@@ -19,6 +19,9 @@ pub struct Type {
     /// The name of the type.
     name: String,
 
+    /// Whether the type name refers to a generic definition.
+    generic_ref: bool,
+
     /// If the type has a generic argument, which one is it.
     generic_arg: Option<String>,
 }
@@ -129,6 +132,13 @@ enum ParamParseError {
     /// The parameter was empty.
     Empty,
 
+    /// The parameter is actually a generic type definition for later use,
+    /// such as `{X:Type}`.
+    TypeDef { name: String },
+
+    /// Similar to `TypeDef`, but we don't know what it defines.
+    UnknownDef,
+
     /// No known way to parse this parameter.
     Unimplemented,
 }
@@ -156,6 +166,14 @@ fn remove_tl_comments(contents: &str) -> String {
 
 /// Parses a single type `type<generic_arg>`
 fn parse_type(ty: &str) -> Result<Type, ParamParseError> {
+    // Parse `!type`
+    let (ty, generic_ref) = if ty.starts_with('!') {
+        (&ty[1..], true)
+    } else {
+        (ty, false)
+    };
+
+    // Parse `type<generic_arg>`
     let (ty, generic_arg) = if let Some(pos) = ty.find('<') {
         if !ty.ends_with('>') {
             return Err(ParamParseError::BadGeneric);
@@ -171,12 +189,25 @@ fn parse_type(ty: &str) -> Result<Type, ParamParseError> {
 
     Ok(Type {
         name: ty.into(),
+        generic_ref,
         generic_arg,
     })
 }
 
 /// Parses a single parameter such as `foo:bar`.
 fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
+    // Parse `{X:Type}`
+    if param.starts_with('{') {
+        return Err(if param.ends_with(":Type}") {
+            ParamParseError::TypeDef {
+                // Safe to unwrap because we know it contains ':'
+                name: param[1..param.find(':').unwrap()].into(),
+            }
+        } else {
+            ParamParseError::UnknownDef
+        });
+    };
+
     // Parse `name:type`
     let (name, ty) = {
         let mut it = param.split(':');
@@ -260,7 +291,7 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
         }
     };
 
-    let ty = parse_type(ty).map_err(|_| ParseError::MissingType)?;
+    let mut ty = parse_type(ty).map_err(|_| ParseError::MissingType)?;
 
     // Parse `name middle`
     let (name, middle) = {
@@ -289,20 +320,62 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
     };
 
     // Parse `middle`
+    let mut type_defs = vec![];
+
     let params = middle
         .split_whitespace()
-        .map(|p| {
-            parse_param(p).map_err(|e| match e {
-                ParamParseError::BadFlag | ParamParseError::BadGeneric => {
-                    ParseError::MalformedParam
+        .map(parse_param)
+        .filter_map(|p| match p {
+            // If the parameter is a type definition save it
+            Err(ParamParseError::TypeDef { name }) => {
+                type_defs.push(name);
+                None
+            }
+
+            // If the parameter type is a generic ref ensure it's valid
+            Ok(Parameter {
+                ty:
+                    ParameterType::Normal {
+                        ty:
+                            Type {
+                                ref name,
+                                generic_ref,
+                                ..
+                            },
+                        ..
+                    },
+                ..
+            }) if generic_ref => {
+                if type_defs.contains(&name) {
+                    // Safe to unwrap because we matched on an Ok
+                    Some(Ok(p.unwrap()))
+                } else {
+                    Some(Err(ParseError::MalformedParam))
                 }
+            }
+
+            // Otherwise map the error to a `ParseError`
+            p => Some(p.map_err(|e| match e {
+                ParamParseError::BadFlag
+                | ParamParseError::BadGeneric
+                | ParamParseError::UnknownDef => ParseError::MalformedParam,
                 ParamParseError::Empty => ParseError::MissingType,
                 ParamParseError::Unimplemented => ParseError::NotImplemented {
                     line: definition.trim().into(),
                 },
-            })
+                ParamParseError::TypeDef { .. } => {
+                    // Unreachable because we matched it above
+                    unreachable!();
+                }
+            })),
         })
         .collect::<Result<_, ParseError>>()?;
+
+    // The type lacks `!` so we determine if it's a generic one based
+    // on whether its name is known in a previous parameter type def.
+    if type_defs.contains(&ty.name) {
+        ty.generic_ref = true;
+    }
 
     Ok(Definition {
         name: name.into(),
@@ -423,6 +496,27 @@ mod tests {
     }
 
     #[test]
+    fn parse_type_def_param() {
+        assert_eq!(
+            parse_param("{a:Type}"),
+            Err(ParamParseError::TypeDef { name: "a".into() })
+        );
+    }
+
+    #[test]
+    fn parse_unknown_def_param() {
+        assert_eq!(parse_param("{a:foo}"), Err(ParamParseError::UnknownDef));
+    }
+
+    #[test]
+    fn parse_unknown_def_use() {
+        assert_eq!(
+            parse_tl_definition("a#b c:!d = e"),
+            Err(ParseError::MalformedParam)
+        );
+    }
+
+    #[test]
     fn parse_valid_param() {
         assert_eq!(
             parse_param("foo:#"),
@@ -432,12 +526,13 @@ mod tests {
             })
         );
         assert_eq!(
-            parse_param("foo:bar"),
+            parse_param("foo:!bar"),
             Ok(Parameter {
                 name: "foo".into(),
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "bar".into(),
+                        generic_ref: true,
                         generic_arg: None,
                     },
                     flag: None,
@@ -451,6 +546,7 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "baz".into(),
+                        generic_ref: false,
                         generic_arg: None,
                     },
                     flag: Some(Flag {
@@ -467,6 +563,7 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "bar".into(),
+                        generic_ref: false,
                         generic_arg: Some("baz".into()),
                     },
                     flag: None,
@@ -480,6 +577,7 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "baz".into(),
+                        generic_ref: false,
                         generic_arg: Some("qux".into()),
                     },
                     flag: Some(Flag {
@@ -546,6 +644,7 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                generic_ref: false,
                 generic_arg: None,
             }
         );
@@ -558,6 +657,7 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                generic_ref: false,
                 generic_arg: Some("e".into()),
             }
         );
@@ -570,6 +670,27 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                generic_ref: false,
+                generic_arg: None,
+            }
+        );
+
+        let def = parse_tl_definition("a#1 {b:Type} c:!b = d").unwrap();
+        assert_eq!(def.name, "a");
+        assert_eq!(def.id, Some(1));
+        assert_eq!(def.params.len(), 1);
+        assert!(match def.params[0].ty {
+            ParameterType::Normal {
+                ty: Type { generic_ref, .. },
+                ..
+            } if generic_ref => true,
+            _ => false,
+        });
+        assert_eq!(
+            def.ty,
+            Type {
+                name: "d".into(),
+                generic_ref: false,
                 generic_arg: None,
             }
         );
