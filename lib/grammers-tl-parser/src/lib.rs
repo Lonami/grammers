@@ -1,5 +1,8 @@
 use std::num::ParseIntError;
 
+const FUNCTIONS_SEP: &'static str = "---functions---";
+const TYPES_SEP: &'static str = "---types---";
+
 /// Data attached to parameters conditional on flags.
 #[derive(Debug, PartialEq)]
 pub struct Flag {
@@ -47,6 +50,16 @@ pub struct Parameter {
     pub ty: ParameterType,
 }
 
+/// The category to which a definition belongs.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Category {
+    /// The default category, a definition represents a type.
+    Types,
+
+    /// A definition represents a callable function.
+    Functions,
+}
+
 // TODO `impl Display`
 /// A [Type Language] definition.
 ///
@@ -64,6 +77,9 @@ pub struct Definition {
 
     /// The type to which this definition belongs to.
     pub ty: Type,
+
+    /// The category to which this definition belongs to.
+    pub category: Category,
 }
 
 /// Represents a failure when parsing [Type Language] definitions.
@@ -96,6 +112,9 @@ pub enum ParseError {
     /// int128 4*[ int ] = Int128;
     /// ```
     NotImplemented { line: String },
+
+    /// The file contained an unknown separator (such as `---foo---`)
+    UnknownSeparator,
 }
 
 /// Represents a failure when parsing a single parameter.
@@ -290,6 +309,7 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
         id,
         params,
         ty,
+        category: Category::Types,
     })
 }
 
@@ -297,12 +317,41 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
 pub fn parse_tl_file(contents: &str) -> Vec<Result<Definition, ParseError>> {
+    let mut category = Category::Types;
+    let mut result = Vec::new();
+
     remove_tl_comments(contents)
         .split(';')
         .map(str::trim)
         .filter(|d| !d.is_empty())
-        .map(parse_tl_definition)
-        .collect()
+        .for_each(|d| {
+            // Get rid of the leading separator and adjust category
+            let d = if d.starts_with("---") {
+                if d.starts_with(FUNCTIONS_SEP) {
+                    category = Category::Functions;
+                    d[FUNCTIONS_SEP.len()..].trim()
+                } else if d.starts_with(TYPES_SEP) {
+                    category = Category::Types;
+                    d[TYPES_SEP.len()..].trim()
+                } else {
+                    result.push(Err(ParseError::UnknownSeparator));
+                    return;
+                }
+            } else {
+                d
+            };
+
+            // Save the fixed definition
+            result.push(match parse_tl_definition(d) {
+                Ok(mut d) => {
+                    d.category = category;
+                    Ok(d)
+                }
+                x => x,
+            });
+        });
+
+    result
 }
 
 #[cfg(test)]
@@ -527,8 +576,21 @@ mod tests {
     }
 
     #[test]
+    fn parse_bad_separator() {
+        let result = parse_tl_file("---foo---");
+        assert_eq!(result.len(), 1);
+
+        match &result[0] {
+            Ok(_) => panic!("result should be err"),
+            Err(e) => {
+                assert_eq!(*e, ParseError::UnknownSeparator);
+            }
+        }
+    }
+
+    #[test]
     fn parse_file() {
-        let result = &parse_tl_file(
+        let result = parse_tl_file(
             "
             // leading; comment
             first#1 = t; // inline comment
