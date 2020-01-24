@@ -361,7 +361,10 @@ mod tests {
         assert_eq!(parse_param("foo:bar?"), Err(ParamParseError::BadFlag));
         assert_eq!(parse_param("foo:?bar"), Err(ParamParseError::BadFlag));
         assert_eq!(parse_param("foo:bar?baz"), Err(ParamParseError::BadFlag));
-        assert_eq!(parse_param("foo:bar.baz?qux"), Err(ParamParseError::BadFlag));
+        assert_eq!(
+            parse_param("foo:bar.baz?qux"),
+            Err(ParamParseError::BadFlag)
+        );
     }
 
     #[test]
@@ -490,28 +493,37 @@ mod tests {
         assert_eq!(def.name, "a");
         assert_eq!(def.id, Some(1));
         assert_eq!(def.params.len(), 0);
-        assert_eq!(def.ty, Type {
-            name: "d".into(),
-            generic_arg: None,
-        });
+        assert_eq!(
+            def.ty,
+            Type {
+                name: "d".into(),
+                generic_arg: None,
+            }
+        );
 
         let def = parse_tl_definition("a=d<e>").unwrap();
         assert_eq!(def.name, "a");
         assert_eq!(def.id, None);
         assert_eq!(def.params.len(), 0);
-        assert_eq!(def.ty, Type {
-            name: "d".into(),
-            generic_arg: Some("e".into()),
-        });
+        assert_eq!(
+            def.ty,
+            Type {
+                name: "d".into(),
+                generic_arg: Some("e".into()),
+            }
+        );
 
         let def = parse_tl_definition("a b:c = d").unwrap();
         assert_eq!(def.name, "a");
         assert_eq!(def.id, None);
         assert_eq!(def.params.len(), 1);
-        assert_eq!(def.ty, Type {
-            name: "d".into(),
-            generic_arg: None,
-        });
+        assert_eq!(
+            def.ty,
+            Type {
+                name: "d".into(),
+                generic_arg: None,
+            }
+        );
     }
 
     #[test]
