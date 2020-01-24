@@ -1,6 +1,41 @@
-// TODO `ty` should be parsed further to accomodate for things like
-//      `flags.0?Vector<InputDocument>`
 use std::num::ParseIntError;
+
+/// Data attached to parameters conditional on flags.
+#[derive(Debug, PartialEq)]
+pub struct Flag {
+    /// The name of the field containing the flags.
+    pub name: String,
+
+    /// The bit index for the flag inside the flags variable.
+    pub index: usize,
+}
+
+/// The type of a definition or a parameter.
+#[derive(Debug, PartialEq)]
+pub struct Type {
+    /// The name of the type.
+    name: String,
+
+    /// If the type has a generic argument, which one is it.
+    generic_arg: Option<String>,
+}
+
+/// A parameter type.
+#[derive(Debug, PartialEq)]
+pub enum ParameterType {
+    /// This parameter represents a flags field (`u32`).
+    Flags,
+
+    /// A "normal" type, which may depend on a flag.
+    Normal {
+        /// The actual type of the parameter.
+        ty: Type,
+
+        /// If this parameter is conditional, which
+        /// flag is used to determine its presence.
+        flag: Option<Flag>,
+    },
+}
 
 /// A single parameter, with a name and a type.
 #[derive(Debug, PartialEq)]
@@ -8,12 +43,11 @@ pub struct Parameter {
     /// The name of the parameter.
     pub name: String,
 
-    /// The string representing the type of the parameter.
-    /// Note that further parsing is required to use it,
-    /// for example in `flags.0?Vector<InputDocument>`.
-    pub ty: String,
+    /// The type of the parameter.
+    pub ty: ParameterType,
 }
 
+// TODO `impl Display`
 /// A [Type Language] definition.
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
@@ -29,7 +63,7 @@ pub struct Definition {
     pub params: Vec<Parameter>,
 
     /// The type to which this definition belongs to.
-    pub ty: String,
+    pub ty: Type,
 }
 
 /// Represents a failure when parsing [Type Language] definitions.
@@ -42,6 +76,9 @@ pub enum ParseError {
 
     /// The identifier from this definition is malformed.
     MalformedId(ParseIntError),
+
+    /// Some parameter of this definition is malformed.
+    MalformedParam,
 
     /// The name information is missing from the definition.
     MissingName,
@@ -64,6 +101,12 @@ pub enum ParseError {
 /// Represents a failure when parsing a single parameter.
 #[derive(Debug, PartialEq)]
 enum ParamParseError {
+    /// The flag was malformed (missing dot, bad index, empty name).
+    BadFlag,
+
+    /// The generic argument was malformed (missing closing bracket).
+    BadGeneric,
+
     /// The parameter was empty.
     Empty,
 
@@ -92,8 +135,26 @@ fn remove_tl_comments(contents: &str) -> String {
     result
 }
 
+/// Parses a single type `type<generic_arg>`
+fn parse_type(ty: &str) -> Result<Type, ParamParseError> {
+    let (ty, generic_arg) = if let Some(pos) = ty.find('<') {
+        if !ty.ends_with('>') {
+            return Err(ParamParseError::BadGeneric);
+        }
+        (&ty[..pos], Some(ty[pos + 1..ty.len() - 1].into()))
+    } else {
+        (ty, None)
+    };
+
+    Ok(Type {
+        name: ty.into(),
+        generic_arg,
+    })
+}
+
 /// Parses a single parameter such as `foo:bar`.
 fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
+    // Parse `name:type`
     let (name, ty) = {
         let mut it = param.split(':');
         if let Some(n) = it.next() {
@@ -111,9 +172,39 @@ fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
         return Err(ParamParseError::Empty);
     }
 
+    // Special-case flags type `#`
+    if ty == "#" {
+        return Ok(Parameter {
+            name: name.into(),
+            ty: ParameterType::Flags,
+        });
+    }
+
+    // Parse `flag_name.flag_index?type`
+    let (ty, flag) = if let Some(pos) = ty.find('?') {
+        if let Some(dot_pos) = ty.find('.') {
+            (
+                &ty[pos + 1..],
+                Some(Flag {
+                    name: ty[..dot_pos].into(),
+                    index: ty[dot_pos + 1..pos]
+                        .parse()
+                        .map_err(|_| ParamParseError::BadFlag)?,
+                }),
+            )
+        } else {
+            return Err(ParamParseError::BadFlag);
+        }
+    } else {
+        (ty, None)
+    };
+
+    // Parse `type<generic_arg>`
+    let ty = parse_type(ty)?;
+
     Ok(Parameter {
         name: name.into(),
-        ty: ty.into(),
+        ty: ParameterType::Normal { ty, flag },
     })
 }
 
@@ -157,9 +248,7 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
         }
     };
 
-    if ty.is_empty() {
-        return Err(ParseError::MissingType);
-    }
+    let ty = parse_type(ty).map_err(|_| ParseError::MissingType)?;
 
     // Parse `name middle`
     let (name, middle) = {
@@ -192,6 +281,9 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
         .split_whitespace()
         .map(|p| {
             parse_param(p).map_err(|e| match e {
+                ParamParseError::BadFlag | ParamParseError::BadGeneric => {
+                    ParseError::MalformedParam
+                }
                 ParamParseError::Empty => ParseError::MissingType,
                 ParamParseError::Unimplemented => ParseError::NotImplemented {
                     line: definition.trim().into(),
@@ -204,7 +296,7 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
         name: name.into(),
         id,
         params,
-        ty: ty.into(),
+        ty,
     })
 }
 
