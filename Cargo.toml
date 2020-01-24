@@ -1,4 +1,8 @@
 [workspace]
 members = [
-    "lib/grammers-tl-parser"
+    "lib/grammers-tl-parser",
+    "lib/grammers-tl-types"
 ]
+
+[patch.crates-io]
+grammers-tl-parser = { path = "lib/grammers-tl-parser" }
