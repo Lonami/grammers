@@ -1,31 +1,51 @@
 // TODO `ty` should be parsed further to accomodate for things like
 //      `flags.0?Vector<InputDocument>`
+
+/// A single parameter, with a name and a type.
 #[derive(Debug, PartialEq)]
 pub struct Parameter {
+    /// The name of the parameter.
     pub name: String,
+
+    /// The string representing the type of the parameter.
+    /// Note that further parsing is required to use it,
+    /// for example in `flags.0?Vector<InputDocument>`.
     pub ty: String,
 }
 
+/// A [Type Language] definition.
+///
+/// [Type Language]: https://core.telegram.org/mtproto/TL
 #[derive(Debug, PartialEq)]
 pub struct Definition {
+    /// The name of this definition. Also known as "predicate" or "method".
     pub name: String,
+
+    /// The numeric identifier of this definition.
     pub id: Option<u32>,
+
+    /// A possibly-empty list of parameters this definition has.
     pub params: Vec<Parameter>,
+
+    /// The type to which this definition belongs to.
     pub ty: String,
 }
 
+/// Represents a failure when parsing [Type Language] definitions.
+///
+/// [Type Language]: https://core.telegram.org/mtproto/TL
 #[derive(Debug)]
 pub enum ParseError {
-    /// The definition is empty
+    /// The definition is empty.
     EmptyDefinition,
 
-    /// The identifier from this definition is malformed
+    /// The identifier from this definition is malformed.
     MalformedId(std::num::ParseIntError),
 
-    /// The name information is missing from the definition
+    /// The name information is missing from the definition.
     MissingName,
 
-    /// The type information is missing from the definition
+    /// The type information is missing from the definition.
     MissingType,
 
     /// The parser does not know how to parse the definition.
@@ -40,12 +60,17 @@ pub enum ParseError {
     NotImplemented { line: String },
 }
 
+/// Represents a failure when parsing a single parameter.
 #[derive(Debug)]
 enum ParamParseError {
+    /// The parameter was empty.
     Empty,
+
+    /// No known way to parse this parameter.
     Unimplemented,
 }
 
+/// Removes all single-line comments from the contents.
 fn remove_tl_comments(contents: &str) -> String {
     let mut result = String::with_capacity(contents.len());
     let mut in_comment = false;
@@ -100,6 +125,27 @@ fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
     })
 }
 
+/// Parses a [Type Language] definition.
+///
+/// # Examples
+///
+/// ```
+/// let definition = "foo#1 bar:baz = qux"
+/// let expected = Definition {
+///     name: "foo".into(),
+///     id: Some(1),
+///     parameters: vec![
+///         Parameter {
+///             name: "bar".into(),
+///             ty: "baz".into()
+///         }
+///     ],
+///     ty: "qux".into()
+/// };
+/// assert_eq!(parse_tl_definition(definition), expected);
+/// ```
+///
+/// [Type Language]: https://core.telegram.org/mtproto/TL
 pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
     // Parse `(left = ty)`
     let (left, ty) = {
@@ -166,6 +212,9 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
     })
 }
 
+/// Parses a file full of [Type Language] definitions.
+///
+/// [Type Language]: https://core.telegram.org/mtproto/TL
 pub fn parse_tl_file(contents: &str) -> Vec<Result<Definition, ParseError>> {
     remove_tl_comments(contents)
         .split(';')
@@ -173,12 +222,4 @@ pub fn parse_tl_file(contents: &str) -> Vec<Result<Definition, ParseError>> {
         .filter(|d| !d.is_empty())
         .map(parse_tl_definition)
         .collect()
-}
-
-#[cfg(test)]
-mod tests {
-    #[test]
-    fn it_works() {
-        assert_eq!(2 + 2, 4);
-    }
 }
