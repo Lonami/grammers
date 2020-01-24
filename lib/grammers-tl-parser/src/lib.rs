@@ -146,6 +146,10 @@ fn parse_type(ty: &str) -> Result<Type, ParamParseError> {
         (ty, None)
     };
 
+    if ty.is_empty() {
+        return Err(ParamParseError::Empty);
+    }
+
     Ok(Type {
         name: ty.into(),
         generic_arg,
@@ -213,22 +217,11 @@ fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
 /// # Examples
 ///
 /// ```
-/// use grammers_tl_parser::*;
+/// use grammers_tl_parser::parse_tl_definition;
 ///
-/// let definition = "foo#1 bar:baz = qux";
-/// let expected = Definition {
-///     name: "foo".into(),
-///     id: Some(1),
-///     params: vec![
-///         Parameter {
-///             name: "bar".into(),
-///             ty: "baz".into()
-///         }
-///     ],
-///     ty: "qux".into()
-/// };
+/// assert!(parse_tl_definition("foo#1 bar:baz = qux").is_ok());
 ///
-/// assert_eq!(parse_tl_definition(definition).unwrap(), expected);
+/// assert!(parse_tl_definition("foo#1 bar:b.0?baz = qux<q>").is_ok());
 /// ```
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
@@ -364,12 +357,84 @@ mod tests {
     }
 
     #[test]
+    fn parse_bad_flags() {
+        assert_eq!(parse_param("foo:bar?"), Err(ParamParseError::BadFlag));
+        assert_eq!(parse_param("foo:?bar"), Err(ParamParseError::BadFlag));
+        assert_eq!(parse_param("foo:bar?baz"), Err(ParamParseError::BadFlag));
+        assert_eq!(parse_param("foo:bar.baz?qux"), Err(ParamParseError::BadFlag));
+    }
+
+    #[test]
+    fn parse_bad_generics() {
+        assert_eq!(parse_param("foo:<bar"), Err(ParamParseError::BadGeneric));
+        assert_eq!(parse_param("foo:bar<"), Err(ParamParseError::BadGeneric));
+    }
+
+    #[test]
     fn parse_valid_param() {
+        assert_eq!(
+            parse_param("foo:#"),
+            Ok(Parameter {
+                name: "foo".into(),
+                ty: ParameterType::Flags
+            })
+        );
         assert_eq!(
             parse_param("foo:bar"),
             Ok(Parameter {
                 name: "foo".into(),
-                ty: "bar".into()
+                ty: ParameterType::Normal {
+                    ty: Type {
+                        name: "bar".into(),
+                        generic_arg: None,
+                    },
+                    flag: None,
+                }
+            })
+        );
+        assert_eq!(
+            parse_param("foo:bar.1?baz"),
+            Ok(Parameter {
+                name: "foo".into(),
+                ty: ParameterType::Normal {
+                    ty: Type {
+                        name: "baz".into(),
+                        generic_arg: None,
+                    },
+                    flag: Some(Flag {
+                        name: "bar".into(),
+                        index: 1,
+                    }),
+                }
+            })
+        );
+        assert_eq!(
+            parse_param("foo:bar<baz>"),
+            Ok(Parameter {
+                name: "foo".into(),
+                ty: ParameterType::Normal {
+                    ty: Type {
+                        name: "bar".into(),
+                        generic_arg: Some("baz".into()),
+                    },
+                    flag: None,
+                }
+            })
+        );
+        assert_eq!(
+            parse_param("foo:bar.1?baz<qux>"),
+            Ok(Parameter {
+                name: "foo".into(),
+                ty: ParameterType::Normal {
+                    ty: Type {
+                        name: "baz".into(),
+                        generic_arg: Some("qux".into()),
+                    },
+                    flag: Some(Flag {
+                        name: "bar".into(),
+                        index: 1,
+                    }),
+                }
             })
         );
     }
@@ -425,19 +490,28 @@ mod tests {
         assert_eq!(def.name, "a");
         assert_eq!(def.id, Some(1));
         assert_eq!(def.params.len(), 0);
-        assert_eq!(def.ty, "d");
+        assert_eq!(def.ty, Type {
+            name: "d".into(),
+            generic_arg: None,
+        });
 
-        let def = parse_tl_definition("a=d").unwrap();
+        let def = parse_tl_definition("a=d<e>").unwrap();
         assert_eq!(def.name, "a");
         assert_eq!(def.id, None);
         assert_eq!(def.params.len(), 0);
-        assert_eq!(def.ty, "d");
+        assert_eq!(def.ty, Type {
+            name: "d".into(),
+            generic_arg: Some("e".into()),
+        });
 
         let def = parse_tl_definition("a b:c = d").unwrap();
         assert_eq!(def.name, "a");
         assert_eq!(def.id, None);
         assert_eq!(def.params.len(), 1);
-        assert_eq!(def.ty, "d");
+        assert_eq!(def.ty, Type {
+            name: "d".into(),
+            generic_arg: None,
+        });
     }
 
     #[test]
