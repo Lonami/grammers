@@ -1,0 +1,136 @@
+@font-face {
+    /* http://www.dafont.com/nilland.font */
+    font-family: Nilland;
+    src: url('../font/Nilland.ttf');
+}
+
+@font-face {
+    /* http://www.dafont.com/kirvy.font */
+    font-family: Kirvy;
+    src: url('../font/Kirvy.otf');
+}
+
+::-moz-selection { 
+    background-color: #FFAA00;
+    color: #000000;
+}
+
+::selection {
+    background-color: #FFAA00;
+    color: #000000;
+}
+
+body {
+    margin: 0;
+}
+
+img {
+    vertical-align: middle;
+}
+
+img.emoji {
+    display: inline-block;
+    float: none !important;
+    margin: 0 !important;
+    width: 32px;
+    height: 32px;
+}
+
+a {
+    text-decoration: none;
+    color: #FFAA00;
+    transition: opacity 300ms;
+    font-weight: bold;
+}
+
+a:hover {
+    opacity: 0.8;
+}
+
+.band {
+    width: 100%;
+    height: 500px;
+    background-color: #fff;
+    position: relative;
+    text-align: center;
+}
+
+.band.header {
+    background: url('../img/header.svg') top center no-repeat;
+}
+
+.band div {
+    display: table;
+    width: 100%;
+    max-width: 1024px;
+    height: 500px;
+    margin: 0 auto;
+}
+
+.band h2 {
+    font-family: Kirvy;
+    font-size: 24pt;
+    margin-top: 140px;
+    font-variant: small-caps;
+}
+
+.band p {
+    font-family: Nilland;
+    font-size: 16pt;
+    line-height: 200%;
+    margin-top: 40px;
+}
+
+.band img {
+    margin: 20px;
+    margin-top: 110px;
+    border-radius: 10px;
+}
+
+.band.left img {
+    float: left;
+}
+
+.band.right img {
+    float: right;
+}
+
+.band.left {
+    color: #fff;
+    text-shadow: 2px 2px 5px #000;
+    background-color: #222;
+}
+
+.band.right {
+    color: #000;
+    text-shadow: 2px 2px 5px #fff;
+    background-color: #eee;
+}
+
+/* For mobile devices, don't show the images in two columns */
+@media (max-width:1000px) {
+    .band.header {
+        background: url('../img/header-mobile.svg') top center no-repeat;
+    }
+
+    .band {
+        padding: 40px 0;
+    }
+
+    .band div {
+        height: auto;
+    }
+
+    .band.left img, .band.right img {
+        margin: 20px;
+        float: none;
+    }
+
+    .band h2 {
+        margin-top: 0;
+    }
+
+    .band p {
+        margin-top: 20px;
+    }
+}
