@@ -3,6 +3,7 @@ name = "grammers-tl-types"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 edition = "2018"
+build = "build/main.rs"
 
 [build-dependencies]
 grammers-tl-parser = "0.1.0"
