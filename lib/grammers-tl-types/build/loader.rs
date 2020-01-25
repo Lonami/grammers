@@ -2,8 +2,7 @@
 
 use grammers_tl_parser::{parse_tl_file, Definition};
 use std::fs::File;
-use std::io;
-use std::io::prelude::*;
+use std::io::{self, Read};
 
 /// Load the type language definitions from a certain file.
 /// Parse errors will be printed to `stderr`, and only the

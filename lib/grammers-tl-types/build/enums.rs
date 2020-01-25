@@ -1,10 +1,9 @@
 //! Code to generate Rust's `enum`'s from TL definitions.
 
 use crate::grouper;
-use crate::rustifier::*; // TODO don't use glob import
+use crate::rustifier::{rusty_class_name, rusty_namespaced_class_name};
 use grammers_tl_parser::{Category, Definition, ParameterType};
-use std::io;
-use std::io::prelude::*;
+use std::io::{self, Write};
 
 /// Writes an enumeration listing all types such as the following rust code:
 ///

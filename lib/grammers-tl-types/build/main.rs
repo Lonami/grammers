@@ -6,8 +6,7 @@ mod structs;
 
 use grammers_tl_parser::Category;
 use std::fs::File;
-use std::io::prelude::*;
-use std::io::BufWriter;
+use std::io::{BufWriter, Write};
 
 fn main() -> std::io::Result<()> {
     // TODO maybe a config to determine which files to generate?

@@ -1,10 +1,9 @@
 //! Code to generate Rust's `struct`'s from TL definitions.
 
 use crate::grouper;
-use crate::rustifier::*; // TODO don't use glob import
+use crate::rustifier::{rusty_attr_name, rusty_class_name, rusty_type_name, rusty_type_path};
 use grammers_tl_parser::{Category, Definition, ParameterType};
-use std::io;
-use std::io::prelude::*;
+use std::io::{self, Write};
 
 /// Writes a definition such as the following rust code:
 ///
