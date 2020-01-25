@@ -1,5 +1,9 @@
 [workspace]
 members = [
+    "lib/grammers-client",
+    "lib/grammers-crypto",
+    "lib/grammers-mtproto",
+    "lib/grammers-mtsender",
     "lib/grammers-tl-parser",
     "lib/grammers-tl-types"
 ]
