@@ -607,6 +607,10 @@ fn main() -> std::io::Result<()> {
 
     let mut file = BufWriter::new(File::create("src/generated.rs")?);
 
+    // TODO if a parameter's type is raw (e.g. `vector<Foo>` or `foo`,
+    // starting lowercase) then use the type, not the enum, because the
+    // constructor code should not be serialized and it cannot be any
+    // other type.
     write_category_mod(&mut file, Category::Types, &api)?;
     write_category_mod(&mut file, Category::Functions, &api)?;
     write_enums_mod(&mut file, &api)?;
