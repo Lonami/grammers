@@ -55,7 +55,7 @@ fn group_types_by_ns(definitions: &Vec<Definition>) -> HashMap<String, Vec<&str>
     let mut result = HashMap::new();
     definitions
         .into_iter()
-        .filter(|d| !d.ty.generic_ref)
+        .filter(|d| d.category == Category::Types && !d.ty.generic_ref)
         .for_each(|d| {
             let ns = if let Some(pos) = d.ty.name.find('.') {
                 &d.ty.name[..pos]
