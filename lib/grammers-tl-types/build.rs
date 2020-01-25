@@ -187,12 +187,10 @@ fn rusty_type_name(param: &Parameter) -> String {
 /// }
 /// ```
 fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
-    writeln!(
-        file,
-        "{}pub struct {} {{",
-        indent,
-        rusty_class_name(&def.name)
-    )?;
+    let class_name = rusty_class_name(&def.name);
+
+    // Define struct
+    writeln!(file, "{}pub struct {} {{", indent, class_name)?;
     for param in def.params.iter() {
         match param.ty {
             ParameterType::Flags => {
@@ -211,11 +209,11 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     }
     writeln!(file, "{}}}", indent)?;
 
+    // impl Identifiable
     writeln!(
         file,
         "{}impl crate::Identifiable for {} {{",
-        indent,
-        rusty_class_name(&def.name)
+        indent, class_name
     )?;
     writeln!(
         file,
@@ -223,6 +221,61 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
         indent,
         def.id.unwrap()
     )?;
+    writeln!(file, "{}}}", indent)?;
+
+    // impl Serializable
+    writeln!(
+        file,
+        "{}impl crate::Serializable for {} {{",
+        indent, class_name
+    )?;
+    writeln!(
+        file,
+        "{}    fn serialize_body<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
+        indent,
+        if def.params.is_empty() { "_" } else { "" }
+    )?;
+
+    for param in def.params.iter() {
+        write!(file, "{}        ", indent)?;
+        match param.ty {
+            ParameterType::Flags => {
+                write!(file, "buf.write(&(0u32")?;
+
+                // Compute flags as a single expression
+                for p in def.params.iter() {
+                    match &p.ty {
+                        ParameterType::Normal {
+                            ty,
+                            flag: Some(flag),
+                        } if flag.name == param.name => {
+                            // We make sure this `p` uses the flag we're currently
+                            // parsing by comparing (`p`'s) `flag.name == param.name`.
+
+                            // OR (if the flag is present) the correct bit index.
+                            // Only the special-cased "true" flags are booleans.
+                            write!(
+                                file,
+                                " | if self.{}{} {{ 1 << {} }} else {{ 0 }}",
+                                rusty_attr_name(p),
+                                if ty.name == "true" { "" } else { ".is_some()" },
+                                flag.index
+                            )?;
+                        }
+                        _ => {}
+                    }
+                }
+
+                writeln!(file, ").to_le_bytes())?;")?;
+            }
+            ParameterType::Normal { .. } => {
+                // TODO
+            }
+        }
+    }
+
+    writeln!(file, "{}        Ok(())", indent)?;
+    writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
 }
 
