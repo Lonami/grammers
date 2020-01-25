@@ -409,6 +409,8 @@ fn write_enum<W: Write>(
         .filter(|d| d.category == Category::Types && d.ty.name == name)
         .collect();
 
+    assert!(!type_defs.is_empty(), "type defs should not be empty");
+
     // Define enum
     writeln!(file, "{}pub enum {} {{", indent, class_name)?;
     for d in type_defs.iter() {
@@ -445,9 +447,8 @@ fn write_enum<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
-        indent,
-        if type_defs.is_empty() { "_" } else { "" }
+        "{}    fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {{",
+        indent
     )?;
 
     if type_defs.is_empty() {
@@ -484,10 +485,45 @@ fn write_enum<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize<B: std::io::Read>(_buf: &mut B) -> std::io::Result<Self> {{",
-        indent,
+        "{}    fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {{",
+        indent
     )?;
-    writeln!(file, "{}        unimplemented!();", indent)?;
+    writeln!(file, "{}        use crate::Identifiable;", indent)?;
+    writeln!(file, "{}        Ok(match u32::deserialize(buf)? {{", indent)?;
+    for d in type_defs.iter() {
+        write!(
+            file,
+            "{}            crate::types::{}::CONSTRUCTOR_ID => Self::{}(",
+            indent,
+            rusty_namespaced_class_name(&d.name),
+            rusty_class_name(&d.name),
+        )?;
+
+        // TODO this is somewhat expensive (and we're doing it twice)
+        let recurses = d.params.iter().any(|p| match &p.ty {
+            ParameterType::Flags => false,
+            ParameterType::Normal { ty, .. } => ty.name == name,
+        });
+
+        if recurses {
+            write!(file, "Box::new(")?;
+        }
+        write!(
+            file,
+            "crate::types::{}::deserialize(buf)?",
+            rusty_namespaced_class_name(&d.name)
+        )?;
+        if recurses {
+            write!(file, ")")?;
+        }
+        writeln!(file, "),")?;
+    }
+    writeln!(
+        file,
+        "{}            _ => unimplemented!(\"return error\")",
+        indent
+    )?;
+    writeln!(file, "{}        }})", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
 }
