@@ -51,15 +51,18 @@ fn group_by_ns(
 /// Similar to `group_by_ns`, but for the definition types.
 fn group_types_by_ns(definitions: &Vec<Definition>) -> HashMap<String, Vec<&str>> {
     let mut result = HashMap::new();
-    definitions.into_iter().for_each(|d| {
-        let (ns, name) = if let Some(pos) = d.ty.name.find('.') {
-            (&d.ty.name[..pos], &d.ty.name[pos + 1..])
-        } else {
-            ("", &d.ty.name[..])
-        };
+    definitions
+        .into_iter()
+        .filter(|d| !d.ty.generic_ref)
+        .for_each(|d| {
+            let (ns, name) = if let Some(pos) = d.ty.name.find('.') {
+                (&d.ty.name[..pos], &d.ty.name[pos + 1..])
+            } else {
+                ("", &d.ty.name[..])
+            };
 
-        result.entry(ns.into()).or_insert_with(Vec::new).push(name);
-    });
+            result.entry(ns.into()).or_insert_with(Vec::new).push(name);
+        });
 
     for (_, vec) in result.iter_mut() {
         vec.sort();
@@ -131,6 +134,10 @@ fn push_sanitized_name(result: &mut String, name: &str) {
 fn rusty_type_name(param: &Parameter) -> String {
     match &param.ty {
         ParameterType::Flags => "u32".into(),
+        ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => {
+            // Special-case: `flags.i?true` are just `bool`.
+            "bool".into()
+        }
         ParameterType::Normal { ty, flag } => {
             let mut result = String::new();
             if flag.is_some() {
@@ -200,9 +207,44 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     writeln!(file, "{}}}", indent)
 }
 
-/// Writes an enumeration listing all types
-fn write_enum<W: Write>(file: &mut W, indent: &str, name: &str) -> io::Result<()> {
-    writeln!(file, "{}pub enum {} {{ }}", indent, rusty_class_name(name))
+/// Writes an enumeration listing all types such as the following rust code:
+///
+/// ```
+/// pub enum Name {
+///     Variant(crate::types::Name),
+/// }
+/// ```
+fn write_enum<W: Write>(
+    file: &mut W,
+    indent: &str,
+    name: &str,
+    definitions: &Vec<Definition>,
+) -> io::Result<()> {
+    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
+    for d in definitions
+        .into_iter()
+        .filter(|d| d.category == Category::Types && d.ty.name == name)
+    {
+        write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
+
+        // Check if this type immediately recurses. If it does, box it.
+        // There are no types with indirect recursion, so this works well.
+        let recurses = d.params.iter().any(|p| match &p.ty {
+            ParameterType::Flags => false,
+            ParameterType::Normal { ty, .. } => ty.name == name,
+        });
+
+        if recurses {
+            write!(file, "Box<")?;
+        }
+        write!(file, "crate::types::{}", rusty_class_name(&d.name))?;
+        if recurses {
+            write!(file, ">")?;
+        }
+
+        writeln!(file, "),")?;
+    }
+    writeln!(file, "{}}}", indent)
 }
 
 fn main() -> std::io::Result<()> {
@@ -258,7 +300,7 @@ fn main() -> std::io::Result<()> {
         };
 
         for name in api_types[key].iter() {
-            write_enum(&mut file, indent, name)?;
+            write_enum(&mut file, indent, name, &api)?;
         }
 
         // End possibly inner mod
