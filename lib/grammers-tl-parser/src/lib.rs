@@ -17,13 +17,13 @@ pub struct Flag {
 #[derive(Debug, PartialEq)]
 pub struct Type {
     /// The name of the type.
-    name: String,
+    pub name: String,
 
     /// Whether the type name refers to a generic definition.
-    generic_ref: bool,
+    pub generic_ref: bool,
 
     /// If the type has a generic argument, which one is it.
-    generic_arg: Option<String>,
+    pub generic_arg: Option<String>,
 }
 
 /// A parameter type.
