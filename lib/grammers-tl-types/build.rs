@@ -55,13 +55,16 @@ fn group_types_by_ns(definitions: &Vec<Definition>) -> HashMap<String, Vec<&str>
         .into_iter()
         .filter(|d| !d.ty.generic_ref)
         .for_each(|d| {
-            let (ns, name) = if let Some(pos) = d.ty.name.find('.') {
-                (&d.ty.name[..pos], &d.ty.name[pos + 1..])
+            let ns = if let Some(pos) = d.ty.name.find('.') {
+                &d.ty.name[..pos]
             } else {
-                ("", &d.ty.name[..])
+                ""
             };
 
-            result.entry(ns.into()).or_insert_with(Vec::new).push(name);
+            result
+                .entry(ns.into())
+                .or_insert_with(Vec::new)
+                .push(&d.ty.name[..]);
         });
 
     for (_, vec) in result.iter_mut() {
@@ -82,6 +85,20 @@ fn rusty_class_name(name: &str) -> String {
 
     name[..1].make_ascii_uppercase();
     name
+}
+
+/// Get a rusty class name, including namespaces.
+fn rusty_namespaced_class_name(name: &str) -> String {
+    let mut result = String::new();
+    if let Some(pos) = name.find('.') {
+        let (ns, n) = (&name[..pos], &name[pos + 1..]);
+        result.push_str(ns);
+        result.push_str("::");
+        result.push_str(&rusty_class_name(n));
+    } else {
+        result.push_str(&rusty_class_name(name));
+    }
+    result
 }
 
 /// Get the rusty attribute name for a certain parameter.
@@ -117,14 +134,7 @@ fn push_sanitized_name(result: &mut String, name: &str) {
     };
     if base.is_empty() {
         result.push_str("crate::enums::");
-        if let Some(pos) = name.find('.') {
-            let (ns, n) = (&name[..pos], &name[pos + 1..]);
-            result.push_str(ns);
-            result.push_str("::");
-            result.push_str(&rusty_class_name(n));
-        } else {
-            result.push_str(&rusty_class_name(name));
-        }
+        result.push_str(&rusty_namespaced_class_name(name));
     } else {
         result.push_str(base);
     }
@@ -237,7 +247,11 @@ fn write_enum<W: Write>(
         if recurses {
             write!(file, "Box<")?;
         }
-        write!(file, "crate::types::{}", rusty_class_name(&d.name))?;
+        write!(
+            file,
+            "crate::types::{}",
+            rusty_namespaced_class_name(&d.name)
+        )?;
         if recurses {
             write!(file, ">")?;
         }
