@@ -1,6 +1,4 @@
-use grammers_tl_parser::{
-    parse_tl_file, Category, Definition, Parameter, ParameterType
-};
+use grammers_tl_parser::{parse_tl_file, Category, Definition, Parameter, ParameterType};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -258,10 +256,10 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
                             // Only the special-cased "true" flags are booleans.
                             write!(
                                 file,
-                                " | if self.{}{} {{ 1 << {} }} else {{ 0 }}",
+                                " | if self.{}{} {{ {} }} else {{ 0 }}",
                                 rusty_attr_name(p),
                                 if ty.name == "true" { "" } else { ".is_some()" },
-                                flag.index
+                                1 << flag.index
                             )?;
                         }
                         _ => {}
@@ -291,7 +289,50 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
 
     writeln!(file, "{}        Ok(())", indent)?;
     writeln!(file, "{}    }}", indent)?;
+    writeln!(file, "{}}}", indent)?;
+
+    // impl Deserializable
+    /*
+    writeln!(
+        file,
+        "{}impl crate::Deserializable for {} {{",
+        indent, class_name
+    )?;
+    writeln!(
+        file,
+        "{}    fn deserialize<B: std::io::Read>({}buf: &mut B) -> std::io::Result<Self> {{",
+        indent,
+        if def.params.is_empty() { "_" } else { "" }
+    )?;
+
+    for param in def.params.iter() {
+        write!(file, "{}        ", indent)?;
+        match &param.ty {
+            ParameterType::Flags => {
+                writeln!(file, "let {}: u32 = buf.read();", rusty_attr_name(param))?;
+            }
+            ParameterType::Normal { .. } => {
+                // TODO
+            }
+        }
+    }
+
+    writeln!(file, "{}        Ok({} {{", indent, class_name)?;
+
+    for param in def.params.iter() {
+        write!(file, "{}            ", indent)?;
+        match &param.ty {
+            ParameterType::Flags => { },
+            ParameterType::Normal { .. } => {
+                writeln!(file, "{},", rusty_attr_name(param))?;
+            }
+        }
+    }
+    writeln!(file, "{}        }})", indent)?;
+    writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
+    */
+    Ok(())
 }
 
 /// Writes an enumeration listing all types such as the following rust code:
