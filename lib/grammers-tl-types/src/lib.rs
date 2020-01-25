@@ -3,6 +3,9 @@ pub use generated::{enums, functions, types};
 
 use std::io::{Read, Result, Write};
 
+/// Wrapper type around a vector of bytes with specialized deserialization.
+pub struct Bytes(Vec<u8>);
+
 /// Anything implementing this trait is identifiable by both ends (client-server)
 /// when performing Remote Procedure Calls (RPC) and transmission of objects.
 pub trait Identifiable {
@@ -157,8 +160,7 @@ impl Deserializable for String {
         Ok(String::from_utf8_lossy(&Vec::<u8>::deserialize(buf)?).into())
     }
 }
-/*
-impl Deserializable for Vec<u8> {
+impl Deserializable for Bytes {
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
         let first_byte = u8::deserialize(buf)?;
         let (len, padding) = if first_byte == 254 {
@@ -180,7 +182,6 @@ impl Deserializable for Vec<u8> {
             }
         }
 
-        Ok(result)
+        Ok(Bytes(result))
     }
 }
-*/

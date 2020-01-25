@@ -176,6 +176,30 @@ fn rusty_type_name(param: &Parameter) -> String {
     }
 }
 
+/// Similar to `rusty_type_name` but to access a path
+/// (for instance `Vec::<u8>` and not `Vec<u8>`).
+/// Note that optionals don't get special treatment.
+fn rusty_type_path(param: &Parameter) -> String {
+    match &param.ty {
+        ParameterType::Flags => "u32".into(),
+        ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => "bool".into(),
+        ParameterType::Normal { ty, .. } => {
+            let mut result = String::new();
+            if ty.generic_ref {
+                result.push_str("Vec::<u8>")
+            } else {
+                push_sanitized_name(&mut result, &ty.name);
+                if let Some(arg) = &ty.generic_arg {
+                    result.push_str("::<");
+                    push_sanitized_name(&mut result, arg);
+                    result.push('>');
+                }
+            }
+            result
+        }
+    }
+}
+
 /// Writes a definition such as the following rust code:
 ///
 /// ```
@@ -292,7 +316,6 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     writeln!(file, "{}}}", indent)?;
 
     // impl Deserializable
-    /*
     writeln!(
         file,
         "{}impl crate::Deserializable for {} {{",
@@ -309,10 +332,43 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
-                writeln!(file, "let {}: u32 = buf.read();", rusty_attr_name(param))?;
+                writeln!(
+                    file,
+                    "let {} = u32::deserialize(buf)?;",
+                    rusty_attr_name(param)
+                )?;
             }
-            ParameterType::Normal { .. } => {
-                // TODO
+            ParameterType::Normal { ty, flag } => {
+                if ty.name == "true" {
+                    let flag = flag
+                        .as_ref()
+                        .expect("the `true` type must always be used in a flag");
+                    writeln!(
+                        file,
+                        "let {} = ({} & {}) != 0;",
+                        rusty_attr_name(param),
+                        flag.name,
+                        1 << flag.index
+                    )?;
+                } else {
+                    write!(file, "let {} = ", rusty_attr_name(param))?;
+                    if let Some(ref flag) = flag {
+                        writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
+                        write!(file, "{}            Some(", indent)?;
+                    }
+                    if ty.name == "bytes" {
+                        write!(file, "crate::Bytes::deserialize(buf)?.0")?;
+                    } else {
+                        write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
+                    }
+                    if flag.is_some() {
+                        writeln!(file, ")")?;
+                        writeln!(file, "{}        }} else {{", indent)?;
+                        writeln!(file, "{}            None", indent)?;
+                        write!(file, "{}        }}", indent)?;
+                    }
+                    writeln!(file, ";")?;
+                }
             }
         }
     }
@@ -322,7 +378,7 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     for param in def.params.iter() {
         write!(file, "{}            ", indent)?;
         match &param.ty {
-            ParameterType::Flags => { },
+            ParameterType::Flags => {}
             ParameterType::Normal { .. } => {
                 writeln!(file, "{},", rusty_attr_name(param))?;
             }
@@ -331,8 +387,6 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     writeln!(file, "{}        }})", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
-    */
-    Ok(())
 }
 
 /// Writes an enumeration listing all types such as the following rust code:
@@ -419,6 +473,21 @@ fn write_enum<W: Write>(
         }
         writeln!(file, "{}        }}", indent)?;
     }
+    writeln!(file, "{}    }}", indent)?;
+    writeln!(file, "{}}}", indent)?;
+
+    // impl Deserializable
+    writeln!(
+        file,
+        "{}impl crate::Deserializable for {} {{",
+        indent, class_name
+    )?;
+    writeln!(
+        file,
+        "{}    fn deserialize<B: std::io::Read>(_buf: &mut B) -> std::io::Result<Self> {{",
+        indent,
+    )?;
+    writeln!(file, "{}        unimplemented!();", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
 }
