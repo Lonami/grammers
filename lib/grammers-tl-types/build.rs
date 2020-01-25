@@ -1,5 +1,5 @@
 use grammers_tl_parser::{
-    parse_tl_file, Category, Definition, Parameter, ParameterType, Type as DefType,
+    parse_tl_file, Category, Definition, Parameter, ParameterType
 };
 use std::collections::HashMap;
 use std::fs::File;
@@ -457,7 +457,7 @@ fn write_enums_mod<W: Write>(mut file: &mut W, definitions: &Vec<Definition>) ->
 
 fn main() -> std::io::Result<()> {
     let api = load_tl("tl/api.tl")?;
-    let mtproto = load_tl("tl/mtproto.tl")?;
+    let _mtproto = load_tl("tl/mtproto.tl")?; // TODO use
 
     let mut file = BufWriter::new(File::create("src/generated.rs")?);
 
