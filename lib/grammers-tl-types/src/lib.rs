@@ -10,7 +10,7 @@ pub struct Bytes(Vec<u8>);
 /// when performing Remote Procedure Calls (RPC) and transmission of objects.
 pub trait Identifiable {
     /// The unique identifier for the type.
-    fn constructor_id() -> u32;
+    const CONSTRUCTOR_ID: u32;
 }
 
 pub trait Serializable {

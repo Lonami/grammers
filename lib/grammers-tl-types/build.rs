@@ -241,7 +241,7 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     )?;
     writeln!(
         file,
-        "{}    fn constructor_id() -> u32 {{ {} }}",
+        "{}    const CONSTRUCTOR_ID: u32 = {};",
         indent,
         def.id.unwrap()
     )?;
@@ -464,7 +464,7 @@ fn write_enum<W: Write>(
             )?;
             writeln!(
                 file,
-                "{}                crate::types::{}::constructor_id().serialize(buf)?;",
+                "{}                crate::types::{}::CONSTRUCTOR_ID.serialize(buf)?;",
                 indent,
                 rusty_namespaced_class_name(&d.name)
             )?;
