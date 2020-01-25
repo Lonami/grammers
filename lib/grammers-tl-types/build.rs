@@ -233,7 +233,7 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     )?;
     writeln!(
         file,
-        "{}    fn serialize_body<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
+        "{}    fn serialize<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
         indent,
         if def.params.is_empty() { "_" } else { "" }
     )?;
@@ -273,13 +273,16 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
             ParameterType::Normal { ty, flag } => {
                 // The `true` type is not serialized
                 if ty.name != "true" {
-                    // TODO handle serialize vs serialize_body
                     if flag.is_some() {
-                        writeln!(file, "if let Some(x) = self.{} {{ ", rusty_attr_name(param))?;
-                        writeln!(file, "{}            x.serialize_body(buf)?;", indent)?;
+                        writeln!(
+                            file,
+                            "if let Some(ref x) = self.{} {{ ",
+                            rusty_attr_name(param)
+                        )?;
+                        writeln!(file, "{}            x.serialize(buf)?;", indent)?;
                         writeln!(file, "{}        }}", indent)?;
                     } else {
-                        writeln!(file, "self.{}.serialize_body(buf)?;", rusty_attr_name(param))?;
+                        writeln!(file, "self.{}.serialize(buf)?;", rusty_attr_name(param))?;
                     }
                 }
             }
@@ -304,11 +307,16 @@ fn write_enum<W: Write>(
     name: &str,
     definitions: &Vec<Definition>,
 ) -> io::Result<()> {
-    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
-    for d in definitions
+    let class_name = rusty_class_name(name);
+
+    let type_defs: Vec<&Definition> = definitions
         .into_iter()
         .filter(|d| d.category == Category::Types && d.ty.name == name)
-    {
+        .collect();
+
+    // Define enum
+    writeln!(file, "{}pub enum {} {{", indent, class_name)?;
+    for d in type_defs.iter() {
         write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
 
         // Check if this type immediately recurses. If it does, box it.
@@ -332,6 +340,45 @@ fn write_enum<W: Write>(
 
         writeln!(file, "),")?;
     }
+    writeln!(file, "{}}}", indent)?;
+
+    // impl Serializable
+    writeln!(
+        file,
+        "{}impl crate::Serializable for {} {{",
+        indent, class_name
+    )?;
+    writeln!(
+        file,
+        "{}    fn serialize<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
+        indent,
+        if type_defs.is_empty() { "_" } else { "" }
+    )?;
+
+    if type_defs.is_empty() {
+        writeln!(file, "{}        Ok(())", indent)?;
+    } else {
+        writeln!(file, "{}        use crate::Identifiable;", indent)?;
+        writeln!(file, "{}        match self {{", indent)?;
+        for d in type_defs.iter() {
+            writeln!(
+                file,
+                "{}            Self::{}(x) => {{",
+                indent,
+                rusty_class_name(&d.name)
+            )?;
+            writeln!(
+                file,
+                "{}                crate::types::{}::constructor_id().serialize(buf)?;",
+                indent,
+                rusty_namespaced_class_name(&d.name)
+            )?;
+            writeln!(file, "{}                x.serialize(buf)", indent)?;
+            writeln!(file, "{}            }},", indent)?;
+        }
+        writeln!(file, "{}        }}", indent)?;
+    }
+    writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)
 }
 
