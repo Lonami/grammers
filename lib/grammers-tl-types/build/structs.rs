@@ -5,21 +5,21 @@ use crate::rustifier::{rusty_attr_name, rusty_class_name, rusty_type_name, rusty
 use grammers_tl_parser::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
-/// Writes a definition such as the following rust code:
+/// Defines the `struct` corresponding to the definition:
 ///
 /// ```
 /// pub struct Name {
 ///     pub field: Type,
 /// }
-/// impl crate::Identifiable for Name {
-///     fn constructor_id() -> u32 { 123 }
-/// }
 /// ```
-fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
-    let class_name = rusty_class_name(&def.name);
-
+fn write_struct<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     // Define struct
-    writeln!(file, "{}pub struct {} {{", indent, class_name)?;
+    writeln!(
+        file,
+        "{}pub struct {} {{",
+        indent,
+        rusty_class_name(&def.name)
+    )?;
     for param in def.params.iter() {
         match param.ty {
             ParameterType::Flags => {
@@ -37,12 +37,22 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
         }
     }
     writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
 
-    // impl Identifiable
+/// Defines the `impl Identifiable` corresponding to the definition:
+///
+/// ```
+/// impl crate::Identifiable for Name {
+///     fn constructor_id() -> u32 { 123 }
+/// }
+/// ```
+fn write_identifiable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Identifiable for {} {{",
-        indent, class_name
+        indent,
+        rusty_class_name(&def.name)
     )?;
     writeln!(
         file,
@@ -51,12 +61,25 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
         def.id.unwrap()
     )?;
     writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
 
-    // impl Serializable
+/// Defines the `impl Serializable` corresponding to the definition:
+///
+/// ```
+/// impl crate::Serializable for Name {
+///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
+///         self.field.serialize(buf)?;
+///         Ok(())
+///     }
+/// }
+/// ```
+fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Serializable for {} {{",
-        indent, class_name
+        indent,
+        rusty_class_name(&def.name)
     )?;
     writeln!(
         file,
@@ -119,12 +142,25 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     writeln!(file, "{}        Ok(())", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
 
-    // impl Deserializable
+/// Defines the `impl Deserializable` corresponding to the definition:
+///
+/// ```
+/// impl crate::Deserializable for Name {
+///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
+///         let field = FieldType::deserialize(buf)?;
+///         Ok(Name { field })
+///     }
+/// }
+/// ```
+fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Deserializable for {} {{",
-        indent, class_name
+        indent,
+        rusty_class_name(&def.name)
     )?;
     writeln!(
         file,
@@ -178,7 +214,12 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
         }
     }
 
-    writeln!(file, "{}        Ok({} {{", indent, class_name)?;
+    writeln!(
+        file,
+        "{}        Ok({} {{",
+        indent,
+        rusty_class_name(&def.name)
+    )?;
 
     for param in def.params.iter() {
         write!(file, "{}            ", indent)?;
@@ -191,7 +232,17 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     }
     writeln!(file, "{}        }})", indent)?;
     writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
+/// Writes an entire definition as Rust code (`struct` and `impl`).
+fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+    write_struct(file, indent, def)?;
+    write_identifiable(file, indent, def)?;
+    write_serializable(file, indent, def)?;
+    write_deserializable(file, indent, def)?;
+    Ok(())
 }
 
 /// Write an entire module for the desired category.

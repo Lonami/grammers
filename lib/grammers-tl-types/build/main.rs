@@ -19,6 +19,9 @@ fn main() -> std::io::Result<()> {
     // starting lowercase) then use the type, not the enum, because the
     // constructor code should not be serialized and it cannot be any
     // other type.
+
+    // TODO dealing with indentation everywhere is a pain, maybe just
+    // don't indent the file? (in structs.rs and enums.rs)
     structs::write_category_mod(&mut file, Category::Types, &api)?;
     structs::write_category_mod(&mut file, Category::Functions, &api)?;
     enums::write_enums_mod(&mut file, &api)?;

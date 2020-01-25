@@ -16,19 +16,9 @@ fn write_enum<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    definitions: &Vec<Definition>,
+    type_defs: &Vec<&Definition>,
 ) -> io::Result<()> {
-    let class_name = rusty_class_name(name);
-
-    let type_defs: Vec<&Definition> = definitions
-        .into_iter()
-        .filter(|d| d.category == Category::Types && d.ty.name == name)
-        .collect();
-
-    assert!(!type_defs.is_empty(), "type defs should not be empty");
-
-    // Define enum
-    writeln!(file, "{}pub enum {} {{", indent, class_name)?;
+    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
     for d in type_defs.iter() {
         write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
 
@@ -54,12 +44,35 @@ fn write_enum<W: Write>(
         writeln!(file, "),")?;
     }
     writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
 
-    // impl Serializable
+/// Defines the `impl Serializable` corresponding to the type definitions:
+///
+/// ```
+/// impl crate::Serializable for Name {
+///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
+///         use crate::Identifiable;
+///         match self {
+///             Self::Variant(x) => {
+///                 crate::types::Name::CONSTRUCTOR_ID.serialize(buf)?;
+///                 x.serialize(buf)
+///             },
+///         }
+///     }
+/// }
+/// ```
+fn write_serializable<W: Write>(
+    file: &mut W,
+    indent: &str,
+    name: &str,
+    type_defs: &Vec<&Definition>,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Serializable for {} {{",
-        indent, class_name
+        indent,
+        rusty_class_name(name)
     )?;
     writeln!(
         file,
@@ -92,12 +105,33 @@ fn write_enum<W: Write>(
     }
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
 
-    // impl Deserializable
+/// Defines the `impl Deserializable` corresponding to the type definitions:
+///
+/// ```
+/// impl crate::Deserializable for Name {
+///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
+///         use crate::Identifiable;
+///         Ok(match u32::deserialize(buf)? {
+///             crate::types::Name::CONSTRUCTOR_ID => Self::Variant(crate::types::Name::deserialize(buf)?),
+///             _ => unimplemented!("return error")
+///         })
+///     }
+/// }
+/// ```
+fn write_deserializable<W: Write>(
+    file: &mut W,
+    indent: &str,
+    name: &str,
+    type_defs: &Vec<&Definition>,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Deserializable for {} {{",
-        indent, class_name
+        indent,
+        rusty_class_name(name)
     )?;
     writeln!(
         file,
@@ -141,7 +175,21 @@ fn write_enum<W: Write>(
     )?;
     writeln!(file, "{}        }})", indent)?;
     writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
+/// Writes an entire definition as Rust code (`enum` and `impl`).
+fn write_definition<W: Write>(
+    file: &mut W,
+    indent: &str,
+    name: &str,
+    type_defs: &Vec<&Definition>,
+) -> io::Result<()> {
+    write_enum(file, indent, name, type_defs)?;
+    write_serializable(file, indent, name, type_defs)?;
+    write_deserializable(file, indent, name, type_defs)?;
+    Ok(())
 }
 
 /// Write the entire module dedicated to enums.
@@ -165,7 +213,13 @@ pub(crate) fn write_enums_mod<W: Write>(
         };
 
         for name in grouped[key].iter() {
-            write_enum(&mut file, indent, name, definitions)?;
+            let type_defs: Vec<&Definition> = definitions
+                .into_iter()
+                .filter(|d| d.category == Category::Types && d.ty.name == **name)
+                .collect();
+
+            assert!(!type_defs.is_empty(), "type defs should not be empty");
+            write_definition(&mut file, indent, name, &type_defs)?;
         }
 
         // End possibly inner mod
