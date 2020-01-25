@@ -153,11 +153,20 @@ fn rusty_type_name(param: &Parameter) -> String {
             if flag.is_some() {
                 result.push_str("Option<");
             }
-            push_sanitized_name(&mut result, &ty.name);
-            if let Some(arg) = &ty.generic_arg {
-                result.push('<');
-                push_sanitized_name(&mut result, arg);
-                result.push('>');
+
+            // Special-case: generic references can represent any type.
+            //
+            // Using an array of bytes lets us store any data without
+            // caring about the type (no generics is also more FFI-friendly).
+            if ty.generic_ref {
+                result.push_str("Vec<u8>")
+            } else {
+                push_sanitized_name(&mut result, &ty.name);
+                if let Some(arg) = &ty.generic_arg {
+                    result.push('<');
+                    push_sanitized_name(&mut result, arg);
+                    result.push('>');
+                }
             }
             if flag.is_some() {
                 result.push('>');
@@ -261,17 +270,24 @@ fn write_enum<W: Write>(
     writeln!(file, "{}}}", indent)
 }
 
-fn main() -> std::io::Result<()> {
-    let api = load_tl("tl/api.tl")?;
-    let mtproto = load_tl("tl/mtproto.tl")?;
-
-    let mut file = BufWriter::new(File::create("src/generated.rs")?);
-
+/// Write an entire module for the desired category.
+fn write_category_mod<W: Write>(
+    mut file: &mut W,
+    category: Category,
+    definitions: &Vec<Definition>,
+) -> io::Result<()> {
     // Begin outermost mod
-    writeln!(file, "pub mod types {{")?;
+    writeln!(
+        file,
+        "pub mod {} {{",
+        match category {
+            Category::Types => "types",
+            Category::Functions => "functions",
+        }
+    )?;
 
-    let api_types = group_by_ns(&api, Category::Types);
-    let mut sorted_keys: Vec<&String> = api_types.keys().collect();
+    let grouped = group_by_ns(definitions, category);
+    let mut sorted_keys: Vec<&String> = grouped.keys().collect();
     sorted_keys.sort();
     for key in sorted_keys.into_iter() {
         // Begin possibly inner mod
@@ -282,7 +298,7 @@ fn main() -> std::io::Result<()> {
             "        "
         };
 
-        for definition in api_types[key].iter() {
+        for definition in grouped[key].iter() {
             write_definition(&mut file, indent, definition)?;
         }
 
@@ -293,16 +309,16 @@ fn main() -> std::io::Result<()> {
     }
 
     // End outermost mod
-    writeln!(file, "}}")?;
+    writeln!(file, "}}")
+}
 
-    writeln!(file, "pub mod functions {{")?;
-    writeln!(file, "}}")?;
-
+/// Write the entire module dedicated to enums.
+fn write_enums_mod<W: Write>(mut file: &mut W, definitions: &Vec<Definition>) -> io::Result<()> {
     // Begin outermost mod
     writeln!(file, "pub mod enums {{")?;
 
-    let api_types = group_types_by_ns(&api);
-    let mut sorted_keys: Vec<&String> = api_types.keys().collect();
+    let grouped = group_types_by_ns(definitions);
+    let mut sorted_keys: Vec<&String> = grouped.keys().collect();
     sorted_keys.sort();
     for key in sorted_keys.into_iter() {
         // Begin possibly inner mod
@@ -313,8 +329,8 @@ fn main() -> std::io::Result<()> {
             "        "
         };
 
-        for name in api_types[key].iter() {
-            write_enum(&mut file, indent, name, &api)?;
+        for name in grouped[key].iter() {
+            write_enum(&mut file, indent, name, definitions)?;
         }
 
         // End possibly inner mod
@@ -324,7 +340,18 @@ fn main() -> std::io::Result<()> {
     }
 
     // End outermost mod
-    writeln!(file, "}}")?;
+    writeln!(file, "}}")
+}
+
+fn main() -> std::io::Result<()> {
+    let api = load_tl("tl/api.tl")?;
+    let mtproto = load_tl("tl/mtproto.tl")?;
+
+    let mut file = BufWriter::new(File::create("src/generated.rs")?);
+
+    write_category_mod(&mut file, Category::Types, &api)?;
+    write_category_mod(&mut file, Category::Functions, &api)?;
+    write_enums_mod(&mut file, &api)?;
 
     file.flush()?;
 
