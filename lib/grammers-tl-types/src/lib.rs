@@ -76,7 +76,7 @@ impl Serializable for Vec<u8> {
 }
 impl Serializable for &[u8] {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        let len = if self.len() < 254 {
+        let len = if self.len() <= 253 {
             buf.write(&[self.len() as u8])?;
             self.len() + 1
         } else {
