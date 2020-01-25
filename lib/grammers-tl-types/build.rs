@@ -602,6 +602,7 @@ fn write_enums_mod<W: Write>(mut file: &mut W, definitions: &Vec<Definition>) ->
 }
 
 fn main() -> std::io::Result<()> {
+    // TODO maybe a config to determine which files to generate?
     let api = load_tl("tl/api.tl")?;
     let _mtproto = load_tl("tl/mtproto.tl")?; // TODO use
 
