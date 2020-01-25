@@ -1,4 +1,6 @@
-use grammers_tl_parser::{parse_tl_file, Category, Definition, Parameter, ParameterType};
+use grammers_tl_parser::{
+    parse_tl_file, Category, Definition, Parameter, ParameterType, Type as DefType,
+};
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::prelude::*;
@@ -238,7 +240,7 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
 
     for param in def.params.iter() {
         write!(file, "{}        ", indent)?;
-        match param.ty {
+        match &param.ty {
             ParameterType::Flags => {
                 write!(file, "buf.write(&(0u32")?;
 
@@ -268,8 +270,18 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
 
                 writeln!(file, ").to_le_bytes())?;")?;
             }
-            ParameterType::Normal { .. } => {
-                // TODO
+            ParameterType::Normal { ty, flag } => {
+                // The `true` type is not serialized
+                if ty.name != "true" {
+                    // TODO handle serialize vs serialize_body
+                    if flag.is_some() {
+                        writeln!(file, "if let Some(x) = self.{} {{ ", rusty_attr_name(param))?;
+                        writeln!(file, "{}            x.serialize_body(buf)?;", indent)?;
+                        writeln!(file, "{}        }}", indent)?;
+                    } else {
+                        writeln!(file, "self.{}.serialize_body(buf)?;", rusty_attr_name(param))?;
+                    }
+                }
             }
         }
     }
