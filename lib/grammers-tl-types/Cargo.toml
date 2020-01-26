@@ -7,3 +7,10 @@ build = "build/main.rs"
 
 [build-dependencies]
 grammers-tl-parser = "0.1.0"
+
+[features]
+default = ["tl-api"]
+
+tl-api = []
+tl-mtproto = []
+deserializable-functions = []

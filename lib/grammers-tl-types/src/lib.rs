@@ -1,3 +1,27 @@
+//! This library contains Telegram's types and functions as Rust code
+//! in the form of `struct` and `enum`, which can be serialized into
+//! bytes and deserialized from bytes.
+//!
+//! # Features
+//!
+//! The default feature set includes:
+//!
+//! * `tl-api`.
+//!
+//! The available features are:
+//!
+//! * `tl-api`: generates code for the `api.tl`.
+//!   This is what high-level libraries often need.
+//!
+//! * `mtproto-api`: generates code for the `mtproto.tl`.
+//!   Only useful for low-level libraries.
+//!
+//! * `deserializable-functions`: adds `impl Deserializable` for `functions`.
+//!   This might be of interest for server implementations, which need to
+//!   deserialize the client's requests.
+//!
+//! [Type Language]: https://core.telegram.org/mtproto/TL
+//! [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
 mod deserializable;
 mod generated;
 mod serializable;

@@ -236,7 +236,9 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     write_struct(file, indent, def)?;
     write_identifiable(file, indent, def)?;
     write_serializable(file, indent, def)?;
-    write_deserializable(file, indent, def)?;
+    if def.category == Category::Types || cfg!(feature = "deserializable-functions") {
+        write_deserializable(file, indent, def)?;
+    }
     Ok(())
 }
 
@@ -247,14 +249,23 @@ pub(crate) fn write_category_mod<W: Write>(
     definitions: &Vec<Definition>,
 ) -> io::Result<()> {
     // Begin outermost mod
-    writeln!(
-        file,
-        "pub mod {} {{",
-        match category {
-            Category::Types => "types",
-            Category::Functions => "functions",
+    match category {
+        Category::Types => {
+            writeln!(file, "/// This module contains all of the bare types,")?;
+            writeln!(file, "/// each represented by a `struct`. All of them")?;
+            writeln!(
+                file,
+                "/// are `Identifiable`, `Serializable` and `Deserializable`."
+            )?;
+            writeln!(file, "pub mod types {{")?;
         }
-    )?;
+        Category::Functions => {
+            writeln!(file, "/// This module contains all of the functions,")?;
+            writeln!(file, "/// each represented by a `struct`. All of them")?;
+            writeln!(file, "/// are `Identifiable` and `Serializable`.")?;
+            writeln!(file, "pub mod functions {{")?;
+        }
+    }
 
     let grouped = grouper::group_by_ns(definitions, category);
     let mut sorted_keys: Vec<&String> = grouped.keys().collect();
