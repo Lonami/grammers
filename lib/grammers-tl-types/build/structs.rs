@@ -197,11 +197,7 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
                         writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
                         write!(file, "{}            Some(", indent)?;
                     }
-                    if ty.name == "bytes" {
-                        write!(file, "crate::Bytes::deserialize(buf)?.0")?;
-                    } else {
-                        write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
-                    }
+                    write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
                     if flag.is_some() {
                         writeln!(file, ")")?;
                         writeln!(file, "{}        }} else {{", indent)?;

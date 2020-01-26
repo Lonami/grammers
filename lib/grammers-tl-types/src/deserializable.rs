@@ -1,5 +1,12 @@
 use std::io::{Cursor, Read, Result};
 
+/// Read a single byte from the buffer.
+#[inline(always)]
+fn read_byte<B: Read>(buf: &mut B) -> Result<u8> {
+    let mut buffer = [0u8; 1];
+    buf.read_exact(&mut buffer).map(|_| buffer[0])
+}
+
 /// Implementations of this trait will create instances of
 /// themselves by deserializing data from a buffer according
 /// to the [Binary Data Serialization].
@@ -41,27 +48,6 @@ impl Deserializable for bool {
             0xbc799737u32 => Ok(false),
             _ => unimplemented!("return error"), // make sure to update the doctest
         }
-    }
-}
-
-/// Deserializes a 8-bit unsigned integer.
-///
-/// # Examples
-///
-/// ```
-/// use grammers_tl_types::Deserializable;
-///
-/// assert_eq!(u8::from_bytes(&[0x00]).unwrap(), 0x00);
-/// assert_eq!(u8::from_bytes(&[0x01]).unwrap(), 0x01);
-/// assert_eq!(u8::from_bytes(&[0xff]).unwrap(), 0xff);
-/// assert_eq!(u8::from_bytes(&[0x7f]).unwrap(), 0x7f);
-/// assert_eq!(u8::from_bytes(&[0x80]).unwrap(), 0x80);
-/// ```
-impl Deserializable for u8 {
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
-        let mut buffer = [0u8; 1];
-        buf.read_exact(&mut buffer)?;
-        Ok(buffer[0])
     }
 }
 
@@ -225,7 +211,7 @@ impl<T: Deserializable> Deserializable for Vec<T> {
 /// ```
 impl Deserializable for String {
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
-        Ok(String::from_utf8_lossy(&crate::Bytes::deserialize(buf)?.0).into())
+        Ok(String::from_utf8_lossy(&Vec::<u8>::deserialize(buf)?).into())
     }
 }
 
@@ -237,14 +223,14 @@ impl Deserializable for String {
 /// # Examples
 ///
 /// ```
-/// use grammers_tl_types::{Bytes, Deserializable};
+/// use grammers_tl_types::{Deserializable};
 ///
-/// assert_eq!(Bytes::from_bytes(&[0x00, 0x00, 0x00, 0x00]).unwrap().0, Vec::new());
-/// assert_eq!(Bytes::from_bytes(&[0x01, 0x7f, 0x00, 0x00]).unwrap().0, vec![0x7f_u8]);
+/// assert_eq!(Vec::<u8>::from_bytes(&[0x00, 0x00, 0x00, 0x00]).unwrap(), Vec::new());
+/// assert_eq!(Vec::<u8>::from_bytes(&[0x01, 0x7f, 0x00, 0x00]).unwrap(), vec![0x7f_u8]);
 /// ```
-impl Deserializable for crate::Bytes {
+impl Deserializable for Vec<u8> {
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
-        let first_byte = u8::deserialize(buf)?;
+        let first_byte = read_byte(buf)?;
         let (len, padding) = if first_byte == 254 {
             let mut buffer = [0u8; 3];
             buf.read_exact(&mut buffer)?;
@@ -263,10 +249,10 @@ impl Deserializable for crate::Bytes {
 
         if padding > 0 {
             for _ in 0..(4 - padding) {
-                u8::deserialize(buf)?;
+                read_byte(buf)?;
             }
         }
 
-        Ok(crate::Bytes(result))
+        Ok(result)
     }
 }

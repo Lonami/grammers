@@ -68,6 +68,16 @@ pub(crate) fn push_sanitized_name(result: &mut String, name: &str) {
     }
 }
 
+/// Sanitizes a path to be legal.
+pub(crate) fn push_sanitized_path(result: &mut String, name: &str) {
+    // All sanitized names are valid paths except for `Vec<u8>`
+    if name == "bytes" {
+        result.push_str("Vec::<u8>");
+    } else {
+        push_sanitized_name(result, name);
+    }
+}
+
 /// Get the rusty type name for a certain parameter.
 pub(crate) fn rusty_type_name(param: &Parameter) -> String {
     match &param.ty {
@@ -116,10 +126,10 @@ pub(crate) fn rusty_type_path(param: &Parameter) -> String {
             if ty.generic_ref {
                 result.push_str("Vec::<u8>")
             } else {
-                push_sanitized_name(&mut result, &ty.name);
+                push_sanitized_path(&mut result, &ty.name);
                 if let Some(arg) = &ty.generic_arg {
                     result.push_str("::<");
-                    push_sanitized_name(&mut result, arg);
+                    push_sanitized_path(&mut result, arg);
                     result.push('>');
                 }
             }

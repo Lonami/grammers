@@ -6,9 +6,6 @@ pub use deserializable::Deserializable;
 pub use generated::{enums, functions, types};
 pub use serializable::Serializable;
 
-/// Wrapper type around a byte string with specialized deserialization.
-pub struct Bytes(pub Vec<u8>);
-
 /// Anything implementing this trait is identifiable by both ends (client-server)
 /// when performing Remote Procedure Calls (RPC) and transmission of objects.
 pub trait Identifiable {
