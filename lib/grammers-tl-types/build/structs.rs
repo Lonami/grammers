@@ -84,8 +84,27 @@ fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
         file,
         "{}    fn serialize<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
         indent,
-        if def.params.is_empty() { "_" } else { "" }
+        if def.category == Category::Types && def.params.is_empty() {
+            "_"
+        } else {
+            ""
+        }
     )?;
+
+    match def.category {
+        Category::Types => {
+            // Bare types should not write their `CONSTRUCTOR_ID`.
+        }
+        Category::Functions => {
+            // Functions should always write their `CONSTRUCTOR_ID`.
+            writeln!(file, "{}        use crate::Identifiable;", indent)?;
+            writeln!(
+                file,
+                "{}        Self::CONSTRUCTOR_ID.serialize(buf)?;",
+                indent
+            )?;
+        }
+    }
 
     for param in def.params.iter() {
         write!(file, "{}        ", indent)?;
