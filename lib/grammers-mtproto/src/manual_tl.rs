@@ -1,6 +1,6 @@
 //! This module contains additional, manual structures for some TL types.
-use grammers_tl_types::{self as tl, Deserializable};
-use std::io;
+use grammers_tl_types::{self as tl, Deserializable, Serializable};
+use std::io::{self, Write};
 
 /// This struct represents the following TL definition:
 ///
@@ -16,17 +16,33 @@ use std::io;
 pub(crate) struct Message {
     pub msg_id: i64,
     pub seq_no: i32,
-    pub bytes: i32,
     pub body: Vec<u8>,
 }
 
 impl Message {
+    // msg_id (8 bytes), seq_no (4 bytes), bytes (4 len)
     pub const SIZE_OVERHEAD: usize = 12;
 
     /// Peek the constructor ID from the body.
     pub fn constructor_id(&self) -> io::Result<u32> {
         let mut buffer = io::Cursor::new(&self.body);
         u32::deserialize(&mut buffer)
+    }
+
+    /// Determine the size this serialized message will occupy.
+    pub fn size(&self) -> usize {
+        // msg_id (8 bytes), seq_no (4 bytes), bytes (4 len), data
+        Self::SIZE_OVERHEAD + self.body.len()
+    }
+}
+
+impl Serializable for Message {
+    fn serialize<B: Write>(&self, buf: &mut B) -> io::Result<()> {
+        self.msg_id.serialize(buf)?;
+        self.seq_no.serialize(buf)?;
+        (self.body.len() as i32).serialize(buf)?;
+        buf.write_all(&self.body)?;
+        Ok(())
     }
 }
 
@@ -54,10 +70,13 @@ pub(crate) struct MessageContainer {
 }
 
 impl MessageContainer {
+    // constructor id (4 bytes), inner vec len (4 bytes)
+    pub const SIZE_OVERHEAD: usize = 8;
+
     /// Maximum size in bytes for the inner payload of the container.
     /// Telegram will close the connection if the payload is bigger.
     /// The overhead of the container itself is subtracted.
-    pub const MAXIMUM_SIZE: usize = 1044456 - 8;
+    pub const MAXIMUM_SIZE: usize = 1044456 - Self::SIZE_OVERHEAD;
 
     /// Maximum amount of messages that can't be sent inside a single
     /// container, inclusive. Beyond this limit Telegram will respond
