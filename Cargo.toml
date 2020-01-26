@@ -10,3 +10,4 @@ members = [
 
 [patch.crates-io]
 grammers-tl-parser = { path = "lib/grammers-tl-parser" }
+grammers-tl-types = { path = "lib/grammers-tl-types" }
