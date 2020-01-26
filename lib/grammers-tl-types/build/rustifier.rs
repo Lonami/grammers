@@ -3,16 +3,29 @@
 use grammers_tl_parser::{Parameter, ParameterType};
 
 /// Get the rusty class name for a certain definition, excluding namespace.
+///
+/// # Examples
+///
+/// ```
+/// assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOKName");
+/// ```
 pub(crate) fn rusty_class_name(name: &str) -> String {
-    let mut name: String = if let Some(pos) = name.find('.') {
-        &name[pos + 1..]
-    } else {
-        name
-    }
-    .into();
+    let start = name.find('.').map(|p| p + 1).unwrap_or(0);
+    let mut result = String::with_capacity(name.len() - start);
 
-    name[..1].make_ascii_uppercase();
-    name
+    name.chars().skip(start).fold(true, |upper, c| {
+        if c == '_' {
+            true
+        } else if upper {
+            result.push(c.to_ascii_uppercase());
+            false
+        } else {
+            result.push(c);
+            false
+        }
+    });
+
+    result
 }
 
 /// Get a rusty class name, including namespaces.

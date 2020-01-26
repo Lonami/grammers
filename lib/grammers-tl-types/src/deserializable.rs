@@ -232,9 +232,11 @@ impl<T: Deserializable> Deserializable for Vec<T> {
 impl<T: Deserializable> Deserializable for crate::RawVec<T> {
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
         let len = u32::deserialize(buf)?;
-        Ok(Self((0..len)
-            .map(|_| T::deserialize(buf))
-            .collect::<Result<Vec<T>>>()?))
+        Ok(Self(
+            (0..len)
+                .map(|_| T::deserialize(buf))
+                .collect::<Result<Vec<T>>>()?,
+        ))
     }
 }
 
