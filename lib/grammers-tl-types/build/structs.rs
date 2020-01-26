@@ -91,7 +91,7 @@ fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
-                write!(file, "buf.write(&(0u32")?;
+                write!(file, "(0u32")?;
 
                 // Compute flags as a single expression
                 for p in def.params.iter() {
@@ -117,7 +117,7 @@ fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
                     }
                 }
 
-                writeln!(file, ").to_le_bytes())?;")?;
+                writeln!(file, ").serialize(buf)?;")?;
             }
             ParameterType::Normal { ty, flag } => {
                 // The `true` type is not serialized

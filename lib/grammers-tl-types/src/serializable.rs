@@ -54,7 +54,7 @@ impl Serializable for bool {
 /// ```
 impl Serializable for i32 {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(&self.to_le_bytes()).map(drop)
+        buf.write_all(&self.to_le_bytes()).map(drop)
     }
 }
 
@@ -75,7 +75,7 @@ impl Serializable for i32 {
 /// ```
 impl Serializable for u32 {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(&self.to_le_bytes()).map(drop)
+        buf.write_all(&self.to_le_bytes()).map(drop)
     }
 }
 
@@ -97,7 +97,7 @@ impl Serializable for u32 {
 /// ```
 impl Serializable for i64 {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(&self.to_le_bytes()).map(drop)
+        buf.write_all(&self.to_le_bytes()).map(drop)
     }
 }
 
@@ -116,7 +116,7 @@ impl Serializable for i64 {
 /// ```
 impl Serializable for [u8; 16] {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(self).map(drop)
+        buf.write_all(self).map(drop)
     }
 }
 
@@ -136,7 +136,7 @@ impl Serializable for [u8; 16] {
 /// ```
 impl Serializable for [u8; 32] {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(self).map(drop)
+        buf.write_all(self).map(drop)
     }
 }
 
@@ -159,7 +159,7 @@ impl Serializable for [u8; 32] {
 /// ```
 impl Serializable for f64 {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write(&self.to_le_bytes()).map(drop)
+        buf.write_all(&self.to_le_bytes()).map(drop)
     }
 }
 
@@ -286,10 +286,10 @@ impl Serializable for Vec<u8> {
 impl Serializable for &[u8] {
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
         let len = if self.len() <= 253 {
-            buf.write(&[self.len() as u8])?;
+            buf.write_all(&[self.len() as u8])?;
             self.len() + 1
         } else {
-            buf.write(&[
+            buf.write_all(&[
                 254,
                 ((self.len() >> 0) & 0xff) as u8,
                 ((self.len() >> 8) & 0xff) as u8,
@@ -299,9 +299,9 @@ impl Serializable for &[u8] {
         };
         let padding = (4 - (len % 4)) % 4;
 
-        buf.write(self)?;
+        buf.write_all(self)?;
         for _ in 0..padding {
-            buf.write(&[0])?;
+            buf.write_all(&[0])?;
         }
         Ok(())
     }
