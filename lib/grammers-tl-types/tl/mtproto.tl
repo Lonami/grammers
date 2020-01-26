@@ -102,15 +102,15 @@ ipPortSecret#37982646 ipv4:int port:int secret:bytes = IpPort;
 accessPointRule#4679b65f phone_prefix_rules:string dc_id:int ips:vector<IpPort> = AccessPointRule;
 help.configSimple#5a592a6c date:int expires:int rules:vector<AccessPointRule> = help.ConfigSimple;
 
-tlsClientHello blocks:vector<TlsBlock> = TlsClientHello;
-
-tlsBlockString data:string = TlsBlock;
-tlsBlockRandom length:int = TlsBlock;
-tlsBlockZero length:int = TlsBlock;
-tlsBlockDomain = TlsBlock;
-tlsBlockGrease seed:int = TlsBlock;
-tlsBlockPublicKey = TlsBlock;
-tlsBlockScope entries:Vector<TlsBlock> = TlsBlock;
+//tlsClientHello blocks:vector<TlsBlock> = TlsClientHello;
+//
+//tlsBlockString data:string = TlsBlock;
+//tlsBlockRandom length:int = TlsBlock;
+//tlsBlockZero length:int = TlsBlock;
+//tlsBlockDomain = TlsBlock;
+//tlsBlockGrease seed:int = TlsBlock;
+//tlsBlockPublicKey = TlsBlock;
+//tlsBlockScope entries:Vector<TlsBlock> = TlsBlock;
 
 ---functions---
 

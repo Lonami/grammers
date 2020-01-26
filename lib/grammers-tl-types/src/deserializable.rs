@@ -121,6 +121,49 @@ impl Deserializable for i64 {
     }
 }
 
+/// Deserializes the 128-bit integer according to the following definition:
+///
+/// * `int128 4*[ int ] = Int128;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::Deserializable;
+///
+/// let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+///
+/// assert_eq!(<[u8; 16]>::from_bytes(&data).unwrap(), data);
+/// ```
+impl Deserializable for [u8; 16] {
+    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+        let mut buffer = [0u8; 16];
+        buf.read_exact(&mut buffer)?;
+        Ok(buffer)
+    }
+}
+
+/// Deserializes the 128-bit integer according to the following definition:
+///
+/// * `int256 8*[ int ] = Int256;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::Deserializable;
+///
+/// let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+///             18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+///
+/// assert_eq!(<[u8; 32]>::from_bytes(&data).unwrap(), data);
+/// ```
+impl Deserializable for [u8; 32] {
+    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+        let mut buffer = [0u8; 32];
+        buf.read_exact(&mut buffer)?;
+        Ok(buffer)
+    }
+}
+
 /// Deserializes a 64-bit floating point according to the following
 /// definition:
 ///
@@ -170,6 +213,28 @@ impl<T: Deserializable> Deserializable for Vec<T> {
         Ok((0..len)
             .map(|_| T::deserialize(buf))
             .collect::<Result<Vec<T>>>()?)
+    }
+}
+
+/// Deserializes a vector of deserializable items according to the following
+/// definition:
+///
+/// * `vector#1cb5c415 {t:Type} # [ t ] = Vector t;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::{RawVec, Deserializable};
+///
+/// assert_eq!(RawVec::<i32>::from_bytes(&[0x0, 0x0, 0x0, 0x0]).unwrap().0, Vec::<i32>::new());
+/// assert_eq!(RawVec::<i32>::from_bytes(&[0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]).unwrap().0, vec![0x7f_i32]);
+/// ```
+impl<T: Deserializable> Deserializable for crate::RawVec<T> {
+    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+        let len = u32::deserialize(buf)?;
+        Ok(Self((0..len)
+            .map(|_| T::deserialize(buf))
+            .collect::<Result<Vec<T>>>()?))
     }
 }
 

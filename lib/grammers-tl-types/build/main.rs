@@ -11,7 +11,7 @@ use std::io::{BufWriter, Write};
 fn main() -> std::io::Result<()> {
     // TODO maybe a config to determine which files to generate?
     let api = loader::load_tl("tl/api.tl")?;
-    let _mtproto = loader::load_tl("tl/mtproto.tl")?; // TODO use
+    let api = loader::load_tl("tl/mtproto.tl")?; // TODO both
 
     let mut file = BufWriter::new(File::create("src/generated.rs")?);
 

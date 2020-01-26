@@ -57,11 +57,19 @@ pub(crate) fn push_sanitized_name(result: &mut String, name: &str) {
         "long" => "i64",
         "string" => "String",
         "true" => "bool",
+        "vector" => "crate::RawVec",
         "Vector" => "Vec",
         _ => "",
     };
     if base.is_empty() {
-        result.push_str("crate::enums::");
+        let first_letter = name.find('.').map(|p| p + 1).unwrap_or(0);
+        if name.as_bytes()[first_letter].is_ascii_lowercase() {
+            // Bare type
+            result.push_str("crate::types::")
+        } else {
+            // Boxed type
+            result.push_str("crate::enums::");
+        }
         result.push_str(&rusty_namespaced_class_name(name));
     } else {
         result.push_str(base);
@@ -70,11 +78,18 @@ pub(crate) fn push_sanitized_name(result: &mut String, name: &str) {
 
 /// Sanitizes a path to be legal.
 pub(crate) fn push_sanitized_path(result: &mut String, name: &str) {
-    // All sanitized names are valid paths except for `Vec<u8>`
-    if name == "bytes" {
-        result.push_str("Vec::<u8>");
-    } else {
+    // All sanitized names are valid paths except for a few base cases.
+    let base = match name {
+        "bytes" => "Vec::<u8>",
+        "int128" => "<[u8; 16]>",
+        "int256" => "<[u8; 32]>",
+        _ => "",
+    };
+
+    if base.is_empty() {
         push_sanitized_name(result, name);
+    } else {
+        result.push_str(base);
     }
 }
 

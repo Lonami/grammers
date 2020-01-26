@@ -101,6 +101,45 @@ impl Serializable for i64 {
     }
 }
 
+/// Serializes the 128-bit integer according to the following definition:
+///
+/// * `int128 4*[ int ] = Int128;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::Serializable;
+///
+/// let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16];
+///
+/// assert_eq!(data.to_bytes(), data);
+/// ```
+impl Serializable for [u8; 16] {
+    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+        buf.write(self).map(drop)
+    }
+}
+
+/// Serializes the 128-bit integer according to the following definition:
+///
+/// * `int256 8*[ int ] = Int256;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::Serializable;
+///
+/// let data = [1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17,
+///             18, 19, 20, 21, 22, 23, 24, 25, 26, 27, 28, 29, 30, 31, 32];
+///
+/// assert_eq!(data.to_bytes(), data);
+/// ```
+impl Serializable for [u8; 32] {
+    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+        buf.write(self).map(drop)
+    }
+}
+
 /// Serializes the 64-bit floating point according to the following
 /// definition:
 ///
@@ -143,6 +182,29 @@ impl<T: Serializable> Serializable for Vec<T> {
         0x1cb5c415u32.serialize(buf)?;
         (self.len() as i32).serialize(buf)?;
         for x in self {
+            x.serialize(buf)?;
+        }
+        Ok(())
+    }
+}
+
+/// Serializes a raw vector of serializable items according to the following
+/// definition:
+///
+/// * `vector#1cb5c415 {t:Type} # [ t ] = Vector t;`.
+///
+/// # Examples
+///
+/// ```
+/// use grammers_tl_types::{RawVec, Serializable};
+///
+/// assert_eq!(RawVec(Vec::<i32>::new()).to_bytes(), [0x0, 0x0, 0x0, 0x0]);
+/// assert_eq!(RawVec(vec![0x7f_i32]).to_bytes(), [0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
+/// ```
+impl<T: Serializable> Serializable for crate::RawVec<T> {
+    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+        (self.0.len() as i32).serialize(buf)?;
+        for x in self.0.iter() {
             x.serialize(buf)?;
         }
         Ok(())
