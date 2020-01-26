@@ -23,6 +23,7 @@
 //! [Type Language]: https://core.telegram.org/mtproto/TL
 //! [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
 mod deserializable;
+pub mod errors;
 mod generated;
 mod serializable;
 

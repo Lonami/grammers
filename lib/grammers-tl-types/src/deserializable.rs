@@ -1,4 +1,5 @@
-use std::io::{Cursor, Read, Result};
+use crate::errors::UnexpectedConstructor;
+use std::io::{Cursor, Error, ErrorKind, Read, Result};
 
 /// Read a single byte from the buffer.
 #[inline(always)]
@@ -46,7 +47,10 @@ impl Deserializable for bool {
         match id {
             0x997275b5u32 => Ok(true),
             0xbc799737u32 => Ok(false),
-            _ => unimplemented!("return error"), // make sure to update the doctest
+            _ => Err(Error::new(
+                ErrorKind::InvalidData,
+                UnexpectedConstructor { id },
+            )),
         }
     }
 }
@@ -207,7 +211,10 @@ impl<T: Deserializable> Deserializable for Vec<T> {
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         if id != 0x1cb5c415u32 {
-            unimplemented!("return error");
+            return Err(Error::new(
+                ErrorKind::InvalidData,
+                UnexpectedConstructor { id },
+            ));
         }
         let len = u32::deserialize(buf)?;
         Ok((0..len)

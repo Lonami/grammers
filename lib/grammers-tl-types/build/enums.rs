@@ -116,7 +116,7 @@ fn write_serializable<W: Write>(
 ///         use crate::Identifiable;
 ///         Ok(match u32::deserialize(buf)? {
 ///             crate::types::Name::CONSTRUCTOR_ID => Self::Variant(crate::types::Name::deserialize(buf)?),
-///             _ => unimplemented!("return error")
+///             _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, ...)),
 ///         })
 ///     }
 /// }
@@ -139,7 +139,8 @@ fn write_deserializable<W: Write>(
         indent
     )?;
     writeln!(file, "{}        use crate::Identifiable;", indent)?;
-    writeln!(file, "{}        Ok(match u32::deserialize(buf)? {{", indent)?;
+    writeln!(file, "{}        let id = u32::deserialize(buf)?;", indent)?;
+    writeln!(file, "{}        Ok(match id {{", indent)?;
     for d in type_defs.iter() {
         write!(
             file,
@@ -170,7 +171,8 @@ fn write_deserializable<W: Write>(
     }
     writeln!(
         file,
-        "{}            _ => unimplemented!(\"return error\")",
+        "{}            _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, \
+         crate::errors::UnexpectedConstructor {{ id }})),",
         indent
     )?;
     writeln!(file, "{}        }})", indent)?;
