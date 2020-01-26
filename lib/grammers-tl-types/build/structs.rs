@@ -57,8 +57,7 @@ fn write_identifiable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
     writeln!(
         file,
         "{}    const CONSTRUCTOR_ID: u32 = {};",
-        indent,
-        def.id.unwrap()
+        indent, def.id
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())

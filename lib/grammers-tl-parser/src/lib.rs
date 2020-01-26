@@ -1,3 +1,4 @@
+use crc32fast::Hasher;
 use std::num::ParseIntError;
 
 const FUNCTIONS_SEP: &'static str = "---functions---";
@@ -73,7 +74,10 @@ pub struct Definition {
     pub name: String,
 
     /// The numeric identifier of this definition.
-    pub id: Option<u32>,
+    ///
+    /// If a definition has an identifier, it overrides this value.
+    /// Otherwise, the identifier is inferred from the definition.
+    pub id: u32,
 
     /// A possibly-empty list of parameters this definition has.
     pub params: Vec<Parameter>,
@@ -262,6 +266,27 @@ fn parse_param(param: &str) -> Result<Parameter, ParamParseError> {
     })
 }
 
+/// Infers the identifier for a definition.
+fn infer_id(definition: &str) -> u32 {
+    let mut representation = definition
+        .replace(":bytes ", ": string")
+        .replace("?bytes ", "? string")
+        .replace("<", " ")
+        .replace(">", "")
+        .replace("{", "")
+        .replace("}", "");
+
+    // Remove r" \w+:flags\.\d+\?true"
+    while let Some(pos) = representation.find("?true") {
+        let space = representation[..pos].rfind(' ').unwrap_or(0);
+        representation.replace_range(space..pos + "?true".len(), "");
+    }
+
+    let mut hasher = Hasher::new();
+    hasher.update(representation.as_bytes());
+    hasher.finalize() // crc32
+}
+
 /// Parses a [Type Language] definition.
 ///
 /// # Examples
@@ -315,8 +340,8 @@ pub fn parse_tl_definition(definition: &str) -> Result<Definition, ParseError> {
 
     // Parse `id`
     let id = match id {
-        Some(i) => Some(u32::from_str_radix(i, 16).map_err(ParseError::MalformedId)?),
-        None => None,
+        Some(i) => u32::from_str_radix(i, 16).map_err(ParseError::MalformedId)?,
+        None => infer_id(definition),
     };
 
     // Parse `middle`
@@ -635,10 +660,38 @@ mod tests {
     }
 
     #[test]
+    fn parse_infer_id() {
+        // Note the type `bytes`
+        let def = "rpc_answer_dropped msg_id:long seq_no:int bytes:int = RpcDropAnswer";
+        assert_eq!(infer_id(def), 0xa43ad8b7);
+
+        // Note the use of angle brackets
+        let def = "msgs_ack msg_ids:Vector<long> = MsgsAck";
+        assert_eq!(infer_id(def), 0x62d6b459);
+
+        // Note the use of curly brackets
+        let def = "invokeAfterMsg {X:Type} msg_id:long query:!X = X";
+        assert_eq!(infer_id(def), 0xcb9f372d);
+
+        // Note the use of `true` flags
+        let def = "inputMessagesFilterPhoneCalls flags:# missed:flags.0?true = MessagesFilter";
+        assert_eq!(infer_id(def), 0x80c99768);
+    }
+
+    #[test]
+    fn parse_override_id() {
+        let def = "rpc_answer_dropped msg_id:long seq_no:int bytes:int = RpcDropAnswer";
+        assert_eq!(parse_tl_definition(def).unwrap().id, 0xa43ad8b7);
+
+        let def = "rpc_answer_dropped#123456 msg_id:long seq_no:int bytes:int = RpcDropAnswer";
+        assert_eq!(parse_tl_definition(def).unwrap().id, 0x123456);
+    }
+
+    #[test]
     fn parse_valid_definition() {
         let def = parse_tl_definition("a#1=d").unwrap();
         assert_eq!(def.name, "a");
-        assert_eq!(def.id, Some(1));
+        assert_eq!(def.id, 1);
         assert_eq!(def.params.len(), 0);
         assert_eq!(
             def.ty,
@@ -651,7 +704,7 @@ mod tests {
 
         let def = parse_tl_definition("a=d<e>").unwrap();
         assert_eq!(def.name, "a");
-        assert_eq!(def.id, None);
+        assert_ne!(def.id, 0);
         assert_eq!(def.params.len(), 0);
         assert_eq!(
             def.ty,
@@ -664,7 +717,7 @@ mod tests {
 
         let def = parse_tl_definition("a b:c = d").unwrap();
         assert_eq!(def.name, "a");
-        assert_eq!(def.id, None);
+        assert_ne!(def.id, 0);
         assert_eq!(def.params.len(), 1);
         assert_eq!(
             def.ty,
@@ -677,7 +730,7 @@ mod tests {
 
         let def = parse_tl_definition("a#1 {b:Type} c:!b = d").unwrap();
         assert_eq!(def.name, "a");
-        assert_eq!(def.id, Some(1));
+        assert_eq!(def.id, 1);
         assert_eq!(def.params.len(), 1);
         assert!(match def.params[0].ty {
             ParameterType::Normal {
@@ -722,8 +775,8 @@ mod tests {
         );
 
         assert_eq!(result.len(), 3);
-        assert_eq!(result[0].as_ref().unwrap().id, Some(1));
+        assert_eq!(result[0].as_ref().unwrap().id, 1);
         assert!(result[1].as_ref().is_err());
-        assert_eq!(result[2].as_ref().unwrap().id, Some(3));
+        assert_eq!(result[2].as_ref().unwrap().id, 3);
     }
 }
