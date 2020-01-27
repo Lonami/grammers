@@ -51,5 +51,5 @@ pub trait Identifiable {
 pub trait RPC: Serializable {
     /// The type of the "return" value coming from the other end of the
     /// connection.
-    type Return;
+    type Return: Deserializable;
 }
