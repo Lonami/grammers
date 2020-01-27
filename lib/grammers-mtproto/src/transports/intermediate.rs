@@ -23,7 +23,7 @@ impl Transport for TransportIntermediate {
         Ok(())
     }
 
-    fn receive<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
+    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
         let len = {
             let mut buf = [0; 4];
             channel.read_exact(&mut buf)?;

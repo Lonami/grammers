@@ -56,5 +56,15 @@ pub trait Transport {
     fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()>;
 
     /// Receive a packet into an existing buffer.
-    fn receive<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()>;
+    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()>;
+
+    /// Create a new buffer to hold an incoming message,
+    /// and then receive one into it.
+    fn receive<R: Read>(&mut self, channel: &mut R) -> Result<Vec<u8>> {
+        let mut buffer = Vec::new();
+        match self.receive_into(channel, &mut buffer) {
+            Ok(_) => Ok(buffer),
+            Err(e) => Err(e),
+        }
+    }
 }

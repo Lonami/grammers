@@ -39,7 +39,7 @@ impl Transport for TransportFull {
         Ok(())
     }
 
-    fn receive<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
+    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
         // payload len
         let mut len_data = [0; 4];
         channel.read_exact(&mut len_data)?;
