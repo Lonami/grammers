@@ -41,6 +41,7 @@ impl MTSender {
             tl::enums::ResPQ::ResPQ(x) => x,
         };
 
+        let pq = auth_key::generation::validate_pq(&nonce, &res_pq)?;
         unimplemented!();
     }
 
