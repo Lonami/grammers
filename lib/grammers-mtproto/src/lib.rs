@@ -7,8 +7,15 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use getrandom::getrandom;
 use grammers_tl_types::{self as tl, Identifiable, Serializable};
 
+const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
+
 struct AuthKey {
     data: Vec<u8>,
+}
+
+/// A builder to configure `MTProto` instances.
+pub struct MTProtoBuilder {
+    compression_threshold: Option<usize>,
 }
 
 /// This structure holds everything needed by the Mobile Transport Protocol.
@@ -36,6 +43,11 @@ pub struct MTProto {
 
     /// Identifiers that need to be acknowledged to the server.
     pending_ack: Vec<i64>,
+
+    /// If present, the threshold in bytes at which a message will be
+    /// considered large enough to attempt compressing it. Otherwise,
+    /// outgoing messages will never be compressed.
+    compression_threshold: Option<usize>,
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
@@ -57,7 +69,30 @@ pub enum EnqueueError {
     IncorrectPadding,
 }
 
+impl MTProtoBuilder {
+    fn new() -> Self {
+        Self {
+            compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
+        }
+    }
+
+    /// Configures the compression threshold for outgoing messages.
+    pub fn compression_threshold(mut self, threshold: Option<usize>) -> Self {
+        self.compression_threshold = threshold;
+        self
+    }
+
+    /// Finishes the builder and returns the `MTProto` instance with all
+    /// the configuration changes applied.
+    pub fn finish(self) -> MTProto {
+        let mut result = MTProto::new();
+        result.compression_threshold = self.compression_threshold;
+        result
+    }
+}
+
 impl MTProto {
+    /// Creates a new instance with default settings.
     pub fn new() -> Self {
         let client_id = {
             let mut buffer = [0u8; 8];
@@ -74,7 +109,13 @@ impl MTProto {
             last_msg_id: 0,
             message_queue: VecDeque::new(),
             pending_ack: vec![],
+            compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
         }
+    }
+
+    /// Returns a builder to configure certain parameters.
+    pub fn build() -> MTProtoBuilder {
+        MTProtoBuilder::new()
     }
 
     /// Enqueues a request and returns its associated `msg_id`.
@@ -87,7 +128,7 @@ impl MTProto {
     /// If a certain amount of time passes and the enqueued
     /// request has not been sent yet, the message ID will
     /// become stale and Telegram will reject it.
-    pub fn enqueue_request(&mut self, body: Vec<u8>) -> Result<MsgId, EnqueueError> {
+    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> Result<MsgId, EnqueueError> {
         if body.len() + manual_tl::Message::SIZE_OVERHEAD
             > manual_tl::MessageContainer::MAXIMUM_SIZE
         {
@@ -95,6 +136,17 @@ impl MTProto {
         }
         if body.len() % 4 != 0 {
             return Err(EnqueueError::IncorrectPadding);
+        }
+
+        // Payload from the outside is always considered to be
+        // content-related, which means we can apply compression.
+        if let Some(threshold) = self.compression_threshold {
+            if body.len() >= threshold {
+                let compressed = manual_tl::GzipPacked::new(&body).to_bytes();
+                if compressed.len() < body.len() {
+                    body = compressed;
+                }
+            }
         }
 
         Ok(self.enqueue_body(body, true))
@@ -119,7 +171,6 @@ impl MTProto {
     fn enqueue_body(&mut self, body: Vec<u8>, content_related: bool) -> MsgId {
         let msg_id = self.get_new_msg_id();
         let seq_no = self.get_seq_no(content_related);
-        // TODO if it's content_related, gzip if uncompressed size > 512 and gzipping is smaller
         self.message_queue.push_back(manual_tl::Message {
             msg_id,
             seq_no,

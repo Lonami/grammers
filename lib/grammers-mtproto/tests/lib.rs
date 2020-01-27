@@ -1,10 +1,19 @@
 use grammers_mtproto::{EnqueueError, MTProto};
 
+// gzip_packed#3072cfa1 packed_data:string = Object;
+const GZIP_PACKED_HEADER: [u8; 4] = [0xa1, 0xcf, 0x72, 0x30];
+
+// invokeAfterMsg#cb9f372d {X:Type} msg_id:long query:!X = X;
+const INVOKE_AFTER_HEADER: [u8; 4] = [0x2d, 0x37, 0x9f, 0xcb];
+
+// msg_container#73f1f8dc messages:vector<message> = MessageContainer;
+const MSG_CONTAINER_HEADER: [u8; 4] = [0xdc, 0xf8, 0xf1, 0x73];
+
 #[test]
 fn ensure_buffer_used_exact_capacity() {
     {
         // Single body (no container)
-        let mut mtproto = MTProto::new();
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -14,7 +23,7 @@ fn ensure_buffer_used_exact_capacity() {
     }
     {
         // Multiple bodies (using a container)
-        let mut mtproto = MTProto::new();
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -40,7 +49,7 @@ fn ensure_buffer_is_message(buffer: &[u8], body: &[u8], seq_no: u8) {
 
 #[test]
 fn ensure_correct_single_serialization() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -51,7 +60,7 @@ fn ensure_correct_single_serialization() {
 
 #[test]
 fn ensure_correct_multi_serialization() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -70,7 +79,7 @@ fn ensure_correct_multi_serialization() {
     assert_eq!(&buffer[12..16], [48, 0, 0, 0]);
 
     // buffer[16..20] is the constructor id of the container
-    assert_eq!(&buffer[16..20], [0xdc, 0xf8, 0xf1, 0x73]);
+    assert_eq!(&buffer[16..20], MSG_CONTAINER_HEADER);
     // buffer[20..24] is how many messages are included
     assert_eq!(&buffer[20..24], [2, 0, 0, 0]);
 
@@ -83,7 +92,7 @@ fn ensure_correct_multi_serialization() {
 
 #[test]
 fn ensure_correct_single_dependant_serialization() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     let id = mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -95,7 +104,7 @@ fn ensure_correct_single_dependant_serialization() {
     let buffer = mtproto.pop_queue().unwrap();
     let invoke_after = {
         let mut tmp = Vec::with_capacity(16);
-        tmp.extend(&[0x2d, 0x37, 0x9f, 0xcb]);
+        tmp.extend(&INVOKE_AFTER_HEADER);
         tmp.extend(&first_buffer[0..8]);
         tmp.extend(b"Bye!");
         tmp
@@ -105,7 +114,7 @@ fn ensure_correct_single_dependant_serialization() {
 
 #[test]
 fn ensure_correct_multi_dependant_serialization() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     let id = mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -124,7 +133,7 @@ fn ensure_correct_multi_dependant_serialization() {
     assert_eq!(&buffer[12..16], [60, 0, 0, 0]);
 
     // buffer[16..20] is the constructor id of the container
-    assert_eq!(&buffer[16..20], [0xdc, 0xf8, 0xf1, 0x73]);
+    assert_eq!(&buffer[16..20], MSG_CONTAINER_HEADER);
     // buffer[20..24] is how many messages are included
     assert_eq!(&buffer[20..24], [2, 0, 0, 0]);
 
@@ -134,7 +143,7 @@ fn ensure_correct_multi_dependant_serialization() {
     // buffer[44..] is the other inner message wrapped in invokeAfterMsg
     let invoke_after = {
         let mut tmp = Vec::with_capacity(16);
-        tmp.extend(&[0x2d, 0x37, 0x9f, 0xcb]);
+        tmp.extend(&INVOKE_AFTER_HEADER);
         tmp.extend(&buffer[24..32]);
         tmp.extend(b"Bye!");
         tmp
@@ -144,7 +153,7 @@ fn ensure_correct_multi_dependant_serialization() {
 
 #[test]
 fn ensure_queue_is_clear() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     assert!(mtproto.pop_queue().is_none());
     let id = mtproto
@@ -157,7 +166,7 @@ fn ensure_queue_is_clear() {
 
 #[test]
 fn ensure_large_payload_errors() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
         Err(EnqueueError::PayloadTooLarge) => true,
@@ -176,7 +185,7 @@ fn ensure_large_payload_errors() {
 
 #[test]
 fn ensure_non_padded_payload_errors() {
-    let mut mtproto = MTProto::new();
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     assert!(match mtproto.enqueue_request(vec![1, 2, 3]) {
         Err(EnqueueError::IncorrectPadding) => true,
@@ -191,4 +200,44 @@ fn ensure_non_padded_payload_errors() {
         .unwrap();
 
     assert_eq!(mtproto.pop_queue().unwrap().len(), 20);
+}
+
+#[test]
+fn ensure_no_compression_is_honored() {
+    // A large vector of null bytes should compress
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
+    mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+    let buffer = mtproto.pop_queue().unwrap();
+    assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+}
+
+#[test]
+fn ensure_some_compression() {
+    // A large vector of null bytes should compress
+    {
+        // High threshold not reached, should not compress
+        let mut mtproto = MTProto::build()
+            .compression_threshold(Some(768 * 1024))
+            .finish();
+        mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+        let buffer = mtproto.pop_queue().unwrap();
+        assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+    }
+    {
+        // Low threshold is exceeded, should compress
+        let mut mtproto = MTProto::build()
+            .compression_threshold(Some(256 * 1024))
+            .finish();
+        mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+        let buffer = mtproto.pop_queue().unwrap();
+        dbg!(&buffer);
+        assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+    }
+    {
+        // The default should compress
+        let mut mtproto = MTProto::new();
+        mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+        let buffer = mtproto.pop_queue().unwrap();
+        assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+    }
 }

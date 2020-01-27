@@ -1,5 +1,6 @@
 //! This module contains additional, manual structures for some TL types.
-use grammers_tl_types::{self as tl, Deserializable, Serializable};
+use grammers_tl_types::{Deserializable, Identifiable, Serializable};
+use miniz_oxide::deflate::compress_to_vec;
 use std::io::{self, Write};
 
 /// This struct represents the following TL definition:
@@ -56,7 +57,7 @@ pub(crate) struct RpcResult {
     pub result: Vec<u8>,
 }
 
-impl tl::Identifiable for RpcResult {
+impl Identifiable for RpcResult {
     const CONSTRUCTOR_ID: u32 = 0xf35c6d01_u32;
 }
 
@@ -89,7 +90,7 @@ impl MessageContainer {
     pub const MAXIMUM_LENGTH: usize = 100;
 }
 
-impl tl::Identifiable for MessageContainer {
+impl Identifiable for MessageContainer {
     const CONSTRUCTOR_ID: u32 = 0x73f1f8dc_u32;
 }
 
@@ -103,23 +104,21 @@ pub(crate) struct GzipPacked {
 }
 
 impl GzipPacked {
-    /// If the given data is larger than a certain threshold,
-    /// and compressing it with gzip is benefitial, the compressed
-    /// data is returned. Otherwise, the original data is returned.
-    ///
-    /// This should only be done for content-related requests.
-    pub fn gzip_if_smaller() {
-        /*
-        if content_related and len(data) > 512:
-            gzipped = bytes(GzipPacked(data))
-            return gzipped if len(gzipped) < len(data) else data
-        else:
-            return data
-        */
-        unimplemented!();
+    pub fn new(unpacked_data: &[u8]) -> Self {
+        Self {
+            packed_data: compress_to_vec(unpacked_data, 9),
+        }
     }
 }
 
-impl tl::Identifiable for GzipPacked {
+impl Identifiable for GzipPacked {
     const CONSTRUCTOR_ID: u32 = 0x3072cfa1_u32;
+}
+
+impl Serializable for GzipPacked {
+    fn serialize<B: Write>(&self, buf: &mut B) -> io::Result<()> {
+        Self::CONSTRUCTOR_ID.serialize(buf)?;
+        self.packed_data.serialize(buf)?;
+        Ok(())
+    }
 }
