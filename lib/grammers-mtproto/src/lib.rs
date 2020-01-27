@@ -213,7 +213,7 @@ impl MTProto {
             .iter()
             .take(manual_tl::MessageContainer::MAXIMUM_LENGTH)
             .take_while(|message| {
-                if batch_size + message.size() < manual_tl::MessageContainer::MAXIMUM_LENGTH {
+                if batch_size + message.size() < manual_tl::MessageContainer::MAXIMUM_SIZE {
                     batch_size += message.size();
                     true
                 } else {

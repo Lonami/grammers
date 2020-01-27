@@ -152,6 +152,34 @@ fn ensure_correct_multi_dependant_serialization() {
 }
 
 #[test]
+fn ensure_correct_single_large_serialization() {
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
+    let data = vec![0x7f; 768 * 1024];
+
+    mtproto.enqueue_request(data.clone()).unwrap();
+    let buffer = mtproto.pop_queue().unwrap();
+    assert_eq!(buffer.len(), 16 + data.len());
+}
+
+#[test]
+fn ensure_correct_multi_large_serialization() {
+    let mut mtproto = MTProto::build().compression_threshold(None).finish();
+    let data = vec![0x7f; 768 * 1024];
+
+    mtproto.enqueue_request(data.clone()).unwrap();
+
+    mtproto.enqueue_request(data.clone()).unwrap();
+
+    // The messages are large enough that they should not be able to go in
+    // a container together (so there are two things to pop).
+    let buffer = mtproto.pop_queue().unwrap();
+    assert_eq!(buffer.len(), 16 + data.len());
+
+    let buffer = mtproto.pop_queue().unwrap();
+    assert_eq!(buffer.len(), 16 + data.len());
+}
+
+#[test]
 fn ensure_queue_is_clear() {
     let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
