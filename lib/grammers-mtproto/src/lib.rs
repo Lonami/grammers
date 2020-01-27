@@ -2,12 +2,14 @@ mod manual_tl;
 pub mod transports;
 
 use std::collections::VecDeque;
+use std::error::Error;
+use std::fmt;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
 use grammers_crypto::{encrypt_data_v2, AuthKey, Side};
-use grammers_tl_types::{self as tl, Identifiable, Serializable};
+use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
 
 const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 
@@ -65,6 +67,48 @@ pub enum EnqueueError {
 
     /// Well-formed data must be padded to 4 bytes.
     IncorrectPadding,
+}
+
+// TODO impl Error for EnqueueError
+// TODO move errors to their own file
+
+/// Represents an error that occurs while deserializing messages.
+#[derive(Debug)]
+pub enum DeserializeError {
+    /// The server's authorization key did not match our expectations.
+    BadAuthKey { got: i64, expected: i64 },
+
+    /// The server's message ID did not match our expectations.
+    BadMessageId { got: i64 },
+
+    /// The server's message length was not strictly positive.
+    NegativeMessageLength { got: i32 },
+
+    /// The server's message length was past the buffer.
+    TooLongMessageLength { got: usize, max_length: usize },
+}
+
+impl Error for DeserializeError {}
+
+impl fmt::Display for DeserializeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::BadAuthKey { got, expected } => write!(
+                f,
+                "bad server auth key (got {}, expected {})",
+                got, expected
+            ),
+            Self::BadMessageId { got } => write!(f, "bad server message id (got {})", got),
+            Self::NegativeMessageLength { got } => {
+                write!(f, "bad server message length (got {})", got)
+            }
+            Self::TooLongMessageLength { got, max_length } => write!(
+                f,
+                "bad server message length (got {}, when at most it should be {})",
+                got, max_length
+            ),
+        }
+    }
 }
 
 impl MTProtoBuilder {
@@ -313,6 +357,50 @@ impl MTProto {
         (body.len() as u32).serialize(&mut buf).unwrap();
         buf.write_all(&body).unwrap();
         buf.into_inner()
+    }
+
+    /// The opposite of `serialize_plain_message`. It validates that the
+    /// returned data is valid.
+    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+        let mut buf = io::Cursor::new(message);
+        let auth_key_id = i64::deserialize(&mut buf)?;
+        if auth_key_id != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::BadAuthKey {
+                    got: auth_key_id,
+                    expected: 0,
+                },
+            ));
+        }
+
+        let msg_id = i64::deserialize(&mut buf)?;
+        if msg_id == 0 {
+            // TODO make sure it's close to our system time
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::BadMessageId { got: msg_id },
+            ));
+        }
+
+        let len = i32::deserialize(&mut buf)?;
+        if len <= 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::NegativeMessageLength { got: len },
+            ));
+        }
+        if (20 + len) as usize > message.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::TooLongMessageLength {
+                    got: len as usize,
+                    max_length: message.len() - 20,
+                },
+            ));
+        }
+
+        Ok(&message[20..20 + len as usize])
     }
 
     /// Encrypts the data returned by `pop_queue` to be able to send it
