@@ -42,6 +42,7 @@ impl From<AuthKeyGenError> for io::Error {
 }
 
 /// Step 1. Generates a secure random nonce.
+// TODO make all steps return a request to make it more straightforward
 pub fn generate_nonce() -> [u8; 16] {
     let mut buffer = [0; 16];
     getrandom(&mut buffer).expect("failed to generate a secure nonce");
@@ -78,7 +79,7 @@ pub fn construct_req_dh_params(
     pq: u64,
     nonce: &[u8; 16],
     res_pq: &tl::types::ResPQ,
-) -> Result<(), AuthKeyGenError> {
+) -> Result<tl::functions::ReqDHParams, AuthKeyGenError> {
     let (p, q) = factorize(pq);
     let new_nonce = {
         let mut buffer = [0; 32];
@@ -102,11 +103,29 @@ pub fn construct_req_dh_params(
     let fingerprint = match res_pq
         .server_public_key_fingerprints
         .iter()
-        .find(|&&fingerprint| key_for_fingerprint(fingerprint).is_some())
+        .cloned()
+        .find(|&fingerprint| key_for_fingerprint(fingerprint).is_some())
     {
         Some(x) => x,
         None => return Err(AuthKeyGenError::UnknownFingerprint),
     };
+
+    // Safe to unwrap because we found it just above
+    let (n, e) = key_for_fingerprint(fingerprint).unwrap();
+    let ciphertext = rsa_encrypt(&pq_inner_data, n, e, true);
+
+    Ok(tl::functions::ReqDHParams {
+        nonce: nonce.clone(),
+        server_nonce: res_pq.server_nonce.clone(),
+        p: p.to_be_bytes().to_vec(),
+        q: q.to_be_bytes().to_vec(),
+        public_key_fingerprint: fingerprint,
+        encrypted_data: ciphertext,
+    })
+}
+
+pub fn validate_server_dh_params(server_dh_params: tl::enums::ServerDHParams) {
+    unimplemented!("validate server dh params");
 }
 
 /// Find the RSA key's `(n, e)` pair for a certain fingerprint.

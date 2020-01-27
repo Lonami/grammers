@@ -42,7 +42,13 @@ impl MTSender {
         };
 
         let pq = auth_key::generation::validate_pq(&nonce, &res_pq)?;
-        unimplemented!();
+
+        // Step 2: DH Exchange.
+        let req_dh = auth_key::generation::construct_req_dh_params(pq, &nonce, &res_pq)?;
+        let server_dh_params = self.invoke_plain_request(req_dh)?;
+        auth_key::generation::validate_server_dh_params(server_dh_params);
+
+        unimplemented!("finish generate auth key");
     }
 
     fn invoke_plain_request<R: RPC>(&mut self, request: R) -> Result<R::Return> {
