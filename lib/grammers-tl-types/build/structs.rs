@@ -149,6 +149,11 @@ fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
                         )?;
                         writeln!(file, "{}            x.serialize(buf)?;", indent)?;
                         writeln!(file, "{}        }}", indent)?;
+                    } else if ty.generic_ref {
+                        // Generic references are stored as bytes *but*
+                        // they're not serialized like a byte-string.
+                        // Instead, they are written out directly.
+                        writeln!(file, "buf.write_all(&self.{})?;", rusty_attr_name(param))?;
                     } else {
                         writeln!(file, "self.{}.serialize(buf)?;", rusty_attr_name(param))?;
                     }
@@ -187,7 +192,7 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
         if def.params.is_empty() { "_" } else { "" }
     )?;
 
-    for param in def.params.iter() {
+    for (i, param) in def.params.iter().enumerate() {
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
@@ -215,7 +220,26 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
                         writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
                         write!(file, "{}            Some(", indent)?;
                     }
-                    write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
+                    if ty.generic_ref {
+                        // Deserialization of a generic reference requires
+                        // parsing *any* constructor, because the length is
+                        // not included anywhere. Unfortunately, we do not
+                        // have the machinery to do that; we would need a
+                        // single `match` with all the possible constructors!.
+                        //
+                        // But, if the generic is the last parameter, we can
+                        // just read the entire remaining thing.
+                        //
+                        // This will only potentially happen while
+                        // deserializing functions anyway.
+                        if i == def.params.len() - 1 {
+                            writeln!(file, "{{ let mut tmp = Vec::new(); buf.read_to_end(&mut tmp)?; tmp }}")?;
+                        } else {
+                            writeln!(file, "unimplemented!(\"cannot read generic params in the middle\")")?;
+                        }
+                    } else {
+                        write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
+                    }
                     if flag.is_some() {
                         writeln!(file, ")")?;
                         writeln!(file, "{}        }} else {{", indent)?;
