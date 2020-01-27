@@ -47,10 +47,14 @@ pub struct Response {
 }
 
 /// Represents an error that occurs while enqueueing requests.
+#[derive(Debug)]
 pub enum EnqueueError {
     /// The request payload is too large and cannot possibly be sent.
     /// Telegram would forcibly close the connection if it was ever sent.
     PayloadTooLarge,
+
+    /// Well-formed data must be padded to 4 bytes.
+    IncorrectPadding,
 }
 
 impl MTProto {
@@ -88,6 +92,9 @@ impl MTProto {
             > manual_tl::MessageContainer::MAXIMUM_SIZE
         {
             return Err(EnqueueError::PayloadTooLarge);
+        }
+        if body.len() % 4 != 0 {
+            return Err(EnqueueError::IncorrectPadding);
         }
 
         Ok(self.enqueue_body(body, true))
@@ -177,12 +184,6 @@ impl MTProto {
         // If we're sending more than one, write the `MessageContainer` header.
         // This should be the moral equivalent of `MessageContainer.serialize(...)`.
         if batch_len > 1 {
-            // Safe to unwrap because we're serializing into a memory buffer.
-            manual_tl::MessageContainer::CONSTRUCTOR_ID
-                .serialize(&mut buf)
-                .unwrap();
-            (batch_len as i32).serialize(&mut buf).unwrap();
-
             // This should be the moral equivalent of `enqueue_body`
             // and `Message::serialize`.
             let msg_id = self.get_new_msg_id();
@@ -194,6 +195,11 @@ impl MTProto {
             ((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32)
                 .serialize(&mut buf)
                 .unwrap();
+
+            manual_tl::MessageContainer::CONSTRUCTOR_ID
+                .serialize(&mut buf)
+                .unwrap();
+            (batch_len as i32).serialize(&mut buf).unwrap();
         }
 
         // Finally, pop that many requests and write them to the buffer.
@@ -206,7 +212,7 @@ impl MTProto {
 
         // The buffer is full, encrypt it and return the data ready to be
         // sent over the network!
-        Some(self.encrypt_message_data(buf.into_inner()))
+        Some(buf.into_inner())
     }
 
     /// Generates a new unique message ID based on the current

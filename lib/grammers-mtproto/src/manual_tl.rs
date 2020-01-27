@@ -21,7 +21,7 @@ pub(crate) struct Message {
 
 impl Message {
     // msg_id (8 bytes), seq_no (4 bytes), bytes (4 len)
-    pub const SIZE_OVERHEAD: usize = 12;
+    pub const SIZE_OVERHEAD: usize = 16;
 
     /// Peek the constructor ID from the body.
     pub fn constructor_id(&self) -> io::Result<u32> {
