@@ -1,6 +1,6 @@
 //! Several functions to "rustify" names.
 
-use grammers_tl_parser::{Parameter, ParameterType};
+use grammers_tl_parser::{Parameter, ParameterType, Type};
 
 /// Get the rusty class name for a certain definition, excluding namespace.
 ///
@@ -106,6 +106,22 @@ pub(crate) fn push_sanitized_path(result: &mut String, name: &str) {
     }
 }
 
+/// Get the rusty type name for a certain type.
+pub(crate) fn rusty_type(ty: &Type) -> String {
+    let mut result = String::new();
+    if ty.generic_ref {
+        result.push_str("Vec<u8>")
+    } else {
+        push_sanitized_name(&mut result, &ty.name);
+        if let Some(arg) = &ty.generic_arg {
+            result.push('<');
+            push_sanitized_name(&mut result, arg);
+            result.push('>');
+        }
+    }
+    result
+}
+
 /// Get the rusty type name for a certain parameter.
 pub(crate) fn rusty_type_name(param: &Parameter) -> String {
     match &param.ty {
@@ -124,16 +140,7 @@ pub(crate) fn rusty_type_name(param: &Parameter) -> String {
             //
             // Using an array of bytes lets us store any data without
             // caring about the type (no generics is also more FFI-friendly).
-            if ty.generic_ref {
-                result.push_str("Vec<u8>")
-            } else {
-                push_sanitized_name(&mut result, &ty.name);
-                if let Some(arg) = &ty.generic_arg {
-                    result.push('<');
-                    push_sanitized_name(&mut result, arg);
-                    result.push('>');
-                }
-            }
+            result.push_str(&rusty_type(ty));
             if flag.is_some() {
                 result.push('>');
             }

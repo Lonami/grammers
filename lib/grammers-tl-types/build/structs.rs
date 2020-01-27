@@ -1,7 +1,9 @@
 //! Code to generate Rust's `struct`'s from TL definitions.
 
 use crate::grouper;
-use crate::rustifier::{rusty_attr_name, rusty_class_name, rusty_type_name, rusty_type_path};
+use crate::rustifier::{
+    rusty_attr_name, rusty_class_name, rusty_type, rusty_type_name, rusty_type_path,
+};
 use grammers_tl_parser::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
@@ -233,9 +235,15 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
                         // This will only potentially happen while
                         // deserializing functions anyway.
                         if i == def.params.len() - 1 {
-                            writeln!(file, "{{ let mut tmp = Vec::new(); buf.read_to_end(&mut tmp)?; tmp }}")?;
+                            writeln!(
+                                file,
+                                "{{ let mut tmp = Vec::new(); buf.read_to_end(&mut tmp)?; tmp }}"
+                            )?;
                         } else {
-                            writeln!(file, "unimplemented!(\"cannot read generic params in the middle\")")?;
+                            writeln!(
+                                file,
+                                "unimplemented!(\"cannot read generic params in the middle\")"
+                            )?;
                         }
                     } else {
                         write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
@@ -274,6 +282,25 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
     Ok(())
 }
 
+/// Defines the `impl RPC` corresponding to the definition:
+///
+/// ```
+/// impl crate::RPC for Name {
+///     type Return = Name;
+/// }
+/// ```
+fn write_rpc<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+    writeln!(
+        file,
+        "{}impl crate::RPC for {} {{",
+        indent,
+        rusty_class_name(&def.name)
+    )?;
+    writeln!(file, "{}    type Return = {};", indent, rusty_type(&def.ty))?;
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
 /// Writes an entire definition as Rust code (`struct` and `impl`).
 fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     write_struct(file, indent, def)?;
@@ -281,6 +308,9 @@ fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> i
     write_serializable(file, indent, def)?;
     if def.category == Category::Types || cfg!(feature = "deserializable-functions") {
         write_deserializable(file, indent, def)?;
+    }
+    if def.category == Category::Functions {
+        write_rpc(file, indent, def)?;
     }
     Ok(())
 }
