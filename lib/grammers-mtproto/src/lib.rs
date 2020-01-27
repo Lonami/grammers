@@ -294,6 +294,27 @@ impl MTProto {
         }
     }
 
+    /// A plain message's structure is different from the structure of
+    /// messages that are meant to be encrypted, and are made up of:
+    ///
+    /// ```text
+    /// [auth_key_id = 0] [   message_id  ] [ msg len ] [ message data ... ]
+    /// [    64 bits    ] [    64 bits    ] [ 32 bits ] [       ...        ]
+    /// ```
+    ///
+    /// They are also known as [unencrypted messages].
+    ///
+    /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
+    pub fn serialize_plain_message(&mut self, body: Vec<u8>) -> Vec<u8> {
+        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
+        // Safe to unwrap because we're serializing into a memory buffer.
+        0i64.serialize(&mut buf).unwrap();
+        self.get_new_msg_id().serialize(&mut buf).unwrap();
+        (body.len() as u32).serialize(&mut buf).unwrap();
+        buf.write_all(&body).unwrap();
+        buf.into_inner()
+    }
+
     /// Encrypts the data returned by `pop_queue` to be able to send it
     /// over the network, using the current authorization key as indicated
     /// by the [MTProto 2.0 guidelines].
