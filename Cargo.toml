@@ -10,5 +10,6 @@ members = [
 
 [patch.crates-io]
 grammers-crypto = { path = "lib/grammers-crypto" }
+grammers-mtproto = { path = "lib/grammers-mtproto" }
 grammers-tl-parser = { path = "lib/grammers-tl-parser" }
 grammers-tl-types = { path = "lib/grammers-tl-types" }
