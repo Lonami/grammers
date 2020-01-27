@@ -1,17 +1,14 @@
 mod manual_tl;
 
 use std::collections::VecDeque;
-use std::io::{self};
+use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
+use grammers_crypto::{encrypt_data_v2, AuthKey, Side};
 use grammers_tl_types::{self as tl, Identifiable, Serializable};
 
 const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
-
-struct AuthKey {
-    data: Vec<u8>,
-}
 
 /// A builder to configure `MTProto` instances.
 pub struct MTProtoBuilder {
@@ -27,10 +24,10 @@ pub struct MTProto {
     time_offset: i32,
 
     /// The current salt to be used when encrypting payload.
-    salt: u64,
+    salt: i64,
 
     /// The secure, random identifier for this instance.
-    client_id: u64,
+    client_id: i64,
 
     /// The current message sequence number.
     sequence: i32,
@@ -97,11 +94,11 @@ impl MTProto {
         let client_id = {
             let mut buffer = [0u8; 8];
             getrandom(&mut buffer).expect("failed to generate a secure client_id");
-            u64::from_le_bytes(buffer)
+            i64::from_le_bytes(buffer)
         };
 
         Self {
-            auth_key: AuthKey { data: vec![] },
+            auth_key: AuthKey::from_bytes([0; 256]),
             time_offset: 0,
             salt: 0,
             client_id,
@@ -297,9 +294,23 @@ impl MTProto {
     }
 
     /// Encrypts the data returned by `pop_queue` to be able to send it
-    /// over the network.
-    pub fn encrypt_message_data(&self, _buffer: Vec<u8>) -> Vec<u8> {
-        unimplemented!();
+    /// over the network, using the current authorization key as indicated
+    /// by the [MTProto 2.0 guidelines].
+    ///
+    /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
+    pub fn encrypt_message_data(&self, plaintext: Vec<u8>) -> Vec<u8> {
+        // TODO maybe this should be part of `pop_queue` which has the entire buffer.
+        //      IIRC plaintext mtproto also needs this but with salt 0
+        let mut buffer = io::Cursor::new(Vec::with_capacity(8 + 8 + plaintext.len()));
+
+        // Prepend salt (8 bytes) and client_id (8 bytes) to the plaintext
+        // Safe to unwrap because we have an in-memory buffer
+        self.salt.serialize(&mut buffer).unwrap();
+        self.client_id.serialize(&mut buffer).unwrap();
+        buffer.write_all(&plaintext).unwrap();
+        let plaintext = buffer.into_inner();
+
+        encrypt_data_v2(&plaintext, &self.auth_key, Side::Client)
     }
 
     /// Decrypts a response packet and handles its contents. If

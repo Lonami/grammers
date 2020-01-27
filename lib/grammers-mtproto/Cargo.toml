@@ -6,6 +6,7 @@ edition = "2018"
 
 [dependencies]
 getrandom = "0.1.14"
+grammers-crypto = "0.1.0"
 miniz_oxide = "0.3.5"
 
 [dependencies.grammers-tl-types]
