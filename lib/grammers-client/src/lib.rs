@@ -1,5 +1,5 @@
 use grammers_mtsender::MTSender;
-use grammers_tl_types::{self as tl, RPC};
+use grammers_tl_types::{self as tl, Serializable, RPC};
 use std::io::Result;
 
 // TODO handle PhoneMigrate
@@ -27,7 +27,9 @@ impl Client {
     pub fn new() -> Result<Self> {
         let mut sender = MTSender::connect(DC_4_ADDRESS)?;
         sender.generate_auth_key()?;
-        Ok(Client { sender })
+        let mut client = Client { sender };
+        client.init_connection()?;
+        Ok(client)
     }
 
     /// Signs in to the bot account associated with this token.
@@ -54,6 +56,30 @@ impl Client {
         _message: &str,
     ) -> Result<()> {
         unimplemented!();
+    }
+
+    /// Initializes the connection with Telegram. If this is never done on
+    /// a fresh session, then Telegram won't know which layer to use and a
+    /// very old one will be used (which we will fail to understand).
+    fn init_connection(&mut self) -> Result<()> {
+        // TODO add layer to tl, and then use that
+        let got = self.invoke(&tl::functions::InvokeWithLayer {
+            layer: 109,
+            query: tl::functions::InitConnection {
+                api_id: 6,
+                device_model: "Linux".into(),
+                system_version: "4.15.0-74-generic".into(),
+                app_version: "0.1.0".into(),
+                system_lang_code: "en".into(),
+                lang_pack: "".into(),
+                lang_code: "en".into(),
+                proxy: None,
+                query: tl::functions::help::GetConfig {}.to_bytes(),
+            }
+            .to_bytes(),
+        })?;
+        dbg!(got);
+        Ok(())
     }
 
     /// Invokes a raw request, and returns its result.
