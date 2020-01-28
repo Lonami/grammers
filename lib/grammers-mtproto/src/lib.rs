@@ -87,6 +87,12 @@ pub enum DeserializeError {
 
     /// The server's message length was past the buffer.
     TooLongMessageLength { got: usize, max_length: usize },
+
+    /// The server returned a negative HTTP error code and not a message.
+    HTTPErrorCode { code: i32 },
+
+    /// The received buffer is too small to contain a valid response message.
+    MessageBufferTooSmall,
 }
 
 impl Error for DeserializeError {}
@@ -107,6 +113,13 @@ impl fmt::Display for DeserializeError {
                 f,
                 "bad server message length (got {}, when at most it should be {})",
                 got, max_length
+            ),
+            Self::HTTPErrorCode { code } => {
+                write!(f, "server responded with negative http status: {}", code)
+            }
+            Self::MessageBufferTooSmall => write!(
+                f,
+                "server responded with a payload that's too small to fit a valid message"
             ),
         }
     }
@@ -363,6 +376,22 @@ impl MTProto {
     /// The opposite of `serialize_plain_message`. It validates that the
     /// returned data is valid.
     pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+        if message.len() == 4 {
+            // Probably a negative HTTP error code
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::HTTPErrorCode {
+                    // Safe to unwrap because we just checked the length
+                    code: i32::from_bytes(message).unwrap(),
+                },
+            ));
+        } else if message.len() < 20 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::MessageBufferTooSmall,
+            ));
+        }
+
         let mut buf = io::Cursor::new(message);
         let auth_key_id = i64::deserialize(&mut buf)?;
         if auth_key_id != 0 {

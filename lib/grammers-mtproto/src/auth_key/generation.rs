@@ -87,12 +87,29 @@ pub fn construct_req_dh_params(
         buffer
     };
 
+    // Convert (p, q) to bytes using the least amount of space possible.
+    // If we don't do this, Telegram will respond with -404 as the message.
+    let p_bytes = {
+        let mut buffer = p.to_be_bytes().to_vec();
+        if let Some(pos) = buffer.iter().position(|&b| b != 0) {
+            buffer = buffer[pos..].to_vec();
+        }
+        buffer
+    };
+    let q_bytes = {
+        let mut buffer = q.to_be_bytes().to_vec();
+        if let Some(pos) = buffer.iter().position(|&b| b != 0) {
+            buffer = buffer[pos..].to_vec();
+        }
+        buffer
+    };
+
     // "pq is a representation of a natural number (in binary big endian format)"
     // https://core.telegram.org/mtproto/auth_key#dh-exchange-initiation
     let pq_inner_data = tl::enums::PQInnerData::PQInnerData(tl::types::PQInnerData {
         pq: pq.to_be_bytes().to_vec(),
-        p: p.to_be_bytes().to_vec(),
-        q: q.to_be_bytes().to_vec(),
+        p: p_bytes.clone(),
+        q: q_bytes.clone(),
         nonce: nonce.clone(),
         server_nonce: res_pq.server_nonce.clone(),
         new_nonce: new_nonce.clone(),
@@ -117,8 +134,8 @@ pub fn construct_req_dh_params(
     Ok(tl::functions::ReqDHParams {
         nonce: nonce.clone(),
         server_nonce: res_pq.server_nonce.clone(),
-        p: p.to_be_bytes().to_vec(),
-        q: q.to_be_bytes().to_vec(),
+        p: p_bytes.clone(),
+        q: q_bytes.clone(),
         public_key_fingerprint: fingerprint,
         encrypted_data: ciphertext,
     })
