@@ -25,9 +25,9 @@ impl IntoInput<tl::enums::InputPeer> for &str {
 impl Client {
     /// Returns a new client instance connected to Telegram and returns it.
     pub fn new() -> Result<Self> {
-        Ok(Client {
-            sender: MTSender::connect(DC_4_ADDRESS)?,
-        })
+        let mut sender = MTSender::connect(DC_4_ADDRESS)?;
+        sender.generate_auth_key()?;
+        Ok(Client { sender })
     }
 
     /// Signs in to the bot account associated with this token.

@@ -23,7 +23,7 @@ pub struct MTProtoBuilder {
 /// This structure holds everything needed by the Mobile Transport Protocol.
 pub struct MTProto {
     /// The authorization key to use to encrypt payload.
-    auth_key: AuthKey,
+    auth_key: Option<AuthKey>,
 
     /// The time offset from the server's time, in seconds.
     time_offset: i32,
@@ -103,7 +103,7 @@ impl MTProto {
         };
 
         Self {
-            auth_key: AuthKey::from_bytes([0; 256]),
+            auth_key: None,
             time_offset: 0,
             salt: 0,
             client_id,
@@ -124,7 +124,7 @@ impl MTProto {
     /// Sets a generated authorization key as the current one, and also
     /// updates the time offset to be correct.
     pub fn set_auth_key(&mut self, auth_key: AuthKey, time_offset: i32) {
-        self.auth_key = auth_key;
+        self.auth_key = Some(auth_key);
         self.time_offset = time_offset;
     }
 
@@ -407,12 +407,8 @@ impl MTProto {
         Ok(&message[20..20 + len as usize])
     }
 
-    /// Encrypts the data returned by `pop_queue` to be able to send it
-    /// over the network, using the current authorization key as indicated
-    /// by the [MTProto 2.0 guidelines].
-    ///
-    /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    pub fn encrypt_message_data(&self, plaintext: Vec<u8>) -> Vec<u8> {
+    /// Properly formats the given plaintext message data to be encrypted.
+    fn format_message_data_for_encryption(&self, plaintext: &[u8]) -> Vec<u8> {
         // TODO maybe this should be part of `pop_queue` which has the entire buffer.
         //      IIRC plaintext mtproto also needs this but with salt 0
         let mut buffer = io::Cursor::new(Vec::with_capacity(8 + 8 + plaintext.len()));
@@ -422,16 +418,41 @@ impl MTProto {
         self.salt.serialize(&mut buffer).unwrap();
         self.client_id.serialize(&mut buffer).unwrap();
         buffer.write_all(&plaintext).unwrap();
-        let plaintext = buffer.into_inner();
+        buffer.into_inner()
+    }
 
-        encrypt_data_v2(&plaintext, &self.auth_key)
+    /// Encrypts the data returned by `pop_queue` to be able to send it
+    /// over the network, using the current authorization key as indicated
+    /// by the [MTProto 2.0 guidelines].
+    ///
+    /// The function will fail if there is no valid authorization key present.
+    ///
+    /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
+    pub fn encrypt_message_data(&self, plaintext: Vec<u8>) -> io::Result<Vec<u8>> {
+        // Attempting to encrypt something with an authorization key full of
+        // zeros will cause Telegram to reply with -404, presumably for no
+        // authorization key.
+        let auth_key = match &self.auth_key {
+            Some(x) => x,
+            // TODO proper error
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found")),
+        };
+
+        let plaintext = self.format_message_data_for_encryption(&plaintext);
+        Ok(encrypt_data_v2(&plaintext, auth_key))
     }
 
     /// Decrypts a response packet and returns the inner message.
     fn decrypt_response(&self, ciphertext: &[u8]) -> io::Result<manual_tl::Message> {
+        let auth_key = match &self.auth_key {
+            Some(x) => x,
+            // TODO proper error
+            None => return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found")),
+        };
+
         Self::check_message_buffer(ciphertext)?;
 
-        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
+        let plaintext = decrypt_data_v2(ciphertext, auth_key)?;
         let mut buffer = io::Cursor::new(plaintext);
 
         let _salt = i64::deserialize(&mut buffer)?;
@@ -701,5 +722,26 @@ impl MTProto {
     fn handle_update(&self, _message: &manual_tl::Message) -> io::Result<()> {
         // TODO dispatch this somehow
         Ok(())
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_proper_encryption_format() {
+        let mtproto = MTProto::build().compression_threshold(None).finish();
+        let plaintext: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
+        let got = mtproto.format_message_data_for_encryption(&plaintext);
+
+        // First comes the salt which by default should be zero.
+        assert_eq!(&got[0..8], [0; 8]);
+
+        // Then comes the client ID which should be random.
+        assert_ne!(&got[8..16], [0; 8]);
+
+        // Our message should follow
+        assert_eq!(&got[16..], &plaintext[..]);
     }
 }

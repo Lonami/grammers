@@ -69,14 +69,12 @@ impl MTSender {
             // The protocol may generate more outgoing requests, so we need
             // to constantly check for those until we receive a response.
             while let Some(payload) = self.protocol.pop_queue() {
-                let encrypted = self.protocol.encrypt_message_data(payload);
-                eprintln!("send = {:?}", encrypted);
+                let encrypted = self.protocol.encrypt_message_data(payload)?;
                 self.transport.send(&mut self.stream, &encrypted)?;
             }
 
             // Process all messages we receive.
             let response = self.receive_message()?;
-            eprintln!("recv = {:?}", response);
             self.protocol.process_response(&response)?;
 
             // See if there are responses to our request.
