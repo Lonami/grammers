@@ -17,7 +17,7 @@ pub trait IntoInput<T> {
 }
 
 impl IntoInput<tl::enums::InputPeer> for &str {
-    fn convert(&self, client: &mut Client) -> tl::enums::InputPeer {
+    fn convert(&self, _client: &mut Client) -> tl::enums::InputPeer {
         unimplemented!();
     }
 }
@@ -43,15 +43,15 @@ impl Client {
     }
 
     /// Resolves a username into the user that owns it, if any.
-    pub fn resolve_username(&mut self, username: &str) -> Result<tl::types::User> {
+    pub fn resolve_username(&mut self, _username: &str) -> Result<tl::types::User> {
         unimplemented!();
     }
 
     /// Sends a text message to the desired chat.
     pub fn send_message<C: IntoInput<tl::enums::InputPeer>>(
         &mut self,
-        chat: C,
-        message: &str,
+        _chat: C,
+        _message: &str,
     ) -> Result<()> {
         unimplemented!();
     }

@@ -70,11 +70,13 @@ impl MTSender {
             // to constantly check for those until we receive a response.
             while let Some(payload) = self.protocol.pop_queue() {
                 let encrypted = self.protocol.encrypt_message_data(payload);
+                eprintln!("send = {:?}", encrypted);
                 self.transport.send(&mut self.stream, &encrypted)?;
             }
 
             // Process all messages we receive.
             let response = self.receive_message()?;
+            eprintln!("recv = {:?}", response);
             self.protocol.process_response(&response)?;
 
             // See if there are responses to our request.
@@ -84,7 +86,7 @@ impl MTSender {
                         Ok(x) => {
                             return R::Return::from_bytes(&x);
                         }
-                        Err(RequestError::InvalidParameters { error }) => {
+                        Err(RequestError::InvalidParameters { error: _error }) => {
                             // TODO return a proper RPC error
                             return Err(io::Error::new(io::ErrorKind::InvalidData, "rpc error"));
                         }
