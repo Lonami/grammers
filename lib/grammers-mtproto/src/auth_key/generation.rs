@@ -9,6 +9,7 @@ use sha1::Sha1;
 use std::error::Error;
 use std::fmt;
 use std::io;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Represents an error that occured during the generation of an
 /// authorization key.
@@ -282,8 +283,13 @@ pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKey
     let dh_prime = BigUint::from_bytes_be(&server_dh_inner.dh_prime);
     let g = server_dh_inner.g.to_biguint().unwrap();
     let g_a = BigUint::from_bytes_be(&server_dh_inner.g_a);
-    //let time_offset = server_dh_inner.server_time - int(time.time())
-    let time_offset = 0; // TODO
+
+    let now = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time is before epoch")
+        .as_secs() as i32;
+
+    let time_offset = server_dh_inner.server_time - now;
 
     let b = {
         let mut buffer = [0; 256];
