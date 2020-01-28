@@ -6,29 +6,27 @@ use openssl::sha::sha1;
 use openssl::symm::Mode;
 use sha2::{Digest, Sha256};
 
-pub enum Side {
+enum Side {
     Client,
     Server,
 }
 
-// Inner body of `encrypt_data_v2`, separated for testing purposes.
-fn encrypt_padded_data_v2(padded_plaintext: &[u8], auth_key: &AuthKey, side: Side) -> Vec<u8> {
+impl Side {
     // "where x = 0 for messages from client to server and x = 8 for those from server to client."
-    let x = match side {
-        Side::Client => 0,
-        Side::Server => 8,
-    };
+    fn x(&self) -> usize {
+        match *self {
+            Side::Client => 0,
+            Side::Server => 8,
+        }
+    }
+}
 
-    // msg_key_large = SHA256 (substr (auth_key, 88+x, 32) + plaintext + random_padding);
-    let msg_key_large = {
-        let mut hasher = Sha256::new();
-        hasher.input(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.input(&padded_plaintext);
-        hasher.result()
-    };
-
-    // msg_key = substr (msg_key_large, 8, 16);
-    let msg_key = { &msg_key_large[8..8 + 16] };
+/// Calculate the key based on Telegram [guidelines for MTProto 2],
+/// returning the pair `(key, iv)` for use in AES-IGE mode.
+///
+/// [guidelines for MTProto 2]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
+fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u8; 32]) {
+    let x = side.x();
 
     // sha256_a = SHA256 (msg_key + substr (auth_key, x, 36));
     let sha256_a = {
@@ -64,14 +62,41 @@ fn encrypt_padded_data_v2(padded_plaintext: &[u8], auth_key: &AuthKey, side: Sid
         buffer
     };
 
+    (aes_key, aes_iv)
+}
+
+// Inner body of `encrypt_data_v2`, separated for testing purposes.
+fn encrypt_padded_data_v2(padded_plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
+    // Encryption is done by the client
+    let side = Side::Client;
+    let x = side.x();
+
+    // msg_key_large = SHA256 (substr (auth_key, 88+x, 32) + plaintext + random_padding);
+    let msg_key_large = {
+        let mut hasher = Sha256::new();
+        hasher.input(&auth_key.data[88 + x..88 + x + 32]);
+        hasher.input(&padded_plaintext);
+        hasher.result()
+    };
+
+    // msg_key = substr (msg_key_large, 8, 16);
+    let msg_key = {
+        let mut buffer = [0; 16];
+        buffer.copy_from_slice(&msg_key_large[8..8 + 16]);
+        buffer
+    };
+
+    // Calculate the key
+    let (key, mut iv) = calc_key(&auth_key, &msg_key, side);
+
     let ciphertext = {
         let mut buffer = vec![0; padded_plaintext.len()];
         // Safe to unwrap because the key is of the correct length
         aes_ige(
             &padded_plaintext,
             &mut buffer,
-            &AesKey::new_encrypt(&aes_key).unwrap(),
-            &mut aes_iv,
+            &AesKey::new_encrypt(&key).unwrap(),
+            &mut iv,
             Mode::Encrypt,
         );
         buffer
@@ -79,7 +104,7 @@ fn encrypt_padded_data_v2(padded_plaintext: &[u8], auth_key: &AuthKey, side: Sid
 
     let mut result = Vec::with_capacity(auth_key.key_id.len() + msg_key.len() + ciphertext.len());
     result.extend(&auth_key.key_id);
-    result.extend(msg_key);
+    result.extend(&msg_key);
     result.extend(&ciphertext);
 
     result
@@ -98,7 +123,7 @@ fn determine_padding_v2_length(len: usize) -> usize {
 /// `aes_key` and `aes_iv` from `auth_key` and `msg_key` as specified
 ///
 /// [MTProto 2.0 algorithm]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
-pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, side: Side) -> Vec<u8> {
+pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     // "Note that MTProto 2.0 requires from 12 to 1024 bytes of padding"
     // "[...] the resulting message length be divisible by 16 bytes"
     let random_padding = {
@@ -110,7 +135,58 @@ pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, side: Side) -> Vec<
     let mut padded = Vec::with_capacity(plaintext.len() + random_padding.len());
     padded.extend(plaintext);
     padded.extend(&random_padding);
-    encrypt_padded_data_v2(&padded, auth_key, side)
+    encrypt_padded_data_v2(&padded, auth_key)
+}
+
+pub enum DecryptionError {
+    /// The ciphertext is either too small or not padded correctly.
+    InvalidBuffer,
+
+    /// The server replied with the ID of a different authorization key.
+    AuthKeyMismatch,
+
+    /// The key of the message did not match our expectations.
+    MessageKeyMismatch,
+}
+
+/// This method is the inverse of `encrypt_data_v2`.
+pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>, DecryptionError> {
+    // Decryption is done from the server
+    let side = Side::Server;
+    let x = side.x();
+
+    if ciphertext.len() < 24 || (ciphertext.len() - 24) % 16 != 0 {
+        return Err(DecryptionError::InvalidBuffer);
+    }
+
+    // TODO Check salt, session_id and sequence_number
+    let key_id = &ciphertext[..8];
+    if auth_key.key_id != *key_id {
+        return Err(DecryptionError::AuthKeyMismatch);
+    }
+
+    let msg_key = {
+        let mut buffer = [0; 16];
+        buffer.copy_from_slice(&ciphertext[8..8 + 16]);
+        buffer
+    };
+
+    let (key, iv) = calc_key(&auth_key, &msg_key, Side::Server);
+    let plaintext = decrypt_ige(&ciphertext[24..], &key, &iv);
+
+    // https://core.telegram.org/mtproto/security_guidelines#mtproto-encrypted-messages
+    let our_key = {
+        let mut hasher = Sha256::new();
+        hasher.input(&auth_key.data[88 + x..88 + x + 32]);
+        hasher.input(plaintext);
+        hasher.result()
+    };
+
+    if msg_key != our_key[8..8 + 16] {
+        return Err(DecryptionError::MessageKeyMismatch);
+    }
+
+    Ok(plaintext)
 }
 
 /// Generate the AES key and initialization vector from the server nonce
@@ -232,7 +308,6 @@ mod tests {
             buffer
         };
         let auth_key = get_test_auth_key();
-        let side = Side::Client;
         let expected = vec![
             50, 209, 88, 110, 164, 87, 223, 200, 168, 23, 41, 212, 109, 181, 64, 25, 162, 191, 215,
             247, 68, 249, 185, 108, 79, 113, 108, 253, 196, 71, 125, 178, 162, 193, 95, 109, 219,
@@ -242,7 +317,7 @@ mod tests {
         ];
 
         assert_eq!(
-            encrypt_padded_data_v2(&padded_plaintext, &auth_key, side),
+            encrypt_padded_data_v2(&padded_plaintext, &auth_key),
             expected
         );
     }
