@@ -373,7 +373,7 @@ fn key_for_fingerprint(fingerprint: i64) -> Option<(BigUint, BigUint)> {
 /// Encrypt the given data using RSA.
 fn rsa_encrypt(data: &[u8], n: BigUint, e: BigUint, random_padding: bool) -> Vec<u8> {
     // Sha1::digest's len is always 20, we're left with 255 - 20 - x padding.
-    let mut to_encrypt = {
+    let to_encrypt = {
         // sha1
         let mut buffer = Vec::with_capacity(255);
         let mut hasher = Sha1::new();
@@ -450,8 +450,8 @@ fn factorize(pq: u64) -> (u64, u64) {
 
     // Random values in the range of 1..pq, chosen by fair dice roll.
     let mut y = big(1 * pq / 4);
-    let mut c = big(2 * pq / 4);
-    let mut m = big(3 * pq / 4);
+    let c = big(2 * pq / 4);
+    let m = big(3 * pq / 4);
     let mut g = big(1u64);
     let mut r = big(1u64);
     let mut q = big(1u64);
@@ -461,14 +461,14 @@ fn factorize(pq: u64) -> (u64, u64) {
 
     while g == big(1) {
         x = y.clone();
-        for i in 0..small(&r) {
+        for _ in 0..small(&r) {
             y = (y.modpow(&big(2), &pq) + &c) % &pq;
         }
 
         let mut k = big(0);
         while k < r && g == big(1) {
             ys = y.clone();
-            for i in 0..min(&m, &(&r - &k)) {
+            for _ in 0..min(&m, &(&r - &k)) {
                 y = (y.modpow(&big(2), &pq) + &c) % &pq;
                 q = (q * abs_sub(&x, &y)) % &pq;
             }

@@ -20,7 +20,8 @@ pub struct MTSender {
 impl MTSender {
     pub fn connect<A: ToSocketAddrs>(addr: A, protocol: MTProto) -> Result<Self> {
         let stream = TcpStream::connect(addr)?;
-        stream.set_read_timeout(Some(Duration::from_secs(2)));
+        // TODO let the user configure this
+        stream.set_read_timeout(Some(Duration::from_secs(2)))?;
         Ok(Self {
             protocol,
             stream,

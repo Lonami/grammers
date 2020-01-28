@@ -25,7 +25,7 @@ pub struct MTProto {
     auth_key: AuthKey,
 
     /// The time offset from the server's time, in seconds.
-    time_offset: i32,
+    _time_offset: i32,
 
     /// The current salt to be used when encrypting payload.
     salt: i64,
@@ -158,7 +158,7 @@ impl MTProto {
 
         Self {
             auth_key: AuthKey::from_bytes([0; 256]),
-            time_offset: 0,
+            _time_offset: 0,
             salt: 0,
             client_id,
             sequence: 0,
@@ -459,9 +459,9 @@ impl MTProto {
         unimplemented!("recv handler not implemented");
     }
 
-    fn process_message(&mut self, message: manual_tl::Message) {
+    fn _process_message(&mut self, message: manual_tl::Message) {
         self.pending_ack.push(message.msg_id);
-        let constructor_id = match message.constructor_id() {
+        let constructor_id = match message._constructor_id() {
             Ok(x) => x,
             Err(e) => {
                 // TODO propagate
@@ -471,64 +471,64 @@ impl MTProto {
         };
 
         match constructor_id {
-            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(),
-            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(),
-            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(),
-            tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_server_salt(),
-            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self.handle_bad_notification(),
-            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(),
-            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_new_detailed_info(),
-            tl::types::NewSessionCreated::CONSTRUCTOR_ID => self.handle_new_session_created(),
-            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(),
-            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(),
-            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_forgotten(),
-            tl::types::MsgResendReq::CONSTRUCTOR_ID => self.handle_state_forgotten(),
-            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(),
-            _ => self.handle_update(),
+            manual_tl::_RpcResult::CONSTRUCTOR_ID => self._handle_rpc_result(),
+            manual_tl::MessageContainer::CONSTRUCTOR_ID => self._handle_container(),
+            tl::types::Pong::CONSTRUCTOR_ID => self._handle_pong(),
+            tl::types::BadServerSalt::CONSTRUCTOR_ID => self._handle_bad_server_salt(),
+            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self._handle_bad_notification(),
+            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self._handle_detailed_info(),
+            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self._handle_new_detailed_info(),
+            tl::types::NewSessionCreated::CONSTRUCTOR_ID => self._handle_new_session_created(),
+            tl::types::MsgsAck::CONSTRUCTOR_ID => self._handle_ack(),
+            tl::types::FutureSalts::CONSTRUCTOR_ID => self._handle_future_salts(),
+            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self._handle_state_forgotten(),
+            tl::types::MsgResendReq::CONSTRUCTOR_ID => self._handle_state_forgotten(),
+            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self._handle_msg_all(),
+            _ => self._handle_update(),
         }
         unimplemented!();
     }
 
-    fn handle_rpc_result(&self) {
+    fn _handle_rpc_result(&self) {
         unimplemented!();
     }
-    fn handle_container(&self) {
+    fn _handle_container(&self) {
         unimplemented!();
     }
-    fn handle_gzip_packed(&self) {
+    fn _handle_gzip_packed(&self) {
         unimplemented!();
     }
-    fn handle_pong(&self) {
+    fn _handle_pong(&self) {
         unimplemented!();
     }
-    fn handle_bad_server_salt(&self) {
+    fn _handle_bad_server_salt(&self) {
         unimplemented!();
     }
-    fn handle_bad_notification(&self) {
+    fn _handle_bad_notification(&self) {
         unimplemented!();
     }
-    fn handle_detailed_info(&self) {
+    fn _handle_detailed_info(&self) {
         unimplemented!();
     }
-    fn handle_new_detailed_info(&self) {
+    fn _handle_new_detailed_info(&self) {
         unimplemented!();
     }
-    fn handle_new_session_created(&self) {
+    fn _handle_new_session_created(&self) {
         unimplemented!();
     }
-    fn handle_ack(&self) {
+    fn _handle_ack(&self) {
         unimplemented!();
     }
-    fn handle_future_salts(&self) {
+    fn _handle_future_salts(&self) {
         unimplemented!();
     }
-    fn handle_state_forgotten(&self) {
+    fn _handle_state_forgotten(&self) {
         unimplemented!();
     }
-    fn handle_msg_all(&self) {
+    fn _handle_msg_all(&self) {
         unimplemented!();
     }
-    fn handle_update(&self) {
+    fn _handle_update(&self) {
         unimplemented!();
     }
 }

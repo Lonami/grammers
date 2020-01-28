@@ -25,7 +25,7 @@ impl Message {
     pub const SIZE_OVERHEAD: usize = 16;
 
     /// Peek the constructor ID from the body.
-    pub fn constructor_id(&self) -> io::Result<u32> {
+    pub fn _constructor_id(&self) -> io::Result<u32> {
         let mut buffer = io::Cursor::new(&self.body);
         u32::deserialize(&mut buffer)
     }
@@ -52,12 +52,12 @@ impl Serializable for Message {
 /// ```tl
 /// rpc_result#f35c6d01 req_msg_id:long result:Object = RpcResult;
 /// ```
-pub(crate) struct RpcResult {
+pub(crate) struct _RpcResult {
     pub req_msg_id: u64,
     pub result: Vec<u8>,
 }
 
-impl Identifiable for RpcResult {
+impl Identifiable for _RpcResult {
     const CONSTRUCTOR_ID: u32 = 0xf35c6d01_u32;
 }
 
