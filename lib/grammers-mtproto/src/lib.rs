@@ -1,10 +1,11 @@
 pub mod auth_key;
+pub mod errors;
 mod manual_tl;
 pub mod transports;
 
+use crate::errors::{DeserializeError, EnqueueError};
+
 use std::collections::VecDeque;
-use std::error::Error;
-use std::fmt;
 use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -57,72 +58,6 @@ pub struct MsgId(i64);
 pub struct Response {
     pub msg_id: MsgId,
     pub data: Vec<u8>,
-}
-
-/// Represents an error that occurs while enqueueing requests.
-#[derive(Debug)]
-pub enum EnqueueError {
-    /// The request payload is too large and cannot possibly be sent.
-    /// Telegram would forcibly close the connection if it was ever sent.
-    PayloadTooLarge,
-
-    /// Well-formed data must be padded to 4 bytes.
-    IncorrectPadding,
-}
-
-// TODO impl Error for EnqueueError
-// TODO move errors to their own file
-
-/// Represents an error that occurs while deserializing messages.
-#[derive(Debug)]
-pub enum DeserializeError {
-    /// The server's authorization key did not match our expectations.
-    BadAuthKey { got: i64, expected: i64 },
-
-    /// The server's message ID did not match our expectations.
-    BadMessageId { got: i64 },
-
-    /// The server's message length was not strictly positive.
-    NegativeMessageLength { got: i32 },
-
-    /// The server's message length was past the buffer.
-    TooLongMessageLength { got: usize, max_length: usize },
-
-    /// The server returned a negative HTTP error code and not a message.
-    HTTPErrorCode { code: i32 },
-
-    /// The received buffer is too small to contain a valid response message.
-    MessageBufferTooSmall,
-}
-
-impl Error for DeserializeError {}
-
-impl fmt::Display for DeserializeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::BadAuthKey { got, expected } => write!(
-                f,
-                "bad server auth key (got {}, expected {})",
-                got, expected
-            ),
-            Self::BadMessageId { got } => write!(f, "bad server message id (got {})", got),
-            Self::NegativeMessageLength { got } => {
-                write!(f, "bad server message length (got {})", got)
-            }
-            Self::TooLongMessageLength { got, max_length } => write!(
-                f,
-                "bad server message length (got {}, when at most it should be {})",
-                got, max_length
-            ),
-            Self::HTTPErrorCode { code } => {
-                write!(f, "server responded with negative http status: {}", code)
-            }
-            Self::MessageBufferTooSmall => write!(
-                f,
-                "server responded with a payload that's too small to fit a valid message"
-            ),
-        }
-    }
 }
 
 impl MTProtoBuilder {
@@ -463,7 +398,7 @@ impl MTProto {
 
     /// Decrypts a response packet and handles its contents. If
     /// the response belonged to a previous request, it is returned.
-    pub fn decrypt_response(&mut self) -> Option<Response> {
+    pub fn decrypt_response(&mut self, _response: &[u8]) -> io::Result<Option<(MsgId, Vec<u8>)>> {
         unimplemented!("recv handler not implemented");
     }
 

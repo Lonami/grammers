@@ -1,4 +1,5 @@
-use grammers_mtproto::{EnqueueError, MTProto};
+use grammers_mtproto::errors::EnqueueError;
+use grammers_mtproto::MTProto;
 
 // gzip_packed#3072cfa1 packed_data:string = Object;
 const GZIP_PACKED_HEADER: [u8; 4] = [0xa1, 0xcf, 0x72, 0x30];
@@ -184,7 +185,7 @@ fn ensure_queue_is_clear() {
     let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
     assert!(mtproto.pop_queue().is_none());
-    let id = mtproto
+    mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
         .unwrap();
 
@@ -204,7 +205,7 @@ fn ensure_large_payload_errors() {
     assert!(mtproto.pop_queue().is_none());
 
     // Make sure the queue is not in a broken state
-    let id = mtproto
+    mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
         .unwrap();
 
@@ -223,7 +224,7 @@ fn ensure_non_padded_payload_errors() {
     assert!(mtproto.pop_queue().is_none());
 
     // Make sure the queue is not in a broken state
-    let id = mtproto
+    mtproto
         .enqueue_request(vec![b'H', b'e', b'y', b'!'])
         .unwrap();
 
