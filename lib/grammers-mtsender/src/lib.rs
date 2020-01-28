@@ -33,30 +33,29 @@ impl MTSender {
     /// key that can be used to safely transmit data to and from the server.
     ///
     /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub fn generate_auth_key(&mut self) -> Result<AuthKey> {
-        // Step 1: Request PQ.
-        let nonce = auth_key::generation::generate_nonce();
-        let res_pq = match self.invoke_plain_request(tl::functions::ReqPqMulti {
-            nonce: nonce.clone(),
-        })? {
-            tl::enums::ResPQ::ResPQ(x) => x,
-        };
+    pub fn generate_auth_key(&mut self) -> Result<()> {
+        let (request, data) = auth_key::generation::step1()?;
+        let response = self.invoke_plain_request(&request)?;
 
-        let pq = auth_key::generation::validate_pq(&nonce, &res_pq)?;
+        let (request, data) = auth_key::generation::step2(data, response)?;
+        let response = self.invoke_plain_request(&request)?;
 
-        // Step 2: DH Exchange.
-        let (req_dh, new_nonce) = auth_key::generation::construct_req_dh_params(pq, &nonce, &res_pq)?;
-        let server_dh_params = self.invoke_plain_request(req_dh)?;
-        let (set_dh, gab) = auth_key::generation::validate_server_dh_params(&res_pq, &new_nonce, &server_dh_params)?;
-        let dh_gen = self.invoke_plain_request(set_dh)?;
+        let (request, data) = auth_key::generation::step3(data, response)?;
+        let response = self.invoke_plain_request(&request)?;
 
-        let auth_key = auth_key::generation::last_step(&res_pq, gab, &new_nonce, dh_gen)?;
-        Ok(auth_key)
+        let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
+        self.protocol.set_auth_key(auth_key, time_offset);
+
+        Ok(())
     }
 
-    fn invoke_plain_request<R: RPC>(&mut self, request: R) -> Result<R::Return> {
-        let payload = self.protocol.serialize_plain_message(request.to_bytes());
+    /// Invoke a serialized request in plaintext.
+    fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+        // Send
+        let payload = self.protocol.serialize_plain_message(request);
         self.transport.send(&mut self.stream, &payload)?;
+
+        // Receive
         let response = self
             .transport
             .receive(&mut self.stream)
@@ -64,7 +63,9 @@ impl MTSender {
                 io::ErrorKind::UnexpectedEof => io::Error::new(io::ErrorKind::ConnectionReset, e),
                 _ => e,
             })?;
-        let body = self.protocol.deserialize_plain_message(&response)?;
-        R::Return::from_bytes(body)
+
+        self.protocol
+            .deserialize_plain_message(&response)
+            .map(|x| x.to_vec())
     }
 }

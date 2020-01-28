@@ -25,7 +25,7 @@ pub struct MTProto {
     auth_key: AuthKey,
 
     /// The time offset from the server's time, in seconds.
-    _time_offset: i32,
+    time_offset: i32,
 
     /// The current salt to be used when encrypting payload.
     salt: i64,
@@ -158,7 +158,7 @@ impl MTProto {
 
         Self {
             auth_key: AuthKey::from_bytes([0; 256]),
-            _time_offset: 0,
+            time_offset: 0,
             salt: 0,
             client_id,
             sequence: 0,
@@ -172,6 +172,13 @@ impl MTProto {
     /// Returns a builder to configure certain parameters.
     pub fn build() -> MTProtoBuilder {
         MTProtoBuilder::new()
+    }
+
+    /// Sets a generated authorization key as the current one, and also
+    /// updates the time offset to be correct.
+    pub fn set_auth_key(&mut self, auth_key: AuthKey, time_offset: i32) {
+        self.auth_key = auth_key;
+        self.time_offset = time_offset;
     }
 
     /// Enqueues a request and returns its associated `msg_id`.
@@ -329,8 +336,9 @@ impl MTProto {
             .duration_since(UNIX_EPOCH)
             .expect("system time is before epoch");
 
+        let seconds = (now.as_secs() as i32 + self.time_offset) as u64;
         let nanoseconds = now.subsec_nanos() as u64;
-        let mut new_msg_id = ((now.as_secs() << 32) | (nanoseconds << 2)) as i64;
+        let mut new_msg_id = ((seconds << 32) | (nanoseconds << 2)) as i64;
 
         if self.last_msg_id >= new_msg_id {
             new_msg_id = self.last_msg_id + 4;
@@ -363,7 +371,7 @@ impl MTProto {
     /// They are also known as [unencrypted messages].
     ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    pub fn serialize_plain_message(&mut self, body: Vec<u8>) -> Vec<u8> {
+    pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
         let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
         // Safe to unwrap because we're serializing into a memory buffer.
         0i64.serialize(&mut buf).unwrap();

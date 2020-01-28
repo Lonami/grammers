@@ -1,7 +1,7 @@
 //! Contains the steps required to generate an authorization key.
 use getrandom::getrandom;
 use grammers_crypto::{self, AuthKey};
-use grammers_tl_types::{self as tl, Deserializable, Serializable};
+use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 use num::bigint::{BigUint, ToBigUint};
 use num::integer::Integer;
 use num::traits::cast::ToPrimitive;
@@ -14,6 +14,9 @@ use std::io;
 /// authorization key.
 #[derive(Debug)]
 pub enum AuthKeyGenError {
+    /// The response data was invalid and did not match our expectations.
+    InvalidResponse,
+
     /// The server's nonce did not match ours.
     BadNonce { got: [u8; 16], expected: [u8; 16] },
 
@@ -67,24 +70,56 @@ impl From<AuthKeyGenError> for io::Error {
     }
 }
 
-/// Step 1. Generates a secure random nonce.
-// TODO make all steps return a request to make it more straightforward
-pub fn generate_nonce() -> [u8; 16] {
-    let mut buffer = [0; 16];
-    getrandom(&mut buffer).expect("failed to generate a secure nonce");
-    buffer
+impl From<io::Error> for AuthKeyGenError {
+    fn from(_error: io::Error) -> Self {
+        Self::InvalidResponse
+    }
 }
 
-/// Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
-pub fn validate_pq(nonce: &[u8; 16], res_pq: &tl::types::ResPQ) -> Result<u64, AuthKeyGenError> {
-    if *nonce != res_pq.nonce {
+pub struct Step1 {
+    nonce: [u8; 16],
+}
+
+pub struct Step2 {
+    nonce: [u8; 16],
+    server_nonce: [u8; 16],
+    new_nonce: [u8; 32],
+}
+
+pub struct Step3 {
+    nonce: [u8; 16],
+    server_nonce: [u8; 16],
+    new_nonce: [u8; 32],
+    gab: BigUint,
+    time_offset: i32,
+}
+
+pub fn step1() -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
+    // Step 1. Generates a secure random nonce.
+    let nonce = {
+        let mut buffer = [0; 16];
+        getrandom(&mut buffer).expect("failed to generate a secure nonce");
+        buffer
+    };
+
+    Ok((tl::functions::ReqPqMulti {
+        nonce: nonce.clone(),
+    }.to_bytes(), Step1 { nonce }))
+}
+
+pub fn step2(data: Step1, response: Vec<u8>) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
+    // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
+    let Step1 { nonce } = data;
+    let res_pq = match <tl::functions::ReqPqMulti as RPC>::Return::from_bytes(&response)? {
+        tl::enums::ResPQ::ResPQ(x) => x,
+    };
+
+    if nonce != res_pq.nonce {
         return Err(AuthKeyGenError::BadNonce {
             got: res_pq.nonce.clone(),
             expected: nonce.clone(),
         });
     }
-    // From now on, we will use `res_pq.nonce` to refer to our
-    // `nonce`, which we know is valid and will remain valid.
 
     if res_pq.pq.len() != 8 {
         return Err(AuthKeyGenError::WrongSizePQ {
@@ -99,15 +134,6 @@ pub fn validate_pq(nonce: &[u8; 16], res_pq: &tl::types::ResPQ) -> Result<u64, A
         u64::from_be_bytes(buffer)
     };
 
-    Ok(pq)
-}
-
-/// Step 3. Factorize PQ and construct the request for DH params.
-pub fn construct_req_dh_params(
-    pq: u64,
-    nonce: &[u8; 16],
-    res_pq: &tl::types::ResPQ,
-) -> Result<(tl::functions::ReqDHParams, [u8; 32]), AuthKeyGenError> {
     let (p, q) = factorize(pq);
     let new_nonce = {
         let mut buffer = [0; 32];
@@ -167,16 +193,19 @@ pub fn construct_req_dh_params(
             q: q_bytes.clone(),
             public_key_fingerprint: fingerprint,
             encrypted_data: ciphertext,
-        },
-        new_nonce,
+        }.to_bytes(), Step2 {
+            nonce,
+            server_nonce: res_pq.server_nonce,
+            new_nonce,
+        }
     ))
 }
 
-pub fn validate_server_dh_params(
-    res_pq: &tl::types::ResPQ,
-    new_nonce: &[u8; 32],
-    server_dh_params: &tl::enums::ServerDHParams,
-) -> Result<(tl::functions::SetClientDHParams, BigUint), AuthKeyGenError> {
+pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
+    let Step2 { nonce, server_nonce, new_nonce } = data;
+    let server_dh_params = <tl::functions::ReqDHParams as RPC>::Return::from_bytes(&response)?;
+
+    // Step 3. Factorize PQ and construct the request for DH params.
     let server_dh_params = match server_dh_params {
         tl::enums::ServerDHParams::ServerDHParamsFail(_) => {
             // TODO also validate nonce, server_nonce and new_nonce_hash here
@@ -186,16 +215,16 @@ pub fn validate_server_dh_params(
         tl::enums::ServerDHParams::ServerDHParamsOk(x) => x,
     };
 
-    if server_dh_params.nonce != res_pq.nonce {
+    if server_dh_params.nonce != nonce {
         return Err(AuthKeyGenError::BadNonce {
             got: server_dh_params.nonce.clone(),
-            expected: res_pq.nonce.clone(),
+            expected: nonce.clone(),
         });
     }
-    if server_dh_params.server_nonce != res_pq.server_nonce {
+    if server_dh_params.server_nonce != server_nonce {
         return Err(AuthKeyGenError::BadServerNonce {
             got: server_dh_params.server_nonce.clone(),
-            expected: res_pq.server_nonce.clone(),
+            expected: server_nonce.clone(),
         });
     }
     if server_dh_params.encrypted_answer.len() % 16 != 0 {
@@ -204,11 +233,9 @@ pub fn validate_server_dh_params(
 
     // Complete DH Exchange
     let (key, iv) = grammers_crypto::generate_key_data_from_nonce(
-        &res_pq.server_nonce, &new_nonce
+        &server_nonce, &new_nonce
     );
-    dbg!(server_dh_params.encrypted_answer.len());
-    dbg!(key.len());
-    dbg!(iv.len());
+
     let plain_text_answer = grammers_crypto::decrypt_ige(
         &server_dh_params.encrypted_answer, &key, &iv
     );
@@ -220,16 +247,16 @@ pub fn validate_server_dh_params(
         Err(error) => return Err(AuthKeyGenError::InvalidDHInnerData { error }),
     };
 
-    if server_dh_inner.nonce != res_pq.nonce {
+    if server_dh_inner.nonce != nonce {
         return Err(AuthKeyGenError::BadNonce {
             got: server_dh_inner.nonce.clone(),
-            expected: res_pq.nonce.clone(),
+            expected: nonce.clone(),
         });
     }
-    if server_dh_inner.server_nonce != res_pq.server_nonce {
+    if server_dh_inner.server_nonce != server_nonce {
         return Err(AuthKeyGenError::BadServerNonce {
             got: server_dh_inner.server_nonce.clone(),
-            expected: res_pq.server_nonce.clone(),
+            expected: server_nonce.clone(),
         });
     }
 
@@ -238,6 +265,7 @@ pub fn validate_server_dh_params(
     let g = server_dh_inner.g.to_biguint().unwrap();
     let g_a = BigUint::from_bytes_be(&server_dh_inner.g_a);
     //let time_offset = server_dh_inner.server_time - int(time.time())
+    let time_offset = 0; // TODO
 
     let b = {
         let mut buffer = [0; 256];
@@ -271,8 +299,8 @@ pub fn validate_server_dh_params(
 
     // Prepare client DH Inner Data
     let client_dh_inner = tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
-        nonce: res_pq.nonce.clone(),
-        server_nonce: res_pq.server_nonce.clone(),
+        nonce: nonce.clone(),
+        server_nonce: server_nonce.clone(),
         retry_id: 0, // TODO use an actual retry_id
         g_b: g_b.to_bytes_be(),
     }).to_bytes();
@@ -289,21 +317,26 @@ pub fn validate_server_dh_params(
         buffer
     };
 
-    dbg!(client_dh_inner_hashed.len());
     let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
 
     Ok((tl::functions::SetClientDHParams {
-        nonce: res_pq.nonce.clone(),
-        server_nonce: res_pq.server_nonce.clone(),
+        nonce: nonce.clone(),
+        server_nonce: server_nonce.clone(),
         encrypted_data: client_dh_encrypted
-    }, gab))
+    }.to_bytes(), Step3 {
+        nonce,
+        server_nonce,
+        new_nonce,
+        gab,
+        time_offset
+    }))
+
 }
 
-pub fn last_step(
-    res_pq: &tl::types::ResPQ,
-    gab: BigUint,
-    new_nonce: &[u8; 32],
-    dh_gen: tl::enums::SetClientDHParamsAnswer) -> Result<AuthKey, AuthKeyGenError> {
+pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), AuthKeyGenError> {
+    let Step3 { nonce, server_nonce, new_nonce, gab, time_offset } = data;
+    let dh_gen = <tl::functions::SetClientDHParams as RPC>::Return::from_bytes(&response)?;
+
     // TODO validate nonce and server_nonce for failing cases
     let (nonce_number, dh_gen) = match dh_gen {
         tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => (1, x),
@@ -316,16 +349,16 @@ pub fn last_step(
     };
 
     // TODO create a fn to reuse this check
-    if dh_gen.nonce != res_pq.nonce {
+    if dh_gen.nonce != nonce {
         return Err(AuthKeyGenError::BadNonce {
             got: dh_gen.nonce.clone(),
-            expected: res_pq.nonce.clone(),
+            expected: nonce.clone(),
         });
     }
-    if dh_gen.server_nonce != res_pq.server_nonce {
+    if dh_gen.server_nonce != server_nonce {
         return Err(AuthKeyGenError::BadServerNonce {
             got: dh_gen.server_nonce.clone(),
-            expected: res_pq.server_nonce.clone(),
+            expected: server_nonce.clone(),
         });
     }
 
@@ -335,19 +368,15 @@ pub fn last_step(
         AuthKey::from_bytes(buffer)
     };
 
-    let new_nonce_hash = auth_key.calc_new_nonce_hash(new_nonce, nonce_number);
+    let new_nonce_hash = auth_key.calc_new_nonce_hash(&new_nonce, nonce_number);
     let dh_hash = dh_gen.new_nonce_hash1;
 
     if dh_hash != new_nonce_hash {
         return Err(AuthKeyGenError::BadNonceHash);
     }
 
-    // TODO return time_offset
-    Ok(auth_key)
+    Ok((auth_key, time_offset))
 }
-
-// TODO make it so that the only way to get an AuthKey is through opaque
-// structs following the steps.
 
 /// Find the RSA key's `(n, e)` pair for a certain fingerprint.
 fn key_for_fingerprint(fingerprint: i64) -> Option<(BigUint, BigUint)> {
