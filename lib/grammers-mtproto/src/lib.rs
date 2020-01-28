@@ -50,6 +50,22 @@ pub struct MTProto {
     /// considered large enough to attempt compressing it. Otherwise,
     /// outgoing messages will never be compressed.
     compression_threshold: Option<usize>,
+
+    /// A queue of responses ready to be used.
+    response_queue: VecDeque<(MsgId, Result<Vec<u8>, RequestError>)>,
+}
+
+/// This error occurs when a Remote Procedure call was unsuccessful.
+/// The request should be retransmited when this happens, unless the
+/// variant is `InvalidParameters`.
+pub enum RequestError {
+    /// The parameters used in the request were invalid and caused a
+    /// Remote Procedure Call error.
+    InvalidParameters { error: tl::types::RpcError },
+
+    // TODO be more specific
+    /// A different error occured.
+    Other,
 }
 
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
@@ -96,6 +112,7 @@ impl MTProto {
             message_queue: VecDeque::new(),
             pending_ack: vec![],
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
+            response_queue: VecDeque::new(),
         }
     }
 
@@ -184,6 +201,7 @@ impl MTProto {
         MsgId(msg_id)
     }
 
+    // TODO probably find a better name for this
     /// Pops as many enqueued requests as possible, and returns
     /// the serialized data. If there are no requests enqueued,
     /// this returns `None`.
@@ -418,21 +436,16 @@ impl MTProto {
 
     /// Processes an encrypted response from the server. If the
     /// response belonged to a previous request, it is returned.
-    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<Option<(MsgId, Vec<u8>)>> {
+    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
         self.process_message(self.decrypt_response(ciphertext)?)
     }
 
-    fn process_message(
-        &mut self,
-        message: manual_tl::Message,
-    ) -> io::Result<Option<(MsgId, Vec<u8>)>> {
+    fn process_message(&mut self, message: manual_tl::Message) -> io::Result<()> {
         self.pending_ack.push(message.msg_id);
 
         // Determine what to do based on the inner body's constructor
         match message.constructor_id()? {
-            manual_tl::RpcResult::CONSTRUCTOR_ID => {
-                return self.handle_rpc_result(&message).map(Some);
-            }
+            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(&message),
             manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(&message),
             manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(&message),
             tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(&message),
@@ -450,28 +463,32 @@ impl MTProto {
             tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(&message),
             _ => self.handle_update(&message),
         }
-        .map(|_| None)
+    }
+
+    // TODO process_response and pop_response? maybe one should be named "answer" or "reply"
+    /// Pop a response to a remote procedure call.
+    pub fn pop_response(&mut self) -> Option<(MsgId, Result<Vec<u8>, RequestError>)> {
+        self.response_queue.pop_front()
     }
 
     /// Handles the result for Remote Procedure Calls:
     ///
     ///     rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
-    fn handle_rpc_result(&self, message: &manual_tl::Message) -> io::Result<(MsgId, Vec<u8>)> {
+    fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
         let manual_tl::RpcResult { req_msg_id, result } = rpc_result;
         // TODO handle the body being RpcError (return some enum variant)
         // TODO acknowledge the message id if it's an error
         // TODO handle the body being GzipPacked (decompress it before return)
-        Ok((MsgId(req_msg_id), result))
+        self.response_queue
+            .push_back((MsgId(req_msg_id), Ok(result)));
+        Ok(())
     }
 
     /// Processes the inner messages of a container with many of them:
     ///
     ///     msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
     fn handle_container(&mut self, message: &manual_tl::Message) -> io::Result<()> {
-        // TODO what if the rpc result is in a container? we need another way to
-        // deal with this. maybe we should have a queue of processed rpc results
-        // which users can get, and process_message() just feeds it (not returns)
         let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
         for inner_message in container.messages {
             self.process_message(inner_message)?;
@@ -484,6 +501,7 @@ impl MTProto {
     ///
     ///     gzip_packed#3072cfa1 packed_data:bytes = Object;
     fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO custom error, don't use a string
         let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
         self.process_message(manual_tl::Message {
             body: container
@@ -498,9 +516,14 @@ impl MTProto {
     /// but are still sent through a request:
     ///
     ///     pong#347773c5 msg_id:long ping_id:long = Pong;
-    fn handle_pong(&self, message: &manual_tl::Message) -> io::Result<()> {
-        let _pong = tl::enums::Pong::from_bytes(&message.body)?;
-        // TODO this should be treated as a rpc result
+    fn handle_pong(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        let pong = tl::enums::Pong::from_bytes(&message.body)?;
+        let pong = match pong {
+            tl::enums::Pong::Pong(x) => x,
+        };
+
+        self.response_queue
+            .push_back((MsgId(pong.msg_id), Ok(message.body.clone())));
         Ok(())
     }
 
@@ -517,15 +540,18 @@ impl MTProto {
     ///     error_code:int new_server_salt:long = BadMsgNotification;
     fn handle_bad_notification(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
-        // TODO notify the caller of the protocol that they need to resend
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
             tl::enums::BadMsgNotification::BadServerSalt(x) => {
+                self.response_queue
+                    .push_back((MsgId(x.bad_msg_id), Err(RequestError::Other)));
                 self.salt = x.new_server_salt;
                 return Ok(());
             }
         };
 
+        self.response_queue
+            .push_back((MsgId(bad_msg.bad_msg_id), Err(RequestError::Other)));
         match bad_msg.error_code {
             16 => {
                 // Sent `msg_id` was too low (our `time_offset` is wrong).
@@ -615,9 +641,14 @@ impl MTProto {
     ///
     ///     future_salts#ae500895 req_msg_id:long now:int
     ///     salts:vector<future_salt> = FutureSalts;
-    fn handle_future_salts(&self, message: &manual_tl::Message) -> io::Result<()> {
-        // TODO this is similar to ping, might need to respond to rpc
-        let _salts = tl::enums::FutureSalts::from_bytes(&message.body)?;
+    fn handle_future_salts(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        let salts = tl::enums::FutureSalts::from_bytes(&message.body)?;
+        let salts = match salts {
+            tl::enums::FutureSalts::FutureSalts(x) => x,
+        };
+
+        self.response_queue
+            .push_back((MsgId(salts.req_msg_id), Ok(message.body.clone())));
         Ok(())
     }
 
