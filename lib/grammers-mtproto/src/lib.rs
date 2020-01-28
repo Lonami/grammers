@@ -10,7 +10,7 @@ use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
-use grammers_crypto::{encrypt_data_v2, AuthKey, Side};
+use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
 use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
 
 const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
@@ -393,23 +393,34 @@ impl MTProto {
         buffer.write_all(&plaintext).unwrap();
         let plaintext = buffer.into_inner();
 
-        encrypt_data_v2(&plaintext, &self.auth_key, Side::Client)
+        encrypt_data_v2(&plaintext, &self.auth_key)
     }
 
-    /// Decrypts a response packet and handles its contents. If
-    /// the response belonged to a previous request, it is returned.
-    pub fn decrypt_response(&mut self, _response: &[u8]) -> io::Result<Option<(MsgId, Vec<u8>)>> {
-        unimplemented!("recv handler not implemented");
+    /// Decrypts a response packet and returns the inner message.
+    fn decrypt_response(&self, ciphertext: &[u8]) -> io::Result<manual_tl::Message> {
+        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key);
+        let mut buffer = io::Cursor::new(plaintext);
+
+        let _salt = i64::deserialize(&mut buffer)?;
+        let client_id = i64::deserialize(&mut buffer)?;
+        if client_id != self.client_id {
+            panic!("wrong session id");
+        }
+
+        manual_tl::Message::deserialize(&mut buffer)
     }
 
-    fn _process_message(&mut self, message: manual_tl::Message) {
+    /// Processes an encrypted response from the server. If the
+    /// response belonged to a previous request, it is returned.
+    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
+        let message = self.decrypt_response(ciphertext)?;
         self.pending_ack.push(message.msg_id);
         let constructor_id = match message._constructor_id() {
             Ok(x) => x,
             Err(e) => {
                 // TODO propagate
                 eprintln!("failed to peek constructor ID from message: {:?}", e);
-                return;
+                return Ok(());
             }
         };
 

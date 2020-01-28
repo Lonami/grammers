@@ -1,7 +1,7 @@
 //! This module contains additional, manual structures for some TL types.
 use grammers_tl_types::{Deserializable, Identifiable, Serializable};
 use miniz_oxide::deflate::compress_to_vec;
-use std::io::{self, Write};
+use std::io::{self, Read, Write};
 
 /// This struct represents the following TL definition:
 ///
@@ -44,6 +44,23 @@ impl Serializable for Message {
         (self.body.len() as i32).serialize(buf)?;
         buf.write_all(&self.body)?;
         Ok(())
+    }
+}
+
+impl Deserializable for Message {
+    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+        let msg_id = i64::deserialize(buf)?;
+        let seq_no = i32::deserialize(buf)?;
+        let len = i32::deserialize(buf)?;
+        // TODO check that this len is not ridiculously long
+        let mut body = vec![0; len as usize];
+        buf.read_exact(&mut body)?;
+
+        Ok(Message {
+            msg_id,
+            seq_no,
+            body,
+        })
     }
 }
 
