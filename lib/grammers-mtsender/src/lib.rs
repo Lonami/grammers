@@ -6,7 +6,7 @@ use grammers_tl_types::{self as tl, Deserializable, RPC};
 /// underneath.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
-use std::io::Result;
+use std::io::{self, Result};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
@@ -54,7 +54,13 @@ impl MTSender {
     fn invoke_plain_request<R: RPC>(&mut self, request: R) -> Result<R::Return> {
         let payload = self.protocol.serialize_plain_message(request.to_bytes());
         self.transport.send(&mut self.stream, &payload)?;
-        let response = self.transport.receive(&mut self.stream)?;
+        let response = self
+            .transport
+            .receive(&mut self.stream)
+            .map_err(|e| match e.kind() {
+                io::ErrorKind::UnexpectedEof => io::Error::new(io::ErrorKind::ConnectionReset, e),
+                _ => e,
+            })?;
         let body = self.protocol.deserialize_plain_message(&response)?;
         R::Return::from_bytes(body)
     }
