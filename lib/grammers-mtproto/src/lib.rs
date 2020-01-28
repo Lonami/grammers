@@ -482,7 +482,9 @@ impl MTProto {
 
     /// Handles the result for Remote Procedure Calls:
     ///
-    ///     rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
+    /// ```tl
+    /// rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
+    /// ```
     fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
         let manual_tl::RpcResult { req_msg_id, result } = rpc_result;
@@ -496,7 +498,9 @@ impl MTProto {
 
     /// Processes the inner messages of a container with many of them:
     ///
-    ///     msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
+    /// ```tl
+    /// msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
+    /// ```
     fn handle_container(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
         for inner_message in container.messages {
@@ -508,7 +512,9 @@ impl MTProto {
 
     /// Unpacks the data from a gzipped object and processes it:
     ///
-    ///     gzip_packed#3072cfa1 packed_data:bytes = Object;
+    /// ```tl
+    /// gzip_packed#3072cfa1 packed_data:bytes = Object;
+    /// ```
     fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         // TODO custom error, don't use a string
         let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
@@ -524,7 +530,9 @@ impl MTProto {
     /// Handles pong results, which don't come inside a ``rpc_result``
     /// but are still sent through a request:
     ///
-    ///     pong#347773c5 msg_id:long ping_id:long = Pong;
+    /// ```tl
+    /// pong#347773c5 msg_id:long ping_id:long = Pong;
+    /// ```
     fn handle_pong(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let pong = tl::enums::Pong::from_bytes(&message.body)?;
         let pong = match pong {
@@ -539,14 +547,18 @@ impl MTProto {
     /// Adjusts the current state to be correct based on the
     /// received bad message notification whenever possible:
     ///
-    ///     bad_msg_notification#a7eff811 bad_msg_id:long bad_msg_seqno:int
-    ///     error_code:int = BadMsgNotification;
+    /// ```tl
+    /// bad_msg_notification#a7eff811 bad_msg_id:long bad_msg_seqno:int
+    /// error_code:int = BadMsgNotification;
+    /// ```
     ///
     /// Corrects the currently used server salt to use the right value
     /// before enqueuing the rejected message to be re-sent:
     ///
-    ///     bad_server_salt#edab447b bad_msg_id:long bad_msg_seqno:int
-    ///     error_code:int new_server_salt:long = BadMsgNotification;
+    /// ```tl
+    /// bad_server_salt#edab447b bad_msg_id:long bad_msg_seqno:int
+    /// error_code:int new_server_salt:long = BadMsgNotification;
+    /// ```
     fn handle_bad_notification(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
         let bad_msg = match bad_msg {
@@ -590,11 +602,15 @@ impl MTProto {
 
     /// Updates the current status with the received detailed information:
     ///
-    ///     msg_detailed_info#276d3ec6 msg_id:long answer_msg_id:long
-    ///     bytes:int status:int = MsgDetailedInfo;
+    /// ```tl
+    /// msg_detailed_info#276d3ec6 msg_id:long answer_msg_id:long
+    /// bytes:int status:int = MsgDetailedInfo;
+    /// ```
     ///
-    ///     msg_new_detailed_info#809db6df answer_msg_id:long
-    ///     bytes:int status:int = MsgDetailedInfo;
+    /// ```tl
+    /// msg_new_detailed_info#809db6df answer_msg_id:long
+    /// bytes:int status:int = MsgDetailedInfo;
+    /// ```
     fn handle_detailed_info(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1790-L1820
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
@@ -612,8 +628,10 @@ impl MTProto {
 
     /// Updates the current status with the received session information:
     ///
-    ///     new_session_created#9ec20908 first_msg_id:long unique_id:long
-    ///     server_salt:long = NewSession;
+    /// ```tl
+    /// new_session_created#9ec20908 first_msg_id:long unique_id:long
+    /// server_salt:long = NewSession;
+    /// ```
     fn handle_new_session_created(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
@@ -626,11 +644,15 @@ impl MTProto {
 
     /// Handles a server acknowledge about our messages.
     ///
-    ///     tl::enums::MsgsAck::MsgsAck
+    /// ```tl
+    /// tl::enums::MsgsAck::MsgsAck
+    /// ```
     ///
     /// Normally these can be ignored except in the case of ``auth.logOut``:
     ///
-    ///     auth.logOut#5717da40 = Bool;
+    /// ```tl
+    /// auth.logOut#5717da40 = Bool;
+    /// ```
     ///
     /// Telegram doesn't seem to send its result so we need to confirm
     /// it manually. No other request is known to have this behaviour.
@@ -648,8 +670,10 @@ impl MTProto {
     /// Handles future salt results, which don't come inside a
     /// ``rpc_result`` but are still sent through a request:
     ///
-    ///     future_salts#ae500895 req_msg_id:long now:int
-    ///     salts:vector<future_salt> = FutureSalts;
+    /// ```tl
+    /// future_salts#ae500895 req_msg_id:long now:int
+    /// salts:vector<future_salt> = FutureSalts;
+    /// ```
     fn handle_future_salts(&mut self, message: &manual_tl::Message) -> io::Result<()> {
         let salts = tl::enums::FutureSalts::from_bytes(&message.body)?;
         let salts = match salts {

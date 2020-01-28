@@ -269,7 +269,6 @@ pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
         let mut buffer = vec![0; pad_len];
         getrandom(&mut buffer).expect("failed to generate random padding for encryption");
         padded.extend(&buffer);
-        eprintln!("had to pad now have len {}", padded.len());
 
         &padded
     };

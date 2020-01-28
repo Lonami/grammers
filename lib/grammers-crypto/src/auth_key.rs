@@ -8,6 +8,12 @@ pub struct AuthKey {
     pub(crate) key_id: [u8; 8],
 }
 
+impl PartialEq for AuthKey {
+    fn eq(&self, other: &Self) -> bool {
+        self.key_id == other.key_id
+    }
+}
+
 /// Represents a Telegram's [authorization key].
 ///
 /// [authorization key]: https://core.telegram.org/mtproto/auth_key
