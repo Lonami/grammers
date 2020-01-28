@@ -36,6 +36,7 @@ pub use serializable::Serializable;
 /// common, so instead of creating a enum for `Vector` wrapping `vector`
 /// as Rust's `Vec` (as we would do with auto-generated code),
 /// a new-type for `vector` is used instead.
+#[derive(Debug)]
 pub struct RawVec<T>(pub Vec<T>);
 
 /// Anything implementing this trait is identifiable by both ends (client-server)

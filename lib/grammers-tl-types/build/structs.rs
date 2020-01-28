@@ -16,6 +16,10 @@ use std::io::{self, Write};
 /// ```
 fn write_struct<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
     // Define struct
+    if cfg!(feature = "impl-debug") {
+        writeln!(file, "{}#[derive(Debug)]", indent)?;
+    }
+
     writeln!(
         file,
         "{}pub struct {} {{",

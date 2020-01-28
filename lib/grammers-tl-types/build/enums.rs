@@ -18,6 +18,10 @@ fn write_enum<W: Write>(
     name: &str,
     type_defs: &Vec<&Definition>,
 ) -> io::Result<()> {
+    if cfg!(feature = "impl-debug") {
+        writeln!(file, "{}#[derive(Debug)]", indent)?;
+    }
+
     writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
     for d in type_defs.iter() {
         write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
