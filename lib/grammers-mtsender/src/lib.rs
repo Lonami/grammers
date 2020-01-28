@@ -1,5 +1,6 @@
 use grammers_mtproto::transports::{Transport, TransportFull};
 use grammers_mtproto::{auth_key, MTProto};
+use grammers_tl_types::{Deserializable, RPC};
 
 use std::io::{self, Result};
 use std::net::{TcpStream, ToSocketAddrs};
@@ -17,12 +18,12 @@ pub struct MTSender {
 }
 
 impl MTSender {
-    pub fn connect<A: ToSocketAddrs>(addr: A, protocol: MTProto) -> Result<Self> {
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
         let stream = TcpStream::connect(addr)?;
-        // TODO let the user configure this
+        // TODO let the user configure this (and MTProto too)
         stream.set_read_timeout(Some(Duration::from_secs(2)))?;
         Ok(Self {
-            protocol,
+            protocol: MTProto::new(),
             stream,
             transport: TransportFull::new(),
         })
@@ -55,16 +56,42 @@ impl MTSender {
         self.transport.send(&mut self.stream, &payload)?;
 
         // Receive
-        let response = self
-            .transport
+        let response = self.receive_message()?;
+        self.protocol
+            .deserialize_plain_message(&response)
+            .map(|x| x.to_vec())
+    }
+
+    /// Block invoking a single Remote Procedure Call and return its result.
+    pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return> {
+        let msg_id = self.protocol.enqueue_request(request.to_bytes())?;
+        let data = loop {
+            // The protocol may generate more outgoing requests, so we need
+            // to constantly check for those until we receive a response.
+            while let Some(payload) = self.protocol.pop_queue() {
+                let encrypted = self.protocol.encrypt_message_data(payload);
+                self.transport.send(&mut self.stream, &encrypted)?;
+            }
+
+            // Receive a matching `MsgId`
+            let response = self.receive_message()?;
+            if let Some((response_id, data)) = self.protocol.decrypt_response(&response) {
+                if response_id == msg_id {
+                    break data;
+                }
+            }
+        };
+
+        R::Return::from_bytes(&data)
+    }
+
+    /// Receives a single message from the server
+    fn receive_message(&mut self) -> Result<Vec<u8>> {
+        self.transport
             .receive(&mut self.stream)
             .map_err(|e| match e.kind() {
                 io::ErrorKind::UnexpectedEof => io::Error::new(io::ErrorKind::ConnectionReset, e),
                 _ => e,
-            })?;
-
-        self.protocol
-            .deserialize_plain_message(&response)
-            .map(|x| x.to_vec())
+            })
     }
 }
