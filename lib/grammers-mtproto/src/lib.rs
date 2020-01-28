@@ -340,24 +340,31 @@ impl MTProto {
         buf.into_inner()
     }
 
-    /// The opposite of `serialize_plain_message`. It validates that the
-    /// returned data is valid.
-    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+    /// Checks a message buffer for common errors
+    fn check_message_buffer(message: &[u8]) -> io::Result<()> {
         if message.len() == 4 {
             // Probably a negative HTTP error code
-            return Err(io::Error::new(
+            Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 DeserializeError::HTTPErrorCode {
                     // Safe to unwrap because we just checked the length
                     code: i32::from_bytes(message).unwrap(),
                 },
-            ));
+            ))
         } else if message.len() < 20 {
-            return Err(io::Error::new(
+            Err(io::Error::new(
                 io::ErrorKind::InvalidData,
                 DeserializeError::MessageBufferTooSmall,
-            ));
+            ))
+        } else {
+            Ok(())
         }
+    }
+
+    /// The opposite of `serialize_plain_message`. It validates that the
+    /// returned data is valid.
+    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+        Self::check_message_buffer(message)?;
 
         let mut buf = io::Cursor::new(message);
         let auth_key_id = i64::deserialize(&mut buf)?;
@@ -422,6 +429,8 @@ impl MTProto {
 
     /// Decrypts a response packet and returns the inner message.
     fn decrypt_response(&self, ciphertext: &[u8]) -> io::Result<manual_tl::Message> {
+        Self::check_message_buffer(ciphertext)?;
+
         let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
         let mut buffer = io::Cursor::new(plaintext);
 
