@@ -1,6 +1,8 @@
 //! This module contains additional, manual structures for some TL types.
+use grammers_tl_types::errors::UnexpectedConstructor;
 use grammers_tl_types::{Deserializable, Identifiable, Serializable};
 use miniz_oxide::deflate::compress_to_vec;
+use miniz_oxide::inflate::decompress_to_vec;
 use std::io::{self, Read, Write};
 
 /// This struct represents the following TL definition:
@@ -25,7 +27,7 @@ impl Message {
     pub const SIZE_OVERHEAD: usize = 16;
 
     /// Peek the constructor ID from the body.
-    pub fn _constructor_id(&self) -> io::Result<u32> {
+    pub fn constructor_id(&self) -> io::Result<u32> {
         let mut buffer = io::Cursor::new(&self.body);
         u32::deserialize(&mut buffer)
     }
@@ -69,13 +71,30 @@ impl Deserializable for Message {
 /// ```tl
 /// rpc_result#f35c6d01 req_msg_id:long result:Object = RpcResult;
 /// ```
-pub(crate) struct _RpcResult {
-    pub req_msg_id: u64,
+pub(crate) struct RpcResult {
+    pub req_msg_id: i64,
     pub result: Vec<u8>,
 }
 
-impl Identifiable for _RpcResult {
+impl Identifiable for RpcResult {
     const CONSTRUCTOR_ID: u32 = 0xf35c6d01_u32;
+}
+
+impl Deserializable for RpcResult {
+    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+        let constructor_id = u32::deserialize(buf)?;
+        if constructor_id != Self::CONSTRUCTOR_ID {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                UnexpectedConstructor { id: constructor_id },
+            ));
+        }
+
+        let req_msg_id = i64::deserialize(buf)?;
+        let result = Vec::<u8>::deserialize(buf)?;
+
+        Ok(Self { req_msg_id, result })
+    }
 }
 
 /// This struct represents the following TL definition:
@@ -111,6 +130,27 @@ impl Identifiable for MessageContainer {
     const CONSTRUCTOR_ID: u32 = 0x73f1f8dc_u32;
 }
 
+impl Deserializable for MessageContainer {
+    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+        let constructor_id = u32::deserialize(buf)?;
+        if constructor_id != Self::CONSTRUCTOR_ID {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                UnexpectedConstructor { id: constructor_id },
+            ));
+        }
+
+        let len = i32::deserialize(buf)?;
+        // TODO check that this len is not ridiculously long
+        let mut messages = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            messages.push(Message::deserialize(buf)?);
+        }
+
+        Ok(Self { messages })
+    }
+}
+
 /// This struct represents the following TL definition:
 ///
 /// ```tl
@@ -126,6 +166,10 @@ impl GzipPacked {
             packed_data: compress_to_vec(unpacked_data, 9),
         }
     }
+
+    pub fn decompress(&self) -> Result<Vec<u8>, ()> {
+        decompress_to_vec(&self.packed_data).map_err(drop)
+    }
 }
 
 impl Identifiable for GzipPacked {
@@ -137,5 +181,20 @@ impl Serializable for GzipPacked {
         Self::CONSTRUCTOR_ID.serialize(buf)?;
         self.packed_data.serialize(buf)?;
         Ok(())
+    }
+}
+
+impl Deserializable for GzipPacked {
+    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+        let constructor_id = u32::deserialize(buf)?;
+        if constructor_id != Self::CONSTRUCTOR_ID {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                UnexpectedConstructor { id: constructor_id },
+            ));
+        }
+
+        let packed_data = Vec::<u8>::deserialize(buf)?;
+        Ok(Self { packed_data })
     }
 }

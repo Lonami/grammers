@@ -111,6 +111,17 @@ impl MTProto {
         self.time_offset = time_offset;
     }
 
+    /// Correct our time offset based on a known valid message ID.
+    fn correct_time_offset(&mut self, msg_id: i64) {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time is before epoch")
+            .as_secs() as i32;
+
+        let correct = (msg_id >> 32) as i32;
+        self.time_offset = correct - now;
+    }
+
     /// Enqueues a request and returns its associated `msg_id`.
     ///
     /// Once a response arrives and it is decrypted, the caller
@@ -408,76 +419,223 @@ impl MTProto {
     /// Processes an encrypted response from the server. If the
     /// response belonged to a previous request, it is returned.
     pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<Option<(MsgId, Vec<u8>)>> {
-        let message = self.decrypt_response(ciphertext)?;
+        self.process_message(self.decrypt_response(ciphertext)?)
+    }
+
+    fn process_message(
+        &mut self,
+        message: manual_tl::Message,
+    ) -> io::Result<Option<(MsgId, Vec<u8>)>> {
         self.pending_ack.push(message.msg_id);
-        let constructor_id = match message._constructor_id() {
-            Ok(x) => x,
-            Err(e) => {
-                // TODO propagate
-                eprintln!("failed to peek constructor ID from message: {:?}", e);
-                unimplemented!();
+
+        // Determine what to do based on the inner body's constructor
+        match message.constructor_id()? {
+            manual_tl::RpcResult::CONSTRUCTOR_ID => {
+                return self.handle_rpc_result(&message).map(Some);
+            }
+            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(&message),
+            manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(&message),
+            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(&message),
+            tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_notification(&message),
+            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self.handle_bad_notification(&message),
+            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(&message),
+            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(&message),
+            tl::types::NewSessionCreated::CONSTRUCTOR_ID => {
+                self.handle_new_session_created(&message)
+            }
+            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(&message),
+            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(&message),
+            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_forgotten(&message),
+            tl::types::MsgResendReq::CONSTRUCTOR_ID => self.handle_state_forgotten(&message),
+            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(&message),
+            _ => self.handle_update(&message),
+        }
+        .map(|_| None)
+    }
+
+    /// Handles the result for Remote Procedure Calls:
+    ///
+    ///     rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
+    fn handle_rpc_result(&self, message: &manual_tl::Message) -> io::Result<(MsgId, Vec<u8>)> {
+        let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
+        let manual_tl::RpcResult { req_msg_id, result } = rpc_result;
+        // TODO handle the body being RpcError (return some enum variant)
+        // TODO acknowledge the message id if it's an error
+        // TODO handle the body being GzipPacked (decompress it before return)
+        Ok((MsgId(req_msg_id), result))
+    }
+
+    /// Processes the inner messages of a container with many of them:
+    ///
+    ///     msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
+    fn handle_container(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO what if the rpc result is in a container? we need another way to
+        // deal with this. maybe we should have a queue of processed rpc results
+        // which users can get, and process_message() just feeds it (not returns)
+        let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
+        for inner_message in container.messages {
+            self.process_message(inner_message)?;
+        }
+
+        Ok(())
+    }
+
+    /// Unpacks the data from a gzipped object and processes it:
+    ///
+    ///     gzip_packed#3072cfa1 packed_data:bytes = Object;
+    fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
+        self.process_message(manual_tl::Message {
+            body: container
+                .decompress()
+                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "decompression failed"))?,
+            ..*message
+        })
+        .map(|_| ())
+    }
+
+    /// Handles pong results, which don't come inside a ``rpc_result``
+    /// but are still sent through a request:
+    ///
+    ///     pong#347773c5 msg_id:long ping_id:long = Pong;
+    fn handle_pong(&self, message: &manual_tl::Message) -> io::Result<()> {
+        let _pong = tl::enums::Pong::from_bytes(&message.body)?;
+        // TODO this should be treated as a rpc result
+        Ok(())
+    }
+
+    /// Adjusts the current state to be correct based on the
+    /// received bad message notification whenever possible:
+    ///
+    ///     bad_msg_notification#a7eff811 bad_msg_id:long bad_msg_seqno:int
+    ///     error_code:int = BadMsgNotification;
+    ///
+    /// Corrects the currently used server salt to use the right value
+    /// before enqueuing the rejected message to be re-sent:
+    ///
+    ///     bad_server_salt#edab447b bad_msg_id:long bad_msg_seqno:int
+    ///     error_code:int new_server_salt:long = BadMsgNotification;
+    fn handle_bad_notification(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
+        // TODO notify the caller of the protocol that they need to resend
+        let bad_msg = match bad_msg {
+            tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
+            tl::enums::BadMsgNotification::BadServerSalt(x) => {
+                self.salt = x.new_server_salt;
+                return Ok(());
             }
         };
 
-        match constructor_id {
-            manual_tl::_RpcResult::CONSTRUCTOR_ID => self._handle_rpc_result(),
-            manual_tl::MessageContainer::CONSTRUCTOR_ID => self._handle_container(),
-            tl::types::Pong::CONSTRUCTOR_ID => self._handle_pong(),
-            tl::types::BadServerSalt::CONSTRUCTOR_ID => self._handle_bad_server_salt(),
-            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self._handle_bad_notification(),
-            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self._handle_detailed_info(),
-            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self._handle_new_detailed_info(),
-            tl::types::NewSessionCreated::CONSTRUCTOR_ID => self._handle_new_session_created(),
-            tl::types::MsgsAck::CONSTRUCTOR_ID => self._handle_ack(),
-            tl::types::FutureSalts::CONSTRUCTOR_ID => self._handle_future_salts(),
-            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self._handle_state_forgotten(),
-            tl::types::MsgResendReq::CONSTRUCTOR_ID => self._handle_state_forgotten(),
-            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self._handle_msg_all(),
-            _ => self._handle_update(),
+        match bad_msg.error_code {
+            16 => {
+                // Sent `msg_id` was too low (our `time_offset` is wrong).
+                self.correct_time_offset(message.msg_id);
+            }
+            17 => {
+                // Sent `msg_id` was too high (our `time_offset` is wrong).
+                self.correct_time_offset(message.msg_id);
+            }
+            32 => {
+                // Sent `seq_no` was too low. Bump it by some large-ish value.
+                // TODO start with a fresh session rather than guessing
+                self.sequence += 64;
+            }
+            33 => {
+                // Sent `seq_no` was too high (this error doesn't seem to occur).
+                // TODO start with a fresh session rather than guessing
+                self.sequence -= 16;
+            }
+            _ => {
+                // Just notify about it.
+            }
         }
-        unimplemented!();
+
+        Ok(())
     }
 
-    fn _handle_rpc_result(&self) {
-        unimplemented!();
+    /// Updates the current status with the received detailed information:
+    ///
+    ///     msg_detailed_info#276d3ec6 msg_id:long answer_msg_id:long
+    ///     bytes:int status:int = MsgDetailedInfo;
+    ///
+    ///     msg_new_detailed_info#809db6df answer_msg_id:long
+    ///     bytes:int status:int = MsgDetailedInfo;
+    fn handle_detailed_info(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1790-L1820
+        // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
+        let msg_detailed = tl::enums::MsgDetailedInfo::from_bytes(&message.body)?;
+        match msg_detailed {
+            tl::enums::MsgDetailedInfo::MsgDetailedInfo(x) => {
+                self.pending_ack.push(x.answer_msg_id);
+            }
+            tl::enums::MsgDetailedInfo::MsgNewDetailedInfo(x) => {
+                self.pending_ack.push(x.answer_msg_id);
+            }
+        }
+        Ok(())
     }
-    fn _handle_container(&self) {
-        unimplemented!();
+
+    /// Updates the current status with the received session information:
+    ///
+    ///     new_session_created#9ec20908 first_msg_id:long unique_id:long
+    ///     server_salt:long = NewSession;
+    fn handle_new_session_created(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
+        match new_session {
+            tl::enums::NewSession::NewSessionCreated(x) => {
+                self.salt = x.server_salt;
+            }
+        }
+        Ok(())
     }
-    fn _handle_gzip_packed(&self) {
-        unimplemented!();
+
+    /// Handles a server acknowledge about our messages.
+    ///
+    ///     tl::enums::MsgsAck::MsgsAck
+    ///
+    /// Normally these can be ignored except in the case of ``auth.logOut``:
+    ///
+    ///     auth.logOut#5717da40 = Bool;
+    ///
+    /// Telegram doesn't seem to send its result so we need to confirm
+    /// it manually. No other request is known to have this behaviour.
+    ///
+    /// Since the ID of sent messages consisting of a container is
+    /// never returned (unless on a bad notification), this method
+    /// also removes containers messages when any of their inner
+    /// messages are acknowledged.
+    fn handle_ack(&self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO notify about this somehow
+        let _ack = tl::enums::MsgsAck::from_bytes(&message.body)?;
+        Ok(())
     }
-    fn _handle_pong(&self) {
-        unimplemented!();
+
+    /// Handles future salt results, which don't come inside a
+    /// ``rpc_result`` but are still sent through a request:
+    ///
+    ///     future_salts#ae500895 req_msg_id:long now:int
+    ///     salts:vector<future_salt> = FutureSalts;
+    fn handle_future_salts(&self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO this is similar to ping, might need to respond to rpc
+        let _salts = tl::enums::FutureSalts::from_bytes(&message.body)?;
+        Ok(())
     }
-    fn _handle_bad_server_salt(&self) {
-        unimplemented!();
+
+    /// Handles both :tl:`MsgsStateReq` and :tl:`MsgResendReq` by
+    /// enqueuing a :tl:`MsgsStateInfo` to be sent at a later point.
+    fn handle_state_forgotten(&self, _message: &manual_tl::Message) -> io::Result<()> {
+        // TODO implement
+        Ok(())
     }
-    fn _handle_bad_notification(&self) {
-        unimplemented!();
+
+    /// Handles :tl:`MsgsAllInfo` by doing nothing (yet).
+    fn handle_msg_all(&self, _message: &manual_tl::Message) -> io::Result<()> {
+        // TODO implement
+        Ok(())
     }
-    fn _handle_detailed_info(&self) {
-        unimplemented!();
-    }
-    fn _handle_new_detailed_info(&self) {
-        unimplemented!();
-    }
-    fn _handle_new_session_created(&self) {
-        unimplemented!();
-    }
-    fn _handle_ack(&self) {
-        unimplemented!();
-    }
-    fn _handle_future_salts(&self) {
-        unimplemented!();
-    }
-    fn _handle_state_forgotten(&self) {
-        unimplemented!();
-    }
-    fn _handle_msg_all(&self) {
-        unimplemented!();
-    }
-    fn _handle_update(&self) {
-        unimplemented!();
+
+    fn handle_update(&self, _message: &manual_tl::Message) -> io::Result<()> {
+        // TODO dispatch this somehow
+        Ok(())
     }
 }
