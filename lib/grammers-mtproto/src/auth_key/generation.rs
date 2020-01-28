@@ -18,10 +18,16 @@ pub enum AuthKeyGenError {
     InvalidResponse,
 
     /// The server's nonce did not match ours.
-    BadNonce { got: [u8; 16], expected: [u8; 16] },
+    BadNonce {
+        got: [u8; 16],
+        expected: [u8; 16],
+    },
 
     /// The server's PQ number was not of the right size.
-    WrongSizePQ { size: usize, expected: usize },
+    WrongSizePQ {
+        size: usize,
+        expected: usize,
+    },
 
     /// None of the server fingerprints are known to us.
     UnknownFingerprint,
@@ -30,13 +36,18 @@ pub enum AuthKeyGenError {
     ServerDHParamsFail,
 
     /// The server's nonce has changed during the key exchange.
-    BadServerNonce { got: [u8; 16], expected: [u8; 16] },
+    BadServerNonce {
+        got: [u8; 16],
+        expected: [u8; 16],
+    },
 
     /// The server's `encrypted_data` is not correctly padded.
     EncryptedResponseNotPadded,
 
     /// An error occured while trying to read the DH inner data.
-    InvalidDHInnerData { error: io::Error },
+    InvalidDHInnerData {
+        error: io::Error,
+    },
 
     /// Some parameter (`g`, `g_a` or `g_b`) was out of range.
     GParameterOutOfRange {
@@ -102,9 +113,13 @@ pub fn step1() -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
         buffer
     };
 
-    Ok((tl::functions::ReqPqMulti {
-        nonce: nonce.clone(),
-    }.to_bytes(), Step1 { nonce }))
+    Ok((
+        tl::functions::ReqPqMulti {
+            nonce: nonce.clone(),
+        }
+        .to_bytes(),
+        Step1 { nonce },
+    ))
 }
 
 pub fn step2(data: Step1, response: Vec<u8>) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
@@ -193,16 +208,22 @@ pub fn step2(data: Step1, response: Vec<u8>) -> Result<(Vec<u8>, Step2), AuthKey
             q: q_bytes.clone(),
             public_key_fingerprint: fingerprint,
             encrypted_data: ciphertext,
-        }.to_bytes(), Step2 {
+        }
+        .to_bytes(),
+        Step2 {
             nonce,
             server_nonce: res_pq.server_nonce,
             new_nonce,
-        }
+        },
     ))
 }
 
 pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
-    let Step2 { nonce, server_nonce, new_nonce } = data;
+    let Step2 {
+        nonce,
+        server_nonce,
+        new_nonce,
+    } = data;
     let server_dh_params = <tl::functions::ReqDHParams as RPC>::Return::from_bytes(&response)?;
 
     // Step 3. Factorize PQ and construct the request for DH params.
@@ -232,13 +253,10 @@ pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKey
     }
 
     // Complete DH Exchange
-    let (key, iv) = grammers_crypto::generate_key_data_from_nonce(
-        &server_nonce, &new_nonce
-    );
+    let (key, iv) = grammers_crypto::generate_key_data_from_nonce(&server_nonce, &new_nonce);
 
-    let plain_text_answer = grammers_crypto::decrypt_ige(
-        &server_dh_params.encrypted_answer, &key, &iv
-    );
+    let plain_text_answer =
+        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
 
     // TODO validate this hashsum
     let _hashsum = &plain_text_answer[..20];
@@ -298,12 +316,14 @@ pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKey
     //    raise SecurityError('g_b is not within (2^{2048-64}, dh_prime - 2^{2048-64})')
 
     // Prepare client DH Inner Data
-    let client_dh_inner = tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
-        nonce: nonce.clone(),
-        server_nonce: server_nonce.clone(),
-        retry_id: 0, // TODO use an actual retry_id
-        g_b: g_b.to_bytes_be(),
-    }).to_bytes();
+    let client_dh_inner =
+        tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
+            retry_id: 0, // TODO use an actual retry_id
+            g_b: g_b.to_bytes_be(),
+        })
+        .to_bytes();
 
     // sha1(client_dh_inner).digest() + client_dh_inner
     let client_dh_inner_hashed = {
@@ -319,22 +339,31 @@ pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKey
 
     let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
 
-    Ok((tl::functions::SetClientDHParams {
-        nonce: nonce.clone(),
-        server_nonce: server_nonce.clone(),
-        encrypted_data: client_dh_encrypted
-    }.to_bytes(), Step3 {
+    Ok((
+        tl::functions::SetClientDHParams {
+            nonce: nonce.clone(),
+            server_nonce: server_nonce.clone(),
+            encrypted_data: client_dh_encrypted,
+        }
+        .to_bytes(),
+        Step3 {
+            nonce,
+            server_nonce,
+            new_nonce,
+            gab,
+            time_offset,
+        },
+    ))
+}
+
+pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), AuthKeyGenError> {
+    let Step3 {
         nonce,
         server_nonce,
         new_nonce,
         gab,
-        time_offset
-    }))
-
-}
-
-pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), AuthKeyGenError> {
-    let Step3 { nonce, server_nonce, new_nonce, gab, time_offset } = data;
+        time_offset,
+    } = data;
     let dh_gen = <tl::functions::SetClientDHParams as RPC>::Return::from_bytes(&response)?;
 
     // TODO validate nonce and server_nonce for failing cases
@@ -342,10 +371,10 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
         tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => (1, x),
         tl::enums::SetClientDHParamsAnswer::DhGenRetry(_) => {
             return Err(AuthKeyGenError::DHGenRetry);
-        },
+        }
         tl::enums::SetClientDHParamsAnswer::DhGenFail(_) => {
             return Err(AuthKeyGenError::DHGenFail);
-        },
+        }
     };
 
     // TODO create a fn to reuse this check

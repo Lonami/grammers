@@ -1,15 +1,14 @@
-use grammers_crypto::AuthKey;
 use grammers_mtproto::transports::{Transport, TransportFull};
 use grammers_mtproto::{auth_key, MTProto};
-use grammers_tl_types::{self as tl, Deserializable, RPC};
-/// A Mobile Transport sender, using the [Mobile Transport Protocol]
-/// underneath.
-///
-/// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+
 use std::io::{self, Result};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
+/// A Mobile Transport sender, using the [Mobile Transport Protocol]
+/// underneath.
+///
+/// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub struct MTSender {
     protocol: MTProto,
     stream: TcpStream,
