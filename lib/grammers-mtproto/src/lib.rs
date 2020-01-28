@@ -55,11 +55,6 @@ pub struct MTProto {
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub struct MsgId(i64);
 
-pub struct Response {
-    pub msg_id: MsgId,
-    pub data: Vec<u8>,
-}
-
 impl MTProtoBuilder {
     fn new() -> Self {
         Self {
@@ -398,7 +393,7 @@ impl MTProto {
 
     /// Decrypts a response packet and returns the inner message.
     fn decrypt_response(&self, ciphertext: &[u8]) -> io::Result<manual_tl::Message> {
-        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key);
+        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
         let mut buffer = io::Cursor::new(plaintext);
 
         let _salt = i64::deserialize(&mut buffer)?;
@@ -412,7 +407,7 @@ impl MTProto {
 
     /// Processes an encrypted response from the server. If the
     /// response belonged to a previous request, it is returned.
-    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
+    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<Option<(MsgId, Vec<u8>)>> {
         let message = self.decrypt_response(ciphertext)?;
         self.pending_ack.push(message.msg_id);
         let constructor_id = match message._constructor_id() {
@@ -420,7 +415,7 @@ impl MTProto {
             Err(e) => {
                 // TODO propagate
                 eprintln!("failed to peek constructor ID from message: {:?}", e);
-                return Ok(());
+                unimplemented!();
             }
         };
 

@@ -5,6 +5,9 @@ use openssl::aes::{aes_ige, AesKey};
 use openssl::sha::sha1;
 use openssl::symm::Mode;
 use sha2::{Digest, Sha256};
+use std::error::Error;
+use std::fmt;
+use std::io;
 
 enum Side {
     Client,
@@ -54,7 +57,7 @@ fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u
     };
 
     // aes_iv = substr (sha256_b, 0, 8) + substr (sha256_a, 8, 16) + substr (sha256_b, 24, 8);
-    let mut aes_iv = {
+    let aes_iv = {
         let mut buffer = [0; 32];
         buffer[0..0 + 8].copy_from_slice(&sha256_b[0..0 + 8]);
         buffer[8..8 + 16].copy_from_slice(&sha256_a[8..8 + 16]);
@@ -138,6 +141,7 @@ pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     encrypt_padded_data_v2(&padded, auth_key)
 }
 
+#[derive(Debug)]
 pub enum DecryptionError {
     /// The ciphertext is either too small or not padded correctly.
     InvalidBuffer,
@@ -147,6 +151,21 @@ pub enum DecryptionError {
 
     /// The key of the message did not match our expectations.
     MessageKeyMismatch,
+}
+
+impl Error for DecryptionError {}
+
+impl fmt::Display for DecryptionError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO better display
+        write!(f, "{:?}", self)
+    }
+}
+
+impl From<DecryptionError> for io::Error {
+    fn from(error: DecryptionError) -> Self {
+        io::Error::new(io::ErrorKind::InvalidData, error)
+    }
 }
 
 /// This method is the inverse of `encrypt_data_v2`.
@@ -178,7 +197,7 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
     let our_key = {
         let mut hasher = Sha256::new();
         hasher.input(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.input(plaintext);
+        hasher.input(&plaintext);
         hasher.result()
     };
 

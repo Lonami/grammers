@@ -75,7 +75,7 @@ impl MTSender {
 
             // Receive a matching `MsgId`
             let response = self.receive_message()?;
-            if let Some((response_id, data)) = self.protocol.decrypt_response(&response) {
+            if let Some((response_id, data)) = self.protocol.process_response(&response)? {
                 if response_id == msg_id {
                     break data;
                 }
