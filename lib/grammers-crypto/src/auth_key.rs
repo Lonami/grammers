@@ -32,6 +32,21 @@ impl AuthKey {
             key_id,
         }
     }
+
+    /// Calculates the new nonce hash based on the current attributes.
+    pub fn calc_new_nonce_hash(&self, new_nonce: &[u8; 32], number: u8) -> [u8; 16] {
+        let data = {
+            let mut buffer = Vec::with_capacity(new_nonce.len() + 1 + self.aux_hash.len());
+            buffer.extend(new_nonce);
+            buffer.push(number);
+            buffer.extend(&self.aux_hash);
+            buffer
+        };
+
+        let mut result = [0u8; 16];
+        result.copy_from_slice(&sha1(&data)[4..]);
+        result
+    }
 }
 
 impl fmt::Debug for AuthKey {
@@ -56,6 +71,16 @@ mod tests {
         AuthKey::from_bytes(buffer)
     }
 
+    fn get_test_new_nonce() -> [u8; 32] {
+        let mut buffer = [0u8; 32];
+        buffer
+            .iter_mut()
+            .enumerate()
+            .for_each(|(i, x)| *x = i as u8);
+
+        buffer
+    }
+
     #[test]
     fn auth_key_aux_hash() {
         let auth_key = get_test_auth_key();
@@ -70,5 +95,35 @@ mod tests {
         let expected = [50, 209, 88, 110, 164, 87, 223, 200];
 
         assert_eq!(auth_key.key_id, expected);
+    }
+
+    #[test]
+    fn calc_new_nonce_hash1() {
+        let auth_key = get_test_auth_key();
+        let new_nonce = get_test_new_nonce();
+        assert_eq!(
+            auth_key.calc_new_nonce_hash(&new_nonce, 1),
+            [194, 206, 210, 179, 62, 89, 58, 85, 210, 127, 74, 93, 171, 238, 124, 103]
+        );
+    }
+
+    #[test]
+    fn calc_new_nonce_hash2() {
+        let auth_key = get_test_auth_key();
+        let new_nonce = get_test_new_nonce();
+        assert_eq!(
+            auth_key.calc_new_nonce_hash(&new_nonce, 2),
+            [244, 49, 142, 133, 189, 47, 243, 190, 132, 217, 254, 252, 227, 220, 227, 159]
+        );
+    }
+
+    #[test]
+    fn calc_new_nonce_hash3() {
+        let auth_key = get_test_auth_key();
+        let new_nonce = get_test_new_nonce();
+        assert_eq!(
+            auth_key.calc_new_nonce_hash(&new_nonce, 3),
+            [75, 249, 215, 179, 125, 180, 19, 238, 67, 29, 40, 81, 118, 49, 203, 61]
+        );
     }
 }

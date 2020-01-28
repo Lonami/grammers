@@ -2,6 +2,7 @@ mod auth_key;
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use openssl::aes::{aes_ige, AesKey};
+use openssl::sha::sha1;
 use openssl::symm::Mode;
 use sha2::{Digest, Sha256};
 
@@ -112,6 +113,99 @@ pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, side: Side) -> Vec<
     encrypt_padded_data_v2(&padded, auth_key, side)
 }
 
+/// Generate the AES key and initialization vector from the server nonce
+/// and the new client nonce. This is done after the DH exchange.
+pub fn generate_key_data_from_nonce(
+    server_nonce: &[u8; 16],
+    new_nonce: &[u8; 32],
+) -> ([u8; 32], [u8; 32]) {
+    // hash1 = sha1(new_nonce + server_nonce).digest()
+    let hash1: [u8; 20] = {
+        let mut buffer = Vec::with_capacity(new_nonce.len() + server_nonce.len());
+        buffer.extend(new_nonce);
+        buffer.extend(server_nonce);
+        sha1(&buffer)
+    };
+    // hash2 = sha1(server_nonce + new_nonce).digest()
+    let hash2: [u8; 20] = {
+        let mut buffer = Vec::with_capacity(server_nonce.len() + new_nonce.len());
+        buffer.extend(server_nonce);
+        buffer.extend(new_nonce);
+        sha1(&buffer)
+    };
+    // hash3 = sha1(new_nonce + new_nonce).digest()
+    let hash3: [u8; 20] = {
+        let mut buffer = Vec::with_capacity(new_nonce.len() + new_nonce.len());
+        buffer.extend(new_nonce);
+        buffer.extend(new_nonce);
+        sha1(&buffer)
+    };
+
+    // key = hash1 + hash2[:12]
+    let key: [u8; 32] = {
+        let mut buffer = [0; 32];
+        buffer[..hash1.len()].copy_from_slice(&hash1);
+        buffer[hash1.len()..].copy_from_slice(&hash2[..12]);
+        buffer
+    };
+
+    // iv = hash2[12:20] + hash3 + new_nonce[:4]
+    let iv: [u8; 32] = {
+        let mut buffer = [0; 32];
+        buffer[..8].copy_from_slice(&hash2[12..]);
+        buffer[8..28].copy_from_slice(&hash3);
+        buffer[28..].copy_from_slice(&new_nonce[..4]);
+        buffer
+    };
+
+    (key, iv)
+}
+
+/// Encrypt data using AES-IGE.
+pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
+    let mut padded: Vec<u8>;
+    let padded_plaintext = if plaintext.len() % 16 == 0 {
+        plaintext
+    } else {
+        let pad_len = (16 - (plaintext.len() % 16)) % 16;
+        padded = Vec::with_capacity(plaintext.len() + pad_len);
+        padded.extend(plaintext);
+
+        let mut buffer = vec![0; pad_len];
+        getrandom(&mut buffer).expect("failed to generate random padding for encryption");
+        padded.extend(&buffer);
+        eprintln!("had to pad now have len {}", padded.len());
+
+        &padded
+    };
+
+    let mut buffer = vec![0; padded_plaintext.len()];
+    // Safe to unwrap because the key is of the correct length
+    aes_ige(
+        padded_plaintext,
+        &mut buffer,
+        &AesKey::new_encrypt(key).unwrap(),
+        &mut iv.clone(),
+        Mode::Encrypt,
+    );
+    buffer
+}
+
+/// Decrypt data using AES-IGE. Panics if the plaintext is not padded
+/// to 16 bytes.
+pub fn decrypt_ige(padded_ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
+    let mut buffer = vec![0; padded_ciphertext.len()];
+    // Safe to unwrap because the key is of the correct length
+    aes_ige(
+        &padded_ciphertext,
+        &mut buffer,
+        &AesKey::new_decrypt(key).unwrap(),
+        &mut iv.clone(),
+        Mode::Decrypt,
+    );
+    buffer
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -150,6 +244,42 @@ mod tests {
         assert_eq!(
             encrypt_padded_data_v2(&padded_plaintext, &auth_key, side),
             expected
+        );
+    }
+
+    #[test]
+    fn key_from_nonce() {
+        let server_nonce = {
+            let mut buffer = [0u8; 16];
+            buffer
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, x)| *x = i as u8);
+            buffer
+        };
+        let new_nonce = {
+            let mut buffer = [0u8; 32];
+            buffer
+                .iter_mut()
+                .enumerate()
+                .for_each(|(i, x)| *x = i as u8);
+            buffer
+        };
+
+        let (key, iv) = generate_key_data_from_nonce(&server_nonce, &new_nonce);
+        assert_eq!(
+            key,
+            [
+                7, 88, 241, 83, 59, 97, 93, 36, 246, 232, 169, 74, 111, 203, 238, 10, 85, 234, 171,
+                34, 23, 215, 41, 92, 169, 33, 61, 26, 45, 125, 22, 166
+            ]
+        );
+        assert_eq!(
+            iv,
+            [
+                90, 132, 16, 142, 152, 5, 101, 108, 232, 100, 7, 14, 22, 110, 98, 24, 246, 120, 62,
+                133, 17, 71, 26, 90, 183, 128, 44, 242, 0, 1, 2, 3
+            ]
         );
     }
 }

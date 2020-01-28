@@ -1,6 +1,7 @@
 //! Contains the steps required to generate an authorization key.
 use getrandom::getrandom;
-use grammers_tl_types::{self as tl, Serializable};
+use grammers_crypto::{self, AuthKey};
+use grammers_tl_types::{self as tl, Deserializable, Serializable};
 use num::bigint::{BigUint, ToBigUint};
 use num::integer::Integer;
 use num::traits::cast::ToPrimitive;
@@ -14,16 +15,41 @@ use std::io;
 #[derive(Debug)]
 pub enum AuthKeyGenError {
     /// The server's nonce did not match ours.
-    BadNonce {
-        client_nonce: [u8; 16],
-        server_nonce: [u8; 16],
-    },
+    BadNonce { got: [u8; 16], expected: [u8; 16] },
 
     /// The server's PQ number was not of the right size.
     WrongSizePQ { size: usize, expected: usize },
 
     /// None of the server fingerprints are known to us.
     UnknownFingerprint,
+
+    /// The server failed to send the Diffie-Hellman parameters.
+    ServerDHParamsFail,
+
+    /// The server's nonce has changed during the key exchange.
+    BadServerNonce { got: [u8; 16], expected: [u8; 16] },
+
+    /// The server's `encrypted_data` is not correctly padded.
+    EncryptedResponseNotPadded,
+
+    /// An error occured while trying to read the DH inner data.
+    InvalidDHInnerData { error: io::Error },
+
+    /// Some parameter (`g`, `g_a` or `g_b`) was out of range.
+    GParameterOutOfRange {
+        low: BigUint,
+        high: BigUint,
+        value: BigUint,
+    },
+
+    // The generation of Diffie-Hellman parameters is to be retried.
+    DHGenRetry,
+
+    // The generation of Diffie-Hellman parameters failed.
+    DHGenFail,
+
+    // The new nonce hash did not match.
+    BadNonceHash,
 }
 
 impl Error for AuthKeyGenError {}
@@ -53,10 +79,12 @@ pub fn generate_nonce() -> [u8; 16] {
 pub fn validate_pq(nonce: &[u8; 16], res_pq: &tl::types::ResPQ) -> Result<u64, AuthKeyGenError> {
     if *nonce != res_pq.nonce {
         return Err(AuthKeyGenError::BadNonce {
-            client_nonce: nonce.clone(),
-            server_nonce: res_pq.nonce.clone(),
+            got: res_pq.nonce.clone(),
+            expected: nonce.clone(),
         });
     }
+    // From now on, we will use `res_pq.nonce` to refer to our
+    // `nonce`, which we know is valid and will remain valid.
 
     if res_pq.pq.len() != 8 {
         return Err(AuthKeyGenError::WrongSizePQ {
@@ -79,7 +107,7 @@ pub fn construct_req_dh_params(
     pq: u64,
     nonce: &[u8; 16],
     res_pq: &tl::types::ResPQ,
-) -> Result<tl::functions::ReqDHParams, AuthKeyGenError> {
+) -> Result<(tl::functions::ReqDHParams, [u8; 32]), AuthKeyGenError> {
     let (p, q) = factorize(pq);
     let new_nonce = {
         let mut buffer = [0; 32];
@@ -131,19 +159,195 @@ pub fn construct_req_dh_params(
     let (n, e) = key_for_fingerprint(fingerprint).unwrap();
     let ciphertext = rsa_encrypt(&pq_inner_data, n, e, true);
 
-    Ok(tl::functions::ReqDHParams {
-        nonce: nonce.clone(),
-        server_nonce: res_pq.server_nonce.clone(),
-        p: p_bytes.clone(),
-        q: q_bytes.clone(),
-        public_key_fingerprint: fingerprint,
-        encrypted_data: ciphertext,
-    })
+    Ok((
+        tl::functions::ReqDHParams {
+            nonce: nonce.clone(),
+            server_nonce: res_pq.server_nonce.clone(),
+            p: p_bytes.clone(),
+            q: q_bytes.clone(),
+            public_key_fingerprint: fingerprint,
+            encrypted_data: ciphertext,
+        },
+        new_nonce,
+    ))
 }
 
-pub fn validate_server_dh_params(server_dh_params: tl::enums::ServerDHParams) {
-    unimplemented!("validate server dh params");
+pub fn validate_server_dh_params(
+    res_pq: &tl::types::ResPQ,
+    new_nonce: &[u8; 32],
+    server_dh_params: &tl::enums::ServerDHParams,
+) -> Result<(tl::functions::SetClientDHParams, BigUint), AuthKeyGenError> {
+    let server_dh_params = match server_dh_params {
+        tl::enums::ServerDHParams::ServerDHParamsFail(_) => {
+            // TODO also validate nonce, server_nonce and new_nonce_hash here
+            // new_nonce_hash = sha1(new_nonce).digest()[4..20]
+            return Err(AuthKeyGenError::ServerDHParamsFail);
+        }
+        tl::enums::ServerDHParams::ServerDHParamsOk(x) => x,
+    };
+
+    if server_dh_params.nonce != res_pq.nonce {
+        return Err(AuthKeyGenError::BadNonce {
+            got: server_dh_params.nonce.clone(),
+            expected: res_pq.nonce.clone(),
+        });
+    }
+    if server_dh_params.server_nonce != res_pq.server_nonce {
+        return Err(AuthKeyGenError::BadServerNonce {
+            got: server_dh_params.server_nonce.clone(),
+            expected: res_pq.server_nonce.clone(),
+        });
+    }
+    if server_dh_params.encrypted_answer.len() % 16 != 0 {
+        return Err(AuthKeyGenError::EncryptedResponseNotPadded);
+    }
+
+    // Complete DH Exchange
+    let (key, iv) = grammers_crypto::generate_key_data_from_nonce(
+        &res_pq.server_nonce, &new_nonce
+    );
+    dbg!(server_dh_params.encrypted_answer.len());
+    dbg!(key.len());
+    dbg!(iv.len());
+    let plain_text_answer = grammers_crypto::decrypt_ige(
+        &server_dh_params.encrypted_answer, &key, &iv
+    );
+
+    // TODO validate this hashsum
+    let _hashsum = &plain_text_answer[..20];
+    let server_dh_inner = match tl::enums::ServerDHInnerData::from_bytes(&plain_text_answer[20..]) {
+        Ok(tl::enums::ServerDHInnerData::ServerDHInnerData(x)) => x,
+        Err(error) => return Err(AuthKeyGenError::InvalidDHInnerData { error }),
+    };
+
+    if server_dh_inner.nonce != res_pq.nonce {
+        return Err(AuthKeyGenError::BadNonce {
+            got: server_dh_inner.nonce.clone(),
+            expected: res_pq.nonce.clone(),
+        });
+    }
+    if server_dh_inner.server_nonce != res_pq.server_nonce {
+        return Err(AuthKeyGenError::BadServerNonce {
+            got: server_dh_inner.server_nonce.clone(),
+            expected: res_pq.server_nonce.clone(),
+        });
+    }
+
+    // Safe to unwrap because the numbers are valid
+    let dh_prime = BigUint::from_bytes_be(&server_dh_inner.dh_prime);
+    let g = server_dh_inner.g.to_biguint().unwrap();
+    let g_a = BigUint::from_bytes_be(&server_dh_inner.g_a);
+    //let time_offset = server_dh_inner.server_time - int(time.time())
+
+    let b = {
+        let mut buffer = [0; 256];
+        getrandom(&mut buffer).expect("failed to generate a secure b value");
+        BigUint::from_bytes_be(&buffer)
+    };
+    let g_b = g.modpow(&b, &dh_prime);
+    let gab = g_a.modpow(&b, &dh_prime);
+
+    // IMPORTANT: Apart from the conditions on the Diffie-Hellman prime
+    // dh_prime and generator g, both sides are to check that g, g_a and
+    // g_b are greater than 1 and less than dh_prime - 1. We recommend
+    // checking that g_a and g_b are between 2^{2048-64} and
+    // dh_prime - 2^{2048-64} as well.
+    // (https://core.telegram.org/mtproto/auth_key#dh-key-exchange-complete)
+    //if not (1 < g < (dh_prime - 1)):
+    //    raise SecurityError('g_a is not within (1, dh_prime - 1)')
+
+    //if not (1 < g_a < (dh_prime - 1)):
+    //    raise SecurityError('g_a is not within (1, dh_prime - 1)')
+
+    //if not (1 < g_b < (dh_prime - 1)):
+    //    raise SecurityError('g_b is not within (1, dh_prime - 1)')
+
+    //let safety_range = 2 ** (2048 - 64)
+    //if not (safety_range <= g_a <= (dh_prime - safety_range)):
+    //    raise SecurityError('g_a is not within (2^{2048-64}, dh_prime - 2^{2048-64})')
+
+    //if not (safety_range <= g_b <= (dh_prime - safety_range)):
+    //    raise SecurityError('g_b is not within (2^{2048-64}, dh_prime - 2^{2048-64})')
+
+    // Prepare client DH Inner Data
+    let client_dh_inner = tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
+        nonce: res_pq.nonce.clone(),
+        server_nonce: res_pq.server_nonce.clone(),
+        retry_id: 0, // TODO use an actual retry_id
+        g_b: g_b.to_bytes_be(),
+    }).to_bytes();
+
+    // sha1(client_dh_inner).digest() + client_dh_inner
+    let client_dh_inner_hashed = {
+        let mut buffer = Vec::with_capacity(20 + client_dh_inner.len());
+
+        let mut hasher = Sha1::new();
+        hasher.update(&client_dh_inner);
+
+        buffer.extend(&hasher.digest().bytes());
+        buffer.extend(&client_dh_inner);
+        buffer
+    };
+
+    dbg!(client_dh_inner_hashed.len());
+    let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
+
+    Ok((tl::functions::SetClientDHParams {
+        nonce: res_pq.nonce.clone(),
+        server_nonce: res_pq.server_nonce.clone(),
+        encrypted_data: client_dh_encrypted
+    }, gab))
 }
+
+pub fn last_step(
+    res_pq: &tl::types::ResPQ,
+    gab: BigUint,
+    new_nonce: &[u8; 32],
+    dh_gen: tl::enums::SetClientDHParamsAnswer) -> Result<AuthKey, AuthKeyGenError> {
+    // TODO validate nonce and server_nonce for failing cases
+    let (nonce_number, dh_gen) = match dh_gen {
+        tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => (1, x),
+        tl::enums::SetClientDHParamsAnswer::DhGenRetry(_) => {
+            return Err(AuthKeyGenError::DHGenRetry);
+        },
+        tl::enums::SetClientDHParamsAnswer::DhGenFail(_) => {
+            return Err(AuthKeyGenError::DHGenFail);
+        },
+    };
+
+    // TODO create a fn to reuse this check
+    if dh_gen.nonce != res_pq.nonce {
+        return Err(AuthKeyGenError::BadNonce {
+            got: dh_gen.nonce.clone(),
+            expected: res_pq.nonce.clone(),
+        });
+    }
+    if dh_gen.server_nonce != res_pq.server_nonce {
+        return Err(AuthKeyGenError::BadServerNonce {
+            got: dh_gen.server_nonce.clone(),
+            expected: res_pq.server_nonce.clone(),
+        });
+    }
+
+    let auth_key = {
+        let mut buffer = [0; 256];
+        buffer.copy_from_slice(&gab.to_bytes_be());
+        AuthKey::from_bytes(buffer)
+    };
+
+    let new_nonce_hash = auth_key.calc_new_nonce_hash(new_nonce, nonce_number);
+    let dh_hash = dh_gen.new_nonce_hash1;
+
+    if dh_hash != new_nonce_hash {
+        return Err(AuthKeyGenError::BadNonceHash);
+    }
+
+    // TODO return time_offset
+    Ok(auth_key)
+}
+
+// TODO make it so that the only way to get an AuthKey is through opaque
+// structs following the steps.
 
 /// Find the RSA key's `(n, e)` pair for a certain fingerprint.
 fn key_for_fingerprint(fingerprint: i64) -> Option<(BigUint, BigUint)> {
