@@ -36,6 +36,7 @@ impl Transport for TransportFull {
         channel.write_all(&counter)?;
         channel.write_all(payload)?;
         channel.write_all(&crc)?;
+        self.send_counter += 1;
         Ok(())
     }
 
