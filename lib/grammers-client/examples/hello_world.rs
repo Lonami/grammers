@@ -16,6 +16,7 @@ use std::io::Result;
 
 fn main() -> Result<()> {
     let mut args = env::args();
+
     let _path = args.next();
     let api_id = args
         .next()
@@ -27,9 +28,21 @@ fn main() -> Result<()> {
     let username = args.next().expect("username missing");
     let message = args.next().expect("message missing");
 
+    println!("Connecting to Telegram...");
     let mut client = Client::new()?;
+    println!("Connected!");
+
+    println!("Initializing connection...");
+    client.init_connection()?;
+    println!("Connection initialized!");
+
+    println!("Signing in...");
     client.bot_sign_in(&token, api_id, &api_hash)?;
+    println!("Signed in!");
+
+    println!("Sending message...");
     client.send_message(&username[..], &message)?;
+    println!("Message sent!");
 
     Ok(())
 }

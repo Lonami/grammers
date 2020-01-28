@@ -27,9 +27,7 @@ impl Client {
     pub fn new() -> Result<Self> {
         let mut sender = MTSender::connect(DC_4_ADDRESS)?;
         sender.generate_auth_key()?;
-        let mut client = Client { sender };
-        client.init_connection()?;
-        Ok(client)
+        Ok(Client { sender })
     }
 
     /// Signs in to the bot account associated with this token.
@@ -58,10 +56,11 @@ impl Client {
         unimplemented!();
     }
 
+    // TODO make private and move to new() once it works
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
-    fn init_connection(&mut self) -> Result<()> {
+    pub fn init_connection(&mut self) -> Result<()> {
         // TODO add layer to tl, and then use that
         let got = self.invoke(&tl::functions::InvokeWithLayer {
             layer: 109,
