@@ -1,5 +1,5 @@
 use grammers_mtproto::transports::{Transport, TransportFull};
-use grammers_mtproto::{auth_key, MTProto};
+use grammers_mtproto::{auth_key, MTProto, RequestError};
 use grammers_tl_types::{Deserializable, RPC};
 
 use std::io::{self, Result};
@@ -64,8 +64,8 @@ impl MTSender {
 
     /// Block invoking a single Remote Procedure Call and return its result.
     pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return> {
-        let msg_id = self.protocol.enqueue_request(request.to_bytes())?;
-        let data = loop {
+        let mut msg_id = self.protocol.enqueue_request(request.to_bytes())?;
+        loop {
             // The protocol may generate more outgoing requests, so we need
             // to constantly check for those until we receive a response.
             while let Some(payload) = self.protocol.pop_queue() {
@@ -73,16 +73,29 @@ impl MTSender {
                 self.transport.send(&mut self.stream, &encrypted)?;
             }
 
-            // Receive a matching `MsgId`
+            // Process all messages we receive.
             let response = self.receive_message()?;
-            if let Some((response_id, data)) = self.protocol.process_response(&response)? {
+            self.protocol.process_response(&response)?;
+
+            // See if there are responses to our request.
+            while let Some((response_id, data)) = self.protocol.pop_response() {
                 if response_id == msg_id {
-                    break data;
+                    match data {
+                        Ok(x) => {
+                            return R::Return::from_bytes(&x);
+                        }
+                        Err(RequestError::InvalidParameters { error }) => {
+                            // TODO return a proper RPC error
+                            return Err(io::Error::new(io::ErrorKind::InvalidData, "rpc error"));
+                        }
+                        Err(RequestError::Other) => {
+                            // Need to retransmit
+                            msg_id = self.protocol.enqueue_request(request.to_bytes())?;
+                        }
+                    }
                 }
             }
-        };
-
-        R::Return::from_bytes(&data)
+        }
     }
 
     /// Receives a single message from the server
