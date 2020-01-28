@@ -3,3 +3,7 @@ name = "grammers-client"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 edition = "2018"
+
+[dependencies]
+grammers-mtsender = "0.1.0"
+grammers-tl-types = "0.1.0"

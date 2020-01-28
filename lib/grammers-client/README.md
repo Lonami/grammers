@@ -1,7 +1,5 @@
 # grammers-client
 
-> *(Note: this library is currently empty)*
-
 This library is a higher-level interface to interact with Telegram's API.
 
 It contains the code necessary to create a client, connect to the API and
