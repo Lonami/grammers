@@ -259,7 +259,6 @@ fn ensure_some_compression() {
             .finish();
         mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
         let buffer = mtproto.pop_queue().unwrap();
-        dbg!(&buffer);
         assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
     }
     {

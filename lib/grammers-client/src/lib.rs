@@ -1,6 +1,6 @@
 use grammers_mtsender::MTSender;
 use grammers_tl_types::{self as tl, Serializable, RPC};
-use std::io::Result;
+use std::io::{self, Result};
 
 // TODO handle PhoneMigrate
 const DC_4_ADDRESS: &'static str = "149.154.167.91:443";
@@ -13,12 +13,37 @@ pub struct Client {
 /// Implementors of this trait have a way to turn themselves into the
 /// desired input parameter.
 pub trait IntoInput<T> {
-    fn convert(&self, client: &mut Client) -> T;
+    fn convert(&self, client: &mut Client) -> Result<T>;
+}
+
+impl IntoInput<tl::enums::InputPeer> for tl::types::User {
+    fn convert(&self, _client: &mut Client) -> Result<tl::enums::InputPeer> {
+        if let Some(access_hash) = self.access_hash {
+            Ok(tl::enums::InputPeer::InputPeerUser(
+                tl::types::InputPeerUser {
+                    user_id: self.id,
+                    access_hash: access_hash,
+                },
+            ))
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "user is missing access_hash",
+            ))
+        }
+    }
 }
 
 impl IntoInput<tl::enums::InputPeer> for &str {
-    fn convert(&self, _client: &mut Client) -> tl::enums::InputPeer {
-        unimplemented!();
+    fn convert(&self, client: &mut Client) -> Result<tl::enums::InputPeer> {
+        if let Some(user) = client.resolve_username(self)? {
+            user.convert(client)
+        } else {
+            Err(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no user has that username",
+            ))
+        }
     }
 }
 
@@ -43,17 +68,58 @@ impl Client {
     }
 
     /// Resolves a username into the user that owns it, if any.
-    pub fn resolve_username(&mut self, _username: &str) -> Result<tl::types::User> {
-        unimplemented!();
+    pub fn resolve_username(&mut self, username: &str) -> Result<Option<tl::types::User>> {
+        let tl::types::contacts::ResolvedPeer { peer, users, .. } =
+            match self.invoke(&tl::functions::contacts::ResolveUsername {
+                username: username.into(),
+            })? {
+                tl::enums::contacts::ResolvedPeer::ResolvedPeer(x) => x,
+            };
+
+        match peer {
+            tl::enums::Peer::PeerUser(tl::types::PeerUser { user_id }) => {
+                return Ok(users
+                    .into_iter()
+                    .filter_map(|user| match user {
+                        tl::enums::User::User(user) => {
+                            if user.id == user_id {
+                                Some(user)
+                            } else {
+                                None
+                            }
+                        }
+                        tl::enums::User::UserEmpty(_) => None,
+                    })
+                    .next());
+            }
+            tl::enums::Peer::PeerChat(_) => {}
+            tl::enums::Peer::PeerChannel(_) => {}
+        }
+
+        Ok(None)
     }
 
     /// Sends a text message to the desired chat.
     pub fn send_message<C: IntoInput<tl::enums::InputPeer>>(
         &mut self,
-        _chat: C,
-        _message: &str,
+        chat: C,
+        message: &str,
     ) -> Result<()> {
-        unimplemented!();
+        let chat = chat.convert(self)?;
+        self.invoke(&tl::functions::messages::SendMessage {
+            no_webpage: false,
+            silent: false,
+            background: false,
+            clear_draft: false,
+            peer: chat,
+            reply_to_msg_id: None,
+            message: message.into(),
+            random_id: 1337,
+            reply_markup: None,
+            entities: None,
+            schedule_date: None,
+        })?;
+        Ok(())
     }
 
     // TODO make private and move to new() once it works
@@ -77,7 +143,6 @@ impl Client {
             }
             .to_bytes(),
         })?;
-        dbg!(got);
         Ok(())
     }
 
