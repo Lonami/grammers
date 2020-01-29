@@ -10,6 +10,9 @@ use crate::utils::infer_id;
 /// [Type Language]: https://core.telegram.org/mtproto/TL
 #[derive(Debug, PartialEq)]
 pub struct Definition {
+    /// The namespace components of the definition.
+    pub namespace: Vec<String>,
+
     /// The name of this definition. Also known as "predicate" or "method".
     pub name: String,
 
@@ -69,9 +72,14 @@ impl FromStr for Definition {
             (n, it.next())
         };
 
-        if name.is_empty() {
+        // Parse `ns1.ns2.name`
+        let mut namespace: Vec<String> = name.split('.').map(|part| part.to_string()).collect();
+        if namespace.iter().any(|part| part.is_empty()) {
             return Err(ParseError::MissingName);
         }
+
+        // Safe to unwrap because split() will always yield at least one.
+        let name = namespace.pop().unwrap();
 
         // Parse `id`
         let id = match id {
@@ -138,7 +146,8 @@ impl FromStr for Definition {
         }
 
         Ok(Definition {
-            name: name.into(),
+            namespace,
+            name: name,
             id,
             params,
             ty,
@@ -150,6 +159,7 @@ impl FromStr for Definition {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::tl::Flag;
 
     #[test]
     fn parse_unknown_def_use() {
@@ -281,5 +291,72 @@ mod tests {
                 generic_arg: None,
             }
         );
+    }
+
+    #[test]
+    fn parse_complete() {
+        let def = "ns1.name#123 {X:Type} flags:# pname:flags.10?ns2.Vector<!X> = ns3.Type";
+        assert_eq!(
+            Definition::from_str(def),
+            Ok(Definition {
+                namespace: vec!["ns1".into()],
+                name: "name".into(),
+                id: 0x123,
+                params: vec![
+                    Parameter {
+                        name: "flags".into(),
+                        ty: ParameterType::Flags,
+                    },
+                    Parameter {
+                        name: "pname".into(),
+                        ty: ParameterType::Normal {
+                            ty: Type {
+                                namespace: vec!["ns2".into()],
+                                name: "Vector".into(),
+                                bare: false,
+                                generic_ref: false,
+                                generic_arg: Some(Box::new(Type {
+                                    namespace: vec![],
+                                    name: "X".into(),
+                                    bare: false,
+                                    generic_ref: true,
+                                    generic_arg: None,
+                                })),
+                            },
+                            flag: Some(Flag {
+                                name: "flags".into(),
+                                index: 10
+                            })
+                        },
+                    },
+                ],
+                ty: Type {
+                    namespace: vec!["ns3".into()],
+                    name: "Type".into(),
+                    bare: false,
+                    generic_ref: false,
+                    generic_arg: None,
+                },
+                category: Category::Types,
+            })
+        );
+    }
+
+    #[test]
+    fn parse_missing_generic() {
+        let def = "name param:!X = Type";
+        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+
+        let def = "name {X:Type} param:!Y = Type";
+        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+    }
+
+    #[test]
+    fn parse_unknown_flags() {
+        let def = "name param:flags.0?true = Type";
+        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+
+        let def = "name foo:# param:flags.0?true = Type";
+        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
     }
 }
