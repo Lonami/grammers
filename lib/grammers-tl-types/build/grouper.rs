@@ -1,6 +1,6 @@
 //! Several functions to group definitions by a certain criteria.
 
-use grammers_tl_parser::{Category, Definition};
+use grammers_tl_parser::tl::{Category, Definition};
 use std::collections::HashMap;
 
 /// Group the input vector by namespace, filtering by a certain category.
@@ -13,12 +13,9 @@ pub(crate) fn group_by_ns(
         .into_iter()
         .filter(|d| d.category == category)
         .for_each(|d| {
-            let ns = if let Some(pos) = d.name.find('.') {
-                &d.name[..pos]
-            } else {
-                ""
-            };
-
+            // We currently only handle zero or one namespace.
+            assert!(d.namespace.len() <= 1);
+            let ns = d.namespace.get(0).map(|x| &x[..]).unwrap_or("");
             result.entry(ns.into()).or_insert_with(Vec::new).push(d);
         });
 
@@ -29,20 +26,18 @@ pub(crate) fn group_by_ns(
 }
 
 /// Similar to `group_by_ns`, but for the definition types.
-pub(crate) fn group_types_by_ns(definitions: &Vec<Definition>) -> HashMap<String, Vec<&str>> {
+pub(crate) fn group_types_by_ns(
+    definitions: &Vec<Definition>,
+) -> HashMap<Option<String>, Vec<&str>> {
     let mut result = HashMap::new();
     definitions
         .into_iter()
         .filter(|d| d.category == Category::Types && !d.ty.generic_ref)
         .for_each(|d| {
-            let ns = if let Some(pos) = d.ty.name.find('.') {
-                &d.ty.name[..pos]
-            } else {
-                ""
-            };
-
+            // We currently only handle zero or one namespace.
+            assert!(d.namespace.len() <= 1);
             result
-                .entry(ns.into())
+                .entry(d.namespace.get(0).map(Clone::clone))
                 .or_insert_with(Vec::new)
                 .push(&d.ty.name[..]);
         });

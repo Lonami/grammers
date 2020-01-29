@@ -4,7 +4,7 @@ mod loader;
 mod rustifier;
 mod structs;
 
-use grammers_tl_parser::Category;
+use grammers_tl_parser::tl::Category;
 use std::fs::File;
 use std::io::{BufWriter, Write};
 

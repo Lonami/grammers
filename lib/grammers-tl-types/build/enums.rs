@@ -1,8 +1,8 @@
 //! Code to generate Rust's `enum`'s from TL definitions.
 
 use crate::grouper;
-use crate::rustifier::{rusty_class_name, rusty_namespaced_class_name};
-use grammers_tl_parser::{Category, Definition, ParameterType};
+use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name};
+use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
 /// Writes an enumeration listing all types such as the following rust code:
@@ -36,11 +36,7 @@ fn write_enum<W: Write>(
         if recurses {
             write!(file, "Box<")?;
         }
-        write!(
-            file,
-            "crate::types::{}",
-            rusty_namespaced_class_name(&d.name)
-        )?;
+        write!(file, "{}", rusty_namespaced_type_name(&d))?;
         if recurses {
             write!(file, ">")?;
         }
@@ -98,9 +94,9 @@ fn write_serializable<W: Write>(
             )?;
             writeln!(
                 file,
-                "{}                crate::types::{}::CONSTRUCTOR_ID.serialize(buf)?;",
+                "{}                {}::CONSTRUCTOR_ID.serialize(buf)?;",
                 indent,
-                rusty_namespaced_class_name(&d.name)
+                rusty_namespaced_type_name(&d)
             )?;
             writeln!(file, "{}                x.serialize(buf)", indent)?;
             writeln!(file, "{}            }},", indent)?;
@@ -148,9 +144,9 @@ fn write_deserializable<W: Write>(
     for d in type_defs.iter() {
         write!(
             file,
-            "{}            crate::types::{}::CONSTRUCTOR_ID => Self::{}(",
+            "{}            {}::CONSTRUCTOR_ID => Self::{}(",
             indent,
-            rusty_namespaced_class_name(&d.name),
+            rusty_namespaced_type_name(&d),
             rusty_class_name(&d.name),
         )?;
 
@@ -165,8 +161,8 @@ fn write_deserializable<W: Write>(
         }
         write!(
             file,
-            "crate::types::{}::deserialize(buf)?",
-            rusty_namespaced_class_name(&d.name)
+            "{}::deserialize(buf)?",
+            rusty_namespaced_type_name(&d)
         )?;
         if recurses {
             write!(file, ")")?;
@@ -213,21 +209,26 @@ pub(crate) fn write_enums_mod<W: Write>(
     writeln!(file, "pub mod enums {{")?;
 
     let grouped = grouper::group_types_by_ns(definitions);
-    let mut sorted_keys: Vec<&String> = grouped.keys().collect();
+    dbg!(&grouped);
+    let mut sorted_keys: Vec<&Option<String>> = grouped.keys().collect();
     sorted_keys.sort();
     for key in sorted_keys.into_iter() {
         // Begin possibly inner mod
-        let indent = if key.is_empty() {
-            "    "
-        } else {
-            writeln!(file, "    pub mod {} {{", key)?;
+        let indent = if let Some(ns) = key {
+            writeln!(file, "    pub mod {} {{", ns)?;
             "        "
+        } else {
+            "    "
         };
 
         for name in grouped[key].iter() {
             let type_defs: Vec<&Definition> = definitions
                 .into_iter()
-                .filter(|d| d.category == Category::Types && d.ty.name == **name)
+                .filter(|d| {
+                    d.category == Category::Types
+                        && d.ty.namespace.get(0) == key.as_ref()
+                        && d.ty.name == **name
+                })
                 .collect();
 
             assert!(!type_defs.is_empty(), "type defs should not be empty");
@@ -235,7 +236,7 @@ pub(crate) fn write_enums_mod<W: Write>(
         }
 
         // End possibly inner mod
-        if !key.is_empty() {
+        if key.is_some() {
             writeln!(file, "    }}")?;
         }
     }

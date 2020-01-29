@@ -1,6 +1,6 @@
 //! Several functions to "rustify" names.
 
-use grammers_tl_parser::{Parameter, ParameterType, Type};
+use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 
 /// Get the rusty class name for a certain definition, excluding namespace.
 ///
@@ -10,10 +10,9 @@ use grammers_tl_parser::{Parameter, ParameterType, Type};
 /// assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOKName");
 /// ```
 pub(crate) fn rusty_class_name(name: &str) -> String {
-    let start = name.find('.').map(|p| p + 1).unwrap_or(0);
-    let mut result = String::with_capacity(name.len() - start);
+    let mut result = String::with_capacity(name.len());
 
-    name.chars().skip(start).fold(true, |upper, c| {
+    name.chars().fold(true, |upper, c| {
         if c == '_' {
             true
         } else if upper {
@@ -29,16 +28,31 @@ pub(crate) fn rusty_class_name(name: &str) -> String {
 }
 
 /// Get a rusty class name, including namespaces.
-pub(crate) fn rusty_namespaced_class_name(name: &str) -> String {
+pub(crate) fn rusty_namespaced_class_name(ty: &Type) -> String {
     let mut result = String::new();
-    if let Some(pos) = name.find('.') {
-        let (ns, n) = (&name[..pos], &name[pos + 1..]);
+    if ty.bare {
+        result.push_str("crate::types::");
+    } else {
+        result.push_str("crate::enums::");
+    }
+    ty.namespace.iter().for_each(|ns| {
         result.push_str(ns);
         result.push_str("::");
-        result.push_str(&rusty_class_name(n));
-    } else {
-        result.push_str(&rusty_class_name(name));
-    }
+    });
+    result.push_str(&rusty_class_name(&ty.name));
+    result
+}
+
+// TODO come up with better names and clean-up this file
+/// Get a rusty class name, including namespaces, for the type of the definition.
+pub(crate) fn rusty_namespaced_type_name(def: &Definition) -> String {
+    let mut result = String::new();
+    result.push_str("crate::types::");
+    def.namespace.iter().for_each(|ns| {
+        result.push_str(ns);
+        result.push_str("::");
+    });
+    result.push_str(&rusty_class_name(&def.name));
     result
 }
 
@@ -59,8 +73,8 @@ pub(crate) fn rusty_attr_name(param: &Parameter) -> String {
 }
 
 /// Sanitizes a name to be legal.
-pub(crate) fn push_sanitized_name(result: &mut String, name: &str) {
-    let base = match name {
+pub(crate) fn push_sanitized_name(result: &mut String, ty: &Type) {
+    let base = match ty.name.as_ref() {
         "Bool" => "bool",
         "bytes" => "Vec<u8>",
         "double" => "f64",
@@ -75,24 +89,16 @@ pub(crate) fn push_sanitized_name(result: &mut String, name: &str) {
         _ => "",
     };
     if base.is_empty() {
-        let first_letter = name.find('.').map(|p| p + 1).unwrap_or(0);
-        if name.as_bytes()[first_letter].is_ascii_lowercase() {
-            // Bare type
-            result.push_str("crate::types::")
-        } else {
-            // Boxed type
-            result.push_str("crate::enums::");
-        }
-        result.push_str(&rusty_namespaced_class_name(name));
+        result.push_str(&rusty_namespaced_class_name(ty));
     } else {
         result.push_str(base);
     }
 }
 
 /// Sanitizes a path to be legal.
-pub(crate) fn push_sanitized_path(result: &mut String, name: &str) {
+pub(crate) fn push_sanitized_path(result: &mut String, ty: &Type) {
     // All sanitized names are valid paths except for a few base cases.
-    let base = match name {
+    let base = match ty.name.as_ref() {
         "bytes" => "Vec::<u8>",
         "int128" => "<[u8; 16]>",
         "int256" => "<[u8; 32]>",
@@ -100,7 +106,7 @@ pub(crate) fn push_sanitized_path(result: &mut String, name: &str) {
     };
 
     if base.is_empty() {
-        push_sanitized_name(result, name);
+        push_sanitized_name(result, ty);
     } else {
         result.push_str(base);
     }
@@ -112,7 +118,7 @@ pub(crate) fn rusty_type(ty: &Type) -> String {
     if ty.generic_ref {
         result.push_str("Vec<u8>")
     } else {
-        push_sanitized_name(&mut result, &ty.name);
+        push_sanitized_name(&mut result, ty);
         if let Some(arg) = &ty.generic_arg {
             result.push('<');
             push_sanitized_name(&mut result, arg);
@@ -161,7 +167,7 @@ pub(crate) fn rusty_type_path(param: &Parameter) -> String {
             if ty.generic_ref {
                 result.push_str("Vec::<u8>")
             } else {
-                push_sanitized_path(&mut result, &ty.name);
+                push_sanitized_path(&mut result, &ty);
                 if let Some(arg) = &ty.generic_arg {
                     result.push_str("::<");
                     push_sanitized_path(&mut result, arg);

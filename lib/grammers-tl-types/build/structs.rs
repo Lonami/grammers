@@ -4,7 +4,7 @@ use crate::grouper;
 use crate::rustifier::{
     rusty_attr_name, rusty_class_name, rusty_type, rusty_type_name, rusty_type_path,
 };
-use grammers_tl_parser::{Category, Definition, ParameterType};
+use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
 /// Defines the `struct` corresponding to the definition:

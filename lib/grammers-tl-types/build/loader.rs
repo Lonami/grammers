@@ -1,6 +1,7 @@
 //! Code to load definitions from files.
 
-use grammers_tl_parser::{parse_tl_file, Definition};
+use grammers_tl_parser::parse_tl_file;
+use grammers_tl_parser::tl::Definition;
 use std::fs::File;
 use std::io::{self, Read};
 
