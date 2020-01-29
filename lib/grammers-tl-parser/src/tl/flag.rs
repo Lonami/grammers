@@ -1,4 +1,3 @@
-
 /// Data attached to parameters conditional on flags.
 #[derive(Debug, PartialEq)]
 pub struct Flag {

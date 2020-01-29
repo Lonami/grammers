@@ -2,7 +2,6 @@
 //! of [Type Language] definitions.
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
-
 use std::num::ParseIntError;
 
 /// Represents a failure when parsing [Type Language] definitions.

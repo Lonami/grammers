@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use crate::tl::{Flag, ParameterType};
 use crate::errors::ParamParseError;
+use crate::tl::{Flag, ParameterType};
 
 /// A single parameter, with a name and a type.
 #[derive(Debug, PartialEq)]
@@ -88,7 +88,7 @@ impl FromStr for Parameter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tl::{Type};
+    use crate::tl::Type;
 
     #[test]
     fn parse_empty_param() {
@@ -100,7 +100,10 @@ mod tests {
     #[test]
     fn parse_unknown_param() {
         assert_eq!(Parameter::from_str(""), Err(ParamParseError::Unimplemented));
-        assert_eq!(Parameter::from_str("no colon"), Err(ParamParseError::Unimplemented));
+        assert_eq!(
+            Parameter::from_str("no colon"),
+            Err(ParamParseError::Unimplemented)
+        );
         assert_eq!(
             Parameter::from_str("colonless"),
             Err(ParamParseError::Unimplemented)
@@ -109,9 +112,18 @@ mod tests {
 
     #[test]
     fn parse_bad_flags() {
-        assert_eq!(Parameter::from_str("foo:bar?"), Err(ParamParseError::BadFlag));
-        assert_eq!(Parameter::from_str("foo:?bar"), Err(ParamParseError::BadFlag));
-        assert_eq!(Parameter::from_str("foo:bar?baz"), Err(ParamParseError::BadFlag));
+        assert_eq!(
+            Parameter::from_str("foo:bar?"),
+            Err(ParamParseError::BadFlag)
+        );
+        assert_eq!(
+            Parameter::from_str("foo:?bar"),
+            Err(ParamParseError::BadFlag)
+        );
+        assert_eq!(
+            Parameter::from_str("foo:bar?baz"),
+            Err(ParamParseError::BadFlag)
+        );
         assert_eq!(
             Parameter::from_str("foo:bar.baz?qux"),
             Err(ParamParseError::BadFlag)
@@ -120,8 +132,14 @@ mod tests {
 
     #[test]
     fn parse_bad_generics() {
-        assert_eq!(Parameter::from_str("foo:<bar"), Err(ParamParseError::BadGeneric));
-        assert_eq!(Parameter::from_str("foo:bar<"), Err(ParamParseError::BadGeneric));
+        assert_eq!(
+            Parameter::from_str("foo:<bar"),
+            Err(ParamParseError::BadGeneric)
+        );
+        assert_eq!(
+            Parameter::from_str("foo:bar<"),
+            Err(ParamParseError::BadGeneric)
+        );
     }
 
     #[test]
@@ -134,7 +152,10 @@ mod tests {
 
     #[test]
     fn parse_unknown_def_param() {
-        assert_eq!(Parameter::from_str("{a:foo}"), Err(ParamParseError::UnknownDef));
+        assert_eq!(
+            Parameter::from_str("{a:foo}"),
+            Err(ParamParseError::UnknownDef)
+        );
     }
 
     #[test]

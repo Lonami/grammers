@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
-use crate::tl::{Category, ParameterType, Parameter, Type};
-use crate::errors::{ParseError, ParamParseError};
+use crate::errors::{ParamParseError, ParseError};
+use crate::tl::{Category, Parameter, ParameterType, Type};
 use crate::utils::infer_id;
 
 // TODO `impl Display`
