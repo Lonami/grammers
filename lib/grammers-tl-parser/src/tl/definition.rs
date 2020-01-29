@@ -223,6 +223,7 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                bare: true,
                 generic_ref: false,
                 generic_arg: None,
             }
@@ -236,8 +237,9 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                bare: true,
                 generic_ref: false,
-                generic_arg: Some("e".into()),
+                generic_arg: Some(Box::new("e".parse().unwrap())),
             }
         );
 
@@ -249,6 +251,7 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                bare: true,
                 generic_ref: false,
                 generic_arg: None,
             }
@@ -269,6 +272,7 @@ mod tests {
             def.ty,
             Type {
                 name: "d".into(),
+                bare: true,
                 generic_ref: false,
                 generic_arg: None,
             }

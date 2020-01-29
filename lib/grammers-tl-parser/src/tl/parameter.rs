@@ -174,6 +174,7 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "bar".into(),
+                        bare: true,
                         generic_ref: true,
                         generic_arg: None,
                     },
@@ -188,6 +189,7 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "baz".into(),
+                        bare: true,
                         generic_ref: false,
                         generic_arg: None,
                     },
@@ -205,8 +207,9 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "bar".into(),
+                        bare: true,
                         generic_ref: false,
-                        generic_arg: Some("baz".into()),
+                        generic_arg: Some(Box::new("baz".parse().unwrap())),
                     },
                     flag: None,
                 }
@@ -219,8 +222,9 @@ mod tests {
                 ty: ParameterType::Normal {
                     ty: Type {
                         name: "baz".into(),
+                        bare: true,
                         generic_ref: false,
-                        generic_arg: Some("qux".into()),
+                        generic_arg: Some(Box::new("qux".parse().unwrap())),
                     },
                     flag: Some(Flag {
                         name: "bar".into(),

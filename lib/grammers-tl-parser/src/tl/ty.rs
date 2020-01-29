@@ -8,11 +8,14 @@ pub struct Type {
     /// The name of the type.
     pub name: String,
 
+    /// Whether this type is bare or boxed.
+    pub bare: bool,
+
     /// Whether the type name refers to a generic definition.
     pub generic_ref: bool,
 
-    /// If the type has a generic argument, which one is it.
-    pub generic_arg: Option<String>,
+    /// If the type has a generic argument, which is its type.
+    pub generic_arg: Option<Box<Type>>,
 }
 
 impl FromStr for Type {
@@ -32,7 +35,10 @@ impl FromStr for Type {
             if !ty.ends_with('>') {
                 return Err(ParamParseError::BadGeneric);
             }
-            (&ty[..pos], Some(ty[pos + 1..ty.len() - 1].into()))
+            (
+                &ty[..pos],
+                Some(Box::new(Type::from_str(&ty[pos + 1..ty.len() - 1])?)),
+            )
         } else {
             (ty, None)
         };
@@ -41,8 +47,20 @@ impl FromStr for Type {
             return Err(ParamParseError::Empty);
         }
 
-        Ok(Type {
+        // Safe to unwrap because we just checked is not empty
+        let bare = if let Some(pos) = ty.find('.') {
+            &ty[pos + 1..]
+        } else {
+            ty
+        }
+        .chars()
+        .next()
+        .unwrap()
+        .is_ascii_lowercase();
+
+        Ok(Self {
             name: ty.into(),
+            bare,
             generic_ref,
             generic_arg,
         })
