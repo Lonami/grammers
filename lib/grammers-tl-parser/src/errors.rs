@@ -16,7 +16,7 @@ pub enum ParseError {
     MalformedId(ParseIntError),
 
     /// Some parameter of this definition is malformed.
-    MalformedParam,
+    MalformedParam(ParamParseError),
 
     /// The name information is missing from the definition.
     MissingName,
@@ -33,7 +33,7 @@ pub enum ParseError {
     /// vector {t:Type} # [ t ] = Vector t;
     /// int128 4*[ int ] = Int128;
     /// ```
-    NotImplemented { line: String },
+    NotImplemented,
 
     /// The file contained an unknown separator (such as `---foo---`)
     UnknownSeparator,
@@ -55,7 +55,7 @@ pub enum ParamParseError {
     /// such as `{X:Type}`.
     TypeDef { name: String },
 
-    /// Similar to `TypeDef`, but we don't know what it defines.
+    /// Similar to `TypeDef`, but we don't know what it refers to.
     UnknownDef,
 
     /// No known way to parse this parameter.

@@ -1,7 +1,7 @@
 use std::str::FromStr;
 
 use crate::errors::{ParamParseError, ParseError};
-use crate::tl::{Category, Parameter, ParameterType, Type};
+use crate::tl::{Category, Flag, Parameter, ParameterType, Type};
 use crate::utils::infer_id;
 
 // TODO `impl Display`
@@ -89,18 +89,30 @@ impl FromStr for Definition {
 
         // Parse `middle`
         let mut type_defs = vec![];
+        let mut flag_defs = vec![];
 
         let params = middle
             .split_whitespace()
             .map(Parameter::from_str)
             .filter_map(|p| match p {
                 // If the parameter is a type definition save it
+                // and ignore this parameter.
                 Err(ParamParseError::TypeDef { name }) => {
                     type_defs.push(name);
                     None
                 }
 
-                // If the parameter type is a generic ref ensure it's valid
+                // If the parameter is a flag definition save both
+                // the definition and the parameter.
+                Ok(Parameter {
+                    ref name,
+                    ty: ParameterType::Flags,
+                }) => {
+                    flag_defs.push(name.clone());
+                    Some(Ok(p.unwrap()))
+                }
+
+                // If the parameter type is a generic ref ensure it's valid.
                 Ok(Parameter {
                     ty:
                         ParameterType::Normal {
@@ -114,28 +126,37 @@ impl FromStr for Definition {
                         },
                     ..
                 }) if generic_ref => {
-                    if type_defs.contains(&name) {
-                        // Safe to unwrap because we matched on an Ok
-                        Some(Ok(p.unwrap()))
+                    if generic_ref && !type_defs.contains(&name) {
+                        Some(Err(ParseError::MalformedParam(ParamParseError::UnknownDef)))
                     } else {
-                        Some(Err(ParseError::MalformedParam))
+                        Some(Ok(p.unwrap()))
                     }
                 }
 
-                // Otherwise map the error to a `ParseError`
-                p => Some(p.map_err(|e| match e {
-                    ParamParseError::BadFlag
-                    | ParamParseError::BadGeneric
-                    | ParamParseError::UnknownDef => ParseError::MalformedParam,
-                    ParamParseError::Empty => ParseError::MissingType,
-                    ParamParseError::Unimplemented => ParseError::NotImplemented {
-                        line: definition.trim().into(),
-                    },
-                    ParamParseError::TypeDef { .. } => {
-                        // Unreachable because we matched it above
-                        unreachable!();
+                // If the parameter type references a flag ensure it's valid
+                Ok(Parameter {
+                    ty:
+                        ParameterType::Normal {
+                            flag: Some(Flag { ref name, .. }),
+                            ..
+                        },
+                    ..
+                }) => {
+                    if !flag_defs.contains(&&name) {
+                        Some(Err(ParseError::MalformedParam(ParamParseError::UnknownDef)))
+                    } else {
+                        Some(Ok(p.unwrap()))
                     }
-                })),
+                }
+
+                // Any other parameter that's okay should just be passed as-is.
+                Ok(p) => Some(Ok(p)),
+
+                // Unimplenented parameters are unimplemented definitions.
+                Err(ParamParseError::Unimplemented) => Some(Err(ParseError::NotImplemented)),
+
+                // Any error should just become a `ParseError`
+                Err(x) => Some(Err(ParseError::MalformedParam(x))),
             })
             .collect::<Result<_, ParseError>>()?;
 
@@ -160,14 +181,6 @@ impl FromStr for Definition {
 mod tests {
     use super::*;
     use crate::tl::Flag;
-
-    #[test]
-    fn parse_unknown_def_use() {
-        assert_eq!(
-            Definition::from_str("a#b c:!d = e"),
-            Err(ParseError::MalformedParam)
-        );
-    }
 
     #[test]
     fn parse_empty_def() {
@@ -208,9 +221,7 @@ mod tests {
     fn parse_unimplemented() {
         assert_eq!(
             Definition::from_str("int ? = Int"),
-            Err(ParseError::NotImplemented {
-                line: "int ? = Int".into()
-            })
+            Err(ParseError::NotImplemented)
         );
     }
 
@@ -345,18 +356,30 @@ mod tests {
     #[test]
     fn parse_missing_generic() {
         let def = "name param:!X = Type";
-        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+        assert_eq!(
+            Definition::from_str(def),
+            Err(ParseError::MalformedParam(ParamParseError::UnknownDef))
+        );
 
         let def = "name {X:Type} param:!Y = Type";
-        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+        assert_eq!(
+            Definition::from_str(def),
+            Err(ParseError::MalformedParam(ParamParseError::UnknownDef))
+        );
     }
 
     #[test]
     fn parse_unknown_flags() {
         let def = "name param:flags.0?true = Type";
-        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+        assert_eq!(
+            Definition::from_str(def),
+            Err(ParseError::MalformedParam(ParamParseError::UnknownDef))
+        );
 
         let def = "name foo:# param:flags.0?true = Type";
-        assert_eq!(Definition::from_str(def), Err(ParseError::MalformedParam));
+        assert_eq!(
+            Definition::from_str(def),
+            Err(ParseError::MalformedParam(ParamParseError::UnknownDef))
+        );
     }
 }
