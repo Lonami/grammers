@@ -1,8 +1,9 @@
 //! This module contains additional, manual structures for some TL types.
+use crate::errors::DeserializeError;
+use flate2::write::{GzDecoder, GzEncoder};
+use flate2::Compression;
 use grammers_tl_types::errors::UnexpectedConstructor;
 use grammers_tl_types::{Deserializable, Identifiable, Serializable};
-use miniz_oxide::deflate::compress_to_vec;
-use miniz_oxide::inflate::decompress_to_vec;
 use std::io::{self, Read, Write};
 
 /// This struct represents the following TL definition:
@@ -76,6 +77,14 @@ pub(crate) struct RpcResult {
     pub result: Vec<u8>,
 }
 
+impl RpcResult {
+    /// Peek the constructor ID from the body.
+    pub fn inner_constructor(&self) -> io::Result<u32> {
+        let mut buffer = io::Cursor::new(&self.result);
+        u32::deserialize(&mut buffer)
+    }
+}
+
 impl Identifiable for RpcResult {
     const CONSTRUCTOR_ID: u32 = 0xf35c6d01_u32;
 }
@@ -91,7 +100,8 @@ impl Deserializable for RpcResult {
         }
 
         let req_msg_id = i64::deserialize(buf)?;
-        let result = Vec::<u8>::deserialize(buf)?;
+        let mut result = Vec::new();
+        buf.read_to_end(&mut result)?;
 
         Ok(Self { req_msg_id, result })
     }
@@ -162,13 +172,22 @@ pub(crate) struct GzipPacked {
 
 impl GzipPacked {
     pub fn new(unpacked_data: &[u8]) -> Self {
-        Self {
-            packed_data: compress_to_vec(unpacked_data, 9),
-        }
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        // Safe to unwrap, in-memory data should not fail
+        encoder.write_all(unpacked_data).unwrap();
+        let packed_data = encoder.finish().unwrap();
+        Self { packed_data }
     }
 
-    pub fn decompress(&self) -> Result<Vec<u8>, ()> {
-        decompress_to_vec(&self.packed_data).map_err(drop)
+    pub fn decompress(&self) -> Result<Vec<u8>, DeserializeError> {
+        let writer = Vec::new();
+        let mut decoder = GzDecoder::new(writer);
+        decoder
+            .write_all(&self.packed_data[..])
+            .map_err(|_| DeserializeError::DecompressionFailed)?;
+        decoder
+            .finish()
+            .map_err(|_| DeserializeError::DecompressionFailed)
     }
 }
 
@@ -196,5 +215,43 @@ impl Deserializable for GzipPacked {
 
         let packed_data = Vec::<u8>::deserialize(buf)?;
         Ok(Self { packed_data })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn gzip_decompress() {
+        let rpc_result = [
+            1, 109, 92, 243, 132, 41, 150, 69, 54, 75, 49, 94, 161, 207, 114, 48, 254, 140, 1, 0,
+            31, 139, 8, 0, 0, 0, 0, 0, 0, 3, 149, 147, 61, 75, 195, 80, 20, 134, 79, 62, 20, 84,
+            170, 1, 17, 28, 68, 28, 132, 110, 183, 247, 38, 185, 249, 154, 58, 10, 130, 116, 116,
+            170, 54, 109, 18, 11, 173, 169, 109, 90, 112, 210, 209, 81, 112, 112, 22, 127, 131, 56,
+            232, 232, 224, 143, 112, 112, 238, 159, 168, 55, 31, 234, 77, 91, 82, 26, 184, 57, 36,
+            79, 222, 115, 222, 251, 38, 9, 170, 27, 218, 209, 62, 128, 113, 76, 234, 181, 83, 82,
+            55, 31, 175, 223, 101, 0, 216, 249, 120, 217, 219, 102, 181, 244, 244, 186, 203, 10, 8,
+            108, 109, 18, 221, 70, 132, 234, 136, 152, 20, 81, 13, 222, 132, 148, 43, 11, 184, 144,
+            241, 178, 138, 49, 113, 176, 171, 90, 142, 175, 106, 45, 199, 79, 46, 217, 145, 63, 53,
+            126, 117, 241, 92, 49, 215, 215, 48, 17, 197, 185, 185, 179, 156, 252, 113, 49, 227,
+            91, 60, 39, 148, 240, 190, 196, 127, 95, 134, 217, 116, 176, 238, 89, 177, 47, 181,
+            200, 151, 180, 156, 206, 229, 247, 35, 229, 252, 176, 156, 8, 198, 252, 126, 138, 184,
+            144, 241, 57, 57, 106, 139, 114, 148, 167, 115, 178, 73, 46, 199, 34, 46, 100, 124,
+            206, 126, 245, 162, 185, 98, 166, 227, 242, 55, 16, 81, 49, 159, 227, 18, 125, 93, 222,
+            207, 202, 76, 14, 126, 172, 163, 69, 126, 148, 76, 87, 178, 9, 139, 213, 66, 148, 185,
+            177, 48, 0, 159, 211, 52, 167, 118, 198, 27, 189, 145, 134, 6, 145, 215, 65, 205, 176,
+            11, 240, 201, 158, 171, 150, 36, 104, 177, 90, 211, 37, 184, 99, 63, 11, 30, 2, 124,
+            63, 200, 73, 253, 98, 141, 206, 199, 233, 119, 18, 63, 11, 207, 34, 76, 38, 147, 155,
+            120, 193, 248, 48, 185, 23, 207, 186, 117, 214, 146, 26, 247, 57, 56, 1, 184, 63, 19,
+            18, 189, 82, 102, 51, 47, 162, 168, 55, 112, 42, 149, 8, 117, 189, 10, 123, 247, 65,
+            219, 95, 247, 195, 97, 127, 112, 53, 108, 244, 61, 144, 221, 246, 101, 192, 116, 171,
+            65, 24, 6, 29, 47, 13, 83, 73, 203, 15, 58, 186, 13, 141, 216, 3, 0, 0,
+        ];
+        let _rpc_result_id = &rpc_result[0..4];
+        let _msg_id = &rpc_result[4..12];
+        let gzipped = &rpc_result[12..rpc_result.len()];
+        let gzip = GzipPacked::from_bytes(gzipped).unwrap();
+        assert_eq!(gzip.decompress().unwrap().len(), 984);
     }
 }

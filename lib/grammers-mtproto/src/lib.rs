@@ -507,13 +507,34 @@ impl MTProto {
     /// rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
     /// ```
     fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+        // TODO make sure we notify about errors if any step fails in any handler
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
+        let inner_constructor = rpc_result.inner_constructor()?;
         let manual_tl::RpcResult { req_msg_id, result } = rpc_result;
-        // TODO handle the body being RpcError (return some enum variant)
-        // TODO acknowledge the message id if it's an error
-        // TODO handle the body being GzipPacked (decompress it before return)
-        self.response_queue
-            .push_back((MsgId(req_msg_id), Ok(result)));
+        let msg_id = MsgId(req_msg_id);
+
+        match inner_constructor {
+            tl::types::RpcError::CONSTRUCTOR_ID => {
+                match tl::enums::RpcError::from_bytes(&result)? {
+                    tl::enums::RpcError::RpcError(error) => self
+                        .response_queue
+                        .push_back((msg_id, Err(RequestError::InvalidParameters { error }))),
+                }
+            }
+            manual_tl::GzipPacked::CONSTRUCTOR_ID => {
+                // Telegram shouldn't send compressed errors (the overhead
+                // would probably outweight the benefits) so we don't check
+                // that the decompressed payload is an error.
+                self.response_queue.push_back((
+                    msg_id,
+                    Ok(manual_tl::GzipPacked::from_bytes(&result)?.decompress()?),
+                ))
+            }
+            _ => {
+                self.response_queue.push_back((msg_id, Ok(result)));
+            }
+        }
+
         Ok(())
     }
 

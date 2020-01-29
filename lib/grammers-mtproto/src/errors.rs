@@ -52,6 +52,9 @@ pub enum DeserializeError {
 
     /// The received buffer is too small to contain a valid response message.
     MessageBufferTooSmall,
+
+    /// The server responded with compressed data which we failed to decompress.
+    DecompressionFailed,
 }
 
 impl Error for DeserializeError {}
@@ -80,6 +83,13 @@ impl fmt::Display for DeserializeError {
                 f,
                 "server responded with a payload that's too small to fit a valid message"
             ),
+            Self::DecompressionFailed => write!(f, "failed to decompress server's data"),
         }
+    }
+}
+
+impl From<DeserializeError> for io::Error {
+    fn from(error: DeserializeError) -> Self {
+        io::Error::new(io::ErrorKind::InvalidData, error)
     }
 }
