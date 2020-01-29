@@ -2,7 +2,7 @@ use std::fmt;
 use std::str::FromStr;
 
 use crate::errors::ParamParseError;
-use crate::tl::{Flag, ParameterType};
+use crate::tl::ParameterType;
 
 /// A single parameter, with a name and a type.
 #[derive(Debug, PartialEq)]
@@ -23,9 +23,17 @@ impl fmt::Display for Parameter {
 impl FromStr for Parameter {
     type Err = ParamParseError;
 
-    /// Parses a single parameter such as `foo:bar`.
+    /// Parses a parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use grammers_tl_parser::tl::Parameter;
+    ///
+    /// assert!("foo:flags.0?bar.Baz".parse::<Parameter>().is_ok());
+    /// ```
     fn from_str(param: &str) -> Result<Self, Self::Err> {
-        // Parse `{X:Type}`
+        // Special case: parse `{X:Type}`
         if param.starts_with('{') {
             return Err(if param.ends_with(":Type}") {
                 ParamParseError::TypeDef {
@@ -33,7 +41,7 @@ impl FromStr for Parameter {
                     name: param[1..param.find(':').unwrap()].into(),
                 }
             } else {
-                ParamParseError::UnknownDef
+                ParamParseError::MissingDef
             });
         };
 
@@ -44,50 +52,20 @@ impl FromStr for Parameter {
                 if let Some(t) = it.next() {
                     (n, t)
                 } else {
-                    return Err(ParamParseError::Unimplemented);
+                    return Err(ParamParseError::NotImplemented);
                 }
             } else {
                 return Err(ParamParseError::Empty);
             }
         };
 
-        if name.is_empty() || ty.is_empty() {
+        if name.is_empty() {
             return Err(ParamParseError::Empty);
         }
 
-        // Special-case flags type `#`
-        if ty == "#" {
-            return Ok(Parameter {
-                name: name.into(),
-                ty: ParameterType::Flags,
-            });
-        }
-
-        // Parse `flag_name.flag_index?type`
-        let (ty, flag) = if let Some(pos) = ty.find('?') {
-            if let Some(dot_pos) = ty.find('.') {
-                (
-                    &ty[pos + 1..],
-                    Some(Flag {
-                        name: ty[..dot_pos].into(),
-                        index: ty[dot_pos + 1..pos]
-                            .parse()
-                            .map_err(|_| ParamParseError::BadFlag)?,
-                    }),
-                )
-            } else {
-                return Err(ParamParseError::BadFlag);
-            }
-        } else {
-            (ty, None)
-        };
-
-        // Parse `type<generic_arg>`
-        let ty = ty.parse()?;
-
         Ok(Parameter {
             name: name.into(),
-            ty: ParameterType::Normal { ty, flag },
+            ty: ty.parse()?,
         })
     }
 }
@@ -95,7 +73,7 @@ impl FromStr for Parameter {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::tl::Type;
+    use crate::tl::{Flag, Type};
 
     #[test]
     fn parse_empty_param() {
@@ -106,14 +84,17 @@ mod tests {
 
     #[test]
     fn parse_unknown_param() {
-        assert_eq!(Parameter::from_str(""), Err(ParamParseError::Unimplemented));
+        assert_eq!(
+            Parameter::from_str(""),
+            Err(ParamParseError::NotImplemented)
+        );
         assert_eq!(
             Parameter::from_str("no colon"),
-            Err(ParamParseError::Unimplemented)
+            Err(ParamParseError::NotImplemented)
         );
         assert_eq!(
             Parameter::from_str("colonless"),
-            Err(ParamParseError::Unimplemented)
+            Err(ParamParseError::NotImplemented)
         );
     }
 
@@ -121,19 +102,19 @@ mod tests {
     fn parse_bad_flags() {
         assert_eq!(
             Parameter::from_str("foo:bar?"),
-            Err(ParamParseError::BadFlag)
+            Err(ParamParseError::InvalidFlag)
         );
         assert_eq!(
             Parameter::from_str("foo:?bar"),
-            Err(ParamParseError::BadFlag)
+            Err(ParamParseError::InvalidFlag)
         );
         assert_eq!(
             Parameter::from_str("foo:bar?baz"),
-            Err(ParamParseError::BadFlag)
+            Err(ParamParseError::InvalidFlag)
         );
         assert_eq!(
             Parameter::from_str("foo:bar.baz?qux"),
-            Err(ParamParseError::BadFlag)
+            Err(ParamParseError::InvalidFlag)
         );
     }
 
@@ -141,11 +122,11 @@ mod tests {
     fn parse_bad_generics() {
         assert_eq!(
             Parameter::from_str("foo:<bar"),
-            Err(ParamParseError::BadGeneric)
+            Err(ParamParseError::InvalidGeneric)
         );
         assert_eq!(
             Parameter::from_str("foo:bar<"),
-            Err(ParamParseError::BadGeneric)
+            Err(ParamParseError::InvalidGeneric)
         );
     }
 
@@ -161,7 +142,7 @@ mod tests {
     fn parse_unknown_def_param() {
         assert_eq!(
             Parameter::from_str("{a:foo}"),
-            Err(ParamParseError::UnknownDef)
+            Err(ParamParseError::MissingDef)
         );
     }
 

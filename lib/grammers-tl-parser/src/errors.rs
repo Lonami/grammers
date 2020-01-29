@@ -1,22 +1,21 @@
-//! This module contains the errors that can occur during the parsing
-//! of [Type Language] definitions.
-///
-/// [Type Language]: https://core.telegram.org/mtproto/TL
+//! Errors that can occur during the parsing of [Type Language] definitions.
+//!
+//! [Type Language]: https://core.telegram.org/mtproto/TL
 use std::num::ParseIntError;
 
-/// Represents a failure when parsing [Type Language] definitions.
+/// The error type for the parsing operation of [`Definition`]s.
 ///
-/// [Type Language]: https://core.telegram.org/mtproto/TL
+/// [`Definition`]: tl/struct.Definition.html
 #[derive(Debug, PartialEq)]
 pub enum ParseError {
     /// The definition is empty.
-    EmptyDefinition,
+    Empty,
 
-    /// The identifier from this definition is malformed.
-    MalformedId(ParseIntError),
+    /// The identifier from this definition is invalid.
+    InvalidId(ParseIntError),
 
-    /// Some parameter of this definition is malformed.
-    MalformedParam(ParamParseError),
+    /// One of the parameters from this definition was invalid.
+    InvalidParam(ParamParseError),
 
     /// The name information is missing from the definition.
     MissingName,
@@ -25,39 +24,33 @@ pub enum ParseError {
     MissingType,
 
     /// The parser does not know how to parse the definition.
-    ///
-    /// Some unimplemented examples are:
-    ///
-    /// ```text
-    /// int ? = Int;
-    /// vector {t:Type} # [ t ] = Vector t;
-    /// int128 4*[ int ] = Int128;
-    /// ```
     NotImplemented,
 
     /// The file contained an unknown separator (such as `---foo---`)
     UnknownSeparator,
 }
 
-/// Represents a failure when parsing a single parameter.
+/// The error type for the parsing operation of [`Parameter`]s.
+///
+/// [`Parameter`]: tl/struct.Parameter.html
 #[derive(Debug, PartialEq)]
 pub enum ParamParseError {
-    /// The flag was malformed (missing dot, bad index, empty name).
-    BadFlag,
-
-    /// The generic argument was malformed (missing closing bracket).
-    BadGeneric,
-
     /// The parameter was empty.
     Empty,
 
-    /// The parameter is actually a generic type definition for later use,
-    /// such as `{X:Type}`.
+    /// The flag specification was invalid.
+    InvalidFlag,
+
+    /// The generic argument was invalid.
+    InvalidGeneric,
+
+    /// The parameter is actually a generic type definition for later
+    /// use, such as `{X:Type}`, but it is not a parameter in itself.
     TypeDef { name: String },
 
-    /// Similar to `TypeDef`, but we don't know what it refers to.
-    UnknownDef,
+    /// The parameter refers to some unknown definition.
+    MissingDef,
 
-    /// No known way to parse this parameter.
-    Unimplemented,
+    /// The parser does not know how to parse the parameter.
+    NotImplemented,
 }

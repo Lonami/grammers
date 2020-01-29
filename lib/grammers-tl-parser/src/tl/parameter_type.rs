@@ -1,5 +1,7 @@
 use std::fmt;
+use std::str::FromStr;
 
+use crate::errors::ParamParseError;
 use crate::tl::{Flag, Type};
 
 /// A parameter type.
@@ -13,8 +15,8 @@ pub enum ParameterType {
         /// The actual type of the parameter.
         ty: Type,
 
-        /// If this parameter is conditional, which
-        /// flag is used to determine its presence.
+        /// If this parameter is only present sometimes,
+        /// the flag upon which its presence depends.
         flag: Option<Flag>,
     },
 }
@@ -30,5 +32,41 @@ impl fmt::Display for ParameterType {
                 write!(f, "{}", ty)
             }
         }
+    }
+}
+
+impl FromStr for ParameterType {
+    type Err = ParamParseError;
+
+    /// Parses the type of a parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use grammers_tl_parser::tl::ParameterType;
+    ///
+    /// assert!("vector<int>".parse::<ParameterType>().is_ok());
+    /// ```
+    fn from_str(ty: &str) -> Result<Self, Self::Err> {
+        if ty.is_empty() {
+            return Err(ParamParseError::Empty);
+        }
+
+        // Parse `#`
+        if ty == "#" {
+            return Ok(ParameterType::Flags);
+        }
+
+        // Parse `flag_name.flag_index?type`
+        let (ty, flag) = if let Some(pos) = ty.find('?') {
+            (&ty[pos + 1..], Some(ty[..pos].parse()?))
+        } else {
+            (ty, None)
+        };
+
+        // Parse `type<generic_arg>`
+        let ty = ty.parse()?;
+
+        Ok(ParameterType::Normal { ty, flag })
     }
 }

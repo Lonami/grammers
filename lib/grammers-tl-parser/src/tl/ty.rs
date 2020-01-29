@@ -54,7 +54,15 @@ impl Type {
 impl FromStr for Type {
     type Err = ParamParseError;
 
-    /// Parses a single type `type<generic_arg>`
+    /// Parses a type.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use grammers_tl_parser::tl::Type;
+    ///
+    /// assert!("vector<int>".parse::<Type>().is_ok());
+    /// ```
     fn from_str(ty: &str) -> Result<Self, Self::Err> {
         // Parse `!type`
         let (ty, generic_ref) = if ty.starts_with('!') {
@@ -66,7 +74,7 @@ impl FromStr for Type {
         // Parse `type<generic_arg>`
         let (ty, generic_arg) = if let Some(pos) = ty.find('<') {
             if !ty.ends_with('>') {
-                return Err(ParamParseError::BadGeneric);
+                return Err(ParamParseError::InvalidGeneric);
             }
             (
                 &ty[..pos],

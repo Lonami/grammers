@@ -1,7 +1,7 @@
 //! This module contains all the different structures representing the
 //! various terms of the [Type Language].
-///
-/// [Type Language]: https://core.telegram.org/mtproto/TL
+//!
+//! [Type Language]: https://core.telegram.org/mtproto/TL
 mod category;
 mod definition;
 mod flag;
