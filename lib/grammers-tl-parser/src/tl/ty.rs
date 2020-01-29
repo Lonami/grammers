@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use crate::errors::ParamParseError;
@@ -19,6 +20,35 @@ pub struct Type {
 
     /// If the type has a generic argument, which is its type.
     pub generic_arg: Option<Box<Type>>,
+}
+
+impl fmt::Display for Type {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ns in self.namespace.iter() {
+            write!(f, "{}.", ns)?;
+        }
+        if self.generic_ref {
+            write!(f, "!")?;
+        }
+        write!(f, "{}", self.name)?;
+        if let Some(generic_arg) = &self.generic_arg {
+            write!(f, "<{}>", generic_arg)?;
+        }
+        Ok(())
+    }
+}
+
+impl Type {
+    /// Find all the nested generic references in this type, and appends them
+    /// to the input vector.Box
+    pub(crate) fn find_generic_refs<'a>(&'a self, output: &mut Vec<&'a str>) {
+        if self.generic_ref {
+            output.push(&self.name);
+        }
+        if let Some(generic_arg) = &self.generic_arg {
+            generic_arg.find_generic_refs(output);
+        }
+    }
 }
 
 impl FromStr for Type {

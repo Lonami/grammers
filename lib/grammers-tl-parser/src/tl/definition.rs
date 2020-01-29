@@ -1,10 +1,10 @@
+use std::fmt;
 use std::str::FromStr;
 
 use crate::errors::{ParamParseError, ParseError};
 use crate::tl::{Category, Flag, Parameter, ParameterType, Type};
 use crate::utils::infer_id;
 
-// TODO `impl Display`
 /// A [Type Language] definition.
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
@@ -30,6 +30,37 @@ pub struct Definition {
 
     /// The category to which this definition belongs to.
     pub category: Category,
+}
+
+impl fmt::Display for Definition {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ns in self.namespace.iter() {
+            write!(f, "{}.", ns)?;
+        }
+        write!(f, "{}#{:x}", self.name, self.id)?;
+
+        // If any parameter references a generic, make sure to define it early
+        let mut type_defs = vec![];
+        for param in self.params.iter() {
+            match &param.ty {
+                ParameterType::Normal { ty, .. } => {
+                    ty.find_generic_refs(&mut type_defs);
+                }
+                _ => {}
+            }
+        }
+        type_defs.sort();
+        type_defs.dedup();
+        for type_def in type_defs {
+            write!(f, " {{{}:Type}}", type_def)?;
+        }
+
+        for param in self.params.iter() {
+            write!(f, " {}", param)?;
+        }
+        write!(f, " = {}", self.ty)?;
+        Ok(())
+    }
 }
 
 impl FromStr for Definition {
@@ -381,5 +412,11 @@ mod tests {
             Definition::from_str(def),
             Err(ParseError::MalformedParam(ParamParseError::UnknownDef))
         );
+    }
+
+    #[test]
+    fn test_to_string() {
+        let def = "ns1.name#123 {X:Type} flags:# pname:flags.10?ns2.Vector<!X> = ns3.Type";
+        assert_eq!(Definition::from_str(def).unwrap().to_string(), def);
     }
 }

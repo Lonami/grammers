@@ -1,3 +1,5 @@
+use std::fmt;
+
 use crate::tl::{Flag, Type};
 
 /// A parameter type.
@@ -15,4 +17,18 @@ pub enum ParameterType {
         /// flag is used to determine its presence.
         flag: Option<Flag>,
     },
+}
+
+impl fmt::Display for ParameterType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Flags => write!(f, "#"),
+            Self::Normal { ty, flag } => {
+                if let Some(flag) = flag {
+                    write!(f, "{}?", flag)?;
+                }
+                write!(f, "{}", ty)
+            }
+        }
+    }
 }

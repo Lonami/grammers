@@ -1,3 +1,4 @@
+use std::fmt;
 use std::str::FromStr;
 
 use crate::errors::ParamParseError;
@@ -11,6 +12,12 @@ pub struct Parameter {
 
     /// The type of the parameter.
     pub ty: ParameterType,
+}
+
+impl fmt::Display for Parameter {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}:{}", self.name, self.ty)
+    }
 }
 
 impl FromStr for Parameter {
