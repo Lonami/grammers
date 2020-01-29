@@ -13,11 +13,13 @@ use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
 use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
 
-const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
+/// The default compression threshold to be used.
+pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 
 /// A builder to configure `MTProto` instances.
 pub struct MTProtoBuilder {
     compression_threshold: Option<usize>,
+    auth_key: Option<AuthKey>,
 }
 
 /// This structure holds everything needed by the Mobile Transport Protocol.
@@ -75,6 +77,7 @@ impl MTProtoBuilder {
     fn new() -> Self {
         Self {
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
+            auth_key: None,
         }
     }
 
@@ -84,11 +87,20 @@ impl MTProtoBuilder {
         self
     }
 
+    /// Sets the authorization key to be used. Otherwise, no authorization
+    /// key will be present, and a new one will have to be generated before
+    /// being able to create encrypted messages.
+    pub fn auth_key(mut self, auth_key: AuthKey) -> Self {
+        self.auth_key = Some(auth_key);
+        self
+    }
+
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
     pub fn finish(self) -> MTProto {
         let mut result = MTProto::new();
         result.compression_threshold = self.compression_threshold;
+        result.auth_key = self.auth_key;
         result
     }
 }

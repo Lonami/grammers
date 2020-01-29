@@ -1,10 +1,21 @@
+use grammers_crypto::AuthKey;
 use grammers_mtproto::transports::{Transport, TransportFull};
+pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
 use grammers_mtproto::{auth_key, MTProto, RequestError};
 use grammers_tl_types::{Deserializable, RPC};
 
 use std::io::{self, Result};
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
+
+pub const DEFAULT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(10));
+
+/// A builder to configure `MTSender` instances.
+pub struct MTSenderBuilder {
+    compression_threshold: Option<usize>,
+    auth_key: Option<AuthKey>,
+    timeout: Option<Duration>,
+}
 
 /// A Mobile Transport sender, using the [Mobile Transport Protocol]
 /// underneath.
@@ -17,13 +28,67 @@ pub struct MTSender {
     transport: TransportFull,
 }
 
+impl MTSenderBuilder {
+    fn new() -> Self {
+        Self {
+            compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
+            auth_key: None,
+            timeout: DEFAULT_TIMEOUT,
+        }
+    }
+
+    /// Configures the compression threshold for outgoing messages.
+    pub fn compression_threshold(mut self, threshold: Option<usize>) -> Self {
+        self.compression_threshold = threshold;
+        self
+    }
+
+    /// Sets the authorization key to be used. Otherwise, no authorization
+    /// key will be present, and a new one will have to be generated before
+    /// being able to send encrypted messages.
+    pub fn auth_key(mut self, auth_key: AuthKey) -> Self {
+        self.auth_key = Some(auth_key);
+        self
+    }
+
+    /// Configures the network timeout to use when performing network
+    /// operations.
+    pub fn timeout(mut self, timeout: Option<Duration>) -> Self {
+        self.timeout = timeout;
+        self
+    }
+
+    /// Finishes the builder and returns the `MTProto` instance with all
+    /// the configuration changes applied.
+    pub fn connect<A: ToSocketAddrs>(self, addr: A) -> Result<MTSender> {
+        MTSender::with_builder(self, addr)
+    }
+}
+
 impl MTSender {
+    /// Returns a builder to configure certain parameters.
+    pub fn build() -> MTSenderBuilder {
+        MTSenderBuilder::new()
+    }
+
+    /// Creates and connects a new instance with default settings.
     pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+        Self::build().connect(addr)
+    }
+
+    /// Constructs an instance using a finished builder.
+    fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> Result<Self> {
         let stream = TcpStream::connect(addr)?;
-        // TODO let the user configure this (and MTProto too)
-        stream.set_read_timeout(Some(Duration::from_secs(2)))?;
+        stream.set_read_timeout(builder.timeout)?;
+
+        let mut protocol = MTProto::build().compression_threshold(builder.compression_threshold);
+
+        if let Some(auth_key) = builder.auth_key {
+            protocol = protocol.auth_key(auth_key);
+        }
+
         Ok(Self {
-            protocol: MTProto::new(),
+            protocol: protocol.finish(),
             stream,
             transport: TransportFull::new(),
         })
