@@ -173,6 +173,7 @@ mod tests {
                 name: "foo".into(),
                 ty: ParameterType::Normal {
                     ty: Type {
+                        namespace: vec![],
                         name: "bar".into(),
                         bare: true,
                         generic_ref: true,
@@ -188,6 +189,7 @@ mod tests {
                 name: "foo".into(),
                 ty: ParameterType::Normal {
                     ty: Type {
+                        namespace: vec![],
                         name: "baz".into(),
                         bare: true,
                         generic_ref: false,
@@ -206,6 +208,7 @@ mod tests {
                 name: "foo".into(),
                 ty: ParameterType::Normal {
                     ty: Type {
+                        namespace: vec![],
                         name: "bar".into(),
                         bare: true,
                         generic_ref: false,
@@ -221,6 +224,7 @@ mod tests {
                 name: "foo".into(),
                 ty: ParameterType::Normal {
                     ty: Type {
+                        namespace: vec![],
                         name: "baz".into(),
                         bare: true,
                         generic_ref: false,

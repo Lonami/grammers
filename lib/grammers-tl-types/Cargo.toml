@@ -6,7 +6,7 @@ edition = "2018"
 build = "build/main.rs"
 
 [build-dependencies]
-grammers-tl-parser = "0.1.0"
+grammers-tl-parser = "0.2.0"
 
 [features]
 default = ["tl-api", "impl-debug"]

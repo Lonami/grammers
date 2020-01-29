@@ -222,6 +222,7 @@ mod tests {
         assert_eq!(
             def.ty,
             Type {
+                namespace: vec![],
                 name: "d".into(),
                 bare: true,
                 generic_ref: false,
@@ -236,6 +237,7 @@ mod tests {
         assert_eq!(
             def.ty,
             Type {
+                namespace: vec![],
                 name: "d".into(),
                 bare: true,
                 generic_ref: false,
@@ -250,6 +252,7 @@ mod tests {
         assert_eq!(
             def.ty,
             Type {
+                namespace: vec![],
                 name: "d".into(),
                 bare: true,
                 generic_ref: false,
@@ -271,6 +274,7 @@ mod tests {
         assert_eq!(
             def.ty,
             Type {
+                namespace: vec![],
                 name: "d".into(),
                 bare: true,
                 generic_ref: false,
