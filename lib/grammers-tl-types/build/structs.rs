@@ -328,19 +328,27 @@ pub(crate) fn write_category_mod<W: Write>(
     // Begin outermost mod
     match category {
         Category::Types => {
-            writeln!(file, "/// This module contains all of the bare types,")?;
-            writeln!(file, "/// each represented by a `struct`. All of them")?;
-            writeln!(
-                file,
-                "/// are `Identifiable`, `Serializable` and `Deserializable`."
-            )?;
-            writeln!(file, "pub mod types {{")?;
+            writeln!(file, "\
+            /// This module contains all of the bare types, each\n\
+            /// represented by a `struct`. All of them implement\n\
+            /// [`Identifiable`], [`Serializable`] and [`Deserializable`].\n\
+            ///\n\
+            /// [`Identifiable`]: ../trait.Identifiable.html\n\
+            /// [`Serializable`]: ../trait.Serializable.html\n\
+            /// [`Deserializable`]: ../trait.Deserializable.html\n\
+            pub mod types {{
+            ")?;
         }
         Category::Functions => {
-            writeln!(file, "/// This module contains all of the functions,")?;
-            writeln!(file, "/// each represented by a `struct`. All of them")?;
-            writeln!(file, "/// are `Identifiable` and `Serializable`.")?;
-            writeln!(file, "pub mod functions {{")?;
+            writeln!(file, "\
+            /// This module contains all of the functions, each\n\
+            /// represented by a `struct`. All of them implement\n\
+            /// [`Identifiable`] and [`Serializable`].\n\
+            ///\n\
+            /// [`Identifiable`]: ../trait.Identifiable.html\n\
+            /// [`Serializable`]: ../trait.Serializable.html\n\
+            pub mod functions {{
+            ")?;
         }
     }
 

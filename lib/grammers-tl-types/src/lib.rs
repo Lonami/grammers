@@ -1,8 +1,13 @@
-//! This library contains Telegram's types and functions as Rust code
-//! in the form of `struct` and `enum`, which can be serialized into
-//! bytes and deserialized from bytes.
+//! This library contains the Rust definitions for Telegram's [`types`] and
+//! [`functions`] in the form of `struct` and `enum`. All of them implement
+//! [`Serializable`], and by default only types implement [`Deserializable`].
 //!
 //! # Features
+//!
+//! The default feature set is intended to make the use of the library
+//! comfortable, and not intended to be minimal in code size. If you need
+//! a smaller libary or are concerned about build-times, consider disabling
+//! some of the default features.
 //!
 //! The default feature set includes:
 //!
@@ -16,12 +21,15 @@
 //! * `mtproto-api`: generates code for the `mtproto.tl`.
 //!   Only useful for low-level libraries.
 //!
-//! * `deserializable-functions`: adds `impl Deserializable` for `functions`.
-//!   This might be of interest for server implementations, which need to
-//!   deserialize the client's requests.
+//! * `deserializable-functions`: implements [`Deserializable`] for
+//!   [`functions`]. This might be of interest for server implementations,
+//!   which need to deserialize the client's requests, but is otherwise not
+//!   required.
 //!
-//! [Type Language]: https://core.telegram.org/mtproto/TL
-//! [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
+//! [`types`]: types/index.html
+//! [`functions`]: functions/index.html
+//! [`Serializable`]: trait.Serializable.html
+//! [`Deserializable`]: trait.Deserializable.html
 mod deserializable;
 pub mod errors;
 mod generated;
@@ -47,8 +55,8 @@ pub trait Identifiable {
 }
 
 /// Structures implementing this trait indicate that they are suitable for
-/// use to perform Remote Procedure Calls (RPC), and are able to determine
-/// what the type of the response will be.
+/// use to perform Remote Procedure Calls (RPC), and know what the type of
+/// the response will be.
 pub trait RPC: Serializable {
     /// The type of the "return" value coming from the other end of the
     /// connection.

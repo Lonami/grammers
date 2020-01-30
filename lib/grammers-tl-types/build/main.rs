@@ -1,3 +1,5 @@
+//! This module gathers all the code generation submodules and coordinates
+//! them, feeding them the right data.
 mod enums;
 mod grouper;
 mod loader;
