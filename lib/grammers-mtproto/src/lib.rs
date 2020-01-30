@@ -8,6 +8,7 @@
 pub mod errors;
 mod manual_tl;
 pub mod transports;
+mod utils;
 
 use crate::errors::{DeserializeError, EnqueueError};
 
@@ -33,9 +34,35 @@ pub struct MTProtoBuilder {
     auth_key: Option<AuthKey>,
 }
 
-/// This structure holds the state needed by the [Mobile Transport Protocol].
+/// An implementation of the [Mobile Transport Protocol].
+///
+/// When working with unencrypted data (for example, when generating a new
+/// authorization key), the [`serialize_plain_message`] may be used to wrap
+/// a serialized request inside a message.
+///
+/// When working with encrypted data (every other time besides generating
+/// authorization keys), use [`enqueue_request`] with the serialized request
+/// that you want to send. You may enqueue as many requests as you want.
+///
+/// Once your transport is ready to send more data, use
+/// [`serialize_encrypted_messages`] to pop requests from the queue,
+/// serialize them, and encrypt them. This data can be sent to the server.
+///
+/// Once your transport receives some data, use [`process_encrypted_response`]
+/// to decrypt, deserialize and process the server's response. This response
+/// may contain replies to your previously-sent requests.
+///
+/// Finally, [`poll_response`] can be used to poll for server's responses to
+/// your previously-sent requests.
+///
+/// When server responses
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+/// [`serialize_plain_message`]: #method.serialize_plain_message
+/// [`enqueue_request`]: #method.enqueue_request
+/// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
+/// [`process_encrypted_response`]: #method.process_encrypted_response
+/// [`poll_response`]: #method.poll_response
 pub struct MTProto {
     /// The authorization key to use to encrypt payload.
     auth_key: Option<AuthKey>,
@@ -127,6 +154,9 @@ impl MTProtoBuilder {
 }
 
 impl MTProto {
+    // Constructors
+    // ========================================
+
     /// Creates a new instance with default settings.
     pub fn new() -> Self {
         let client_id = {
@@ -154,8 +184,18 @@ impl MTProto {
         MTProtoBuilder::new()
     }
 
+    // State management
+    // ========================================
+
     /// Sets a generated authorization key as the current one, and also
     /// updates the time offset to be correct.
+    ///
+    /// An authorization key must be set before calling the
+    /// [`serialize_encrypted_messages`] and [`process_encrypted_response`]
+    /// methods, or they will return a missing key error.
+    ///
+    /// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
+    /// [`process_encrypted_response`]: #method.process_encrypted_response
     pub fn set_auth_key(&mut self, auth_key: AuthKey, time_offset: i32) {
         self.auth_key = Some(auth_key);
         self.time_offset = time_offset;
@@ -172,16 +212,119 @@ impl MTProto {
         self.time_offset = correct - now;
     }
 
+    /// Generates a new unique message ID based on the current
+    /// time (in ms) since epoch, applying a known time offset.
+    fn get_new_msg_id(&mut self) -> i64 {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .expect("system time is before epoch");
+
+        let seconds = (now.as_secs() as i32 + self.time_offset) as u64;
+        let nanoseconds = now.subsec_nanos() as u64;
+        let mut new_msg_id = ((seconds << 32) | (nanoseconds << 2)) as i64;
+
+        if self.last_msg_id >= new_msg_id {
+            new_msg_id = self.last_msg_id + 4;
+        }
+
+        self.last_msg_id = new_msg_id;
+        new_msg_id
+    }
+
+    /// Generates the next sequence number depending on whether
+    /// it should be for a content-related query or not.
+    fn get_seq_no(&mut self, content_related: bool) -> i32 {
+        if content_related {
+            let result = self.sequence * 2 + 1;
+            self.sequence += 1;
+            result
+        } else {
+            self.sequence * 2
+        }
+    }
+
+    // Plain requests
+    // ========================================
+
+    /// Wraps a request's data into a plain message (also known as
+    /// [unencrypted messages]), and returns its serialized contents.
+    ///
+    /// Plain messages may be used for requests that don't require an
+    /// authorization key to be present, such as those needed to generate
+    /// the authorization key itself.
+    ///
+    /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
+    pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
+        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
+        // Safe to unwrap because we're serializing into a memory buffer.
+        0i64.serialize(&mut buf).unwrap();
+        self.get_new_msg_id().serialize(&mut buf).unwrap();
+        (body.len() as u32).serialize(&mut buf).unwrap();
+        buf.write_all(&body).unwrap();
+        buf.into_inner()
+    }
+
+    /// Validates that the returned data is a correct plain message, and
+    /// if it is, the method returns the inner contents of the message.
+    ///
+    /// [`serialize_plain_message`]: #method.serialize_plain_message
+    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+        utils::check_message_buffer(message)?;
+
+        let mut buf = io::Cursor::new(message);
+        let auth_key_id = i64::deserialize(&mut buf)?;
+        if auth_key_id != 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::BadAuthKey {
+                    got: auth_key_id,
+                    expected: 0,
+                },
+            ));
+        }
+
+        let msg_id = i64::deserialize(&mut buf)?;
+        if msg_id == 0 {
+            // TODO make sure it's close to our system time
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::BadMessageId { got: msg_id },
+            ));
+        }
+
+        let len = i32::deserialize(&mut buf)?;
+        if len <= 0 {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::NegativeMessageLength { got: len },
+            ));
+        }
+        if (20 + len) as usize > message.len() {
+            return Err(io::Error::new(
+                io::ErrorKind::InvalidData,
+                DeserializeError::TooLongMessageLength {
+                    got: len as usize,
+                    max_length: message.len() - 20,
+                },
+            ));
+        }
+
+        Ok(&message[20..20 + len as usize])
+    }
+
+    // Encrypted requests
+    // ========================================
+
     /// Enqueues a request and returns its associated `msg_id`.
     ///
-    /// Once a response arrives and it is decrypted, the caller
-    /// is expected to compare the `msg_id` against previously
-    /// enqueued requests to determine to which of these the
-    /// response belongs.
+    /// Once a response arrives and it is decrypted, the caller is expected
+    /// to compare the `msg_id` against the `msg_id` of previously enqueued
+    /// requests to determine to which of these the response belongs.
     ///
-    /// If a certain amount of time passes and the enqueued
-    /// request has not been sent yet, the message ID will
-    /// become stale and Telegram will reject it.
+    /// If a certain amount of time passes and the enqueued request has not
+    /// been sent yet, the message ID will become stale and Telegram will
+    /// reject it. The caller is then expected to re-enqueue their request
+    /// and send a new encrypted message.
     pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> Result<MsgId, EnqueueError> {
         if body.len() + manual_tl::Message::SIZE_OVERHEAD
             > manual_tl::MessageContainer::MAXIMUM_SIZE
@@ -206,22 +349,6 @@ impl MTProto {
         Ok(self.enqueue_body(body, true))
     }
 
-    /// Enqueues a request to be executed by the server sequentially after
-    /// another specific request.
-    pub fn enqueue_sequential_request(
-        &mut self,
-        body: Vec<u8>,
-        after: &MsgId,
-    ) -> Result<MsgId, EnqueueError> {
-        self.enqueue_request(
-            tl::functions::InvokeAfterMsg {
-                msg_id: after.0,
-                query: body,
-            }
-            .to_bytes(),
-        )
-    }
-
     fn enqueue_body(&mut self, body: Vec<u8>, content_related: bool) -> MsgId {
         let msg_id = self.get_new_msg_id();
         let seq_no = self.get_seq_no(content_related);
@@ -234,11 +361,7 @@ impl MTProto {
         MsgId(msg_id)
     }
 
-    // TODO probably find a better name for this
-    /// Pops as many enqueued requests as possible, and returns
-    /// the serialized data. If there are no requests enqueued,
-    /// this returns `None`.
-    pub fn pop_queue(&mut self) -> Option<Vec<u8>> {
+    fn pop_queued_messages(&mut self) -> Option<Vec<u8>> {
         // If we need to acknowledge messages, this notification goes
         // in with the rest of requests so that we can also include it.
         if !self.pending_ack.is_empty() {
@@ -284,8 +407,14 @@ impl MTProto {
                 manual_tl::Message::SIZE_OVERHEAD + manual_tl::MessageContainer::SIZE_OVERHEAD;
         }
 
-        // Allocate enough size and pop that many requests
-        let mut buf = io::Cursor::new(Vec::with_capacity(batch_size));
+        // Allocate enough size for the final message:
+        //     8 bytes `salt` + 8 bytes `client_id` + `batch_size` bytes body
+        let mut buf = io::Cursor::new(Vec::with_capacity(8 + 8 + batch_size));
+
+        // All of the `serialize(...).unwrap()` are safe because we have an
+        // in-memory buffer.
+        self.salt.serialize(&mut buf).unwrap();
+        self.client_id.serialize(&mut buf).unwrap();
 
         // If we're sending more than one, write the `MessageContainer` header.
         // This should be the moral equivalent of `MessageContainer.serialize(...)`.
@@ -295,7 +424,6 @@ impl MTProto {
             let msg_id = self.get_new_msg_id();
             let seq_no = self.get_seq_no(false);
 
-            // Safe to unwrap because we're serializing into a memory buffer.
             msg_id.serialize(&mut buf).unwrap();
             seq_no.serialize(&mut buf).unwrap();
             ((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32)
@@ -308,182 +436,55 @@ impl MTProto {
             (batch_len as i32).serialize(&mut buf).unwrap();
         }
 
-        // Finally, pop that many requests and write them to the buffer.
+        // Pop `batch_len` requests and append them to the final message.
         (0..batch_len).for_each(|_| {
             // Safe to unwrap because the length cannot exceed the queue's.
             let message = self.message_queue.pop_front().unwrap();
-            // Safe to unwrap because we're serializing into a memory buffer.
             message.serialize(&mut buf).unwrap();
         });
 
-        // The buffer is full, encrypt it and return the data ready to be
-        // sent over the network!
+        // Our message is ready.
         Some(buf.into_inner())
     }
 
-    /// Generates a new unique message ID based on the current
-    /// time (in ms) since epoch, applying a known time offset.
-    fn get_new_msg_id(&mut self) -> i64 {
-        let now = SystemTime::now()
-            .duration_since(UNIX_EPOCH)
-            .expect("system time is before epoch");
-
-        let seconds = (now.as_secs() as i32 + self.time_offset) as u64;
-        let nanoseconds = now.subsec_nanos() as u64;
-        let mut new_msg_id = ((seconds << 32) | (nanoseconds << 2)) as i64;
-
-        if self.last_msg_id >= new_msg_id {
-            new_msg_id = self.last_msg_id + 4;
-        }
-
-        self.last_msg_id = new_msg_id;
-        new_msg_id
-    }
-
-    /// Generates the next sequence number depending on whether
-    /// it should be for a content-related query or not.
-    fn get_seq_no(&mut self, content_related: bool) -> i32 {
-        if content_related {
-            let result = self.sequence * 2 + 1;
-            self.sequence += 1;
-            result
-        } else {
-            self.sequence * 2
-        }
-    }
-
-    /// A plain message's structure is different from the structure of
-    /// messages that are meant to be encrypted, and are made up of:
-    ///
-    /// ```text
-    /// [auth_key_id = 0] [   message_id  ] [ msg len ] [ message data ... ]
-    /// [    64 bits    ] [    64 bits    ] [ 32 bits ] [       ...        ]
-    /// ```
-    ///
-    /// They are also known as [unencrypted messages].
-    ///
-    /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
-        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
-        // Safe to unwrap because we're serializing into a memory buffer.
-        0i64.serialize(&mut buf).unwrap();
-        self.get_new_msg_id().serialize(&mut buf).unwrap();
-        (body.len() as u32).serialize(&mut buf).unwrap();
-        buf.write_all(&body).unwrap();
-        buf.into_inner()
-    }
-
-    /// Checks a message buffer for common errors
-    fn check_message_buffer(message: &[u8]) -> io::Result<()> {
-        if message.len() == 4 {
-            // Probably a negative HTTP error code
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::TransportError {
-                    // Safe to unwrap because we just checked the length
-                    code: i32::from_bytes(message).unwrap(),
-                },
-            ))
-        } else if message.len() < 20 {
-            Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::MessageBufferTooSmall,
-            ))
-        } else {
-            Ok(())
-        }
-    }
-
-    /// The opposite of `serialize_plain_message`. It validates that the
-    /// returned data is valid.
-    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
-        Self::check_message_buffer(message)?;
-
-        let mut buf = io::Cursor::new(message);
-        let auth_key_id = i64::deserialize(&mut buf)?;
-        if auth_key_id != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::BadAuthKey {
-                    got: auth_key_id,
-                    expected: 0,
-                },
-            ));
-        }
-
-        let msg_id = i64::deserialize(&mut buf)?;
-        if msg_id == 0 {
-            // TODO make sure it's close to our system time
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::BadMessageId { got: msg_id },
-            ));
-        }
-
-        let len = i32::deserialize(&mut buf)?;
-        if len <= 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::NegativeMessageLength { got: len },
-            ));
-        }
-        if (20 + len) as usize > message.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::TooLongMessageLength {
-                    got: len as usize,
-                    max_length: message.len() - 20,
-                },
-            ));
-        }
-
-        Ok(&message[20..20 + len as usize])
-    }
-
-    /// Properly formats the given plaintext message data to be encrypted.
-    fn format_message_data_for_encryption(&self, plaintext: &[u8]) -> Vec<u8> {
-        // TODO maybe this should be part of `pop_queue` which has the entire buffer.
-        //      IIRC plaintext mtproto also needs this but with salt 0
-        let mut buffer = io::Cursor::new(Vec::with_capacity(8 + 8 + plaintext.len()));
-
-        // Prepend salt (8 bytes) and client_id (8 bytes) to the plaintext
-        // Safe to unwrap because we have an in-memory buffer
-        self.salt.serialize(&mut buffer).unwrap();
-        self.client_id.serialize(&mut buffer).unwrap();
-        buffer.write_all(&plaintext).unwrap();
-        buffer.into_inner()
-    }
-
-    /// Encrypts the data returned by `pop_queue` to be able to send it
-    /// over the network, using the current authorization key as indicated
-    /// by the [MTProto 2.0 guidelines].
+    /// If there is one or more requests enqueued, this method will pack as
+    /// many as possible into a single message, serialize it, and return it
+    /// encrypted using the current authorization key as indicated by the
+    /// [MTProto 2.0 guidelines].
     ///
     /// The function will fail if there is no valid authorization key present.
     ///
+    /// If there are no enqueued requests, the method succeeds but returns
+    /// `None`.
+    ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    pub fn encrypt_message_data(&self, plaintext: Vec<u8>) -> io::Result<Vec<u8>> {
+    pub fn serialize_encrypted_messages(&mut self) -> Result<Option<Vec<u8>>, io::Error> {
         // Attempting to encrypt something with an authorization key full of
         // zeros will cause Telegram to reply with -404, presumably for no
         // authorization key.
-        let auth_key = match &self.auth_key {
-            Some(x) => x,
+        if self.auth_key.is_none() {
             // TODO proper error
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found")),
-        };
+            return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found"));
+        }
 
-        let plaintext = self.format_message_data_for_encryption(&plaintext);
-        Ok(encrypt_data_v2(&plaintext, auth_key))
+        Ok(self
+            .pop_queued_messages()
+            .map(|payload| encrypt_data_v2(&payload, self.auth_key.as_ref().unwrap())))
     }
 
-    /// Decrypts a response packet and returns the inner message.
-    fn decrypt_response(&self, ciphertext: &[u8]) -> io::Result<manual_tl::Message> {
+    /// Processes an encrypted response from the server. If the response
+    /// contains replies to previously-sent requests, they will be enqueued,
+    /// and can be polled for later with [`poll_response`].
+    ///
+    /// [`poll_response`]: #method.poll_response
+    pub fn process_encrypted_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
         let auth_key = match &self.auth_key {
             Some(x) => x,
             // TODO proper error
             None => return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found")),
         };
 
-        Self::check_message_buffer(ciphertext)?;
+        utils::check_message_buffer(ciphertext)?;
 
         let plaintext = decrypt_data_v2(ciphertext, auth_key)?;
         let mut buffer = io::Cursor::new(plaintext);
@@ -494,14 +495,18 @@ impl MTProto {
             panic!("wrong session id");
         }
 
-        manual_tl::Message::deserialize(&mut buffer)
+        self.process_message(manual_tl::Message::deserialize(&mut buffer)?)
     }
 
-    /// Processes an encrypted response from the server. If the
-    /// response belonged to a previous request, it is returned.
-    pub fn process_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
-        self.process_message(self.decrypt_response(ciphertext)?)
+    /// Poll for responses to previously-sent Remote Procedure Calls.
+    ///
+    /// If there are no new server responses, the method returns `None`.
+    pub fn poll_response(&mut self) -> Option<(MsgId, Result<Vec<u8>, RequestError>)> {
+        self.response_queue.pop_front()
     }
+
+    // Response handlers
+    // ========================================
 
     fn process_message(&mut self, message: manual_tl::Message) -> io::Result<()> {
         self.pending_ack.push(message.msg_id);
@@ -526,12 +531,6 @@ impl MTProto {
             tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(&message),
             _ => self.handle_update(&message),
         }
-    }
-
-    // TODO process_response and pop_response? maybe one should be named "answer" or "reply"
-    /// Pop a response to a remote procedure call.
-    pub fn pop_response(&mut self) -> Option<(MsgId, Result<Vec<u8>, RequestError>)> {
-        self.response_queue.pop_front()
     }
 
     /// Handles the result for Remote Procedure Calls:
@@ -783,19 +782,237 @@ impl MTProto {
 mod tests {
     use super::*;
 
+    // salt + client_id
+    const MESSAGE_PREFIX_LEN: usize = 8 + 8;
+
+    // gzip_packed#3072cfa1 packed_data:string = Object;
+    const GZIP_PACKED_HEADER: [u8; 4] = [0xa1, 0xcf, 0x72, 0x30];
+
+    // msg_container#73f1f8dc messages:vector<message> = MessageContainer;
+    const MSG_CONTAINER_HEADER: [u8; 4] = [0xdc, 0xf8, 0xf1, 0x73];
+
     #[test]
-    fn check_proper_encryption_format() {
-        let mtproto = MTProto::build().compression_threshold(None).finish();
-        let plaintext: Vec<u8> = vec![1, 2, 3, 4, 5, 6, 7, 8];
-        let got = mtproto.format_message_data_for_encryption(&plaintext);
+    fn ensure_buffer_used_exact_capacity() {
+        {
+            // Single body (no container)
+            let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
-        // First comes the salt which by default should be zero.
-        assert_eq!(&got[0..8], [0; 8]);
+            mtproto
+                .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+                .unwrap();
+            let buffer = mtproto.pop_queued_messages().unwrap();
+            assert_eq!(buffer.capacity(), buffer.len());
+        }
+        {
+            // Multiple bodies (using a container)
+            let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
-        // Then comes the client ID which should be random.
-        assert_ne!(&got[8..16], [0; 8]);
+            mtproto
+                .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+                .unwrap();
+            mtproto
+                .enqueue_request(vec![b'B', b'y', b'e', b'!'])
+                .unwrap();
+            let buffer = mtproto.pop_queued_messages().unwrap();
+            assert_eq!(buffer.capacity(), buffer.len());
+        }
+    }
 
-        // Our message should follow
-        assert_eq!(&got[16..], &plaintext[..]);
+    fn ensure_buffer_is_message(buffer: &[u8], body: &[u8], seq_no: u8) {
+        // buffer[0..8] is the msg_id, based on `SystemTime::now()`
+        assert_ne!(&buffer[0..8], [0, 0, 0, 0, 0, 0, 0, 0]);
+        // buffer[8..12] is the seq_no, ever-increasing odd number (little endian)
+        assert_eq!(&buffer[8..12], [seq_no, 0, 0, 0]);
+        // buffer[12..16] is the bytes, the len of the body (little endian)
+        assert_eq!(&buffer[12..16], [body.len() as u8, 0, 0, 0]);
+        // buffer[16..] is the body, which is padded to 4 bytes
+        assert_eq!(&buffer[16..], body);
+    }
+
+    #[test]
+    fn ensure_serialization_has_salt_client_id() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+        let buffer = mtproto.pop_queued_messages().unwrap();
+
+        // salt comes first, it's zero by default.
+        assert_eq!(&buffer[0..8], [0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // client_id should be random.
+        assert_ne!(&buffer[8..16], [0, 0, 0, 0, 0, 0, 0, 0]);
+
+        // Only one message should remain.
+        ensure_buffer_is_message(&buffer[MESSAGE_PREFIX_LEN..], b"Hey!", 1);
+    }
+
+    #[test]
+    fn ensure_correct_single_serialization() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+
+        let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
+        ensure_buffer_is_message(&buffer, b"Hey!", 1);
+    }
+
+    #[test]
+    fn ensure_correct_multi_serialization() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+        mtproto
+            .enqueue_request(vec![b'B', b'y', b'e', b'!'])
+            .unwrap();
+        let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
+
+        // buffer[0..8] is the msg_id for the container
+        assert_ne!(&buffer[0..8], [0, 0, 0, 0, 0, 0, 0, 0]);
+        // buffer[8..12] is the seq_no, maybe-increasing even number.
+        // after two messages (1, 3) the next non-content related is 4.
+        assert_eq!(&buffer[8..12], [4, 0, 0, 0]);
+        // buffer[12..16] is the bytes, the len of the body
+        assert_eq!(&buffer[12..16], [48, 0, 0, 0]);
+
+        // buffer[16..20] is the constructor id of the container
+        assert_eq!(&buffer[16..20], MSG_CONTAINER_HEADER);
+        // buffer[20..24] is how many messages are included
+        assert_eq!(&buffer[20..24], [2, 0, 0, 0]);
+
+        // buffer[24..44] is an inner message
+        ensure_buffer_is_message(&buffer[24..44], b"Hey!", 1);
+
+        // buffer[44..] is the other inner message
+        ensure_buffer_is_message(&buffer[44..], b"Bye!", 3);
+    }
+
+    #[test]
+    fn ensure_correct_single_large_serialization() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let data = vec![0x7f; 768 * 1024];
+
+        mtproto.enqueue_request(data.clone()).unwrap();
+        let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
+        assert_eq!(buffer.len(), 16 + data.len());
+    }
+
+    #[test]
+    fn ensure_correct_multi_large_serialization() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let data = vec![0x7f; 768 * 1024];
+
+        mtproto.enqueue_request(data.clone()).unwrap();
+
+        mtproto.enqueue_request(data.clone()).unwrap();
+
+        // The messages are large enough that they should not be able to go in
+        // a container together (so there are two things to pop).
+        let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
+        assert_eq!(buffer.len(), 16 + data.len());
+
+        let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
+        assert_eq!(buffer.len(), 16 + data.len());
+    }
+
+    #[test]
+    fn ensure_queue_is_clear() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        assert!(mtproto.pop_queued_messages().is_none());
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+
+        assert!(mtproto.pop_queued_messages().is_some());
+        assert!(mtproto.pop_queued_messages().is_none());
+    }
+
+    #[test]
+    fn ensure_large_payload_errors() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
+            Err(EnqueueError::PayloadTooLarge) => true,
+            _ => false,
+        });
+
+        assert!(mtproto.pop_queued_messages().is_none());
+
+        // Make sure the queue is not in a broken state
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+
+        assert_eq!(
+            mtproto.pop_queued_messages().unwrap().len(),
+            20 + MESSAGE_PREFIX_LEN
+        );
+    }
+
+    #[test]
+    fn ensure_non_padded_payload_errors() {
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+
+        assert!(match mtproto.enqueue_request(vec![1, 2, 3]) {
+            Err(EnqueueError::IncorrectPadding) => true,
+            _ => false,
+        });
+
+        assert!(mtproto.pop_queued_messages().is_none());
+
+        // Make sure the queue is not in a broken state
+        mtproto
+            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
+            .unwrap();
+
+        assert_eq!(
+            mtproto.pop_queued_messages().unwrap().len(),
+            20 + MESSAGE_PREFIX_LEN
+        );
+    }
+
+    #[test]
+    fn ensure_no_compression_is_honored() {
+        // A large vector of null bytes should compress
+        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+        let buffer = mtproto.pop_queued_messages().unwrap();
+        assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+    }
+
+    #[test]
+    fn ensure_some_compression() {
+        // A large vector of null bytes should compress
+        {
+            // High threshold not reached, should not compress
+            let mut mtproto = MTProto::build()
+                .compression_threshold(Some(768 * 1024))
+                .finish();
+            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            let buffer = mtproto.pop_queued_messages().unwrap();
+            assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+        }
+        {
+            // Low threshold is exceeded, should compress
+            let mut mtproto = MTProto::build()
+                .compression_threshold(Some(256 * 1024))
+                .finish();
+            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            let buffer = mtproto.pop_queued_messages().unwrap();
+            assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+        }
+        {
+            // The default should compress
+            let mut mtproto = MTProto::new();
+            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            let buffer = mtproto.pop_queued_messages().unwrap();
+            assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+        }
     }
 }
