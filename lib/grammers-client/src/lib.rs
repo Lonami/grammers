@@ -1,6 +1,8 @@
-use grammers_mtsender::MTSender;
-use grammers_tl_types::{self as tl, Serializable, RPC};
 use std::io::{self, Result};
+
+use grammers_mtsender::MTSender;
+use grammers_session::Session;
+use grammers_tl_types::{self as tl, Serializable, RPC};
 
 // TODO handle PhoneMigrate
 const DC_4_ADDRESS: &'static str = "149.154.167.91:443";
@@ -49,9 +51,44 @@ impl IntoInput<tl::enums::InputPeer> for &str {
 
 impl Client {
     /// Returns a new client instance connected to Telegram and returns it.
+    ///
+    /// This method will generate a new authorization key and connect to a
+    /// default datacenter. To prevent logging in every single time, use
+    /// [`with_session`] instead, which will reuse a previous session.
     pub fn new() -> Result<Self> {
         let mut sender = MTSender::connect(DC_4_ADDRESS)?;
         sender.generate_auth_key()?;
+        Ok(Client { sender })
+    }
+
+    /// Configures a new client instance from an existing session and returns
+    /// it.
+    pub fn with_session(mut session: Box<dyn Session>) -> Result<Self> {
+        // TODO this doesn't look clean, and configuring the authkey
+        //      on the sender this way also seems a bit weird.
+        let auth_key;
+        let server_id;
+        let server_address;
+        if let Some((dc_id, dc_addr)) = session.get_user_datacenter() {
+            server_id = dc_id;
+            server_address = dc_addr;
+            auth_key = session.get_auth_key_data(dc_id);
+        } else {
+            server_id = 4;
+            server_address = DC_4_ADDRESS.parse().unwrap();
+            session.set_user_datacenter(server_id, &server_address);
+            auth_key = None;
+        }
+
+        let mut sender = MTSender::connect(server_address)?;
+        if let Some(auth_key) = auth_key {
+            sender.set_auth_key(auth_key);
+        } else {
+            let auth_key = sender.generate_auth_key()?;
+            session.set_auth_key_data(server_id, &auth_key.to_bytes());
+            session.save()?;
+        }
+
         Ok(Client { sender })
     }
 

@@ -45,6 +45,12 @@ impl AuthKey {
         }
     }
 
+    /// Converts the authorization key to a sequence of bytes, which can
+    /// be loaded back later.
+    pub fn to_bytes(&self) -> [u8; 256] {
+        self.data.clone()
+    }
+
     /// Calculates the new nonce hash based on the current attributes.
     pub fn calc_new_nonce_hash(&self, new_nonce: &[u8; 32], number: u8) -> [u8; 16] {
         let data = {

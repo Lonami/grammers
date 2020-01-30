@@ -98,7 +98,7 @@ impl MTSender {
     /// key that can be used to safely transmit data to and from the server.
     ///
     /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub fn generate_auth_key(&mut self) -> Result<()> {
+    pub fn generate_auth_key(&mut self) -> Result<AuthKey> {
         let (request, data) = auth_key::generation::step1()?;
         let response = self.invoke_plain_request(&request)?;
 
@@ -109,9 +109,14 @@ impl MTSender {
         let response = self.invoke_plain_request(&request)?;
 
         let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
-        self.protocol.set_auth_key(auth_key, time_offset);
+        self.protocol.set_auth_key(auth_key.clone(), time_offset);
 
-        Ok(())
+        Ok(auth_key)
+    }
+
+    /// Changes the authorization key data for a different one.
+    pub fn set_auth_key(&mut self, data: [u8; 256]) {
+        self.protocol.set_auth_key(AuthKey::from_bytes(data), 0);
     }
 
     /// Invoke a serialized request in plaintext.
@@ -133,17 +138,16 @@ impl MTSender {
         loop {
             // The protocol may generate more outgoing requests, so we need
             // to constantly check for those until we receive a response.
-            while let Some(payload) = self.protocol.pop_queue() {
-                let encrypted = self.protocol.encrypt_message_data(payload)?;
-                self.transport.send(&mut self.stream, &encrypted)?;
+            while let Some(payload) = self.protocol.serialize_encrypted_messages()? {
+                self.transport.send(&mut self.stream, &payload)?;
             }
 
             // Process all messages we receive.
             let response = self.receive_message()?;
-            self.protocol.process_response(&response)?;
+            self.protocol.process_encrypted_response(&response)?;
 
             // See if there are responses to our request.
-            while let Some((response_id, data)) = self.protocol.pop_response() {
+            while let Some((response_id, data)) = self.protocol.poll_response() {
                 if response_id == msg_id {
                     match data {
                         Ok(x) => {

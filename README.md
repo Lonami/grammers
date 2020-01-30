@@ -11,6 +11,7 @@ The following libraries can be used to work with Telegram in some way:
 * **[grammers-crypto]**: cryptography-related methods.
 * **[grammers-mtproto]**: implementation of the [Mobile Transport Protocol].
 * **[grammers-mtsender]**: network connection to Telegram.
+* **[grammers-session]**: session storages for the client.
 * **[grammers-tl-parser]**: a [Type Language] parser.
 * **[grammers-tl-types]**: generated Rust types for a certain layer.
 
@@ -20,5 +21,6 @@ The following libraries can be used to work with Telegram in some way:
 [grammers-crypto]: lib/grammers-crypto/
 [grammers-mtproto]: lib/grammers-mtproto/
 [grammers-mtsender]: lib/grammers-mtsender/
+[grammers-session]: lib/grammers-session/
 [grammers-tl-parser]: lib/grammers-tl-parser/
 [grammers-tl-types]: lib/grammers-tl-types/

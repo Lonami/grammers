@@ -11,6 +11,7 @@
 //! ```
 
 use grammers_client::Client;
+use grammers_session::TextSession;
 use std::env;
 use std::io::Result;
 
@@ -28,8 +29,15 @@ fn main() -> Result<()> {
     let username = args.next().expect("username missing");
     let message = args.next().expect("message missing");
 
+    // Try loading a previous session, or create a new one otherwise.
+    let session = Box::new(if let Ok(session) = TextSession::load(&"hello.session") {
+        session
+    } else {
+        TextSession::create("hello.session")?
+    });
+
     println!("Connecting to Telegram...");
-    let mut client = Client::new()?;
+    let mut client = Client::with_session(session)?;
     println!("Connected!");
 
     println!("Initializing connection...");

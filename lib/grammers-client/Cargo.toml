@@ -6,4 +6,5 @@ edition = "2018"
 
 [dependencies]
 grammers-mtsender = "0.1.0"
+grammers-session = "0.1.0"
 grammers-tl-types = "0.1.0"
