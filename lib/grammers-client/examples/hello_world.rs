@@ -40,10 +40,6 @@ fn main() -> Result<()> {
     let mut client = Client::with_session(session)?;
     println!("Connected!");
 
-    println!("Initializing connection...");
-    client.init_connection()?;
-    println!("Connection initialized!");
-
     println!("Signing in...");
     client.bot_sign_in(&token, api_id, &api_hash)?;
     println!("Signed in!");

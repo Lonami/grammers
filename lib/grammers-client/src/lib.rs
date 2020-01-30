@@ -58,7 +58,7 @@ impl Client {
     pub fn new() -> Result<Self> {
         let mut sender = MTSender::connect(DC_4_ADDRESS)?;
         sender.generate_auth_key()?;
-        Ok(Client { sender })
+        Self::with_sender(sender)
     }
 
     /// Configures a new client instance from an existing session and returns
@@ -76,8 +76,9 @@ impl Client {
         } else {
             server_id = 4;
             server_address = DC_4_ADDRESS.parse().unwrap();
-            session.set_user_datacenter(server_id, &server_address);
             auth_key = None;
+            session.set_user_datacenter(server_id, &server_address);
+            session.save()?;
         }
 
         let mut sender = MTSender::connect(server_address)?;
@@ -89,7 +90,14 @@ impl Client {
             session.save()?;
         }
 
-        Ok(Client { sender })
+        Self::with_sender(sender)
+    }
+
+    /// Creates a client instance with a sender
+    fn with_sender(sender: MTSender) -> Result<Self> {
+        let mut client = Client { sender };
+        client.init_connection()?;
+        Ok(client)
     }
 
     /// Signs in to the bot account associated with this token.
@@ -159,14 +167,13 @@ impl Client {
         Ok(())
     }
 
-    // TODO make private and move to new() once it works
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
-    pub fn init_connection(&mut self) -> Result<()> {
-        // TODO add layer to tl, and then use that
+    fn init_connection(&mut self) -> Result<()> {
+        // TODO store config
         self.invoke(&tl::functions::InvokeWithLayer {
-            layer: 109,
+            layer: tl::LAYER,
             query: tl::functions::InitConnection {
                 api_id: 6,
                 device_model: "Linux".into(),
