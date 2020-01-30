@@ -1,5 +1,32 @@
+//! Contains the steps required to generate an authorization key.
+//!
+//! # Examples
+//!
+//! ```no_run
+//! use std::io::Result;
+//! use grammers_crypto::auth_key;
+//!
+//! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>> {
+//!     unimplemented!()
+//! }
+//! 
+//! fn main() -> Result<()> {
+//!     let (request, data) = auth_key::generation::step1()?;
+//!     let response = send_data_to_server(&request)?;
+//!
+//!     let (request, data) = auth_key::generation::step2(data, response)?;
+//!     let response = send_data_to_server(&request)?;
+//!
+//!     let (request, data) = auth_key::generation::step3(data, response)?;
+//!     let response = send_data_to_server(&request)?;
+//!
+//!     let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
+//!     // Now you have a secure `auth_key` to send encrypted messages to server.
+//!     Ok(())
+//! }
+//! ```
 use getrandom::getrandom;
-use grammers_crypto::{self, AuthKey};
+use crate::AuthKey;
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 use num::bigint::{BigUint, ToBigUint};
 use num::integer::Integer;
@@ -376,10 +403,10 @@ fn do_step3(
     }
 
     // Complete DH Exchange
-    let (key, iv) = grammers_crypto::generate_key_data_from_nonce(&server_nonce, &new_nonce);
+    let (key, iv) = crate::generate_key_data_from_nonce(&server_nonce, &new_nonce);
 
     let plain_text_answer =
-        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
+        crate::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
 
     // TODO validate this hashsum
     let _hashsum = &plain_text_answer[..20];
@@ -469,7 +496,7 @@ fn do_step3(
         buffer
     };
 
-    let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
+    let client_dh_encrypted = crate::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
 
     Ok((
         tl::functions::SetClientDHParams {

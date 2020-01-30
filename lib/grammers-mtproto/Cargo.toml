@@ -9,12 +9,8 @@ crc = "1.8.1"
 getrandom = "0.1.14"
 grammers-crypto = "0.1.0"
 flate2 = "1.0.13"
-sha1 = "0.6.0"
-
-[dependencies.num]
-version = "0.2.1"
-features = ["num-bigint"]
 
 [dependencies.grammers-tl-types]
 version = "0.1.0"
+default-features = false
 features = ["tl-mtproto"]

@@ -1,3 +1,5 @@
+pub mod generation;
+
 use openssl::sha::sha1;
 use std::fmt;
 
@@ -16,7 +18,11 @@ impl PartialEq for AuthKey {
 
 /// Represents a Telegram's [authorization key].
 ///
+/// To generate a new, valid authorization key, one should use the methods
+/// provided by the [`generation`] module.
+///
 /// [authorization key]: https://core.telegram.org/mtproto/auth_key
+/// [`generation`]: generation.html
 impl AuthKey {
     /// Creates a new authorization key from the given binary data.
     pub fn from_bytes(data: [u8; 256]) -> Self {
