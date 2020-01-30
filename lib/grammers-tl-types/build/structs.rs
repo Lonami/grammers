@@ -3,7 +3,8 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier::{
-    rusty_attr_name, rusty_class_name, rusty_type, rusty_type_name, rusty_type_path,
+    rusty_attr_name, rusty_class_name, rusty_namespaced_class_name, rusty_namespaced_type_name,
+    rusty_type, rusty_type_name, rusty_type_path,
 };
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
@@ -15,7 +16,12 @@ use std::io::{self, Write};
 ///     pub field: Type,
 /// }
 /// ```
-fn write_struct<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+fn write_struct<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+) -> io::Result<()> {
     // Define struct
     if cfg!(feature = "impl-debug") {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
@@ -54,7 +60,12 @@ fn write_struct<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::R
 ///     fn constructor_id() -> u32 { 123 }
 /// }
 /// ```
-fn write_identifiable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+fn write_identifiable<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Identifiable for {} {{",
@@ -80,7 +91,12 @@ fn write_identifiable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
 ///     }
 /// }
 /// ```
-fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+fn write_serializable<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Serializable for {} {{",
@@ -185,7 +201,12 @@ fn write_serializable<W: Write>(file: &mut W, indent: &str, def: &Definition) ->
 ///     }
 /// }
 /// ```
-fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+fn write_deserializable<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Deserializable for {} {{",
@@ -294,7 +315,12 @@ fn write_deserializable<W: Write>(file: &mut W, indent: &str, def: &Definition) 
 ///     type Return = Name;
 /// }
 /// ```
-fn write_rpc<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
+fn write_rpc<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::RPC for {} {{",
@@ -306,16 +332,91 @@ fn write_rpc<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Resu
     Ok(())
 }
 
+/// Defines the `impl TryFrom` corresponding to the definition:
+///
+/// ```
+/// impl impl TryFrom<Enum> for Name {
+///     type Error = crate::errors::WrongVariant;
+/// }
+/// ```
+fn write_impl_from<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    metadata: &Metadata,
+) -> io::Result<()> {
+    let infallible = metadata.defs_with_type(&def.ty).len() == 1;
+
+    writeln!(
+        file,
+        "{}impl {}From<{}> for {} {{",
+        indent,
+        if infallible { "" } else { "Try" },
+        rusty_namespaced_class_name(&def.ty),
+        rusty_namespaced_type_name(&def),
+    )?;
+    if !infallible {
+        writeln!(
+            file,
+            "{}    type Error = crate::errors::WrongVariant;",
+            indent
+        )?;
+    }
+    writeln!(
+        file,
+        "{}    fn {try_}from(x: {cls}) -> {result}Self{error} {{",
+        indent,
+        try_ = if infallible { "" } else { "try_" },
+        cls = rusty_namespaced_class_name(&def.ty),
+        result = if infallible { "" } else { "Result<" },
+        error = if infallible { "" } else { ", Self::Error>" },
+    )?;
+    writeln!(file, "{}        match x {{", indent)?;
+    writeln!(
+        file,
+        "{}            {cls}::{name}(x) => {ok}{deref}x{paren},",
+        indent,
+        cls = rusty_namespaced_class_name(&def.ty),
+        name = rusty_class_name(&def.name),
+        ok = if infallible { "" } else { "Ok(" },
+        deref = if metadata.is_recursive_def(def) {
+            "*"
+        } else {
+            ""
+        },
+        paren = if infallible { "" } else { ")" },
+    )?;
+    if !infallible {
+        writeln!(
+            file,
+            "{}            _ => Err(crate::errors::WrongVariant)",
+            indent
+        )?;
+    }
+    writeln!(file, "{}        }}", indent)?;
+    writeln!(file, "{}    }}", indent)?;
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
 /// Writes an entire definition as Rust code (`struct` and `impl`).
-fn write_definition<W: Write>(file: &mut W, indent: &str, def: &Definition) -> io::Result<()> {
-    write_struct(file, indent, def)?;
-    write_identifiable(file, indent, def)?;
-    write_serializable(file, indent, def)?;
+fn write_definition<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    metadata: &Metadata,
+) -> io::Result<()> {
+    write_struct(file, indent, def, metadata)?;
+    write_identifiable(file, indent, def, metadata)?;
+    write_serializable(file, indent, def, metadata)?;
     if def.category == Category::Types || cfg!(feature = "deserializable-functions") {
-        write_deserializable(file, indent, def)?;
+        write_deserializable(file, indent, def, metadata)?;
     }
     if def.category == Category::Functions {
-        write_rpc(file, indent, def)?;
+        write_rpc(file, indent, def, metadata)?;
+    }
+    if def.category == Category::Types && cfg!(feature = "impl-from-enum") {
+        write_impl_from(file, indent, def, metadata)?;
     }
     Ok(())
 }
@@ -325,7 +426,7 @@ pub(crate) fn write_category_mod<W: Write>(
     mut file: &mut W,
     category: Category,
     definitions: &Vec<Definition>,
-    _metadata: &Metadata,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     // Begin outermost mod
     match category {
@@ -373,11 +474,14 @@ pub(crate) fn write_category_mod<W: Write>(
         };
 
         if category == Category::Types && cfg!(feature = "impl-from-enum") {
-            writeln!(file, "use std::convert::TryFrom;")?;
+            // If all of the conversions are infallible this will be unused.
+            // Don't bother checking this beforehand, just allow warnings.
+            writeln!(file, "{}#[allow(unused_imports)]", indent)?;
+            writeln!(file, "{}use std::convert::TryFrom;", indent)?;
         }
 
         for definition in grouped[key].iter() {
-            write_definition(&mut file, indent, definition)?;
+            write_definition(&mut file, indent, definition, metadata)?;
         }
 
         // End possibly inner mod

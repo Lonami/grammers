@@ -9,9 +9,11 @@ build = "build/main.rs"
 grammers-tl-parser = "1.0.0"
 
 [features]
-default = ["tl-api", "impl-debug"]
+default = ["tl-api", "impl-debug", "impl-from-type", "impl-from-enum"]
 
 tl-api = []
 tl-mtproto = []
 deserializable-functions = []
 impl-debug = []
+impl-from-type = []
+impl-from-enum = []

@@ -34,3 +34,19 @@ impl fmt::Display for UnexpectedConstructor {
         write!(f, "unexpected constructor: {:08x}", self.id)
     }
 }
+
+/// The error type indicating the enumeration is representing a different
+/// variant (which is "wrong") and cannot be converted into the desired type.
+#[derive(Debug)]
+#[cfg(feature = "impl-from-enum")]
+pub struct WrongVariant;
+
+#[cfg(feature = "impl-from-enum")]
+impl Error for WrongVariant {}
+
+#[cfg(feature = "impl-from-enum")]
+impl fmt::Display for WrongVariant {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "enum has a different variant than the requested")
+    }
+}

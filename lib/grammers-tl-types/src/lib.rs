@@ -12,6 +12,9 @@
 //! The default feature set includes:
 //!
 //! * `tl-api`.
+//! * `impl-debug`.
+//! * `impl-from-type`.
+//! * `impl-from-enum`.
 //!
 //! The available features are:
 //!
@@ -25,6 +28,10 @@
 //!   [`functions`]. This might be of interest for server implementations,
 //!   which need to deserialize the client's requests, but is otherwise not
 //!   required.
+//!
+//! * `impl-debug`: implements `Debug` for the generated code.
+//! * `impl-from-type`: implements `From<Type> for Enum`.
+//! * `impl-from-enum`: implements `TryFrom<Enum> for Type`.
 //!
 //! [`types`]: types/index.html
 //! [`functions`]: functions/index.html
