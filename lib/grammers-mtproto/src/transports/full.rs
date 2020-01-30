@@ -5,6 +5,10 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 /// The basic MTProto transport protocol. This is an implementation of the
 /// [full transport].
 ///
+/// * Overhead: medium
+/// * Minimum envelope length: 12 bytes.
+/// * Maximum envelope length: 12 bytes.
+///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
 pub struct TransportFull {
     send_counter: u32,

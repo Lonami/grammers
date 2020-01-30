@@ -4,6 +4,10 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
 ///
+/// * Overhead: small.
+/// * Minimum envelope length: 4 bytes.
+/// * Maximum envelope length: 4 bytes.
+///
 /// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
 pub struct TransportIntermediate;
 

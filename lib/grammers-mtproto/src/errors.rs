@@ -1,10 +1,10 @@
-//! This module contains all the custom errors used by the library.
+//! Errors that can occur when using the library's functions.
 
 use std::error::Error;
 use std::fmt;
 use std::io;
 
-/// This error that occurs while enqueueing requests.
+/// The error type for enqueueing requests.
 #[derive(Debug)]
 pub enum EnqueueError {
     /// The request payload is too large and cannot possibly be sent.
@@ -32,7 +32,7 @@ impl From<EnqueueError> for io::Error {
     }
 }
 
-/// This error occurs while deserializing server messages.
+/// The error type for the deserialization of server messages.
 #[derive(Debug)]
 pub enum DeserializeError {
     /// The server's authorization key did not match our expectations.
@@ -47,8 +47,19 @@ pub enum DeserializeError {
     /// The server's message length was past the buffer.
     TooLongMessageLength { got: usize, max_length: usize },
 
-    /// The server returned a negative HTTP error code and not a message.
-    HTTPErrorCode { code: i32 },
+    /// The error occured at the [transport level], making it impossible to
+    /// deserialize any data. The absolute value indicates the HTTP error
+    /// code. Some known, possible codes are:
+    ///
+    /// * 404, if the authorization key used was not found, meaning that the
+    ///   server is not aware of the key used by the client, so it cannot be
+    ///   used to securely communicate with it.
+    ///
+    /// * 429, if too many transport connections are established to the same
+    ///   IP address in a too-short lapse of time.
+    ///
+    /// [transport level]: https://core.telegram.org/mtproto/mtproto-transports#transport-errors
+    TransportError { code: i32 },
 
     /// The received buffer is too small to contain a valid response message.
     MessageBufferTooSmall,
@@ -76,8 +87,8 @@ impl fmt::Display for DeserializeError {
                 "bad server message length (got {}, when at most it should be {})",
                 got, max_length
             ),
-            Self::HTTPErrorCode { code } => {
-                write!(f, "server responded with negative http status: {}", code)
+            Self::TransportError { code } => {
+                write!(f, "transpot-level error, http status code: {}", code.abs())
             }
             Self::MessageBufferTooSmall => write!(
                 f,

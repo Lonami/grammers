@@ -1,4 +1,11 @@
-pub mod auth_key;
+//! This library is an implementation of the [Mobile Transport Protocol].
+//!
+//! It is capable of efficiently packing enqueued requests into message
+//! containers to later be encrypted and transmitted, and processing the
+//! server responses to maintain a correct state.
+//!
+//! [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+pub mod auth_key_gen;
 pub mod errors;
 mod manual_tl;
 pub mod transports;
@@ -16,13 +23,20 @@ use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
 /// The default compression threshold to be used.
 pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 
-/// A builder to configure `MTProto` instances.
+/// A builder to configure [`MTProto`] instances.
+///
+/// Use the [`MTProto::build`] method to create builder instances.
+///
+/// [`MTProto`]: struct.mtproto.html
+/// [`MTProto::build`]: fn.mtproto.build.html
 pub struct MTProtoBuilder {
     compression_threshold: Option<usize>,
     auth_key: Option<AuthKey>,
 }
 
-/// This structure holds everything needed by the Mobile Transport Protocol.
+/// This structure holds the state needed by the [Mobile Transport Protocol].
+///
+/// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub struct MTProto {
     /// The authorization key to use to encrypt payload.
     auth_key: Option<AuthKey>,
@@ -58,6 +72,7 @@ pub struct MTProto {
 }
 
 /// This error occurs when a Remote Procedure call was unsuccessful.
+///
 /// The request should be retransmited when this happens, unless the
 /// variant is `InvalidParameters`.
 pub enum RequestError {
@@ -70,6 +85,13 @@ pub enum RequestError {
     Other,
 }
 
+/// A Message Identifier.
+///
+/// When requests are enqueued, a new associated message identifier is
+/// returned. As server responses get processed, some of them will be a
+/// response to a previous request. You can now  `pop_response` to get
+/// all the server responses, and if one matches your original identifier,
+/// you will know the response corresponds to it.
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub struct MsgId(i64);
 
@@ -358,7 +380,7 @@ impl MTProto {
             // Probably a negative HTTP error code
             Err(io::Error::new(
                 io::ErrorKind::InvalidData,
-                DeserializeError::HTTPErrorCode {
+                DeserializeError::TransportError {
                     // Safe to unwrap because we just checked the length
                     code: i32::from_bytes(message).unwrap(),
                 },

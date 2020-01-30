@@ -4,6 +4,10 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
 ///
+/// * Overhead: very small.
+/// * Minimum envelope length: 1 byte.
+/// * Maximum envelope length: 4 bytes.
+///
 /// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
 pub struct TransportAbridged;
 

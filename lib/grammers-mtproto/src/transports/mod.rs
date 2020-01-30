@@ -46,7 +46,9 @@ impl fmt::Display for InvalidCrc32 {
     }
 }
 
-/// Anything implementing this trait can be used as a transport.
+/// The trait used by [MTProto transports].
+///
+/// [MTProto transports]: index.html
 pub trait Transport {
     /// The maximum data that can be received in a single packet.
     /// Anything bigger than this will result in an error to avoid attacks.
