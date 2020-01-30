@@ -1,4 +1,6 @@
 pub mod auth_key;
+mod factorize;
+mod rsa;
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use openssl::aes::{aes_ige, AesKey};
