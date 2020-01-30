@@ -5,7 +5,6 @@
 //! server responses to maintain a correct state.
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto
-pub mod auth_key_gen;
 pub mod errors;
 mod manual_tl;
 pub mod transports;

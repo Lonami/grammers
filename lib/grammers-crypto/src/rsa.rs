@@ -1,4 +1,3 @@
-
 use num::bigint::BigUint;
 use sha1::Sha1;
 

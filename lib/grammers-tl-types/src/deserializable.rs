@@ -19,7 +19,7 @@ pub trait Deserializable {
     ///
     /// ```
     /// use grammers_tl_types::Deserializable;
-    /// 
+    ///
     /// assert_eq!(bool::deserialize(&[0xb5, 0x75, 0x72, 0x99][..]), Ok(true));
     /// ```
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self>
@@ -32,7 +32,7 @@ pub trait Deserializable {
     ///
     /// ```
     /// use grammers_tl_types::Deserializable;
-    /// 
+    ///
     /// assert_eq!(bool::from_bytes(&[0x37, 0x97, 0x79, 0xbc]), Ok(false));
     /// ```
     fn from_bytes(buf: &[u8]) -> Result<Self>

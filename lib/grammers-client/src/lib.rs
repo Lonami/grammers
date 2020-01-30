@@ -128,7 +128,7 @@ impl Client {
     /// very old one will be used (which we will fail to understand).
     pub fn init_connection(&mut self) -> Result<()> {
         // TODO add layer to tl, and then use that
-        let got = self.invoke(&tl::functions::InvokeWithLayer {
+        self.invoke(&tl::functions::InvokeWithLayer {
             layer: 109,
             query: tl::functions::InitConnection {
                 api_id: 6,

@@ -9,7 +9,7 @@
 //! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>> {
 //!     unimplemented!()
 //! }
-//! 
+//!
 //! fn main() -> Result<()> {
 //!     let (request, data) = auth_key::generation::step1()?;
 //!     let response = send_data_to_server(&request)?;
@@ -35,7 +35,7 @@ use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 use num::bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
-use crate::{AuthKey, factorize::factorize, rsa};
+use crate::{factorize::factorize, rsa, AuthKey};
 
 /// Represents an error that occured during the generation of an
 /// authorization key.
@@ -405,8 +405,7 @@ fn do_step3(
     // Complete DH Exchange
     let (key, iv) = crate::generate_key_data_from_nonce(&server_nonce, &new_nonce);
 
-    let plain_text_answer =
-        crate::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
+    let plain_text_answer = crate::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
 
     // TODO validate this hashsum
     let _hashsum = &plain_text_answer[..20];

@@ -1,7 +1,7 @@
-use grammers_crypto::AuthKey;
+use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::transports::{Transport, TransportFull};
 pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
-use grammers_mtproto::{auth_key, MTProto, RequestError};
+use grammers_mtproto::{MTProto, RequestError};
 use grammers_tl_types::{Deserializable, RPC};
 
 use std::io::{self, Result};
