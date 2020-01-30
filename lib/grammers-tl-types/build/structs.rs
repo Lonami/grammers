@@ -1,6 +1,7 @@
 //! Code to generate Rust's `struct`'s from TL definitions.
 
 use crate::grouper;
+use crate::metadata::Metadata;
 use crate::rustifier::{
     rusty_attr_name, rusty_class_name, rusty_type, rusty_type_name, rusty_type_path,
 };
@@ -324,6 +325,7 @@ pub(crate) fn write_category_mod<W: Write>(
     mut file: &mut W,
     category: Category,
     definitions: &Vec<Definition>,
+    _metadata: &Metadata,
 ) -> io::Result<()> {
     // Begin outermost mod
     match category {
@@ -369,6 +371,10 @@ pub(crate) fn write_category_mod<W: Write>(
             writeln!(file, "    pub mod {} {{", key)?;
             "        "
         };
+
+        if category == Category::Types && cfg!(feature = "impl-from-enum") {
+            writeln!(file, "use std::convert::TryFrom;")?;
+        }
 
         for definition in grouped[key].iter() {
             write_definition(&mut file, indent, definition)?;

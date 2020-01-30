@@ -1,8 +1,9 @@
 //! Code to generate Rust's `enum`'s from TL definitions.
 
 use crate::grouper;
+use crate::metadata::Metadata;
 use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name};
-use grammers_tl_parser::tl::{Category, Definition, ParameterType};
+use grammers_tl_parser::tl::{Category, Definition};
 use std::io::{self, Write};
 
 /// Writes an enumeration listing all types such as the following rust code:
@@ -17,6 +18,7 @@ fn write_enum<W: Write>(
     indent: &str,
     name: &str,
     type_defs: &Vec<&Definition>,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     if cfg!(feature = "impl-debug") {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
@@ -26,18 +28,11 @@ fn write_enum<W: Write>(
     for d in type_defs.iter() {
         write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
 
-        // Check if this type immediately recurses. If it does, box it.
-        // There are no types with indirect recursion, so this works well.
-        let recurses = d.params.iter().any(|p| match &p.ty {
-            ParameterType::Flags => false,
-            ParameterType::Normal { ty, .. } => ty.name == name,
-        });
-
-        if recurses {
+        if metadata.is_recursive_def(d) {
             write!(file, "Box<")?;
         }
         write!(file, "{}", rusty_namespaced_type_name(&d))?;
-        if recurses {
+        if metadata.is_recursive_def(d) {
             write!(file, ">")?;
         }
 
@@ -67,6 +62,7 @@ fn write_serializable<W: Write>(
     indent: &str,
     name: &str,
     type_defs: &Vec<&Definition>,
+    _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
         file,
@@ -126,6 +122,7 @@ fn write_deserializable<W: Write>(
     indent: &str,
     name: &str,
     type_defs: &Vec<&Definition>,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
         file,
@@ -150,13 +147,7 @@ fn write_deserializable<W: Write>(
             rusty_class_name(&d.name),
         )?;
 
-        // TODO this is somewhat expensive (and we're doing it twice)
-        let recurses = d.params.iter().any(|p| match &p.ty {
-            ParameterType::Flags => false,
-            ParameterType::Normal { ty, .. } => ty.name == name,
-        });
-
-        if recurses {
+        if metadata.is_recursive_def(d) {
             write!(file, "Box::new(")?;
         }
         write!(
@@ -164,7 +155,7 @@ fn write_deserializable<W: Write>(
             "{}::deserialize(buf)?",
             rusty_namespaced_type_name(&d)
         )?;
-        if recurses {
+        if metadata.is_recursive_def(d) {
             write!(file, ")")?;
         }
         writeln!(file, "),")?;
@@ -187,10 +178,12 @@ fn write_definition<W: Write>(
     indent: &str,
     name: &str,
     type_defs: &Vec<&Definition>,
+    metadata: &Metadata,
 ) -> io::Result<()> {
-    write_enum(file, indent, name, type_defs)?;
-    write_serializable(file, indent, name, type_defs)?;
-    write_deserializable(file, indent, name, type_defs)?;
+    // TODO move type_defs into metadata
+    write_enum(file, indent, name, type_defs, metadata)?;
+    write_serializable(file, indent, name, type_defs, metadata)?;
+    write_deserializable(file, indent, name, type_defs, metadata)?;
     Ok(())
 }
 
@@ -198,6 +191,7 @@ fn write_definition<W: Write>(
 pub(crate) fn write_enums_mod<W: Write>(
     mut file: &mut W,
     definitions: &Vec<Definition>,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     // Begin outermost mod
     write!(
@@ -214,7 +208,6 @@ pub(crate) fn write_enums_mod<W: Write>(
     )?;
 
     let grouped = grouper::group_types_by_ns(definitions);
-    dbg!(&grouped);
     let mut sorted_keys: Vec<&Option<String>> = grouped.keys().collect();
     sorted_keys.sort();
     for key in sorted_keys.into_iter() {
@@ -237,7 +230,7 @@ pub(crate) fn write_enums_mod<W: Write>(
                 .collect();
 
             assert!(!type_defs.is_empty(), "type defs should not be empty");
-            write_definition(&mut file, indent, name, &type_defs)?;
+            write_definition(&mut file, indent, name, &type_defs, metadata)?;
         }
 
         // End possibly inner mod

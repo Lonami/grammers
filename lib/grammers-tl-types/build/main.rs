@@ -3,6 +3,7 @@
 mod enums;
 mod grouper;
 mod loader;
+mod metadata;
 mod rustifier;
 mod structs;
 
@@ -37,9 +38,11 @@ fn main() -> std::io::Result<()> {
          ",
         layer
     )?;
-    structs::write_category_mod(&mut file, Category::Types, &definitions)?;
-    structs::write_category_mod(&mut file, Category::Functions, &definitions)?;
-    enums::write_enums_mod(&mut file, &definitions)?;
+
+    let metadata = metadata::Metadata::new(&definitions);
+    structs::write_category_mod(&mut file, Category::Types, &definitions, &metadata)?;
+    structs::write_category_mod(&mut file, Category::Functions, &definitions, &metadata)?;
+    enums::write_enums_mod(&mut file, &definitions, &metadata)?;
 
     file.flush()?;
 
