@@ -11,6 +11,11 @@ use std::fs::File;
 use std::io::{BufWriter, Write};
 
 fn main() -> std::io::Result<()> {
+    let layer = match loader::find_layer("tl/api.tl")? {
+        Some(x) => x,
+        None => panic!("no layer information found in api.tl"),
+    };
+
     let definitions = {
         let mut definitions = Vec::new();
         if cfg!(feature = "tl-api") {
@@ -24,6 +29,14 @@ fn main() -> std::io::Result<()> {
 
     let mut file = BufWriter::new(File::create("src/generated.rs")?);
 
+    writeln!(
+        file,
+        "\
+         /// The schema layer from which the definitions were generated.\n\
+         pub const LAYER: i32 = {};\n\
+         ",
+        layer
+    )?;
     structs::write_category_mod(&mut file, Category::Types, &definitions)?;
     structs::write_category_mod(&mut file, Category::Functions, &definitions)?;
     enums::write_enums_mod(&mut file, &definitions)?;

@@ -36,7 +36,7 @@ mod generated;
 mod serializable;
 
 pub use deserializable::Deserializable;
-pub use generated::{enums, functions, types};
+pub use generated::{enums, functions, types, LAYER};
 pub use serializable::Serializable;
 
 /// This struct represents the concrete type of a vector, that is,

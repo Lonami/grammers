@@ -200,17 +200,17 @@ pub(crate) fn write_enums_mod<W: Write>(
     definitions: &Vec<Definition>,
 ) -> io::Result<()> {
     // Begin outermost mod
-    writeln!(
+    write!(
         file,
         "\
-    /// This module contains all of the boxed types, each\n\
-    /// represented by a `enum`. All of them implement\n\
-    /// [`Serializable`] and [`Deserializable`].\n\
-    ///\n\
-    /// [`Serializable`]: /grammers_tl_types/trait.Serializable.html\n\
-    /// [`Deserializable`]: /grammers_tl_types/trait.Deserializable.html\n\
-    pub mod enums {{
-    "
+         /// This module contains all of the boxed types, each\n\
+         /// represented by a `enum`. All of them implement\n\
+         /// [`Serializable`] and [`Deserializable`].\n\
+         ///\n\
+         /// [`Serializable`]: /grammers_tl_types/trait.Serializable.html\n\
+         /// [`Deserializable`]: /grammers_tl_types/trait.Deserializable.html\n\
+         pub mod enums {{\n\
+         "
     )?;
 
     let grouped = grouper::group_types_by_ns(definitions);
