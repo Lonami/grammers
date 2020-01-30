@@ -172,6 +172,56 @@ fn write_deserializable<W: Write>(
     Ok(())
 }
 
+/// Defines the `impl From` corresponding to the definition:
+///
+/// ```
+/// impl impl From<Name> for Enum {
+/// }
+/// ```
+fn write_impl_from<W: Write>(
+    file: &mut W,
+    indent: &str,
+    name: &str,
+    type_defs: &Vec<&Definition>,
+    metadata: &Metadata,
+) -> io::Result<()> {
+    for def in type_defs.iter() {
+        writeln!(
+            file,
+            "{}impl From<{}> for {} {{",
+            indent,
+            rusty_namespaced_type_name(&def),
+            rusty_class_name(name),
+        )?;
+        writeln!(
+            file,
+            "{}    fn from(x: {}) -> Self {{",
+            indent,
+            rusty_namespaced_type_name(&def),
+        )?;
+        writeln!(
+            file,
+            "{}        {cls}::{variant}({box_}x{paren})",
+            indent,
+            cls = rusty_class_name(name),
+            box_ = if metadata.is_recursive_def(def) {
+                "Box::new("
+            } else {
+                ""
+            },
+            variant = rusty_class_name(&def.name),
+            paren = if metadata.is_recursive_def(def) {
+                ")"
+            } else {
+                ""
+            },
+        )?;
+        writeln!(file, "{}    }}", indent)?;
+        writeln!(file, "{}}}", indent)?;
+    }
+    Ok(())
+}
+
 /// Writes an entire definition as Rust code (`enum` and `impl`).
 fn write_definition<W: Write>(
     file: &mut W,
@@ -184,6 +234,9 @@ fn write_definition<W: Write>(
     write_enum(file, indent, name, type_defs, metadata)?;
     write_serializable(file, indent, name, type_defs, metadata)?;
     write_deserializable(file, indent, name, type_defs, metadata)?;
+    if cfg!(feature = "impl-from-type") {
+        write_impl_from(file, indent, name, type_defs, metadata)?;
+    }
     Ok(())
 }
 
