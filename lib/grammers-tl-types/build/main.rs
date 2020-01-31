@@ -16,8 +16,10 @@ mod rustifier;
 mod structs;
 
 use grammers_tl_parser::tl::Category;
+use std::env;
 use std::fs::File;
 use std::io::{BufWriter, Write};
+use std::path::Path;
 
 fn main() -> std::io::Result<()> {
     let layer = match loader::find_layer("tl/api.tl")? {
@@ -36,7 +38,9 @@ fn main() -> std::io::Result<()> {
         definitions
     };
 
-    let mut file = BufWriter::new(File::create("src/generated.rs")?);
+    let mut file = BufWriter::new(File::create(
+        Path::new(&env::var("OUT_DIR").unwrap()).join("generated.rs"),
+    )?);
 
     writeln!(
         file,

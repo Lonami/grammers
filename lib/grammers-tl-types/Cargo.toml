@@ -13,6 +13,11 @@ keywords = ["telegram", "tl"]
 categories = ["data-structures", "encoding"]
 edition = "2018"
 build = "build/main.rs"
+include = [
+    "build/*.rs",
+    "src/*.rs",
+    "tl/*.tl",
+]
 
 [build-dependencies]
 grammers-tl-parser = "1.0.0"
