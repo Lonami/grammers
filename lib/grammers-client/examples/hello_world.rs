@@ -40,9 +40,11 @@ fn main() -> Result<()> {
     let mut client = Client::with_session(session)?;
     println!("Connected!");
 
-    println!("Signing in...");
-    client.bot_sign_in(&token, api_id, &api_hash)?;
-    println!("Signed in!");
+    if !client.is_authorized()? {
+        println!("Signing in...");
+        client.bot_sign_in(&token, api_id, &api_hash)?;
+        println!("Signed in!");
+    }
 
     println!("Sending message...");
     client.send_message(&username[..], &message)?;

@@ -1,4 +1,5 @@
 use std::io;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 use grammers_mtsender::{MTSender, RequestResult};
 use grammers_session::Session;
@@ -47,6 +48,14 @@ impl IntoInput<tl::enums::InputPeer> for &str {
             ))
         }
     }
+}
+
+/// Generate a random message ID suitable for `send_message`.
+fn generate_random_message_id() -> i64 {
+    SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time is before epoch")
+        .as_nanos() as i64
 }
 
 impl Client {
@@ -98,6 +107,15 @@ impl Client {
         let mut client = Client { sender };
         client.init_connection()?;
         Ok(client)
+    }
+
+    /// Returns `true` if the current account is authorized. Otherwise,
+    /// logging in will be required before being able to invoke requests.
+    pub fn is_authorized(&mut self) -> io::Result<bool> {
+        match self.invoke(&tl::functions::updates::GetState {})? {
+            Ok(_) => Ok(true),
+            Err(_) => Ok(false),
+        }
     }
 
     /// Signs in to the bot account associated with this token.
@@ -159,7 +177,7 @@ impl Client {
             peer: chat,
             reply_to_msg_id: None,
             message: message.into(),
-            random_id: 1337,
+            random_id: generate_random_message_id(),
             reply_markup: None,
             entities: None,
             schedule_date: None,
