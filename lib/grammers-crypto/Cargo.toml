@@ -3,6 +3,14 @@ name = "grammers-crypto"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
+description = """
+Several cryptographic utilities to work with Telegram's data.
+"""
+homepage = "https://github.com/Lonami/grammers"
+documentation = "https://docs.rs/grammers-crypto"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+categories = ["cryptography"]
 edition = "2018"
 
 [dependencies]

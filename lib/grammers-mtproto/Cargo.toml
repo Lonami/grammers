@@ -3,6 +3,14 @@ name = "grammers-mtproto"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
+description = """
+An implementation of the Mobile Transport Protocol.
+"""
+homepage = "https://github.com/Lonami/grammers"
+documentation = "https://docs.rs/grammers-mtproto"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["mtproto", "telegram", "tl"]
+categories = ["network-programming"]
 edition = "2018"
 
 [dependencies]

@@ -3,6 +3,14 @@ name = "grammers-tl-parser"
 version = "1.0.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
+description = """
+A parser for Type Language definitions.
+"""
+homepage = "https://github.com/Lonami/grammers"
+documentation = "https://docs.rs/grammers-tl-parser"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+categories = ["parser-implementations"]
 edition = "2018"
 
 [dependencies]

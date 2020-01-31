@@ -3,6 +3,14 @@ name = "grammers-tl-types"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
+description = """
+Rust definitions for Telegram's API types and functions.
+"""
+homepage = "https://github.com/Lonami/grammers"
+documentation = "https://docs.rs/grammers-tl-types"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+categories = ["data-structures", "encoding"]
 edition = "2018"
 build = "build/main.rs"
 

@@ -3,4 +3,12 @@ name = "grammers-session"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
+description = """
+Different session storages for Telegram data.
+"""
+homepage = "https://github.com/Lonami/grammers"
+documentation = "https://docs.rs/grammers-session"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+categories = []
 edition = "2018"
