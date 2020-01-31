@@ -1,5 +1,6 @@
 [workspace]
 members = [
+    "lib/grammers",
     "lib/grammers-client",
     "lib/grammers-crypto",
     "lib/grammers-mtproto",
@@ -10,6 +11,7 @@ members = [
 ]
 
 [patch.crates-io]
+grammers-client = { path = "lib/grammers-client" }
 grammers-crypto = { path = "lib/grammers-crypto" }
 grammers-mtproto = { path = "lib/grammers-mtproto" }
 grammers-mtsender = { path = "lib/grammers-mtsender" }
