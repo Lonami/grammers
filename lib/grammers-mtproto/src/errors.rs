@@ -4,6 +4,8 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use grammers_tl_types as tl;
+
 /// The error type for enqueueing requests.
 #[derive(Debug)]
 pub enum EnqueueError {
@@ -102,5 +104,134 @@ impl fmt::Display for DeserializeError {
 impl From<DeserializeError> for io::Error {
     fn from(error: DeserializeError) -> Self {
         io::Error::new(io::ErrorKind::InvalidData, error)
+    }
+}
+
+/// This error occurs when a Remote Procedure call was unsuccessful.
+///
+/// The request should be retransmited when this happens, unless the
+/// variant is `InvalidParameters`.
+pub enum RequestError {
+    /// The parameters used in the request were invalid and caused a
+    /// Remote Procedure Call error.
+    RPCError(RPCError),
+
+    /// The message sent to the server was invalid, and the request
+    /// must be retransmitted.
+    BadMessage {
+        /// The code of the bad message error.
+        code: i32,
+    },
+}
+
+impl RequestError {
+    pub fn should_retransmit(&self) -> bool {
+        match self {
+            Self::RPCError(_) => false,
+            _ => true,
+        }
+    }
+}
+
+/// The error type reported by the server when a request is misused.
+#[derive(Debug, PartialEq)]
+pub struct RPCError {
+    /// A numerical value similar to HTTP status codes.
+    code: i32,
+
+    /// The ASCII error name, normally in screaming snake case.
+    name: String,
+
+    /// If the error contained an additional value, it will be present here.
+    value: Option<u32>,
+}
+
+impl Error for RPCError {}
+
+impl fmt::Display for RPCError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "rpc error {}: {}", self.code, self.name)?;
+        if let Some(value) = self.value {
+            write!(f, " (value: {})", value)?;
+        }
+        Ok(())
+    }
+}
+
+impl From<RPCError> for io::Error {
+    fn from(error: RPCError) -> Self {
+        Self::new(io::ErrorKind::InvalidData, error)
+    }
+}
+
+impl From<tl::types::RpcError> for RPCError {
+    fn from(error: tl::types::RpcError) -> Self {
+        // Extract the numeric value in the error, if any
+        if let Some(value) = error
+            .error_message
+            .split(|c: char| !c.is_digit(10))
+            .filter(|s| !s.is_empty())
+            .next()
+        {
+            let mut to_remove = String::with_capacity(1 + value.len());
+            to_remove.push('_');
+            to_remove.push_str(value);
+            Self {
+                code: error.error_code,
+                name: error.error_message.replace(&to_remove, ""),
+                // Safe to unwrap, matched on digits
+                value: Some(value.parse().unwrap()),
+            }
+        } else {
+            Self {
+                code: error.error_code,
+                name: error.error_message.clone(),
+                value: None,
+            }
+        }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_rpc_error_parsing() {
+        assert_eq!(
+            RPCError::from(tl::types::RpcError {
+                error_code: 400,
+                error_message: "CHAT_INVALID".into(),
+            }),
+            RPCError {
+                code: 400,
+                name: "CHAT_INVALID".into(),
+                value: None
+            }
+        );
+
+        assert_eq!(
+            RPCError::from(tl::types::RpcError {
+                error_code: 420,
+                error_message: "FLOOD_WAIT_31".into(),
+            }),
+            RPCError {
+                code: 420,
+                name: "FLOOD_WAIT".into(),
+                value: Some(31)
+            }
+        );
+
+        assert_eq!(
+            RPCError::from(tl::types::RpcError {
+                error_code: 500,
+                error_message: "INTERDC_2_CALL_ERROR".into(),
+            }),
+            RPCError {
+                code: 500,
+                name: "INTERDC_CALL_ERROR".into(),
+                value: Some(2)
+            }
+        );
     }
 }

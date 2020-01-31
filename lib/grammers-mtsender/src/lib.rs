@@ -1,14 +1,23 @@
 use grammers_crypto::{auth_key, AuthKey};
+use grammers_mtproto::errors::{RPCError, RequestError};
 use grammers_mtproto::transports::{Transport, TransportFull};
+use grammers_mtproto::MTProto;
 pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
-use grammers_mtproto::{MTProto, RequestError};
 use grammers_tl_types::{Deserializable, RPC};
 
-use std::io::{self, Result};
+use std::io;
 use std::net::{TcpStream, ToSocketAddrs};
 use std::time::Duration;
 
 pub const DEFAULT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(10));
+
+/// The invocation might fail due to network problems, in which case the
+/// outermost result represents failure.
+///
+/// If the request is both sent and received successfully, then the request
+/// itself was understood by the server, but it could not be executed. This
+/// is represented by the innermost result.
+pub type RequestResult<R> = io::Result<Result<R, RPCError>>;
 
 /// A builder to configure `MTSender` instances.
 pub struct MTSenderBuilder {
@@ -60,7 +69,7 @@ impl MTSenderBuilder {
 
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn connect<A: ToSocketAddrs>(self, addr: A) -> Result<MTSender> {
+    pub fn connect<A: ToSocketAddrs>(self, addr: A) -> io::Result<MTSender> {
         MTSender::with_builder(self, addr)
     }
 }
@@ -72,12 +81,12 @@ impl MTSender {
     }
 
     /// Creates and connects a new instance with default settings.
-    pub fn connect<A: ToSocketAddrs>(addr: A) -> Result<Self> {
+    pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
         Self::build().connect(addr)
     }
 
     /// Constructs an instance using a finished builder.
-    fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> Result<Self> {
+    fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> io::Result<Self> {
         let stream = TcpStream::connect(addr)?;
         stream.set_read_timeout(builder.timeout)?;
 
@@ -98,7 +107,7 @@ impl MTSender {
     /// key that can be used to safely transmit data to and from the server.
     ///
     /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub fn generate_auth_key(&mut self) -> Result<AuthKey> {
+    pub fn generate_auth_key(&mut self) -> io::Result<AuthKey> {
         let (request, data) = auth_key::generation::step1()?;
         let response = self.invoke_plain_request(&request)?;
 
@@ -120,7 +129,7 @@ impl MTSender {
     }
 
     /// Invoke a serialized request in plaintext.
-    fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>> {
+    fn invoke_plain_request(&mut self, request: &[u8]) -> io::Result<Vec<u8>> {
         // Send
         let payload = self.protocol.serialize_plain_message(request);
         self.transport.send(&mut self.stream, &payload)?;
@@ -133,7 +142,14 @@ impl MTSender {
     }
 
     /// Block invoking a single Remote Procedure Call and return its result.
-    pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return> {
+    ///
+    /// The invocation might fail due to network problems, in which case the
+    /// outermost result represents failure.
+    ///
+    /// If the request is both sent and received successfully, then the
+    /// request itself was understood by the server, but it could not be
+    /// executed. This is represented by the innermost result.
+    pub fn invoke<R: RPC>(&mut self, request: &R) -> RequestResult<R::Return> {
         let mut msg_id = self.protocol.enqueue_request(request.to_bytes())?;
         loop {
             // The protocol may generate more outgoing requests, so we need
@@ -151,13 +167,12 @@ impl MTSender {
                 if response_id == msg_id {
                     match data {
                         Ok(x) => {
-                            return R::Return::from_bytes(&x);
+                            return Ok(Ok(R::Return::from_bytes(&x)?));
                         }
-                        Err(RequestError::InvalidParameters { error: _error }) => {
-                            // TODO return a proper RPC error
-                            return Err(io::Error::new(io::ErrorKind::InvalidData, "rpc error"));
+                        Err(RequestError::RPCError(error)) => {
+                            return Ok(Err(error));
                         }
-                        Err(RequestError::Other) => {
+                        Err(RequestError::BadMessage { .. }) => {
                             // Need to retransmit
                             msg_id = self.protocol.enqueue_request(request.to_bytes())?;
                         }
@@ -168,7 +183,7 @@ impl MTSender {
     }
 
     /// Receives a single message from the server
-    fn receive_message(&mut self) -> Result<Vec<u8>> {
+    fn receive_message(&mut self) -> io::Result<Vec<u8>> {
         self.transport
             .receive(&mut self.stream)
             .map_err(|e| match e.kind() {

@@ -10,7 +10,7 @@ mod manual_tl;
 pub mod transports;
 mod utils;
 
-use crate::errors::{DeserializeError, EnqueueError};
+use crate::errors::{DeserializeError, EnqueueError, RequestError};
 
 use std::collections::VecDeque;
 use std::io::{self, Write};
@@ -95,20 +95,6 @@ pub struct MTProto {
 
     /// A queue of responses ready to be used.
     response_queue: VecDeque<(MsgId, Result<Vec<u8>, RequestError>)>,
-}
-
-/// This error occurs when a Remote Procedure call was unsuccessful.
-///
-/// The request should be retransmited when this happens, unless the
-/// variant is `InvalidParameters`.
-pub enum RequestError {
-    /// The parameters used in the request were invalid and caused a
-    /// Remote Procedure Call error.
-    InvalidParameters { error: tl::types::RpcError },
-
-    // TODO be more specific
-    /// A different error occured.
-    Other,
 }
 
 /// A Message Identifier.
@@ -550,7 +536,7 @@ impl MTProto {
                 match tl::enums::RpcError::from_bytes(&result)? {
                     tl::enums::RpcError::RpcError(error) => self
                         .response_queue
-                        .push_back((msg_id, Err(RequestError::InvalidParameters { error }))),
+                        .push_back((msg_id, Err(RequestError::RPCError(error.into())))),
                 }
             }
             manual_tl::GzipPacked::CONSTRUCTOR_ID => {
@@ -638,15 +624,21 @@ impl MTProto {
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
             tl::enums::BadMsgNotification::BadServerSalt(x) => {
-                self.response_queue
-                    .push_back((MsgId(x.bad_msg_id), Err(RequestError::Other)));
+                self.response_queue.push_back((
+                    MsgId(x.bad_msg_id),
+                    Err(RequestError::BadMessage { code: x.error_code }),
+                ));
                 self.salt = x.new_server_salt;
                 return Ok(());
             }
         };
 
-        self.response_queue
-            .push_back((MsgId(bad_msg.bad_msg_id), Err(RequestError::Other)));
+        self.response_queue.push_back((
+            MsgId(bad_msg.bad_msg_id),
+            Err(RequestError::BadMessage {
+                code: bad_msg.error_code,
+            }),
+        ));
         match bad_msg.error_code {
             16 => {
                 // Sent `msg_id` was too low (our `time_offset` is wrong).
