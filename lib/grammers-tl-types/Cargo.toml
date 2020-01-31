@@ -2,6 +2,7 @@
 name = "grammers-tl-types"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
+license = "MIT OR Apache-2.0"
 edition = "2018"
 build = "build/main.rs"
 

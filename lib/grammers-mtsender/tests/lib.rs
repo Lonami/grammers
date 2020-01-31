@@ -1,3 +1,10 @@
+// Copyright 2020 - developers of the `grammers` project.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
 pub const TELEGRAM_TEST_DC_2: &'static str = "149.154.167.40:443";
 
 /// The default datacenter to connect to for testing.

@@ -1,3 +1,11 @@
+// Copyright 2020 - developers of the `grammers` project.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
 //! This library contains the Rust definitions for Telegram's [`types`] and
 //! [`functions`] in the form of `struct` and `enum`. All of them implement
 //! [`Serializable`], and by default only types implement [`Deserializable`].
