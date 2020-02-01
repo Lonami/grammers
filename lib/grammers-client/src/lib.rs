@@ -15,8 +15,12 @@ use grammers_tl_types::{self as tl, Serializable, RPC};
 // TODO handle PhoneMigrate
 const DC_4_ADDRESS: &'static str = "149.154.167.91:443";
 
+/// When no locale is found, use this one instead.
+const DEFAULT_LOCALE: &'static str = "en";
+
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
+    api_id: i32,
     sender: MTSender,
 }
 
@@ -111,7 +115,8 @@ impl Client {
 
     /// Creates a client instance with a sender
     fn with_sender(sender: MTSender) -> io::Result<Self> {
-        let mut client = Client { sender };
+        // TODO user-provided api key
+        let mut client = Client { api_id: 6, sender };
         client.init_connection()?;
         Ok(client)
     }
@@ -196,17 +201,29 @@ impl Client {
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
     fn init_connection(&mut self) -> io::Result<()> {
+        let info = os_info::get();
+
+        let mut system_lang_code = locate_locale::system();
+        if system_lang_code.is_empty() {
+            system_lang_code.push_str(DEFAULT_LOCALE);
+        }
+
+        let mut lang_code = locate_locale::user();
+        if lang_code.is_empty() {
+            lang_code.push_str(DEFAULT_LOCALE);
+        }
+
         // TODO store config
         self.invoke(&tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
             query: tl::functions::InitConnection {
-                api_id: 6,
-                device_model: "Linux".into(),
-                system_version: "4.15.0-74-generic".into(),
-                app_version: "0.1.0".into(),
-                system_lang_code: "en".into(),
+                api_id: self.api_id,
+                device_model: format!("{} {}", info.os_type(), info.bitness()),
+                system_version: info.version().to_string(),
+                app_version: env!("CARGO_PKG_VERSION").into(),
+                system_lang_code,
                 lang_pack: "".into(),
-                lang_code: "en".into(),
+                lang_code,
                 proxy: None,
                 query: tl::functions::help::GetConfig {}.to_bytes(),
             }
