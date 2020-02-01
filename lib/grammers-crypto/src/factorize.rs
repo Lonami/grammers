@@ -5,9 +5,32 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use num::bigint::{BigUint, ToBigUint};
-use num::integer::Integer;
-use num::traits::cast::ToPrimitive;
+
+fn gcd(mut a: u128, mut b: u128) -> u128 {
+    while b != 0 {
+        let (na, nb) = (b, a % b);
+        a = na;
+        b = nb;
+    }
+    a
+}
+
+fn modpow(mut n: u128, mut e: u128, m: u128) -> u128 {
+    if m == 1 {
+        return 0;
+    }
+
+    let mut result = 1;
+    n %= m;
+    while e > 0 {
+        if e % 2 == 1 {
+            result = (result * n) % m;
+        }
+        e >>= 1;
+        n = (n * n) % m;
+    }
+    result
+}
 
 /// Factorize the given number into its two prime factors.
 ///
@@ -18,85 +41,57 @@ use num::traits::cast::ToPrimitive;
 /// Pollard's rho algorithm: https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
 /// Richard Brent: https://maths-people.anu.edu.au/~brent/pd/rpb051i.pdf
 pub(crate) fn factorize(pq: u64) -> (u64, u64) {
-    // TODO try to clean-up this BigUint mess
     if pq % 2 == 0 {
         return (2, pq);
     }
 
-    /// Convenience function to convert an unsigned 64 bit integer into a
-    /// big unsigned integer.
-    fn big(n: u64) -> BigUint {
-        // Safe to unwrap because the numbers we have are valid.
-        n.to_biguint().unwrap()
-    }
-
-    /// The opposite of `big`. This will panic if the caller did not make sure
-    /// that the value fits within 64 bits.
-    fn small(n: &BigUint) -> u64 {
-        n.to_u64().unwrap()
-    }
-
-    /// Returns the smallet of two big numbers as unsigned integer.
-    fn min(a: &BigUint, b: &BigUint) -> u64 {
-        if a < b {
-            small(a)
-        } else {
-            small(b)
-        }
-    }
-
-    /// The positive difference of two big numbers.
-    fn abs_sub(a: &BigUint, b: &BigUint) -> BigUint {
-        if a > b {
-            a - b
-        } else {
-            b - a
-        }
+    let pq = pq as u128;
+    fn abs_sub(a: u128, b: u128) -> u128 {
+        a.max(b) - a.min(b)
     }
 
     // Random values in the range of 1..pq, chosen by fair dice roll.
-    let mut y = big(1 * pq / 4);
-    let c = big(2 * pq / 4);
-    let m = big(3 * pq / 4);
-    let mut g = big(1u64);
-    let mut r = big(1u64);
-    let mut q = big(1u64);
-    let mut x = big(0u64);
-    let mut ys = big(0u64);
-    let pq = big(pq);
+    let mut y = 1 * pq / 4;
+    let c = 2 * pq / 4;
+    let m = 3 * pq / 4;
+    let mut g = 1u128;
+    let mut r = 1u128;
+    let mut q = 1u128;
+    let mut x = 0u128;
+    let mut ys = 0u128;
 
-    while g == big(1) {
-        x = y.clone();
-        for _ in 0..small(&r) {
-            y = (y.modpow(&big(2), &pq) + &c) % &pq;
+    while g == 1 {
+        x = y;
+        for _ in 0..r {
+            y = (modpow(y, 2, pq) + c) % &pq;
         }
 
-        let mut k = big(0);
-        while k < r && g == big(1) {
+        let mut k = 0;
+        while k < r && g == 1 {
             ys = y.clone();
-            for _ in 0..min(&m, &(&r - &k)) {
-                y = (y.modpow(&big(2), &pq) + &c) % &pq;
-                q = (q * abs_sub(&x, &y)) % &pq;
+            for _ in 0..m.min(r - k) {
+                y = (modpow(y, 2, pq) + c) % &pq;
+                q = (q * abs_sub(x, y)) % &pq;
             }
 
-            g = q.gcd(&pq);
-            k += &m;
+            g = gcd(q, pq);
+            k += m;
         }
 
-        r *= big(2);
+        r *= 2;
     }
 
     if g == pq {
         loop {
-            ys = (ys.modpow(&big(2), &pq) + &c) % &pq;
-            g = abs_sub(&x, &ys).gcd(&pq);
-            if g > big(1) {
+            ys = (modpow(ys, 2, pq) + c) % &pq;
+            g = gcd(abs_sub(x, ys), pq);
+            if g > 1 {
                 break;
             }
         }
     }
 
-    let (p, q) = (small(&g), small(&(&pq / &g)));
+    let (p, q) = (g as u64, (pq / g) as u64);
     (p.min(q), p.max(q))
 }
 
