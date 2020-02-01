@@ -5,9 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use std::convert::TryInto;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use grammers_mtproto::errors::RPCError;
 use grammers_mtsender::{MTSender, RequestResult};
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Serializable, RPC};
@@ -22,6 +24,9 @@ const DEFAULT_LOCALE: &'static str = "en";
 pub struct Client {
     api_id: i32,
     sender: MTSender,
+
+    /// The stored phone and its hash from the last `request_login_code` call.
+    last_phone_hash: Option<(String, String)>,
 }
 
 /// Implementors of this trait have a way to turn themselves into the
@@ -67,6 +72,23 @@ fn generate_random_message_id() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system time is before epoch")
         .as_nanos() as i64
+}
+
+#[derive(Debug)]
+pub enum SignInError {
+    IO(io::Error),
+    NoCodeSent,
+    SignUpRequired {
+        terms_of_service: Option<tl::types::help::TermsOfService>,
+    },
+    InvalidCode,
+    Other(RPCError),
+}
+
+impl From<io::Error> for SignInError {
+    fn from(error: io::Error) -> Self {
+        Self::IO(error)
+    }
 }
 
 impl Client {
@@ -116,7 +138,11 @@ impl Client {
     /// Creates a client instance with a sender
     fn with_sender(sender: MTSender) -> io::Result<Self> {
         // TODO user-provided api key
-        let mut client = Client { api_id: 6, sender };
+        let mut client = Client {
+            api_id: 6,
+            sender,
+            last_phone_hash: None,
+        };
         client.init_connection()?;
         Ok(client)
     }
@@ -127,6 +153,64 @@ impl Client {
         match self.invoke(&tl::functions::updates::GetState {})? {
             Ok(_) => Ok(true),
             Err(_) => Ok(false),
+        }
+    }
+
+    /// Requests the login code for the account associated to the given phone
+    /// number via another Telegram application or SMS.
+    pub fn request_login_code(
+        &mut self,
+        phone: &str,
+        api_id: i32,
+        api_hash: &str,
+    ) -> io::Result<tl::types::auth::SentCode> {
+        let sent_code: tl::types::auth::SentCode = self
+            .invoke(&tl::functions::auth::SendCode {
+                phone_number: phone.to_string(),
+                api_id,
+                api_hash: api_hash.to_string(),
+                settings: tl::types::CodeSettings {
+                    allow_flashcall: false,
+                    current_number: false,
+                    allow_app_hash: false,
+                }
+                .into(),
+            })??
+            .into();
+
+        self.last_phone_hash = Some((phone.to_string(), sent_code.phone_code_hash.clone()));
+        Ok(sent_code)
+    }
+
+    /// Signs in to the user account. To have the login code be sent, use
+    /// [`request_login_code`] first.
+    ///
+    /// [`request_login_code`]: #method.request_login_code
+    pub fn sign_in(&mut self, code: &str) -> Result<tl::types::User, SignInError> {
+        let (phone_number, phone_code_hash) = if let Some(t) = self.last_phone_hash.take() {
+            t
+        } else {
+            return Err(SignInError::NoCodeSent);
+        };
+
+        match self.invoke(&tl::functions::auth::SignIn {
+            phone_number,
+            phone_code_hash,
+            phone_code: code.to_string(),
+        })? {
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                // Safe to unwrap, Telegram won't send `UserEmpty` here.
+                Ok(x.user.try_into().unwrap())
+            }
+            Ok(tl::enums::auth::Authorization::AuthorizationSignUpRequired(x)) => {
+                Err(SignInError::SignUpRequired {
+                    terms_of_service: x.terms_of_service.map(|tos| tos.into()),
+                })
+            }
+            Err(RPCError { name, .. }) if name.starts_with("PHONE_CODE_") => {
+                Err(SignInError::InvalidCode)
+            }
+            Err(error) => Err(SignInError::Other(error)),
         }
     }
 

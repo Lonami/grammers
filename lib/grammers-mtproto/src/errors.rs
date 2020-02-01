@@ -145,13 +145,13 @@ impl RequestError {
 #[derive(Debug, PartialEq)]
 pub struct RPCError {
     /// A numerical value similar to HTTP status codes.
-    code: i32,
+    pub code: i32,
 
     /// The ASCII error name, normally in screaming snake case.
-    name: String,
+    pub name: String,
 
     /// If the error contained an additional value, it will be present here.
-    value: Option<u32>,
+    pub value: Option<u32>,
 }
 
 impl Error for RPCError {}
