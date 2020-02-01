@@ -14,6 +14,7 @@ categories = ["api-bindings"]
 edition = "2018"
 
 [dependencies]
+fallible-iterator = "0.2.0"
 grammers-mtproto = "0.1.0"
 grammers-mtsender = "0.1.0"
 grammers-session = "0.1.0"

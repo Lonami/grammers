@@ -5,6 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+mod dialogs;
+pub mod types;
+
 use std::convert::TryInto;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -279,6 +282,10 @@ impl Client {
             schedule_date: None,
         })??;
         Ok(())
+    }
+
+    pub fn iter_dialogs(&mut self) -> dialogs::Dialogs {
+        dialogs::Dialogs::new(self)
     }
 
     /// Initializes the connection with Telegram. If this is never done on
