@@ -124,7 +124,7 @@ pub(crate) fn push_sanitized_path(result: &mut String, ty: &Type) {
 pub(crate) fn rusty_type(ty: &Type) -> String {
     let mut result = String::new();
     if ty.generic_ref {
-        result.push_str("Vec<u8>")
+        result.push_str("crate::Blob")
     } else {
         push_sanitized_name(&mut result, ty);
         if let Some(arg) = &ty.generic_arg {

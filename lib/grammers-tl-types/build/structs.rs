@@ -170,7 +170,9 @@ fn write_serializable<W: Write>(
                 writeln!(file, ").serialize(buf)?;")?;
             }
             ParameterType::Normal { ty, flag } => {
-                // The `true` type is not serialized
+                // The `true` bare type is a bit special: it's empty so there
+                // is not need to serialize it, but it's used enough to deserve
+                // a special case and ignore it.
                 if ty.name != "true" {
                     if flag.is_some() {
                         writeln!(
@@ -180,11 +182,6 @@ fn write_serializable<W: Write>(
                         )?;
                         writeln!(file, "{}            x.serialize(buf)?;", indent)?;
                         writeln!(file, "{}        }}", indent)?;
-                    } else if ty.generic_ref {
-                        // Generic references are stored as bytes *but*
-                        // they're not serialized like a byte-string.
-                        // Instead, they are written out directly.
-                        writeln!(file, "buf.write_all(&self.{})?;", rusty_attr_name(param))?;
                     } else {
                         writeln!(file, "self.{}.serialize(buf)?;", rusty_attr_name(param))?;
                     }

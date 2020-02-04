@@ -62,6 +62,18 @@ pub use serializable::Serializable;
 #[derive(Debug)]
 pub struct RawVec<T>(pub Vec<T>);
 
+/// This struct represents an unparsed blob, which should not be deserialized
+/// as a bytes string. Used by functions returning generic objects which pass
+/// the underlying result without any modification or interpretation.
+#[derive(Debug)]
+pub struct Blob(pub Vec<u8>);
+
+impl From<Vec<u8>> for Blob {
+    fn from(value: Vec<u8>) -> Self {
+        Self(value)
+    }
+}
+
 /// Anything implementing this trait is identifiable by both ends (client-server)
 /// when performing Remote Procedure Calls (RPC) and transmission of objects.
 pub trait Identifiable {

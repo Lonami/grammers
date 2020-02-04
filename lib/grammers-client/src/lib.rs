@@ -369,12 +369,13 @@ impl Client {
                 lang_pack: "".into(),
                 lang_code,
                 proxy: None,
-                query: request.to_bytes(),
+                query: request.to_bytes().into(),
             }
-            .to_bytes(),
+            .to_bytes()
+            .into(),
         })??;
 
-        Ok(Ok(R::Return::from_bytes(&data)?))
+        Ok(Ok(R::Return::from_bytes(&data.0)?))
     }
 
     /// Invokes a raw request, and returns its result.

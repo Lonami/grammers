@@ -25,9 +25,11 @@ pub trait Deserializable {
     /// # Examples
     ///
     /// ```
+    /// use std::io::Cursor;
     /// use grammers_tl_types::Deserializable;
     ///
-    /// assert_eq!(bool::deserialize(&[0xb5, 0x75, 0x72, 0x99][..]), Ok(true));
+    /// let mut cursor = Cursor::new([0xb5, 0x75, 0x72, 0x99]);
+    /// assert_eq!(bool::deserialize(&mut cursor).unwrap(), true);
     /// ```
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self>
     where
@@ -40,7 +42,7 @@ pub trait Deserializable {
     /// ```
     /// use grammers_tl_types::Deserializable;
     ///
-    /// assert_eq!(bool::from_bytes(&[0x37, 0x97, 0x79, 0xbc]), Ok(false));
+    /// assert_eq!(bool::from_bytes(&[0x37, 0x97, 0x79, 0xbc]).unwrap(), false);
     /// ```
     fn from_bytes(buf: &[u8]) -> Result<Self>
     where
@@ -272,6 +274,15 @@ impl<T: Deserializable> Deserializable for crate::RawVec<T> {
     }
 }
 
+impl Deserializable for crate::Blob {
+    /// Deserializes a blob by doing no parsing or interpretation.
+    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+        let mut result = Vec::new();
+        buf.read_to_end(&mut result)?;
+        Ok(Self(result))
+    }
+}
+
 impl Deserializable for String {
     /// Deserializes a UTF-8 string according to the following definition:
     ///
@@ -353,5 +364,21 @@ impl Deserializable for Vec<u8> {
         }
 
         Ok(result)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_generic_reads_blob() {
+        let blob = [103, 64, 11, 51, 72];
+        assert_eq!(
+            <crate::functions::InvokeWithLayer as crate::RPC>::Return::from_bytes(&blob)
+                .unwrap()
+                .0,
+            blob
+        );
     }
 }
