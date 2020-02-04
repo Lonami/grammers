@@ -181,19 +181,43 @@ impl Client {
         api_id: i32,
         api_hash: &str,
     ) -> io::Result<tl::types::auth::SentCode> {
-        let sent_code: tl::types::auth::SentCode = self
-            .invoke(&tl::functions::auth::SendCode {
-                phone_number: phone.to_string(),
-                api_id,
-                api_hash: api_hash.to_string(),
-                settings: tl::types::CodeSettings {
-                    allow_flashcall: false,
-                    current_number: false,
-                    allow_app_hash: false,
-                }
-                .into(),
-            })??
-            .into();
+        let request = tl::functions::auth::SendCode {
+            phone_number: phone.to_string(),
+            api_id,
+            api_hash: api_hash.to_string(),
+            settings: tl::types::CodeSettings {
+                allow_flashcall: false,
+                current_number: false,
+                allow_app_hash: false,
+            }
+            .into(),
+        };
+
+        let sent_code: tl::types::auth::SentCode = match self.invoke(&request)? {
+            Ok(x) => x.into(),
+            Err(RPCError { name, value, .. }) if name == "PHONE_MIGRATE" => {
+                // Safe to unwrap, this error always has data
+                let dc_id = value.unwrap() as i32;
+                let exported: tl::types::auth::ExportedAuthorization = self
+                    .invoke(&tl::functions::auth::ExportAuthorization { dc_id })??
+                    .into();
+
+                // n.b.: we don't want to replace `self.sender` unless the block succeeds.
+                self.sender = {
+                    let mut sender = MTSender::connect(DC_ADDRESSES[dc_id as usize])?;
+                    sender.generate_auth_key()?;
+                    sender
+                };
+
+                self.init_invoke(&tl::functions::auth::ImportAuthorization {
+                    id: exported.id,
+                    bytes: exported.bytes,
+                })??;
+
+                self.invoke(&request)??.into()
+            }
+            Err(e) => return Err(e.into()),
+        };
 
         self.last_phone_hash = Some((phone.to_string(), sent_code.phone_code_hash.clone()));
         Ok(sent_code)
