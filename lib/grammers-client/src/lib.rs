@@ -15,10 +15,24 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use grammers_mtproto::errors::RPCError;
 use grammers_mtsender::{MTSender, RequestResult};
 use grammers_session::Session;
-use grammers_tl_types::{self as tl, Serializable, RPC};
+use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 
-// TODO handle PhoneMigrate
-const DC_4_ADDRESS: &'static str = "149.154.167.91:443";
+/// Socket addresses to Telegram datacenters, where the index into this array
+/// represents the data center ID.
+///
+/// The addresses were obtained from the `static` addresses through a call to
+/// `functions::help::GetConfig`.
+const DC_ADDRESSES: [&'static str; 6] = [
+    "",
+    "149.154.175.53:443",
+    "149.154.167.51:443",
+    "149.154.175.100:443",
+    "149.154.167.92:443",
+    "91.108.56.190:443",
+];
+
+/// The DC ID to originally connect to.
+const DEFAULT_DC_ID: usize = 2;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &'static str = "en";
@@ -101,7 +115,7 @@ impl Client {
     /// default datacenter. To prevent logging in every single time, use
     /// [`with_session`] instead, which will reuse a previous session.
     pub fn new() -> io::Result<Self> {
-        let mut sender = MTSender::connect(DC_4_ADDRESS)?;
+        let mut sender = MTSender::connect(DC_ADDRESSES[DEFAULT_DC_ID])?;
         sender.generate_auth_key()?;
         Self::with_sender(sender)
     }
@@ -119,8 +133,8 @@ impl Client {
             server_address = dc_addr;
             auth_key = session.get_auth_key_data(dc_id);
         } else {
-            server_id = 4;
-            server_address = DC_4_ADDRESS.parse().unwrap();
+            server_id = DEFAULT_DC_ID as i32;
+            server_address = DC_ADDRESSES[DEFAULT_DC_ID].parse().unwrap();
             auth_key = None;
             session.set_user_datacenter(server_id, &server_address);
             session.save()?;
@@ -292,6 +306,14 @@ impl Client {
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
     fn init_connection(&mut self) -> io::Result<()> {
+        // TODO store config
+        let _config = self.init_invoke(&tl::functions::help::GetConfig {})??;
+        Ok(())
+    }
+
+    /// Wraps the request in `invokeWithLayer(initConnection(...))` and
+    /// invokes that. Should be used by the first request after connect.
+    fn init_invoke<R: RPC>(&mut self, request: &R) -> RequestResult<R::Return> {
         let info = os_info::get();
 
         let mut system_lang_code = locate_locale::system();
@@ -304,8 +326,15 @@ impl Client {
             lang_code.push_str(DEFAULT_LOCALE);
         }
 
-        // TODO store config
-        self.invoke(&tl::functions::InvokeWithLayer {
+        // TODO figure out what we're doing wrong because Telegram seems to
+        //      reply some constructor we are unaware of, even though we
+        //      explicitly did invokeWithLayer. this will fail, because
+        //      we want to return the right type (before we ignored it).
+        //
+        // a second call to getConfig will work just fine though.
+        //
+        // this also seems to have triggered RPC_CALL_FAIL
+        let data = self.invoke(&tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
             query: tl::functions::InitConnection {
                 api_id: self.api_id,
@@ -316,11 +345,12 @@ impl Client {
                 lang_pack: "".into(),
                 lang_code,
                 proxy: None,
-                query: tl::functions::help::GetConfig {}.to_bytes(),
+                query: request.to_bytes(),
             }
             .to_bytes(),
         })??;
-        Ok(())
+
+        Ok(Ok(R::Return::from_bytes(&data)?))
     }
 
     /// Invokes a raw request, and returns its result.

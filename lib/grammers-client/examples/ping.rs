@@ -14,7 +14,7 @@ fn main() -> Result<()> {
     println!("Connected!");
 
     println!("Sending ping...");
-    dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 })?);
+    dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 })??);
     println!("Ping sent successfully!");
 
     Ok(())
