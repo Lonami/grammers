@@ -15,8 +15,10 @@
 //!
 //! [`Session`]: trait.session.html
 
+mod memory_session;
 mod session;
 mod text_session;
 
+pub use memory_session::MemorySession;
 pub use session::Session;
 pub use text_session::TextSession;

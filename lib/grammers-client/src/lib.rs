@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use grammers_mtproto::errors::RPCError;
 use grammers_mtsender::{MTSender, RequestResult};
-use grammers_session::Session;
+use grammers_session::{MemorySession, Session};
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
@@ -41,6 +41,7 @@ const DEFAULT_LOCALE: &'static str = "en";
 pub struct Client {
     api_id: i32,
     sender: MTSender,
+    session: Box<dyn Session>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
     last_phone_hash: Option<(String, String)>,
@@ -115,9 +116,10 @@ impl Client {
     /// default datacenter. To prevent logging in every single time, use
     /// [`with_session`] instead, which will reuse a previous session.
     pub fn new() -> io::Result<Self> {
+        // TODO we probably should just require a session storage as input
         let mut sender = MTSender::connect(DC_ADDRESSES[DEFAULT_DC_ID])?;
         sender.generate_auth_key()?;
-        Self::with_sender(sender)
+        Self::with_sender(sender, Box::new(MemorySession::new()))
     }
 
     /// Configures a new client instance from an existing session and returns
@@ -149,15 +151,16 @@ impl Client {
             session.save()?;
         }
 
-        Self::with_sender(sender)
+        Self::with_sender(sender, session)
     }
 
     /// Creates a client instance with a sender
-    fn with_sender(sender: MTSender) -> io::Result<Self> {
+    fn with_sender(sender: MTSender, session: Box<dyn Session>) -> io::Result<Self> {
         // TODO user-provided api key
         let mut client = Client {
             api_id: 6,
             sender,
+            session,
             last_phone_hash: None,
         };
         client.init_connection()?;
@@ -196,25 +199,28 @@ impl Client {
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request)? {
             Ok(x) => x.into(),
             Err(RPCError { name, value, .. }) if name == "PHONE_MIGRATE" => {
-                // Safe to unwrap, this error always has data
-                let dc_id = value.unwrap() as i32;
-                let exported: tl::types::auth::ExportedAuthorization = self
-                    .invoke(&tl::functions::auth::ExportAuthorization { dc_id })??
-                    .into();
+                let server_id = value.unwrap() as i32;
+                let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
+                self.session.set_user_datacenter(server_id, &server_address);
+                self.session.save()?;
 
-                // n.b.: we don't want to replace `self.sender` unless the block succeeds.
+                // Since we are not logged in (we're literally requesting for
+                // the code to login now), there's no need to export the current
+                // authorization and re-import it at a different datacenter.
+                //
+                // Just connect and generate a new authorization key with it
+                // before trying again. Don't want to replace `self.sender`
+                // unless the entire process succeeds.
                 self.sender = {
-                    let mut sender = MTSender::connect(DC_ADDRESSES[dc_id as usize])?;
-                    sender.generate_auth_key()?;
+                    let mut sender = MTSender::connect(server_address)?;
+                    let auth_key = sender.generate_auth_key()?;
+                    self.session
+                        .set_auth_key_data(server_id, &auth_key.to_bytes());
+                    self.session.save()?;
                     sender
                 };
 
-                self.init_invoke(&tl::functions::auth::ImportAuthorization {
-                    id: exported.id,
-                    bytes: exported.bytes,
-                })??;
-
-                self.invoke(&request)??.into()
+                self.init_invoke(&request)??.into()
             }
             Err(e) => return Err(e.into()),
         };
