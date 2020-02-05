@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod dialogs;
+mod iterators;
 pub mod types;
 
 use std::convert::TryInto;
@@ -17,7 +17,7 @@ use grammers_mtsender::{MTSender, RequestResult};
 use grammers_session::{MemorySession, Session};
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 
-pub use dialogs::Dialogs;
+pub use iterators::Dialogs;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.

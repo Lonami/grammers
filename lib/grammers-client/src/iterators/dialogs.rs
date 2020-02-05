@@ -4,18 +4,18 @@ use std::io;
 
 use grammers_tl_types as tl;
 
+use crate::iterators::{RPCIterBuffer, RPCIterator};
 use crate::types;
 use crate::Client;
 
 const MAX_DIALOGS_PER_REQUEST: i32 = 100;
 
 pub struct Dialogs {
-    batch_stack: Vec<types::Dialog>,
-    total: Option<usize>,
-    done: bool,
+    buffer: RPCIterBuffer<tl::functions::messages::GetDialogs, types::Dialog>,
+
+    // We reuse the same map for the sake of avoiding allocations
     entities: HashMap<i32, types::Entity>,
     messages: HashMap<(i32, i32), tl::enums::Message>,
-    request: tl::functions::messages::GetDialogs,
 }
 
 // TODO more reusable methods to get ids from things
@@ -41,12 +41,7 @@ fn message_id(message: &tl::enums::Message) -> Option<(i32, i32)> {
 impl Dialogs {
     pub fn iter() -> Self {
         Self {
-            batch_stack: Vec::with_capacity(MAX_DIALOGS_PER_REQUEST as usize),
-            total: None,
-            done: false,
-            entities: HashMap::new(),
-            messages: HashMap::new(),
-            request: tl::functions::messages::GetDialogs {
+            buffer: RPCIterBuffer::new(tl::functions::messages::GetDialogs {
                 exclude_pinned: false,
                 folder_id: None,
                 offset_date: 0,
@@ -54,13 +49,10 @@ impl Dialogs {
                 offset_peer: tl::types::InputPeerEmpty {}.into(),
                 limit: MAX_DIALOGS_PER_REQUEST,
                 hash: 0,
-            },
+            }),
+            entities: HashMap::new(),
+            messages: HashMap::new(),
         }
-    }
-
-    /// If the batch index is beyond the buffer length, it fills the buffer.
-    fn should_fill_buffer(&mut self) -> bool {
-        self.batch_stack.is_empty() && !self.done
     }
 
     fn update_user_entities(&mut self, users: Vec<tl::enums::User>) {
@@ -108,7 +100,7 @@ impl Dialogs {
                     let peer_id = peer_id(&dialog.peer);
                     if let Some(entity) = self.entities.remove(&peer_id) {
                         let last_message = self.messages.remove(&(peer_id, dialog.top_message));
-                        self.batch_stack.push(types::Dialog {
+                        self.buffer.push(types::Dialog {
                             dialog,
                             entity,
                             last_message,
@@ -120,41 +112,55 @@ impl Dialogs {
     }
 
     fn update_request_offsets(&mut self) {
-        if let Some(dialog) = self.batch_stack.get(0) {
-            self.request.offset_peer = dialog.entity.to_input_peer();
+        if let Some(dialog) = self.buffer.batch.get(0) {
+            self.buffer.request.offset_peer = dialog.entity.to_input_peer();
         }
 
         // Find last dialog with a message
-        for dialog in self.batch_stack.iter() {
+        for dialog in self.buffer.batch.iter() {
             if let Some(message) = &dialog.last_message {
                 match message {
                     tl::enums::Message::Message(message) => {
-                        self.request.offset_id = message.id;
-                        self.request.offset_date = message.date;
+                        self.buffer.request.offset_id = message.id;
+                        self.buffer.request.offset_date = message.date;
                     }
                     tl::enums::Message::MessageService(message) => {
-                        self.request.offset_id = message.id;
-                        self.request.offset_date = message.date;
+                        self.buffer.request.offset_id = message.id;
+                        self.buffer.request.offset_date = message.date;
                     }
                     tl::enums::Message::MessageEmpty(message) => {
-                        self.request.offset_id = message.id;
+                        self.buffer.request.offset_id = message.id;
                     }
                 }
                 break;
             }
         }
     }
+}
+
+impl RPCIterator<types::Dialog> for Dialogs {
+    fn total(&self) -> Option<usize> {
+        self.buffer.total
+    }
+
+    fn should_fill_buffer(&self) -> bool {
+        self.buffer.should_fill()
+    }
+
+    fn pop_buffer(&mut self) -> Option<types::Dialog> {
+        self.buffer.pop()
+    }
 
     fn fill_buffer(&mut self, client: &mut Client) -> io::Result<()> {
-        match client.invoke(&self.request)?? {
+        match client.invoke(&self.buffer.request)?? {
             tl::enums::messages::Dialogs::Dialogs(tl::types::messages::Dialogs {
                 dialogs,
                 messages,
                 chats,
                 users,
             }) => {
-                self.total = Some(dialogs.len());
-                self.done = true;
+                self.buffer.total = Some(dialogs.len());
+                self.buffer.done = true;
                 self.update_user_entities(users);
                 self.update_chat_entities(chats);
                 self.update_messages(messages);
@@ -167,8 +173,8 @@ impl Dialogs {
                 chats,
                 users,
             }) => {
-                self.total = Some(count as usize);
-                self.done = dialogs.len() < self.request.limit as usize;
+                self.buffer.total = Some(count as usize);
+                self.buffer.done = dialogs.len() < self.buffer.request.limit as usize;
                 self.update_user_entities(users);
                 self.update_chat_entities(chats);
                 self.update_messages(messages);
@@ -176,18 +182,10 @@ impl Dialogs {
                 self.update_request_offsets();
             }
             tl::enums::messages::Dialogs::DialogsNotModified(dialogs) => {
-                self.total = Some(dialogs.count as usize);
-                self.done = true;
+                self.buffer.total = Some(dialogs.count as usize);
+                self.buffer.done = true;
             }
         }
         Ok(())
-    }
-
-    pub fn next(&mut self, client: &mut Client) -> Result<Option<types::Dialog>, io::Error> {
-        if self.should_fill_buffer() {
-            self.fill_buffer(client)?;
-        }
-
-        Ok(self.batch_stack.pop())
     }
 }
