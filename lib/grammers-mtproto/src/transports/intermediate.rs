@@ -16,6 +16,7 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 /// * Maximum envelope length: 4 bytes.
 ///
 /// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
+#[derive(Default)]
 pub struct TransportIntermediate;
 
 impl TransportIntermediate {

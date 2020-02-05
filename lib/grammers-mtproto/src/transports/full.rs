@@ -28,6 +28,12 @@ impl TransportFull {
     }
 }
 
+impl Default for TransportFull {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Transport for TransportFull {
     fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)

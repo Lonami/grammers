@@ -40,6 +40,7 @@ fn modpow(mut n: u128, mut e: u128, m: u128) -> u128 {
 ///
 /// Pollard's rho algorithm: https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
 /// Richard Brent: https://maths-people.anu.edu.au/~brent/pd/rpb051i.pdf
+#[allow(clippy::many_single_char_names)]
 pub(crate) fn factorize(pq: u64) -> (u64, u64) {
     if pq % 2 == 0 {
         return (2, pq);
@@ -51,7 +52,7 @@ pub(crate) fn factorize(pq: u64) -> (u64, u64) {
     }
 
     // Random values in the range of 1..pq, chosen by fair dice roll.
-    let mut y = 1 * pq / 4;
+    let mut y = pq / 4;
     let c = 2 * pq / 4;
     let m = 3 * pq / 4;
     let mut g = 1u128;
@@ -63,15 +64,15 @@ pub(crate) fn factorize(pq: u64) -> (u64, u64) {
     while g == 1 {
         x = y;
         for _ in 0..r {
-            y = (modpow(y, 2, pq) + c) % &pq;
+            y = (modpow(y, 2, pq) + c) % pq;
         }
 
         let mut k = 0;
         while k < r && g == 1 {
-            ys = y.clone();
+            ys = y;
             for _ in 0..m.min(r - k) {
-                y = (modpow(y, 2, pq) + c) % &pq;
-                q = (q * abs_sub(x, y)) % &pq;
+                y = (modpow(y, 2, pq) + c) % pq;
+                q = (q * abs_sub(x, y)) % pq;
             }
 
             g = gcd(q, pq);
@@ -83,7 +84,7 @@ pub(crate) fn factorize(pq: u64) -> (u64, u64) {
 
     if g == pq {
         loop {
-            ys = (modpow(ys, 2, pq) + c) % &pq;
+            ys = (modpow(ys, 2, pq) + c) % pq;
             g = gcd(abs_sub(x, ys), pq);
             if g > 1 {
                 break;

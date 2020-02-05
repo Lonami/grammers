@@ -264,6 +264,7 @@ pub(crate) fn write_enums_mod<W: Write>(
          ///\n\
          /// [`Serializable`]: /grammers_tl_types/trait.Serializable.html\n\
          /// [`Deserializable`]: /grammers_tl_types/trait.Deserializable.html\n\
+         #[allow(clippy::large_enum_variant)]\n\
          pub mod enums {{\n\
          "
     )?;
@@ -274,6 +275,7 @@ pub(crate) fn write_enums_mod<W: Write>(
     for key in sorted_keys.into_iter() {
         // Begin possibly inner mod
         let indent = if let Some(ns) = key {
+            writeln!(file, "    #[allow(clippy::large_enum_variant)]")?;
             writeln!(file, "    pub mod {} {{", ns)?;
             "        "
         } else {

@@ -50,11 +50,8 @@ impl fmt::Display for Definition {
         // If any parameter references a generic, make sure to define it early
         let mut type_defs = vec![];
         for param in self.params.iter() {
-            match &param.ty {
-                ParameterType::Normal { ty, .. } => {
-                    ty.find_generic_refs(&mut type_defs);
-                }
-                _ => {}
+            if let ParameterType::Normal { ty, .. } = &param.ty {
+                ty.find_generic_refs(&mut type_defs);
             }
         }
         type_defs.sort();
@@ -215,7 +212,7 @@ impl FromStr for Definition {
 
         Ok(Definition {
             namespace,
-            name: name,
+            name,
             id,
             params,
             ty,

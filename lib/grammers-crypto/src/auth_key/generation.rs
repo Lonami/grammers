@@ -237,13 +237,9 @@ pub fn step1() -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
 // n.b.: the `do_step` functions are pure so that they can be tested.
 fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
     // Step 1. Generates a secure random nonce.
-    let nonce = random_bytes.clone();
-
+    let nonce = *random_bytes;
     Ok((
-        tl::functions::ReqPqMulti {
-            nonce: nonce.clone(),
-        }
-        .to_bytes(),
+        tl::functions::ReqPqMulti { nonce }.to_bytes(),
         Step1 { nonce },
     ))
 }
@@ -266,9 +262,8 @@ fn do_step2(
 ) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
     // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
     let Step1 { nonce } = data;
-    let res_pq = match <tl::functions::ReqPqMulti as RPC>::Return::from_bytes(&response)? {
-        tl::enums::ResPQ::ResPQ(x) => x,
-    };
+    let tl::enums::ResPQ::ResPQ(res_pq) =
+        <tl::functions::ReqPqMulti as RPC>::Return::from_bytes(&response)?;
 
     check_nonce(&res_pq.nonce, &nonce)?;
 
@@ -321,9 +316,9 @@ fn do_step2(
         pq: pq.to_be_bytes().to_vec(),
         p: p_bytes.clone(),
         q: q_bytes.clone(),
-        nonce: nonce.clone(),
-        server_nonce: res_pq.server_nonce.clone(),
-        new_nonce: new_nonce.clone(),
+        nonce,
+        server_nonce: res_pq.server_nonce,
+        new_nonce,
     })
     .to_bytes();
 
@@ -348,10 +343,10 @@ fn do_step2(
 
     Ok((
         tl::functions::ReqDHParams {
-            nonce: nonce.clone(),
-            server_nonce: res_pq.server_nonce.clone(),
-            p: p_bytes.clone(),
-            q: q_bytes.clone(),
+            nonce,
+            server_nonce: res_pq.server_nonce,
+            p: p_bytes,
+            q: q_bytes,
             public_key_fingerprint: fingerprint,
             encrypted_data: ciphertext,
         }
@@ -495,8 +490,8 @@ fn do_step3(
     // Prepare client DH Inner Data
     let client_dh_inner =
         tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
-            nonce: nonce.clone(),
-            server_nonce: server_nonce.clone(),
+            nonce,
+            server_nonce,
             retry_id: 0, // TODO use an actual retry_id
             g_b: g_b.to_bytes_be(),
         })
@@ -524,8 +519,8 @@ fn do_step3(
 
     Ok((
         tl::functions::SetClientDHParams {
-            nonce: nonce.clone(),
-            server_nonce: server_nonce.clone(),
+            nonce,
+            server_nonce,
             encrypted_data: client_dh_encrypted,
         }
         .to_bytes(),
@@ -559,20 +554,20 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
 
     let dh_gen = match dh_gen {
         tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => DHGenData {
-            nonce: x.nonce.clone(),
-            server_nonce: x.server_nonce.clone(),
+            nonce: x.nonce,
+            server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash1,
             nonce_number: 1,
         },
         tl::enums::SetClientDHParamsAnswer::DhGenRetry(x) => DHGenData {
-            nonce: x.nonce.clone(),
-            server_nonce: x.server_nonce.clone(),
+            nonce: x.nonce,
+            server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash2,
             nonce_number: 2,
         },
         tl::enums::SetClientDHParamsAnswer::DhGenFail(x) => DHGenData {
-            nonce: x.nonce.clone(),
-            server_nonce: x.server_nonce.clone(),
+            nonce: x.nonce,
+            server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash3,
             nonce_number: 3,
         },
@@ -604,8 +599,8 @@ fn check_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKeyGenErro
         Ok(())
     } else {
         Err(AuthKeyGenError::InvalidNonce {
-            got: got.clone(),
-            expected: expected.clone(),
+            got: *got,
+            expected: *expected,
         })
     }
 }
@@ -617,8 +612,8 @@ fn check_server_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKey
         Ok(())
     } else {
         Err(AuthKeyGenError::InvalidServerNonce {
-            got: got.clone(),
-            expected: expected.clone(),
+            got: *got,
+            expected: *expected,
         })
     }
 }
@@ -630,8 +625,8 @@ fn check_new_nonce_hash(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthK
         Ok(())
     } else {
         Err(AuthKeyGenError::InvalidNewNonceHash {
-            got: got.clone(),
-            expected: expected.clone(),
+            got: *got,
+            expected: *expected,
         })
     }
 }
@@ -651,6 +646,7 @@ fn check_g_in_range(value: &BigUint, low: &BigUint, high: &BigUint) -> Result<()
 }
 
 /// Find the RSA key's `(n, e)` pair for a certain fingerprint.
+#[allow(clippy::unreadable_literal)]
 fn key_for_fingerprint(fingerprint: i64) -> Option<rsa::Key> {
     Some(match fingerprint {
         // New

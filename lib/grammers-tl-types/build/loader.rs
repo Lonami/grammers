@@ -34,7 +34,7 @@ pub(crate) fn load_tl(file: &str) -> io::Result<Vec<Definition>> {
 
 /// Find the `// LAYER #` comment, and return its value if it's valid.
 pub(crate) fn find_layer(file: &str) -> io::Result<Option<i32>> {
-    const LAYER_MARK: &'static str = "LAYER";
+    const LAYER_MARK: &str = "LAYER";
 
     Ok(BufReader::new(File::open(file)?).lines().find_map(|line| {
         let line = line.unwrap();

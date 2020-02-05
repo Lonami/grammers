@@ -59,7 +59,7 @@ fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u
     // aes_key = substr (sha256_a, 0, 8) + substr (sha256_b, 8, 16) + substr (sha256_a, 24, 8);
     let aes_key = {
         let mut buffer = [0; 32];
-        buffer[0..0 + 8].copy_from_slice(&sha256_a[0..0 + 8]);
+        buffer[0..8].copy_from_slice(&sha256_a[0..8]);
         buffer[8..8 + 16].copy_from_slice(&sha256_b[8..8 + 16]);
         buffer[24..24 + 8].copy_from_slice(&sha256_a[24..24 + 8]);
         buffer
@@ -68,7 +68,7 @@ fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u
     // aes_iv = substr (sha256_b, 0, 8) + substr (sha256_a, 8, 16) + substr (sha256_b, 24, 8);
     let aes_iv = {
         let mut buffer = [0; 32];
-        buffer[0..0 + 8].copy_from_slice(&sha256_b[0..0 + 8]);
+        buffer[0..8].copy_from_slice(&sha256_b[0..8]);
         buffer[8..8 + 16].copy_from_slice(&sha256_a[8..8 + 16]);
         buffer[24..24 + 8].copy_from_slice(&sha256_b[24..24 + 8]);
         buffer

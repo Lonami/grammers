@@ -22,7 +22,7 @@ use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 ///
 /// The addresses were obtained from the `static` addresses through a call to
 /// `functions::help::GetConfig`.
-const DC_ADDRESSES: [&'static str; 6] = [
+const DC_ADDRESSES: [&str; 6] = [
     "",
     "149.154.175.53:443",
     "149.154.167.51:443",
@@ -35,7 +35,7 @@ const DC_ADDRESSES: [&'static str; 6] = [
 const DEFAULT_DC_ID: usize = 2;
 
 /// When no locale is found, use this one instead.
-const DEFAULT_LOCALE: &'static str = "en";
+const DEFAULT_LOCALE: &str = "en";
 
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
@@ -59,7 +59,7 @@ impl IntoInput<tl::enums::InputPeer> for tl::types::User {
             Ok(tl::enums::InputPeer::InputPeerUser(
                 tl::types::InputPeerUser {
                     user_id: self.id,
-                    access_hash: access_hash,
+                    access_hash,
                 },
             ))
         } else {
@@ -275,12 +275,13 @@ impl Client {
 
     /// Resolves a username into the user that owns it, if any.
     pub fn resolve_username(&mut self, username: &str) -> io::Result<Option<tl::types::User>> {
-        let tl::types::contacts::ResolvedPeer { peer, users, .. } =
-            match self.invoke(&tl::functions::contacts::ResolveUsername {
-                username: username.into(),
-            })?? {
-                tl::enums::contacts::ResolvedPeer::ResolvedPeer(x) => x,
-            };
+        let tl::enums::contacts::ResolvedPeer::ResolvedPeer(tl::types::contacts::ResolvedPeer {
+            peer,
+            users,
+            ..
+        }) = self.invoke(&tl::functions::contacts::ResolveUsername {
+            username: username.into(),
+        })??;
 
         match peer {
             tl::enums::Peer::PeerUser(tl::types::PeerUser { user_id }) => {

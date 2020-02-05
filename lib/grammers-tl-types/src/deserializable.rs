@@ -66,6 +66,7 @@ impl Deserializable for bool {
     /// assert_eq!(bool::from_bytes(&[0xb5, 0x75, 0x72, 0x99]).unwrap(), true);
     /// assert_eq!(bool::from_bytes(&[0x37, 0x97, 0x79, 0xbc]).unwrap(), false);
     /// ```
+    #[allow(clippy::unreadable_literal)]
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         match id {
@@ -235,6 +236,7 @@ impl<T: Deserializable> Deserializable for Vec<T> {
     /// assert_eq!(Vec::<i32>::from_bytes(&[0x15, 0xc4, 0xb5, 0x1c, 0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]).unwrap(),
     ///            vec![0x7f_i32]);
     /// ```
+    #[allow(clippy::unreadable_literal)]
     fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         if id != 0x1cb5c415u32 {
@@ -344,9 +346,8 @@ impl Deserializable for Vec<u8> {
         let (len, padding) = if first_byte == 254 {
             let mut buffer = [0u8; 3];
             buf.read_exact(&mut buffer)?;
-            let len = ((buffer[0] as usize) << 0)
-                | ((buffer[1] as usize) << 8)
-                | ((buffer[2] as usize) << 16);
+            let len =
+                (buffer[0] as usize) | ((buffer[1] as usize) << 8) | ((buffer[2] as usize) << 16);
 
             (len, len % 4)
         } else {

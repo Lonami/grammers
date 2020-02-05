@@ -16,6 +16,7 @@ use std::io::{Error, ErrorKind, Read, Result, Write};
 /// * Maximum envelope length: 4 bytes.
 ///
 /// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
+#[derive(Default)]
 pub struct TransportAbridged;
 
 impl TransportAbridged {

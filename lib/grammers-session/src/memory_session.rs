@@ -26,21 +26,27 @@ impl MemorySession {
     }
 }
 
+impl Default for MemorySession {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl Session for MemorySession {
     fn set_user_datacenter(&mut self, dc_id: i32, dc_addr: &SocketAddr) {
-        self.user_dc = Some((dc_id, dc_addr.clone()));
+        self.user_dc = Some((dc_id, *dc_addr));
     }
 
     fn set_auth_key_data(&mut self, _dc_id: i32, data: &[u8; 256]) {
-        self.auth_key_data = Some(data.clone());
+        self.auth_key_data = Some(*data);
     }
 
     fn get_user_datacenter(&self) -> Option<(i32, SocketAddr)> {
-        self.user_dc.clone()
+        self.user_dc
     }
 
     fn get_auth_key_data(&self, _dc_id: i32) -> Option<[u8; 256]> {
-        self.auth_key_data.clone()
+        self.auth_key_data
     }
 
     fn save(&mut self) -> io::Result<()> {

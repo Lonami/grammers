@@ -9,9 +9,9 @@ use crate::errors::ParseError;
 use crate::tl::{Category, Definition};
 use crate::utils::remove_tl_comments;
 
-const DEFINITION_SEP: &'static str = ";";
-const FUNCTIONS_SEP: &'static str = "---functions---";
-const TYPES_SEP: &'static str = "---types---";
+const DEFINITION_SEP: &str = ";";
+const FUNCTIONS_SEP: &str = "---functions---";
+const TYPES_SEP: &str = "---types---";
 
 /// An iterator over [Type Language] definitions.
 ///

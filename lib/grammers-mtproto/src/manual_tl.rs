@@ -94,7 +94,8 @@ impl RpcResult {
 }
 
 impl Identifiable for RpcResult {
-    const CONSTRUCTOR_ID: u32 = 0xf35c6d01_u32;
+    #[allow(clippy::unreadable_literal)]
+    const CONSTRUCTOR_ID: u32 = 0xf35c6d01;
 }
 
 impl Deserializable for RpcResult {
@@ -131,7 +132,7 @@ impl MessageContainer {
     /// Maximum size in bytes for the inner payload of the container.
     /// Telegram will close the connection if the payload is bigger.
     /// The overhead of the container itself is subtracted.
-    pub const MAXIMUM_SIZE: usize = 1044456 - Self::SIZE_OVERHEAD;
+    pub const MAXIMUM_SIZE: usize = 1_044_456 - Self::SIZE_OVERHEAD;
 
     /// Maximum amount of messages that can't be sent inside a single
     /// container, inclusive. Beyond this limit Telegram will respond
@@ -145,7 +146,8 @@ impl MessageContainer {
 }
 
 impl Identifiable for MessageContainer {
-    const CONSTRUCTOR_ID: u32 = 0x73f1f8dc_u32;
+    #[allow(clippy::unreadable_literal)]
+    const CONSTRUCTOR_ID: u32 = 0x73f1f8dc;
 }
 
 impl Deserializable for MessageContainer {
@@ -200,7 +202,8 @@ impl GzipPacked {
 }
 
 impl Identifiable for GzipPacked {
-    const CONSTRUCTOR_ID: u32 = 0x3072cfa1_u32;
+    #[allow(clippy::unreadable_literal)]
+    const CONSTRUCTOR_ID: u32 = 0x3072cfa1;
 }
 
 impl Serializable for GzipPacked {

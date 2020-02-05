@@ -36,7 +36,7 @@ impl AuthKey {
         let sha = sha1(&data);
         let aux_hash = {
             let mut buffer = [0; 8];
-            buffer.copy_from_slice(&sha[0..0 + 8]);
+            buffer.copy_from_slice(&sha[0..8]);
             buffer
         };
         let key_id = {
@@ -55,7 +55,7 @@ impl AuthKey {
     /// Converts the authorization key to a sequence of bytes, which can
     /// be loaded back later.
     pub fn to_bytes(&self) -> [u8; 256] {
-        self.data.clone()
+        self.data
     }
 
     /// Calculates the new nonce hash based on the current attributes.

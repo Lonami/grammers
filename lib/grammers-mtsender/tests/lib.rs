@@ -5,10 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub const TELEGRAM_TEST_DC_2: &'static str = "149.154.167.40:443";
+pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 
 /// The default datacenter to connect to for testing.
-pub const TELEGRAM_DEFAULT_TEST_DC: &'static str = TELEGRAM_TEST_DC_2;
+pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtsender::MTSender;
 

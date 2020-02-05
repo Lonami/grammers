@@ -178,8 +178,7 @@ impl From<tl::types::RpcError> for RPCError {
         if let Some(value) = error
             .error_message
             .split(|c: char| !c.is_digit(10))
-            .filter(|s| !s.is_empty())
-            .next()
+            .find(|s| !s.is_empty())
         {
             let mut to_remove = String::with_capacity(1 + value.len());
             to_remove.push('_');

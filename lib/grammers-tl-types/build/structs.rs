@@ -446,6 +446,7 @@ pub(crate) fn write_category_mod<W: Write>(
                  /// [`Identifiable`]: ../trait.Identifiable.html\n\
                  /// [`Serializable`]: ../trait.Serializable.html\n\
                  /// [`Deserializable`]: ../trait.Deserializable.html\n\
+                 #[allow(clippy::cognitive_complexity, clippy::identity_op, clippy::unreadable_literal)]\n\
                  pub mod types {{\n\
                  "
             )?;
@@ -460,6 +461,7 @@ pub(crate) fn write_category_mod<W: Write>(
             ///\n\
             /// [`Identifiable`]: ../trait.Identifiable.html\n\
             /// [`Serializable`]: ../trait.Serializable.html\n\
+            #[allow(clippy::cognitive_complexity, clippy::identity_op, clippy::unreadable_literal)]\n\
             pub mod functions {{
             "
             )?;
@@ -474,6 +476,7 @@ pub(crate) fn write_category_mod<W: Write>(
         let indent = if key.is_empty() {
             "    "
         } else {
+            writeln!(file, "    #[allow(clippy::unreadable_literal)]")?;
             writeln!(file, "    pub mod {} {{", key)?;
             "        "
         };

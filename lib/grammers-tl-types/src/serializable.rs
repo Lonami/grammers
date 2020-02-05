@@ -40,6 +40,7 @@ impl Serializable for bool {
     /// assert_eq!(true.to_bytes(), [0xb5, 0x75, 0x72, 0x99]);
     /// assert_eq!(false.to_bytes(), [0x37, 0x97, 0x79, 0xbc]);
     /// ```
+    #[allow(clippy::unreadable_literal)]
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
         if *self { 0x997275b5u32 } else { 0xbc799737u32 }.serialize(buf)
     }
@@ -187,6 +188,7 @@ impl<T: Serializable> Serializable for Vec<T> {
     /// assert_eq!(vec![0x7f_i32].to_bytes(),
     ///            [0x15, 0xc4, 0xb5, 0x1c, 0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
     /// ```
+    #[allow(clippy::unreadable_literal)]
     fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
         0x1cb5c415u32.serialize(buf)?;
         (self.len() as i32).serialize(buf)?;
@@ -307,7 +309,7 @@ impl Serializable for &[u8] {
         } else {
             buf.write_all(&[
                 254,
-                ((self.len() >> 0) & 0xff) as u8,
+                (self.len() & 0xff) as u8,
                 ((self.len() >> 8) & 0xff) as u8,
                 ((self.len() >> 16) & 0xff) as u8,
             ])?;

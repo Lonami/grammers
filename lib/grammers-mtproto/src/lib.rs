@@ -147,6 +147,12 @@ impl MTProtoBuilder {
     }
 }
 
+impl Default for MTProto {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl MTProto {
     // Constructors
     // ========================================
@@ -602,10 +608,7 @@ impl MTProto {
     /// pong#347773c5 msg_id:long ping_id:long = Pong;
     /// ```
     fn handle_pong(&mut self, message: &manual_tl::Message) -> io::Result<()> {
-        let pong = tl::enums::Pong::from_bytes(&message.body)?;
-        let pong = match pong {
-            tl::enums::Pong::Pong(x) => x,
-        };
+        let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
         self.response_queue
             .push_back((MsgId(pong.msg_id), Ok(message.body.clone())));
@@ -749,10 +752,8 @@ impl MTProto {
     /// salts:vector<future_salt> = FutureSalts;
     /// ```
     fn handle_future_salts(&mut self, message: &manual_tl::Message) -> io::Result<()> {
-        let salts = tl::enums::FutureSalts::from_bytes(&message.body)?;
-        let salts = match salts {
-            tl::enums::FutureSalts::FutureSalts(x) => x,
-        };
+        let tl::enums::FutureSalts::FutureSalts(salts) =
+            tl::enums::FutureSalts::from_bytes(&message.body)?;
 
         self.response_queue
             .push_back((MsgId(salts.req_msg_id), Ok(message.body.clone())));
