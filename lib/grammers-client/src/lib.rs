@@ -17,6 +17,8 @@ use grammers_mtsender::{MTSender, RequestResult};
 use grammers_session::{MemorySession, Session};
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 
+pub use dialogs::Dialogs;
+
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
 ///
@@ -327,10 +329,6 @@ impl Client {
             schedule_date: None,
         })??;
         Ok(())
-    }
-
-    pub fn iter_dialogs(&mut self) -> dialogs::Dialogs {
-        dialogs::Dialogs::new(self)
     }
 
     /// Initializes the connection with Telegram. If this is never done on

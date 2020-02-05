@@ -2,7 +2,6 @@ use std::collections::HashMap;
 use std::convert::TryInto;
 use std::io;
 
-use fallible_iterator::FallibleIterator;
 use grammers_tl_types as tl;
 
 use crate::types;
@@ -10,8 +9,7 @@ use crate::Client;
 
 const MAX_DIALOGS_PER_REQUEST: i32 = 100;
 
-pub struct Dialogs<'a> {
-    client: &'a mut Client,
+pub struct Dialogs {
     batch_stack: Vec<types::Dialog>,
     total: Option<usize>,
     done: bool,
@@ -40,10 +38,9 @@ fn message_id(message: &tl::enums::Message) -> Option<(i32, i32)> {
     }
 }
 
-impl<'a> Dialogs<'a> {
-    pub fn new(client: &'a mut Client) -> Self {
+impl Dialogs {
+    pub fn iter() -> Self {
         Self {
-            client,
             batch_stack: Vec::with_capacity(MAX_DIALOGS_PER_REQUEST as usize),
             total: None,
             done: false,
@@ -62,12 +59,8 @@ impl<'a> Dialogs<'a> {
     }
 
     /// If the batch index is beyond the buffer length, it fills the buffer.
-    fn ensure_buffer(&mut self) -> io::Result<()> {
-        if self.batch_stack.is_empty() && !self.done {
-            self.fill_buffer()
-        } else {
-            Ok(())
-        }
+    fn should_fill_buffer(&mut self) -> bool {
+        self.batch_stack.is_empty() && !self.done
     }
 
     fn update_user_entities(&mut self, users: Vec<tl::enums::User>) {
@@ -152,8 +145,8 @@ impl<'a> Dialogs<'a> {
         }
     }
 
-    fn fill_buffer(&mut self) -> io::Result<()> {
-        match self.client.invoke(&self.request)?? {
+    fn fill_buffer(&mut self, client: &mut Client) -> io::Result<()> {
+        match client.invoke(&self.request)?? {
             tl::enums::messages::Dialogs::Dialogs(tl::types::messages::Dialogs {
                 dialogs,
                 messages,
@@ -189,22 +182,12 @@ impl<'a> Dialogs<'a> {
         }
         Ok(())
     }
-}
 
-impl<'a> FallibleIterator for Dialogs<'a> {
-    type Item = types::Dialog;
-    type Error = io::Error;
-
-    fn next(&mut self) -> Result<Option<Self::Item>, Self::Error> {
-        self.ensure_buffer()?;
-        Ok(self.batch_stack.pop())
-    }
-
-    fn size_hint(&self) -> (usize, Option<usize>) {
-        if let Some(total) = self.total {
-            (total, Some(total))
-        } else {
-            (0, None)
+    pub fn next(&mut self, client: &mut Client) -> Result<Option<types::Dialog>, io::Error> {
+        if self.should_fill_buffer() {
+            self.fill_buffer(client)?;
         }
+
+        Ok(self.batch_stack.pop())
     }
 }

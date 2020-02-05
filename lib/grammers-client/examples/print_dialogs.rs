@@ -7,8 +7,7 @@
 use std::env;
 use std::io::{self, Write};
 
-use fallible_iterator::FallibleIterator;
-use grammers_client::Client;
+use grammers_client::{Client, Dialogs};
 use grammers_session::TextSession;
 
 fn ask_input(message: &str) -> io::Result<String> {
@@ -48,8 +47,8 @@ fn main() -> io::Result<()> {
         client.sign_in(&code).expect("failed to login");
     }
 
-    let mut iter = client.iter_dialogs();
-    while let Some(dialog) = iter.next()? {
+    let mut iter = Dialogs::iter();
+    while let Some(dialog) = iter.next(&mut client)? {
         println!("[{:>10}] {}", dialog.entity.id(), dialog.entity.display());
     }
 
