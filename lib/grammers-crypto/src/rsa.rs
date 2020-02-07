@@ -29,9 +29,7 @@ pub(crate) fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -
     let to_encrypt = {
         // sha1
         let mut buffer = Vec::with_capacity(255);
-        let mut hasher = Sha1::new();
-        hasher.update(data);
-        buffer.extend(&hasher.digest().bytes());
+        buffer.extend(&Sha1::from(data).digest().bytes());
 
         // + data
         buffer.extend(data);

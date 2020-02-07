@@ -397,9 +397,7 @@ fn do_step3(
 
             let new_nonce_hash = {
                 let mut buffer = [0; 16];
-                let mut hasher = Sha1::new();
-                hasher.update(&new_nonce);
-                buffer.copy_from_slice(&hasher.digest().bytes()[4..20]);
+                buffer.copy_from_slice(&Sha1::from(&new_nonce).digest().bytes()[4..20]);
                 buffer
             };
             check_new_nonce_hash(&server_dh_params.new_nonce_hash, &new_nonce_hash)?;
@@ -439,9 +437,9 @@ fn do_step3(
     };
 
     let expected_answer_hash = {
-        let mut hasher = Sha1::new();
-        hasher.update(&plain_text_answer[20..20 + plain_text_cursor.position() as usize]);
-        hasher.digest().bytes()
+        Sha1::from(&plain_text_answer[20..20 + plain_text_cursor.position() as usize])
+            .digest()
+            .bytes()
     };
 
     if got_answer_hash != expected_answer_hash {
@@ -501,10 +499,7 @@ fn do_step3(
     let client_dh_inner_hashed = {
         let mut buffer = Vec::with_capacity(20 + client_dh_inner.len() + 16);
 
-        let mut hasher = Sha1::new();
-        hasher.update(&client_dh_inner);
-
-        buffer.extend(&hasher.digest().bytes());
+        buffer.extend(&Sha1::from(&client_dh_inner).digest().bytes());
         buffer.extend(&client_dh_inner);
 
         // Make sure we pad it ourselves, or else `encrypt_ige` will,
