@@ -5,14 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+mod aes;
 pub mod auth_key;
 mod factorize;
 mod rsa;
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
-use openssl::aes::{aes_ige, AesKey};
-use openssl::sha::sha1;
-use openssl::symm::Mode;
+use sha1::Sha1;
 use sha2::{Digest, Sha256};
 use std::error::Error;
 use std::fmt;
@@ -118,20 +117,9 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
     };
 
     // Calculate the key
-    let (key, mut iv) = calc_key(&auth_key, &msg_key, side);
+    let (key, iv) = calc_key(&auth_key, &msg_key, side);
 
-    let ciphertext = {
-        let mut buffer = vec![0; padded_plaintext.len()];
-        // Safe to unwrap because the key is of the correct length
-        aes_ige(
-            &padded_plaintext,
-            &mut buffer,
-            &AesKey::new_encrypt(&key).unwrap(),
-            &mut iv,
-            Mode::Encrypt,
-        );
-        buffer
-    };
+    let ciphertext = { aes::ige_encrypt(&padded_plaintext, &key, &iv) };
 
     let mut result = Vec::with_capacity(auth_key.key_id.len() + msg_key.len() + ciphertext.len());
     result.extend(&auth_key.key_id);
@@ -228,26 +216,28 @@ pub fn generate_key_data_from_nonce(
     server_nonce: &[u8; 16],
     new_nonce: &[u8; 32],
 ) -> ([u8; 32], [u8; 32]) {
+    let mut hasher = Sha1::new();
+
     // hash1 = sha1(new_nonce + server_nonce).digest()
     let hash1: [u8; 20] = {
-        let mut buffer = Vec::with_capacity(new_nonce.len() + server_nonce.len());
-        buffer.extend(new_nonce);
-        buffer.extend(server_nonce);
-        sha1(&buffer)
+        hasher.reset();
+        hasher.update(new_nonce);
+        hasher.update(server_nonce);
+        hasher.digest().bytes()
     };
     // hash2 = sha1(server_nonce + new_nonce).digest()
     let hash2: [u8; 20] = {
-        let mut buffer = Vec::with_capacity(server_nonce.len() + new_nonce.len());
-        buffer.extend(server_nonce);
-        buffer.extend(new_nonce);
-        sha1(&buffer)
+        hasher.reset();
+        hasher.update(server_nonce);
+        hasher.update(new_nonce);
+        hasher.digest().bytes()
     };
     // hash3 = sha1(new_nonce + new_nonce).digest()
     let hash3: [u8; 20] = {
-        let mut buffer = Vec::with_capacity(new_nonce.len() + new_nonce.len());
-        buffer.extend(new_nonce);
-        buffer.extend(new_nonce);
-        sha1(&buffer)
+        hasher.reset();
+        hasher.update(new_nonce);
+        hasher.update(new_nonce);
+        hasher.digest().bytes()
     };
 
     // key = hash1 + hash2[:12]
@@ -287,31 +277,13 @@ pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
         &padded
     };
 
-    let mut buffer = vec![0; padded_plaintext.len()];
-    // Safe to unwrap because the key is of the correct length
-    aes_ige(
-        padded_plaintext,
-        &mut buffer,
-        &AesKey::new_encrypt(key).unwrap(),
-        &mut iv.clone(),
-        Mode::Encrypt,
-    );
-    buffer
+    aes::ige_encrypt(padded_plaintext, key, iv)
 }
 
 /// Decrypt data using AES-IGE. Panics if the plaintext is not padded
 /// to 16 bytes.
 pub fn decrypt_ige(padded_ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    let mut buffer = vec![0; padded_ciphertext.len()];
-    // Safe to unwrap because the key is of the correct length
-    aes_ige(
-        &padded_ciphertext,
-        &mut buffer,
-        &AesKey::new_decrypt(key).unwrap(),
-        &mut iv.clone(),
-        Mode::Decrypt,
-    );
-    buffer
+    aes::ige_decrypt(padded_ciphertext, key, iv)
 }
 
 #[cfg(test)]

@@ -14,8 +14,8 @@ categories = ["cryptography"]
 edition = "2018"
 
 [dependencies]
+aes = "0.3.2"
 getrandom = "0.1.14"
-openssl = "0.10.26"
 sha1 = "0.6.0"
 sha2 = "0.8.1"
 
