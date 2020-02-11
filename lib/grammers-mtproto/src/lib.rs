@@ -954,7 +954,7 @@ mod tests {
         let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
         assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
-            Err(EnqueueError::PayloadTooLarge) => true,
+            Err(SerializeError::PayloadTooLarge) => true,
             _ => false,
         });
 

@@ -11,14 +11,14 @@
 //! # Examples
 //!
 //! ```no_run
-//! use std::io::Result;
 //! use grammers_crypto::auth_key;
+//! use grammers_crypto::auth_key::generation::AuthKeyGenError;
 //!
-//! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>> {
+//! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>, AuthKeyGenError> {
 //!     unimplemented!()
 //! }
 //!
-//! fn main() -> Result<()> {
+//! fn main() -> Result<(), AuthKeyGenError> {
 //!     let (request, data) = auth_key::generation::step1()?;
 //!     let response = send_data_to_server(&request)?;
 //!
