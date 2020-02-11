@@ -7,10 +7,11 @@
 use std::env;
 use std::io::{self, Write};
 
-use grammers_client::{Client, Dialogs};
+use grammers_client::iterators::RPCIterator;
+use grammers_client::{AuthorizationError, Client, Dialogs, InvocationError};
 use grammers_session::TextSession;
 
-fn ask_input(message: &str) -> io::Result<String> {
+fn ask_input(message: &str) -> Result<String, InvocationError> {
     let mut input = String::new();
     print!("{}", message);
     io::stdout().flush()?;
@@ -18,7 +19,7 @@ fn ask_input(message: &str) -> io::Result<String> {
     Ok(input)
 }
 
-fn main() -> io::Result<()> {
+fn main() -> Result<(), AuthorizationError> {
     let mut args = env::args();
 
     let _path = args.next();

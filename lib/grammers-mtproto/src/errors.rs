@@ -12,39 +12,15 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
+use grammers_crypto::DecryptionError;
 use grammers_tl_types as tl;
-
-/// The error type for enqueueing requests.
-#[derive(Debug)]
-pub enum EnqueueError {
-    /// The request payload is too large and cannot possibly be sent.
-    /// Telegram would forcibly close the connection if it was ever sent.
-    PayloadTooLarge,
-
-    /// Well-formed data must be padded to 4 bytes.
-    IncorrectPadding,
-}
-
-impl Error for EnqueueError {}
-
-impl fmt::Display for EnqueueError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::PayloadTooLarge => write!(f, "the payload is too large and cannot be sent"),
-            Self::IncorrectPadding => write!(f, "the data is not padded correctly"),
-        }
-    }
-}
-
-impl From<EnqueueError> for io::Error {
-    fn from(error: EnqueueError) -> Self {
-        io::Error::new(io::ErrorKind::InvalidData, error)
-    }
-}
 
 /// The error type for the deserialization of server messages.
 #[derive(Debug)]
 pub enum DeserializeError {
+    /// The authorization key is missing, so data cannot be decrypted.
+    MissingAuthKey,
+
     /// The server's authorization key did not match our expectations.
     BadAuthKey { got: i64, expected: i64 },
 
@@ -76,6 +52,12 @@ pub enum DeserializeError {
 
     /// The server responded with compressed data which we failed to decompress.
     DecompressionFailed,
+
+    /// Reading from the buffer failed in some way.
+    BufferError(io::Error),
+
+    /// Attempting to decrypt the message failed in some way.
+    DecryptionError(DecryptionError),
 }
 
 impl Error for DeserializeError {}
@@ -83,6 +65,7 @@ impl Error for DeserializeError {}
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
+            Self::MissingAuthKey => write!(f, "missing auth key"),
             Self::BadAuthKey { got, expected } => write!(
                 f,
                 "bad server auth key (got {}, expected {})",
@@ -105,13 +88,44 @@ impl fmt::Display for DeserializeError {
                 "server responded with a payload that's too small to fit a valid message"
             ),
             Self::DecompressionFailed => write!(f, "failed to decompress server's data"),
+            Self::BufferError(ref error) => write!(f, "failed to deserialize message: {}", error),
+            Self::DecryptionError(ref error) => write!(f, "failed to decrypt message: {}", error),
         }
     }
 }
 
-impl From<DeserializeError> for io::Error {
-    fn from(error: DeserializeError) -> Self {
-        io::Error::new(io::ErrorKind::InvalidData, error)
+impl From<io::Error> for DeserializeError {
+    fn from(error: io::Error) -> Self {
+        Self::BufferError(error)
+    }
+}
+
+impl From<DecryptionError> for DeserializeError {
+    fn from(error: DecryptionError) -> Self {
+        Self::DecryptionError(error)
+    }
+}
+
+/// The error type for the serialization of outgoing messages.
+#[derive(Debug)]
+pub enum SerializeError {
+    /// The authorization key is missing, so data cannot be encrypted.
+    MissingAuthKey,
+
+    /// The serialization would be considered invalid because the request
+    /// payload is too large and cannot possibly be sent. Telegram would
+    /// forcibly close the connection if it was ever sent.
+    PayloadTooLarge,
+}
+
+impl Error for SerializeError {}
+
+impl fmt::Display for SerializeError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::MissingAuthKey => write!(f, "missing auth key"),
+            Self::PayloadTooLarge => write!(f, "request payload too large"),
+        }
     }
 }
 
@@ -163,12 +177,6 @@ impl fmt::Display for RPCError {
             write!(f, " (value: {})", value)?;
         }
         Ok(())
-    }
-}
-
-impl From<RPCError> for io::Error {
-    fn from(error: RPCError) -> Self {
-        Self::new(io::ErrorKind::InvalidData, error)
     }
 }
 

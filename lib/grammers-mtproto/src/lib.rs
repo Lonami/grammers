@@ -18,7 +18,7 @@ mod manual_tl;
 pub mod transports;
 mod utils;
 
-use crate::errors::{DeserializeError, EnqueueError, RequestError};
+use crate::errors::{DeserializeError, RequestError, SerializeError};
 
 use std::collections::VecDeque;
 use std::io::{self, Write};
@@ -268,45 +268,36 @@ impl MTProto {
     /// if it is, the method returns the inner contents of the message.
     ///
     /// [`serialize_plain_message`]: #method.serialize_plain_message
-    pub fn deserialize_plain_message<'a>(&self, message: &'a [u8]) -> io::Result<&'a [u8]> {
+    pub fn deserialize_plain_message<'a>(
+        &self,
+        message: &'a [u8],
+    ) -> Result<&'a [u8], DeserializeError> {
         utils::check_message_buffer(message)?;
 
         let mut buf = io::Cursor::new(message);
         let auth_key_id = i64::deserialize(&mut buf)?;
         if auth_key_id != 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::BadAuthKey {
-                    got: auth_key_id,
-                    expected: 0,
-                },
-            ));
+            return Err(DeserializeError::BadAuthKey {
+                got: auth_key_id,
+                expected: 0,
+            });
         }
 
         let msg_id = i64::deserialize(&mut buf)?;
         if msg_id == 0 {
             // TODO make sure it's close to our system time
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::BadMessageId { got: msg_id },
-            ));
+            return Err(DeserializeError::BadMessageId { got: msg_id });
         }
 
         let len = i32::deserialize(&mut buf)?;
         if len <= 0 {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::NegativeMessageLength { got: len },
-            ));
+            return Err(DeserializeError::NegativeMessageLength { got: len });
         }
         if (20 + len) as usize > message.len() {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                DeserializeError::TooLongMessageLength {
-                    got: len as usize,
-                    max_length: message.len() - 20,
-                },
-            ));
+            return Err(DeserializeError::TooLongMessageLength {
+                got: len as usize,
+                max_length: message.len() - 20,
+            });
         }
 
         Ok(&message[20..20 + len as usize])
@@ -325,15 +316,22 @@ impl MTProto {
     /// been sent yet, the message ID will become stale and Telegram will
     /// reject it. The caller is then expected to re-enqueue their request
     /// and send a new encrypted message.
-    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> Result<MsgId, EnqueueError> {
+    ///
+    /// # Panics
+    ///
+    /// The method panics if the body length is not padded to 4 bytes. The
+    /// serialization of requests will always be correctly padded, so adding
+    /// an error case for this rare case (impossible with the expected inputs)
+    /// would simply be unnecessary.
+    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> Result<MsgId, SerializeError> {
         if body.len() + manual_tl::Message::SIZE_OVERHEAD
             > manual_tl::MessageContainer::MAXIMUM_SIZE
         {
-            return Err(EnqueueError::PayloadTooLarge);
+            return Err(SerializeError::PayloadTooLarge);
         }
-        if body.len() % 4 != 0 {
-            return Err(EnqueueError::IncorrectPadding);
-        }
+
+        // Serialized requests will always be well-formed
+        assert!(body.len() % 4 == 0);
 
         // Payload from the outside is always considered to be
         // content-related, which means we can apply compression.
@@ -458,15 +456,15 @@ impl MTProto {
     /// `None`.
     ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    pub fn serialize_encrypted_messages(&mut self) -> Result<Option<Vec<u8>>, io::Error> {
+    pub fn serialize_encrypted_messages(&mut self) -> Result<Option<Vec<u8>>, SerializeError> {
         // Attempting to encrypt something with an authorization key full of
         // zeros will cause Telegram to reply with -404, presumably for no
         // authorization key.
         if self.auth_key.is_none() {
-            // TODO proper error
-            return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found"));
+            return Err(SerializeError::MissingAuthKey);
         }
 
+        // TODO try to avoid unwrap even though it's safe
         Ok(self
             .pop_queued_messages()
             .map(|payload| encrypt_data_v2(&payload, self.auth_key.as_ref().unwrap())))
@@ -477,11 +475,13 @@ impl MTProto {
     /// and can be polled for later with [`poll_response`].
     ///
     /// [`poll_response`]: #method.poll_response
-    pub fn process_encrypted_response(&mut self, ciphertext: &[u8]) -> io::Result<()> {
+    pub fn process_encrypted_response(
+        &mut self,
+        ciphertext: &[u8],
+    ) -> Result<(), DeserializeError> {
         let auth_key = match &self.auth_key {
             Some(x) => x,
-            // TODO proper error
-            None => return Err(io::Error::new(io::ErrorKind::NotFound, "no auth_key found")),
+            None => return Err(DeserializeError::MissingAuthKey),
         };
 
         utils::check_message_buffer(ciphertext)?;
@@ -508,7 +508,7 @@ impl MTProto {
     // Response handlers
     // ========================================
 
-    fn process_message(&mut self, message: manual_tl::Message) -> io::Result<()> {
+    fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         self.pending_ack.push(message.msg_id);
 
         // Determine what to do based on the inner body's constructor
@@ -538,7 +538,7 @@ impl MTProto {
     /// ```tl
     /// rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
     /// ```
-    fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO make sure we notify about errors if any step fails in any handler
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
         let inner_constructor = rpc_result.inner_constructor()?;
@@ -575,7 +575,7 @@ impl MTProto {
     /// ```tl
     /// msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
     /// ```
-    fn handle_container(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_container(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
         let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
         for inner_message in container.messages {
             self.process_message(inner_message)?;
@@ -589,7 +589,7 @@ impl MTProto {
     /// ```tl
     /// gzip_packed#3072cfa1 packed_data:bytes = Object;
     /// ```
-    fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO custom error, don't use a string
         let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
         self.process_message(manual_tl::Message {
@@ -607,7 +607,7 @@ impl MTProto {
     /// ```tl
     /// pong#347773c5 msg_id:long ping_id:long = Pong;
     /// ```
-    fn handle_pong(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_pong(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
         self.response_queue
@@ -630,7 +630,10 @@ impl MTProto {
     /// bad_server_salt#edab447b bad_msg_id:long bad_msg_seqno:int
     /// error_code:int new_server_salt:long = BadMsgNotification;
     /// ```
-    fn handle_bad_notification(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_bad_notification(
+        &mut self,
+        message: &manual_tl::Message,
+    ) -> Result<(), DeserializeError> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
@@ -688,7 +691,10 @@ impl MTProto {
     /// msg_new_detailed_info#809db6df answer_msg_id:long
     /// bytes:int status:int = MsgDetailedInfo;
     /// ```
-    fn handle_detailed_info(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_detailed_info(
+        &mut self,
+        message: &manual_tl::Message,
+    ) -> Result<(), DeserializeError> {
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1790-L1820
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
         let msg_detailed = tl::enums::MsgDetailedInfo::from_bytes(&message.body)?;
@@ -709,7 +715,10 @@ impl MTProto {
     /// new_session_created#9ec20908 first_msg_id:long unique_id:long
     /// server_salt:long = NewSession;
     /// ```
-    fn handle_new_session_created(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_new_session_created(
+        &mut self,
+        message: &manual_tl::Message,
+    ) -> Result<(), DeserializeError> {
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
             tl::enums::NewSession::NewSessionCreated(x) => {
@@ -738,7 +747,7 @@ impl MTProto {
     /// never returned (unless on a bad notification), this method
     /// also removes containers messages when any of their inner
     /// messages are acknowledged.
-    fn handle_ack(&self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_ack(&self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO notify about this somehow
         let _ack = tl::enums::MsgsAck::from_bytes(&message.body)?;
         Ok(())
@@ -751,7 +760,10 @@ impl MTProto {
     /// future_salts#ae500895 req_msg_id:long now:int
     /// salts:vector<future_salt> = FutureSalts;
     /// ```
-    fn handle_future_salts(&mut self, message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_future_salts(
+        &mut self,
+        message: &manual_tl::Message,
+    ) -> Result<(), DeserializeError> {
         let tl::enums::FutureSalts::FutureSalts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
@@ -762,18 +774,21 @@ impl MTProto {
 
     /// Handles both :tl:`MsgsStateReq` and :tl:`MsgResendReq` by
     /// enqueuing a :tl:`MsgsStateInfo` to be sent at a later point.
-    fn handle_state_forgotten(&self, _message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_state_forgotten(
+        &self,
+        _message: &manual_tl::Message,
+    ) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
 
     /// Handles :tl:`MsgsAllInfo` by doing nothing (yet).
-    fn handle_msg_all(&self, _message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_msg_all(&self, _message: &manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
 
-    fn handle_update(&self, _message: &manual_tl::Message) -> io::Result<()> {
+    fn handle_update(&self, _message: &manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO dispatch this somehow
         Ok(())
     }
@@ -957,25 +972,11 @@ mod tests {
     }
 
     #[test]
-    fn ensure_non_padded_payload_errors() {
+    #[should_panic]
+    fn ensure_non_padded_payload_panics() {
         let mut mtproto = MTProto::build().compression_threshold(None).finish();
 
-        assert!(match mtproto.enqueue_request(vec![1, 2, 3]) {
-            Err(EnqueueError::IncorrectPadding) => true,
-            _ => false,
-        });
-
-        assert!(mtproto.pop_queued_messages().is_none());
-
-        // Make sure the queue is not in a broken state
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
-
-        assert_eq!(
-            mtproto.pop_queued_messages().unwrap().len(),
-            20 + MESSAGE_PREFIX_LEN
-        );
+        drop(mtproto.enqueue_request(vec![1, 2, 3]));
     }
 
     #[test]

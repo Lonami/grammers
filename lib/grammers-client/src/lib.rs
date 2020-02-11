@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod iterators;
+pub mod iterators;
 pub mod types;
 
 use std::convert::TryInto;
@@ -13,7 +13,8 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use grammers_mtproto::errors::RPCError;
-use grammers_mtsender::{MTSender, RequestResult};
+use grammers_mtsender::MTSender;
+pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{MemorySession, Session};
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
 
@@ -52,11 +53,11 @@ pub struct Client {
 /// Implementors of this trait have a way to turn themselves into the
 /// desired input parameter.
 pub trait IntoInput<T> {
-    fn convert(&self, client: &mut Client) -> io::Result<T>;
+    fn convert(&self, client: &mut Client) -> Result<T, InvocationError>;
 }
 
 impl IntoInput<tl::enums::InputPeer> for tl::types::User {
-    fn convert(&self, _client: &mut Client) -> io::Result<tl::enums::InputPeer> {
+    fn convert(&self, _client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
         if let Some(access_hash) = self.access_hash {
             Ok(tl::enums::InputPeer::InputPeerUser(
                 tl::types::InputPeerUser {
@@ -65,23 +66,27 @@ impl IntoInput<tl::enums::InputPeer> for tl::types::User {
                 },
             ))
         } else {
-            Err(io::Error::new(
+            // TODO how should custom "into input" errors be handled?
+            // this is pretty much the only case where we need a custom one,
+            // maybe a "conversion failure" which is either invocation or custom
+            Err(InvocationError::IO(io::Error::new(
                 io::ErrorKind::NotFound,
                 "user is missing access_hash",
-            ))
+            )))
         }
     }
 }
 
 impl IntoInput<tl::enums::InputPeer> for &str {
-    fn convert(&self, client: &mut Client) -> io::Result<tl::enums::InputPeer> {
+    fn convert(&self, client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
         if let Some(user) = client.resolve_username(self)? {
             user.convert(client)
         } else {
-            Err(io::Error::new(
+            // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
+            Err(InvocationError::IO(io::Error::new(
                 io::ErrorKind::NotFound,
                 "no user has that username",
-            ))
+            )))
         }
     }
 }
@@ -96,18 +101,17 @@ fn generate_random_message_id() -> i64 {
 
 #[derive(Debug)]
 pub enum SignInError {
-    IO(io::Error),
     NoCodeSent,
     SignUpRequired {
         terms_of_service: Option<tl::types::help::TermsOfService>,
     },
     InvalidCode,
-    Other(RPCError),
+    Other(InvocationError),
 }
 
 impl From<io::Error> for SignInError {
     fn from(error: io::Error) -> Self {
-        Self::IO(error)
+        Self::Other(error.into())
     }
 }
 
@@ -117,16 +121,16 @@ impl Client {
     /// This method will generate a new authorization key and connect to a
     /// default datacenter. To prevent logging in every single time, use
     /// [`with_session`] instead, which will reuse a previous session.
-    pub fn new() -> io::Result<Self> {
+    pub fn new() -> Result<Self, AuthorizationError> {
         // TODO we probably should just require a session storage as input
         let mut sender = MTSender::connect(DC_ADDRESSES[DEFAULT_DC_ID])?;
         sender.generate_auth_key()?;
-        Self::with_sender(sender, Box::new(MemorySession::new()))
+        Ok(Self::with_sender(sender, Box::new(MemorySession::new()))?)
     }
 
     /// Configures a new client instance from an existing session and returns
     /// it.
-    pub fn with_session(mut session: Box<dyn Session>) -> io::Result<Self> {
+    pub fn with_session(mut session: Box<dyn Session>) -> Result<Self, AuthorizationError> {
         // TODO this doesn't look clean, and configuring the authkey
         //      on the sender this way also seems a bit weird.
         let auth_key;
@@ -153,11 +157,11 @@ impl Client {
             session.save()?;
         }
 
-        Self::with_sender(sender, session)
+        Ok(Self::with_sender(sender, session)?)
     }
 
     /// Creates a client instance with a sender
-    fn with_sender(sender: MTSender, session: Box<dyn Session>) -> io::Result<Self> {
+    fn with_sender(sender: MTSender, session: Box<dyn Session>) -> Result<Self, InvocationError> {
         // TODO user-provided api key
         let mut client = Client {
             api_id: 6,
@@ -171,9 +175,9 @@ impl Client {
 
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
-    pub fn is_authorized(&mut self) -> io::Result<bool> {
-        match self.invoke(&tl::functions::updates::GetState {})? {
-            Ok(_) => Ok(true),
+    pub fn is_authorized(&mut self) -> Result<bool, io::Error> {
+        match self.invoke(&tl::functions::updates::GetState {}) {
+            Ok(_) | Err(InvocationError::RPC(_)) => Ok(true),
             Err(_) => Ok(false),
         }
     }
@@ -185,7 +189,7 @@ impl Client {
         phone: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> io::Result<tl::types::auth::SentCode> {
+    ) -> Result<tl::types::auth::SentCode, AuthorizationError> {
         let request = tl::functions::auth::SendCode {
             phone_number: phone.to_string(),
             api_id,
@@ -198,9 +202,9 @@ impl Client {
             .into(),
         };
 
-        let sent_code: tl::types::auth::SentCode = match self.invoke(&request)? {
+        let sent_code: tl::types::auth::SentCode = match self.invoke(&request) {
             Ok(x) => x.into(),
-            Err(RPCError { name, value, .. }) if name == "PHONE_MIGRATE" => {
+            Err(InvocationError::RPC(RPCError { name, value, .. })) if name == "PHONE_MIGRATE" => {
                 let server_id = value.unwrap() as i32;
                 let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
                 self.session.set_user_datacenter(server_id, &server_address);
@@ -222,7 +226,7 @@ impl Client {
                     sender
                 };
 
-                self.init_invoke(&request)??.into()
+                self.init_invoke(&request)?.into()
             }
             Err(e) => return Err(e.into()),
         };
@@ -246,7 +250,7 @@ impl Client {
             phone_number,
             phone_code_hash,
             phone_code: code.to_string(),
-        })? {
+        }) {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
                 Ok(x.user.try_into().unwrap())
@@ -256,7 +260,7 @@ impl Client {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
                 })
             }
-            Err(RPCError { name, .. }) if name.starts_with("PHONE_CODE_") => {
+            Err(InvocationError::RPC(RPCError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
             }
             Err(error) => Err(SignInError::Other(error)),
@@ -264,26 +268,34 @@ impl Client {
     }
 
     /// Signs in to the bot account associated with this token.
-    pub fn bot_sign_in(&mut self, token: &str, api_id: i32, api_hash: &str) -> io::Result<()> {
+    pub fn bot_sign_in(
+        &mut self,
+        token: &str,
+        api_id: i32,
+        api_hash: &str,
+    ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::auth::ImportBotAuthorization {
             flags: 0,
             api_id,
             api_hash: api_hash.to_string(),
             bot_auth_token: token.to_string(),
-        })??;
+        })?;
 
         Ok(())
     }
 
     /// Resolves a username into the user that owns it, if any.
-    pub fn resolve_username(&mut self, username: &str) -> io::Result<Option<tl::types::User>> {
+    pub fn resolve_username(
+        &mut self,
+        username: &str,
+    ) -> Result<Option<tl::types::User>, InvocationError> {
         let tl::enums::contacts::ResolvedPeer::ResolvedPeer(tl::types::contacts::ResolvedPeer {
             peer,
             users,
             ..
         }) = self.invoke(&tl::functions::contacts::ResolveUsername {
             username: username.into(),
-        })??;
+        })?;
 
         match peer {
             tl::enums::Peer::PeerUser(tl::types::PeerUser { user_id }) => {
@@ -313,7 +325,7 @@ impl Client {
         &mut self,
         chat: C,
         message: &str,
-    ) -> io::Result<()> {
+    ) -> Result<(), InvocationError> {
         let chat = chat.convert(self)?;
         self.invoke(&tl::functions::messages::SendMessage {
             no_webpage: false,
@@ -327,22 +339,22 @@ impl Client {
             reply_markup: None,
             entities: None,
             schedule_date: None,
-        })??;
+        })?;
         Ok(())
     }
 
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
-    fn init_connection(&mut self) -> io::Result<()> {
+    fn init_connection(&mut self) -> Result<(), InvocationError> {
         // TODO store config
-        let _config = self.init_invoke(&tl::functions::help::GetConfig {})??;
+        let _config = self.init_invoke(&tl::functions::help::GetConfig {})?;
         Ok(())
     }
 
     /// Wraps the request in `invokeWithLayer(initConnection(...))` and
     /// invokes that. Should be used by the first request after connect.
-    fn init_invoke<R: RPC>(&mut self, request: &R) -> RequestResult<R::Return> {
+    fn init_invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         let info = os_info::get();
 
         let mut system_lang_code = locate_locale::system();
@@ -378,13 +390,13 @@ impl Client {
             }
             .to_bytes()
             .into(),
-        })??;
+        })?;
 
-        Ok(Ok(R::Return::from_bytes(&data.0)?))
+        Ok(R::Return::from_bytes(&data.0)?)
     }
 
     /// Invokes a raw request, and returns its result.
-    pub fn invoke<R: RPC>(&mut self, request: &R) -> RequestResult<R::Return> {
+    pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         self.sender.invoke(request)
     }
 }

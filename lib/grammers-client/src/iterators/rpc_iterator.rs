@@ -1,4 +1,4 @@
-use std::io;
+use grammers_mtsender::InvocationError;
 
 use crate::Client;
 
@@ -16,7 +16,7 @@ pub trait RPCIterator<T> {
     fn should_fill_buffer(&self) -> bool;
 
     /// Fills the iterator buffer by making another request.
-    fn fill_buffer(&mut self, client: &mut Client) -> Result<(), io::Error>;
+    fn fill_buffer(&mut self, client: &mut Client) -> Result<(), InvocationError>;
 
     /// Advances the iterator and returns the next value.
     ///
@@ -28,7 +28,7 @@ pub trait RPCIterator<T> {
     /// returned.
     ///
     /// Returns `Ok(None)` when iteration is finished.
-    fn next(&mut self, client: &mut Client) -> Result<Option<T>, io::Error> {
+    fn next(&mut self, client: &mut Client) -> Result<Option<T>, InvocationError> {
         if self.should_fill_buffer() {
             self.fill_buffer(client)?;
         }

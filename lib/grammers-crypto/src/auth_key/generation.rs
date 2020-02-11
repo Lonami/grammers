@@ -181,12 +181,6 @@ impl fmt::Display for AuthKeyGenError {
     }
 }
 
-impl From<AuthKeyGenError> for io::Error {
-    fn from(error: AuthKeyGenError) -> Self {
-        io::Error::new(io::ErrorKind::InvalidData, error)
-    }
-}
-
 impl From<io::Error> for AuthKeyGenError {
     fn from(error: io::Error) -> Self {
         Self::InvalidResponse { error }

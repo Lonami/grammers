@@ -1,7 +1,7 @@
 use std::collections::HashMap;
 use std::convert::TryInto;
-use std::io;
 
+use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 
 use crate::iterators::{RPCIterBuffer, RPCIterator};
@@ -151,8 +151,8 @@ impl RPCIterator<types::Dialog> for Dialogs {
         self.buffer.pop()
     }
 
-    fn fill_buffer(&mut self, client: &mut Client) -> io::Result<()> {
-        match client.invoke(&self.buffer.request)?? {
+    fn fill_buffer(&mut self, client: &mut Client) -> Result<(), InvocationError> {
+        match client.invoke(&self.buffer.request)? {
             tl::enums::messages::Dialogs::Dialogs(tl::types::messages::Dialogs {
                 dialogs,
                 messages,

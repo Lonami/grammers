@@ -4,17 +4,16 @@
 //! cargo run --example ping
 //! ```
 
-use grammers_client::Client;
+use grammers_client::{AuthorizationError, Client};
 use grammers_tl_types as tl;
-use std::io::Result;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), AuthorizationError> {
     println!("Connecting to Telegram...");
     let mut client = Client::new()?;
     println!("Connected!");
 
     println!("Sending ping...");
-    dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 })??);
+    dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 })?);
     println!("Ping sent successfully!");
 
     Ok(())

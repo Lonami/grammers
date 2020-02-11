@@ -10,12 +10,11 @@
 //! cargo run --example hello_world -- 123 1234abc 123:abc username 'Hello, world!'
 //! ```
 
-use grammers_client::Client;
+use grammers_client::{AuthorizationError, Client};
 use grammers_session::TextSession;
 use std::env;
-use std::io::Result;
 
-fn main() -> Result<()> {
+fn main() -> Result<(), AuthorizationError> {
     let mut args = env::args();
 
     let _path = args.next();
