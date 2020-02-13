@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use num::bigint::BigUint;
+use num_bigint::BigUint;
 use sha1::Sha1;
 
 /// RSA key.

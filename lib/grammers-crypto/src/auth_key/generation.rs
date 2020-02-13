@@ -40,8 +40,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
 use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
-use num::bigint::{BigUint, ToBigUint};
-use num::traits::identities::One;
+use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
 use crate::{factorize::factorize, rsa, AuthKey};
@@ -470,12 +469,12 @@ fn do_step3(
     // checking that g_a and g_b are between 2^{2048-64} and
     // dh_prime - 2^{2048-64} as well.
     // (https://core.telegram.org/mtproto/auth_key#dh-key-exchange-complete)
-    let one = BigUint::one();
+    let one = BigUint::from_bytes_be(&[1]);
     check_g_in_range(&g, &one, &(&dh_prime - &one))?;
     check_g_in_range(&g_a, &one, &(&dh_prime - &one))?;
     check_g_in_range(&g_b, &one, &(&dh_prime - &one))?;
 
-    let safety_range = BigUint::one() << (2048 - 64);
+    let safety_range = one << (2048 - 64);
     check_g_in_range(&g_a, &safety_range, &(&dh_prime - &safety_range))?;
     check_g_in_range(&g_b, &safety_range, &(&dh_prime - &safety_range))?;
 
