@@ -355,22 +355,26 @@ impl Client {
     pub fn send_message<C: IntoInput<tl::enums::InputPeer>>(
         &mut self,
         chat: C,
-        message: &str,
+        message: types::Message,
     ) -> Result<(), InvocationError> {
         let chat = chat.convert(self)?;
-        self.invoke(&tl::functions::messages::SendMessage {
-            no_webpage: false,
-            silent: false,
-            background: false,
-            clear_draft: false,
+        self.invoke(&dbg!(tl::functions::messages::SendMessage {
+            no_webpage: !message.link_preview,
+            silent: message.silent,
+            background: message.background,
+            clear_draft: message.clear_draft,
             peer: chat,
-            reply_to_msg_id: None,
-            message: message.into(),
+            reply_to_msg_id: message.reply_to,
+            message: message.text,
             random_id: generate_random_message_id(),
-            reply_markup: None,
-            entities: None,
-            schedule_date: None,
-        })?;
+            reply_markup: message.reply_markup,
+            entities: if message.entities.is_empty() {
+                None
+            } else {
+                Some(message.entities)
+            },
+            schedule_date: message.schedule_date,
+        }))?;
         Ok(())
     }
 
