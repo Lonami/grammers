@@ -13,6 +13,10 @@ keywords = ["mtproto", "telegram", "tl"]
 categories = ["api-bindings"]
 edition = "2018"
 
+[features]
+markdown = ["pulldown-cmark"]
+html = ["html5ever"]
+
 [dependencies]
 grammers-mtproto = "0.1.0"
 grammers-mtsender = "0.1.0"
@@ -21,6 +25,5 @@ grammers-tl-types = "0.1.0"
 os_info = { version = "2.0.0", default_features = false }
 locate-locale = "0.1.0"
 
-[features]
-markdown = []
-html = []
+pulldown-cmark = { version = "0.7.0", default-features = false, optional = true }
+html5ever = { version = "0.25.1", optional = true }

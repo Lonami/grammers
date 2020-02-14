@@ -32,6 +32,7 @@ fn write_enum<W: Write>(
         writeln!(file, "{}#[derive(Debug)]", indent)?;
     }
 
+    writeln!(file, "{}#[derive(PartialEq)]", indent)?;
     writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
     for d in type_defs.iter() {
         write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;

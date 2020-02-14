@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub mod iterators;
+mod parsers;
 pub mod types;
 
 use std::convert::TryInto;
@@ -358,7 +359,7 @@ impl Client {
         message: types::Message,
     ) -> Result<(), InvocationError> {
         let chat = chat.convert(self)?;
-        self.invoke(&dbg!(tl::functions::messages::SendMessage {
+        self.invoke(&tl::functions::messages::SendMessage {
             no_webpage: !message.link_preview,
             silent: message.silent,
             background: message.background,
@@ -374,7 +375,7 @@ impl Client {
                 Some(message.entities)
             },
             schedule_date: message.schedule_date,
-        }))?;
+        })?;
         Ok(())
     }
 

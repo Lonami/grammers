@@ -110,14 +110,24 @@ impl Message {
     /// message contents and entities.
     #[cfg(feature = "markdown")]
     pub fn markdown<T: AsRef<str>>(s: T) -> Self {
-        todo!()
+        let (text, entities) = crate::parsers::parse_markdown_message(s.as_ref());
+        Self {
+            text,
+            entities,
+            ..Self::default()
+        }
     }
 
     /// Builds a new message from the given HTML-formatted string as the
     /// message contents and entities.
     #[cfg(feature = "html")]
     pub fn html<T: AsRef<str>>(s: T) -> Self {
-        todo!()
+        let (text, entities) = crate::parsers::parse_html_message(s.as_ref());
+        Self {
+            text,
+            entities,
+            ..Self::default()
+        }
     }
 }
 
