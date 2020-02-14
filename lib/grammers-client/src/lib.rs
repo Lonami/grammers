@@ -210,11 +210,6 @@ impl Client {
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request) {
             Ok(x) => x.into(),
             Err(InvocationError::RPC(RPCError { name, value, .. })) if name == "PHONE_MIGRATE" => {
-                let server_id = value.unwrap() as i32;
-                let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
-                self.session.set_user_datacenter(server_id, &server_address);
-                self.session.save()?;
-
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
                 // authorization and re-import it at a different datacenter.
@@ -222,15 +217,7 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again. Don't want to replace `self.sender`
                 // unless the entire process succeeds.
-                self.sender = {
-                    let mut sender = MTSender::connect(server_address)?;
-                    let auth_key = sender.generate_auth_key()?;
-                    self.session
-                        .set_auth_key_data(server_id, &auth_key.to_bytes());
-                    self.session.save()?;
-                    sender
-                };
-
+                self.replace_mtsender(value.unwrap() as i32)?;
                 self.init_invoke(&request)?.into()
             }
             Err(e) => return Err(e.into()),
@@ -278,13 +265,52 @@ impl Client {
         token: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> Result<(), InvocationError> {
-        self.invoke(&tl::functions::auth::ImportBotAuthorization {
+    ) -> Result<(), AuthorizationError> {
+        let request = tl::functions::auth::ImportBotAuthorization {
             flags: 0,
             api_id,
             api_hash: api_hash.to_string(),
             bot_auth_token: token.to_string(),
-        })?;
+        };
+
+        let _result = match self.invoke(&request) {
+            Ok(x) => x,
+            Err(InvocationError::RPC(RPCError { name, value, .. })) if name == "USER_MIGRATE" => {
+                self.replace_mtsender(value.unwrap() as i32)?;
+                self.init_invoke(&request)?
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(())
+    }
+
+    /// Replace the current `MTSender` with one connected to a different datacenter.
+    ///
+    /// This process is not quite a migration, since it will ignore any previous
+    /// authorization key.
+    ///
+    /// The sender will not be replaced unless the entire process succeeds.
+    ///
+    /// After the sender is replaced, the next request should use `init_invoke`.
+    ///
+    /// # Panics
+    ///
+    /// If the server ID is not within the known identifiers.
+    fn replace_mtsender(&mut self, server_id: i32) -> Result<(), AuthorizationError> {
+        let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
+        self.session.set_user_datacenter(server_id, &server_address);
+        self.session.save()?;
+
+        // Don't replace `self.sender` unless the entire process succeeds.
+        self.sender = {
+            let mut sender = MTSender::connect(server_address)?;
+            let auth_key = sender.generate_auth_key()?;
+            self.session
+                .set_auth_key_data(server_id, &auth_key.to_bytes());
+            self.session.save()?;
+            sender
+        };
 
         Ok(())
     }
