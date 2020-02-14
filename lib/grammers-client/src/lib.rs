@@ -79,7 +79,11 @@ impl IntoInput<tl::enums::InputPeer> for tl::types::User {
 
 impl IntoInput<tl::enums::InputPeer> for &str {
     fn convert(&self, client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
-        if let Some(user) = client.resolve_username(self)? {
+        if self.eq_ignore_ascii_case("me") {
+            Ok(tl::enums::InputPeer::InputPeerSelf(
+                tl::types::InputPeerSelf {},
+            ))
+        } else if let Some(user) = client.resolve_username(self)? {
             user.convert(client)
         } else {
             // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
