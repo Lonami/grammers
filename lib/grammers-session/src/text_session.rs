@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Seek, Write};
 use std::net::SocketAddr;
 use std::path::Path;
@@ -126,7 +126,7 @@ impl TextSession {
 
         drop(lines);
         Ok(Self {
-            file: File::open(path)?,
+            file: OpenOptions::new().write(true).open(path)?,
             user_dc,
             auth_key_data,
         })
