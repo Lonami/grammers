@@ -179,10 +179,11 @@ impl Client {
 
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
-    pub fn is_authorized(&mut self) -> Result<bool, io::Error> {
+    pub fn is_authorized(&mut self) -> Result<bool, InvocationError> {
         match self.invoke(&tl::functions::updates::GetState {}) {
-            Ok(_) | Err(InvocationError::RPC(_)) => Ok(true),
-            Err(_) => Ok(false),
+            Ok(_) => Ok(true),
+            Err(InvocationError::RPC(_)) => Ok(false),
+            Err(err) => Err(err),
         }
     }
 
