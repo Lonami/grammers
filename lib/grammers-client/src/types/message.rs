@@ -108,6 +108,9 @@ impl Message {
 
     /// Builds a new message from the given markdown-formatted string as the
     /// message contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links.
     #[cfg(feature = "markdown")]
     pub fn markdown<T: AsRef<str>>(s: T) -> Self {
         let (text, entities) = crate::parsers::parse_markdown_message(s.as_ref());
@@ -120,6 +123,9 @@ impl Message {
 
     /// Builds a new message from the given HTML-formatted string as the
     /// message contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links.
     #[cfg(feature = "html")]
     pub fn html<T: AsRef<str>>(s: T) -> Self {
         let (text, entities) = crate::parsers::parse_html_message(s.as_ref());
