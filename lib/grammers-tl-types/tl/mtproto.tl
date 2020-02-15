@@ -68,6 +68,7 @@ msg_detailed_info#276d3ec6 msg_id:long answer_msg_id:long bytes:int status:int =
 msg_new_detailed_info#809db6df answer_msg_id:long bytes:int status:int = MsgDetailedInfo;
 
 msg_resend_req#7d861a08 msg_ids:Vector<long> = MsgResendReq;
+msg_resend_ans_req#8610baeb msg_ids:Vector<long> = MsgResendReq;
 
 //rpc_result#f35c6d01 req_msg_id:long result:Object = RpcResult; // parsed manually
 

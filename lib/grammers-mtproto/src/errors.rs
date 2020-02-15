@@ -133,10 +133,14 @@ impl fmt::Display for SerializeError {
 ///
 /// The request should be retransmited when this happens, unless the
 /// variant is `InvalidParameters`.
+#[derive(Debug)]
 pub enum RequestError {
     /// The parameters used in the request were invalid and caused a
     /// Remote Procedure Call error.
     RPCError(RPCError),
+
+    /// The call was dropped (cancelled), so the server will not process it.
+    Dropped,
 
     /// The message sent to the server was invalid, and the request
     /// must be retransmitted.
