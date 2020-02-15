@@ -189,13 +189,11 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             => self.entities);
                     }
                     TAG_A => {
-                        // TODO Handle missing href
                         let url = attrs
                             .into_iter()
                             .find(|a| a.name.local == ATTR_HREF)
-                            .map(|a| a.value)
-                            .unwrap()
-                            .to_string();
+                            .map(|a| a.value.to_string())
+                            .unwrap_or_else(|| "".to_string());
 
                         push_entity!(MessageEntityTextUrl(self.offset, url = url)
                             => self.entities);
@@ -512,6 +510,23 @@ mod tests {
                 offset: 5,
                 length: 5,
                 language: "rust".to_string()
+            }
+            .into(),]
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn parse_link_no_href_html() {
+        let (text, entities) = parse_html_message("Some <a>empty link</a>, it does nothing");
+
+        assert_eq!(text, "Some empty link, it does nothing");
+        assert_eq!(
+            entities,
+            vec![tl::types::MessageEntityTextUrl {
+                offset: 5,
+                length: 10,
+                url: "".to_string()
             }
             .into(),]
         );
