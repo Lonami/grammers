@@ -24,3 +24,10 @@ sha2 = "0.8.1"
 version = "0.1.0"
 default-features = false
 features = ["tl-mtproto"]
+
+[dev-dependencies]
+criterion = "0.3"
+
+[[bench]]
+name = "cipher"
+harness = false
