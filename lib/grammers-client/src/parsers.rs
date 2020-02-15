@@ -9,30 +9,57 @@ fn telegram_string_len(string: &str) -> i32 {
     string.encode_utf16().count() as i32
 }
 
-/// Return the offset for the given entity.
-fn entity_offset(entity: &tl::enums::MessageEntity) -> i32 {
-    use tl::enums::MessageEntity as ME;
+/// Pushes a new `MessageEntity` instance with zero-length to the specified vector.
+///
+/// # Examples
+///
+/// ```
+/// let mut vec = Vec::new();
+/// push_entity!(MessageEntityBold(1) => vec);
+/// push_entity!(MessageEntityPre(2, language = "rust".to_string()) => vec);
+/// ```
+macro_rules! push_entity {
+    ( $ty:ident($offset:expr) => $vector:expr ) => {
+        $vector.push(
+            tl::types::$ty {
+                offset: $offset,
+                length: 0,
+            }
+            .into(),
+        )
+    };
+    ( $ty:ident($offset:expr, $field:ident = $value:expr) => $vector:expr ) => {
+        $vector.push(
+            tl::types::$ty {
+                offset: $offset,
+                length: 0,
+                $field: $value,
+            }
+            .into(),
+        )
+    };
+}
 
-    match entity {
-        ME::MessageEntityUnknown(e) => e.offset,
-        ME::MessageEntityMention(e) => e.offset,
-        ME::MessageEntityHashtag(e) => e.offset,
-        ME::MessageEntityBotCommand(e) => e.offset,
-        ME::MessageEntityUrl(e) => e.offset,
-        ME::MessageEntityEmail(e) => e.offset,
-        ME::MessageEntityBold(e) => e.offset,
-        ME::MessageEntityItalic(e) => e.offset,
-        ME::MessageEntityCode(e) => e.offset,
-        ME::MessageEntityPre(e) => e.offset,
-        ME::MessageEntityTextUrl(e) => e.offset,
-        ME::MessageEntityMentionName(e) => e.offset,
-        ME::InputMessageEntityMentionName(e) => e.offset,
-        ME::MessageEntityPhone(e) => e.offset,
-        ME::MessageEntityCashtag(e) => e.offset,
-        ME::MessageEntityUnderline(e) => e.offset,
-        ME::MessageEntityStrike(e) => e.offset,
-        ME::MessageEntityBlockquote(e) => e.offset,
-    }
+/// Updates the length of the latest `MessageEntity` inside the specified vector.
+///
+/// # Examples
+///
+/// ```
+/// let mut vec = Vec::new();
+/// push_entity!(MessageEntityBold(1) => vec);
+/// update_entity_len!(MessageEntityBold(2) => vec);
+/// ```
+macro_rules! update_entity_len {
+    ( $ty:ident($end_offset:expr) => $vector:expr ) => {
+        let end_offset = $end_offset;
+        $vector.iter_mut().rposition(|e| match e {
+            tl::enums::MessageEntity::$ty(e) => {
+                e.length = end_offset - e.offset;
+                true
+            }
+            _ => false,
+        });
+    };
 }
 
 #[cfg(feature = "markdown")]
@@ -43,7 +70,6 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
     let mut entities = Vec::new();
 
     let mut offset = 0;
-    let mut live_entities = Vec::new();
     Parser::new(message).for_each(|event| match event {
         // text
         Event::Text(string) => {
@@ -61,103 +87,44 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
 
         // **bold text**
         Event::Start(Tag::Strong) => {
-            live_entities.push(tl::types::MessageEntityBold { offset, length: 0 }.into());
+            push_entity!(MessageEntityBold(offset) => entities);
         }
         Event::End(Tag::Strong) => {
-            let index = live_entities
-                .iter_mut()
-                .rposition(|e| match e {
-                    tl::enums::MessageEntity::MessageEntityBold(e) => {
-                        e.length = offset - e.offset;
-                        true
-                    }
-                    _ => false,
-                })
-                .unwrap();
-
-            entities.push(live_entities.remove(index));
+            update_entity_len!(MessageEntityBold(offset) => entities);
         }
 
         // *italic text*
         Event::Start(Tag::Emphasis) => {
-            live_entities.push(tl::types::MessageEntityItalic { offset, length: 0 }.into());
+            push_entity!(MessageEntityItalic(offset) => entities);
         }
         Event::End(Tag::Emphasis) => {
-            let index = live_entities
-                .iter_mut()
-                .rposition(|e| match e {
-                    tl::enums::MessageEntity::MessageEntityItalic(e) => {
-                        e.length = offset - e.offset;
-                        true
-                    }
-                    _ => false,
-                })
-                .unwrap();
-
-            entities.push(live_entities.remove(index));
+            update_entity_len!(MessageEntityItalic(offset) => entities);
         }
 
         // [text link](https://example.com)
         Event::Start(Tag::Link(_kind, url, _title)) => {
-            live_entities.push(
-                tl::types::MessageEntityTextUrl {
-                    offset,
-                    length: 0,
-                    url: url.to_string(),
-                }
-                .into(),
-            );
+            push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
         }
         Event::End(Tag::Link(_kindd, _url, _title)) => {
-            let index = live_entities
-                .iter_mut()
-                .rposition(|e| match e {
-                    tl::enums::MessageEntity::MessageEntityTextUrl(e) => {
-                        e.length = offset - e.offset;
-                        true
-                    }
-                    _ => false,
-                })
-                .unwrap();
-
-            entities.push(live_entities.remove(index));
+            update_entity_len!(MessageEntityTextUrl(offset) => entities);
         }
 
         // ```lang\npre```
         Event::Start(Tag::CodeBlock(kind)) => {
-            live_entities.push(
-                tl::types::MessageEntityPre {
-                    offset,
-                    length: 0,
-                    language: match kind {
-                        CodeBlockKind::Indented => "".to_string(),
-                        CodeBlockKind::Fenced(lang) => lang.to_string(),
-                    },
-                }
-                .into(),
-            );
+            let lang = match kind {
+                CodeBlockKind::Indented => "".to_string(),
+                CodeBlockKind::Fenced(lang) => lang.to_string(),
+            }
+            .to_string();
+
+            push_entity!(MessageEntityPre(offset, language = lang) => entities);
         }
         Event::End(Tag::CodeBlock(_kind)) => {
-            let index = live_entities
-                .iter_mut()
-                .rposition(|e| match e {
-                    tl::enums::MessageEntity::MessageEntityPre(e) => {
-                        e.length = offset - e.offset;
-                        true
-                    }
-                    _ => false,
-                })
-                .unwrap();
-
-            entities.push(live_entities.remove(index));
+            update_entity_len!(MessageEntityPre(offset) => entities);
         }
 
         _ => {}
     });
-
-    // When nesting entities, we will close the inner one before the outer one,
-    // but we want to have them sorted by offset.
-    entities.sort_by(|a, b| entity_offset(a).cmp(&entity_offset(b)));
 
     (text, entities)
 }
@@ -186,7 +153,6 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
         text: String,
         entities: Vec<tl::enums::MessageEntity>,
         offset: i32,
-        live_entities: Vec<tl::enums::MessageEntity>,
     }
 
     impl TokenSink for Sink {
@@ -201,84 +167,38 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     attrs,
                 }) => match name {
                     n if n == TAG_B || n == TAG_STRONG => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityBold {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityBold(self.offset) => self.entities);
                     }
                     n if n == TAG_I || n == TAG_EM => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityItalic {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityItalic(self.offset) => self.entities);
                     }
                     n if n == TAG_S || n == TAG_DEL => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityStrike {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityStrike(self.offset) => self.entities);
                     }
                     TAG_U => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityUnderline {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityUnderline(self.offset) => self.entities);
                     }
                     TAG_BLOCKQUOTE => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityBlockquote {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityBlockquote(self.offset) => self.entities);
                     }
                     TAG_CODE => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityCode {
-                                offset: self.offset,
-                                length: 0,
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityCode(self.offset) => self.entities);
                     }
                     TAG_PRE => {
-                        dbg!(attrs);
-                        self.live_entities.push(
-                            tl::types::MessageEntityPre {
-                                offset: self.offset,
-                                length: 0,
-                                language: "".into(),
-                            }
-                            .into(),
-                        );
+                        push_entity!(MessageEntityPre(self.offset, language = "".to_string())
+                            => self.entities);
                     }
                     TAG_A => {
-                        self.live_entities.push(
-                            tl::types::MessageEntityTextUrl {
-                                offset: self.offset,
-                                length: 0,
-                                url: attrs
-                                    .into_iter()
-                                    .find(|a| a.name.local == ATTR_HREF)
-                                    .map(|a| a.value)
-                                    .unwrap()
-                                    .to_string(),
-                            }
-                            .into(),
-                        );
+                        // TODO Handle missing href
+                        let url = attrs
+                            .into_iter()
+                            .find(|a| a.name.local == ATTR_HREF)
+                            .map(|a| a.value)
+                            .unwrap()
+                            .to_string();
+
+                        push_entity!(MessageEntityTextUrl(self.offset, url = url)
+                            => self.entities);
                     }
                     _ => {}
                 },
@@ -287,140 +207,33 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     name,
                     self_closing: _,
                     attrs: _,
-                }) => {
-                    // TODO We probably should use a macro or something to get rid of this mess
-                    match name {
-                        n if n == TAG_B || n == TAG_STRONG => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityBold(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        n if n == TAG_I || n == TAG_EM => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityItalic(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        n if n == TAG_S || n == TAG_DEL => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityStrike(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        TAG_U => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityUnderline(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        TAG_BLOCKQUOTE => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityBlockquote(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        TAG_CODE => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityCode(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        TAG_PRE => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityPre(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        TAG_A => {
-                            let offset = self.offset;
-                            let index = self
-                                .live_entities
-                                .iter_mut()
-                                .rposition(|e| match e {
-                                    tl::enums::MessageEntity::MessageEntityTextUrl(e) => {
-                                        e.length = offset - e.offset;
-                                        true
-                                    }
-                                    _ => false,
-                                })
-                                .unwrap();
-
-                            self.entities.push(self.live_entities.remove(index));
-                        }
-                        _ => {}
+                }) => match name {
+                    n if n == TAG_B || n == TAG_STRONG => {
+                        update_entity_len!(MessageEntityBold(self.offset) => self.entities);
                     }
-                }
+                    n if n == TAG_I || n == TAG_EM => {
+                        update_entity_len!(MessageEntityItalic(self.offset) => self.entities);
+                    }
+                    n if n == TAG_S || n == TAG_DEL => {
+                        update_entity_len!(MessageEntityStrike(self.offset) => self.entities);
+                    }
+                    TAG_U => {
+                        update_entity_len!(MessageEntityUnderline(self.offset) => self.entities);
+                    }
+                    TAG_BLOCKQUOTE => {
+                        update_entity_len!(MessageEntityBlockquote(self.offset) => self.entities);
+                    }
+                    TAG_CODE => {
+                        update_entity_len!(MessageEntityCode(self.offset) => self.entities);
+                    }
+                    TAG_PRE => {
+                        update_entity_len!(MessageEntityPre(self.offset) => self.entities);
+                    }
+                    TAG_A => {
+                        update_entity_len!(MessageEntityTextUrl(self.offset) => self.entities);
+                    }
+                    _ => {}
+                },
                 Token::CharacterTokens(string) => {
                     self.text.push_str(&string);
                     self.offset += telegram_string_len(&string);
@@ -439,20 +252,13 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
             text: String::with_capacity(message.len()),
             entities: Vec::new(),
             offset: 0,
-            live_entities: Vec::new(),
         },
         Default::default(),
     );
     let _ = tok.feed(&mut input);
     tok.end();
 
-    let Sink {
-        text, mut entities, ..
-    } = tok.sink;
-
-    // When nesting entities, we will close the inner one before the outer one,
-    // but we want to have them sorted by offset.
-    entities.sort_by(|a, b| entity_offset(a).cmp(&entity_offset(b)));
+    let Sink { text, entities, .. } = tok.sink;
 
     (text, entities)
 }
