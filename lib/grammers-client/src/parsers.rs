@@ -1,6 +1,8 @@
 #![cfg(any(feature = "markdown", feature = "html"))]
 use grammers_tl_types as tl;
 
+const CODE_LANG_PREFIX: &str = "language-";
+
 /// The length of a string, according to Telegram.
 ///
 /// Telegram considers the length of the string with surrogate pairs.
@@ -142,11 +144,11 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
     use html5ever::{
         ATOM_LOCALNAME__61 as TAG_A, ATOM_LOCALNAME__62 as TAG_B,
         ATOM_LOCALNAME__62_6C_6F_63_6B_71_75_6F_74_65 as TAG_BLOCKQUOTE,
-        ATOM_LOCALNAME__63_6F_64_65 as TAG_CODE, ATOM_LOCALNAME__64_65_6C as TAG_DEL,
-        ATOM_LOCALNAME__65_6D as TAG_EM, ATOM_LOCALNAME__68_72_65_66 as ATTR_HREF,
-        ATOM_LOCALNAME__69 as TAG_I, ATOM_LOCALNAME__70_72_65 as TAG_PRE,
-        ATOM_LOCALNAME__73 as TAG_S, ATOM_LOCALNAME__73_74_72_6F_6E_67 as TAG_STRONG,
-        ATOM_LOCALNAME__75 as TAG_U,
+        ATOM_LOCALNAME__63_6C_61_73_73 as ATTR_CLASS, ATOM_LOCALNAME__63_6F_64_65 as TAG_CODE,
+        ATOM_LOCALNAME__64_65_6C as TAG_DEL, ATOM_LOCALNAME__65_6D as TAG_EM,
+        ATOM_LOCALNAME__68_72_65_66 as ATTR_HREF, ATOM_LOCALNAME__69 as TAG_I,
+        ATOM_LOCALNAME__70_72_65 as TAG_PRE, ATOM_LOCALNAME__73 as TAG_S,
+        ATOM_LOCALNAME__73_74_72_6F_6E_67 as TAG_STRONG, ATOM_LOCALNAME__75 as TAG_U,
     };
 
     struct Sink {
@@ -182,7 +184,25 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         push_entity!(MessageEntityBlockquote(self.offset) => self.entities);
                     }
                     TAG_CODE => {
-                        push_entity!(MessageEntityCode(self.offset) => self.entities);
+                        match self.entities.iter_mut().rev().next() {
+                            // If the previous tag is an open `<pre>`, don't add `<code>`;
+                            // we most likely want to indicate `class="language-foo"`.
+                            Some(tl::enums::MessageEntity::MessageEntityPre(e))
+                                if e.length == 0 =>
+                            {
+                                e.language = attrs
+                                    .into_iter()
+                                    .find(|a| {
+                                        a.name.local == ATTR_CLASS
+                                            && a.value.starts_with(CODE_LANG_PREFIX)
+                                    })
+                                    .map(|a| a.value[CODE_LANG_PREFIX.len()..].to_string())
+                                    .unwrap_or_else(|| "".to_string());
+                            }
+                            _ => {
+                                push_entity!(MessageEntityCode(self.offset) => self.entities);
+                            }
+                        }
                     }
                     TAG_PRE => {
                         push_entity!(MessageEntityPre(self.offset, language = "".to_string())
@@ -222,7 +242,15 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         update_entity_len!(MessageEntityBlockquote(self.offset) => self.entities);
                     }
                     TAG_CODE => {
-                        update_entity_len!(MessageEntityCode(self.offset) => self.entities);
+                        match self.entities.iter_mut().rev().next() {
+                            // If the previous tag is an open `<pre>`, don't update `<code>` len;
+                            // we most likely want to indicate `class="language-foo"`.
+                            Some(tl::enums::MessageEntity::MessageEntityPre(e))
+                                if e.length == 0 => {}
+                            _ => {
+                                update_entity_len!(MessageEntityCode(self.offset) => self.entities);
+                            }
+                        }
                     }
                     TAG_PRE => {
                         update_entity_len!(MessageEntityPre(self.offset) => self.entities);
@@ -500,18 +528,33 @@ mod tests {
     #[test]
     #[cfg(feature = "html")]
     fn parse_pre_with_lang_html() {
-        let (text, entities) =
-            parse_html_message("Some <pre><code class=\"language-rust\">rusty</code></pre> code");
+        let (text, entities) = parse_html_message(
+            "Some <pre>pre</pre>, <code>normal</code> and \
+            <pre><code class=\"language-rust\">rusty</code></pre> code",
+        );
 
-        assert_eq!(text, "Some rusty code");
+        assert_eq!(text, "Some pre, normal and rusty code");
         assert_eq!(
             entities,
-            vec![tl::types::MessageEntityPre {
-                offset: 5,
-                length: 5,
-                language: "rust".to_string()
-            }
-            .into(),]
+            vec![
+                tl::types::MessageEntityPre {
+                    offset: 5,
+                    length: 3,
+                    language: "".to_string()
+                }
+                .into(),
+                tl::types::MessageEntityCode {
+                    offset: 10,
+                    length: 6,
+                }
+                .into(),
+                tl::types::MessageEntityPre {
+                    offset: 21,
+                    length: 5,
+                    language: "rust".to_string()
+                }
+                .into(),
+            ]
         );
     }
 
