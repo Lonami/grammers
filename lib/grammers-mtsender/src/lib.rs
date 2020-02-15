@@ -272,6 +272,11 @@ impl MTSender {
             let response = self.receive_message()?;
             self.protocol.process_encrypted_response(&response)?;
 
+            // TODO dispatch this somehow
+            while let Some(data) = self.protocol.poll_update() {
+                eprintln!("Received update data: {:?}", data);
+            }
+
             // See if there are responses to our request.
             while let Some((response_id, data)) = self.protocol.poll_response() {
                 if response_id == msg_id {

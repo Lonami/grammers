@@ -103,6 +103,9 @@ pub struct MTProto {
 
     /// A queue of responses ready to be used.
     response_queue: VecDeque<(MsgId, Result<Vec<u8>, RequestError>)>,
+
+    /// A queue of updates ready to be used.
+    update_queue: VecDeque<Vec<u8>>,
 }
 
 /// A Message Identifier.
@@ -176,6 +179,7 @@ impl MTProto {
             pending_ack: vec![],
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
             response_queue: VecDeque::new(),
+            update_queue: VecDeque::new(),
         }
     }
 
@@ -505,6 +509,13 @@ impl MTProto {
         self.response_queue.pop_front()
     }
 
+    /// Poll for updates that arrived.
+    ///
+    /// If there are no new updates, the method returns `None`.
+    pub fn poll_update(&mut self) -> Option<Vec<u8>> {
+        self.update_queue.pop_front()
+    }
+
     // Response handlers
     // ========================================
 
@@ -513,23 +524,23 @@ impl MTProto {
 
         // Determine what to do based on the inner body's constructor
         match message.constructor_id()? {
-            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(&message),
-            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(&message),
-            manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(&message),
-            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(&message),
-            tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_notification(&message),
-            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self.handle_bad_notification(&message),
-            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(&message),
-            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(&message),
+            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(message),
+            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(message),
+            manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(message),
+            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(message),
+            tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_notification(message),
+            tl::types::BadMsgNotification::CONSTRUCTOR_ID => self.handle_bad_notification(message),
+            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(message),
+            tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(message),
             tl::types::NewSessionCreated::CONSTRUCTOR_ID => {
-                self.handle_new_session_created(&message)
+                self.handle_new_session_created(message)
             }
-            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(&message),
-            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(&message),
-            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_forgotten(&message),
-            tl::types::MsgResendReq::CONSTRUCTOR_ID => self.handle_state_forgotten(&message),
-            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(&message),
-            _ => self.handle_update(&message),
+            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(message),
+            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(message),
+            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_forgotten(message),
+            tl::types::MsgResendReq::CONSTRUCTOR_ID => self.handle_state_forgotten(message),
+            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(message),
+            _ => self.handle_update(message),
         }
     }
 
@@ -538,7 +549,7 @@ impl MTProto {
     /// ```tl
     /// rpc_result#f35c6d01 req_msg_id:long result:bytes = RpcResult;
     /// ```
-    fn handle_rpc_result(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_rpc_result(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO make sure we notify about errors if any step fails in any handler
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
         let inner_constructor = rpc_result.inner_constructor()?;
@@ -575,7 +586,7 @@ impl MTProto {
     /// ```tl
     /// msg_container#73f1f8dc messages:vector<%Message> = MessageContainer;
     /// ```
-    fn handle_container(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_container(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
         for inner_message in container.messages {
             self.process_message(inner_message)?;
@@ -589,14 +600,14 @@ impl MTProto {
     /// ```tl
     /// gzip_packed#3072cfa1 packed_data:bytes = Object;
     /// ```
-    fn handle_gzip_packed(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_gzip_packed(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO custom error, don't use a string
         let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
         self.process_message(manual_tl::Message {
             body: container
                 .decompress()
                 .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "decompression failed"))?,
-            ..*message
+            ..message
         })
         .map(|_| ())
     }
@@ -607,7 +618,7 @@ impl MTProto {
     /// ```tl
     /// pong#347773c5 msg_id:long ping_id:long = Pong;
     /// ```
-    fn handle_pong(&mut self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_pong(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
         self.response_queue
@@ -632,7 +643,7 @@ impl MTProto {
     /// ```
     fn handle_bad_notification(
         &mut self,
-        message: &manual_tl::Message,
+        message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
         let bad_msg = match bad_msg {
@@ -693,7 +704,7 @@ impl MTProto {
     /// ```
     fn handle_detailed_info(
         &mut self,
-        message: &manual_tl::Message,
+        message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1790-L1820
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
@@ -717,7 +728,7 @@ impl MTProto {
     /// ```
     fn handle_new_session_created(
         &mut self,
-        message: &manual_tl::Message,
+        message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
@@ -747,7 +758,7 @@ impl MTProto {
     /// never returned (unless on a bad notification), this method
     /// also removes containers messages when any of their inner
     /// messages are acknowledged.
-    fn handle_ack(&self, message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_ack(&self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO notify about this somehow
         let _ack = tl::enums::MsgsAck::from_bytes(&message.body)?;
         Ok(())
@@ -760,10 +771,7 @@ impl MTProto {
     /// future_salts#ae500895 req_msg_id:long now:int
     /// salts:vector<future_salt> = FutureSalts;
     /// ```
-    fn handle_future_salts(
-        &mut self,
-        message: &manual_tl::Message,
-    ) -> Result<(), DeserializeError> {
+    fn handle_future_salts(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         let tl::enums::FutureSalts::FutureSalts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
@@ -774,22 +782,19 @@ impl MTProto {
 
     /// Handles both :tl:`MsgsStateReq` and :tl:`MsgResendReq` by
     /// enqueuing a :tl:`MsgsStateInfo` to be sent at a later point.
-    fn handle_state_forgotten(
-        &self,
-        _message: &manual_tl::Message,
-    ) -> Result<(), DeserializeError> {
+    fn handle_state_forgotten(&self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
 
     /// Handles :tl:`MsgsAllInfo` by doing nothing (yet).
-    fn handle_msg_all(&self, _message: &manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_msg_all(&self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
 
-    fn handle_update(&self, _message: &manual_tl::Message) -> Result<(), DeserializeError> {
-        // TODO dispatch this somehow
+    fn handle_update(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        self.update_queue.push_back(message.body);
         Ok(())
     }
 }
