@@ -94,6 +94,12 @@ pub struct MTProto {
     message_queue: VecDeque<manual_tl::Message>,
 
     /// Identifiers that need to be acknowledged to the server.
+    ///
+    /// A [Content-related Message] is "a message requiring an explicit
+    /// acknowledgment. These include all the user and many service messages,
+    /// virtually all with the exception of containers and acknowledgments."
+    ///
+    /// [Content-related Message]: https://core.telegram.org/mtproto/description#content-related-message
     pending_ack: Vec<i64>,
 
     /// If present, the threshold in bytes at which a message will be
@@ -244,6 +250,14 @@ impl MTProto {
             result
         } else {
             self.sequence * 2
+        }
+    }
+
+    /// Some service messages do not actually require acknowledgement, and
+    /// this method can be used to remove it from the pending ack list.
+    fn remove_pending_ack(&mut self, msg_id: i64) {
+        if let Some(pos) = self.pending_ack.iter().rposition(|&p| p == msg_id) {
+            self.pending_ack.remove(pos);
         }
     }
 
@@ -520,6 +534,8 @@ impl MTProto {
     // ========================================
 
     fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // Most messages require acknowledgement, only a few don't.
+        // Those which don't will remove the acknowledgement from the list.
         self.pending_ack.push(message.msg_id);
 
         // Handle all the possible Service Messages:
@@ -812,6 +828,9 @@ impl MTProto {
         &mut self,
         message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
+        // "Notifications of an ignored message do not require acknowledgment"
+        self.remove_pending_ack(message.msg_id);
+
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
@@ -910,7 +929,10 @@ impl MTProto {
     /// valid, the message is to be wrapped in `msg_copy`).
     ///
     /// [Informational Message regarding Status of Messages]: https://core.telegram.org/mtproto/service_messages_about_messages#informational-message-regarding-status-of-messages
-    fn handle_state_info(&self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_state_info(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "This response does not require an acknowledgment"
+        self.remove_pending_ack(message.msg_id);
+
         // TODO implement
         Ok(())
     }
@@ -932,7 +954,10 @@ impl MTProto {
     /// This message does not require an acknowledgment.
     ///
     /// [Voluntary Communication of Status of Messages]: https://core.telegram.org/mtproto/service_messages_about_messages#voluntary-communication-of-status-of-messages
-    fn handle_msg_all(&self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_msg_all(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "This message does not require an acknowledgment"
+        self.remove_pending_ack(message.msg_id);
+
         // TODO implement
         Ok(())
     }
@@ -964,6 +989,9 @@ impl MTProto {
         &mut self,
         message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
+        // "This message does not require an acknowledgment"
+        self.remove_pending_ack(message.msg_id);
+
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1790-L1820
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
         let msg_detailed = tl::enums::MsgDetailedInfo::from_bytes(&message.body)?;
@@ -1035,6 +1063,9 @@ impl MTProto {
     ///
     /// [Request for several future salts]: https://core.telegram.org/mtproto/service_messages#request-for-several-future-salts
     fn handle_future_salts(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "does not require an acknowledgment itself"
+        self.remove_pending_ack(message.msg_id);
+
         let tl::enums::FutureSalts::FutureSalts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
@@ -1079,6 +1110,9 @@ impl MTProto {
     /// [Ping Messages (PING/PONG)]: https://core.telegram.org/mtproto/service_messages#ping-messages-ping-pong
     /// [Deferred Connection Closure + PING]: https://core.telegram.org/mtproto/service_messages#deferred-connection-closure-ping
     fn handle_pong(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "These messages do not require acknowledgments"
+        self.remove_pending_ack(message.msg_id);
+
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
         self.response_queue
@@ -1188,6 +1222,9 @@ impl MTProto {
     /// [Containers]: https://core.telegram.org/mtproto/service_messages#containers
     /// [Simple Container]: https://core.telegram.org/mtproto/service_messages#simple-container
     fn handle_container(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "A container does not require an acknowledgment"
+        self.remove_pending_ack(message.msg_id);
+
         let container = manual_tl::MessageContainer::from_bytes(&message.body)?;
         for inner_message in container.messages {
             self.process_message(inner_message)?;
@@ -1294,7 +1331,10 @@ impl MTProto {
     /// to ping time.
     ///
     /// [HTTP Wait/Long Poll]: https://core.telegram.org/mtproto/service_messages#http-wait-long-poll
-    fn handle_http_wait(&self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_http_wait(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // "special service query not requiring an acknowledgement"
+        self.remove_pending_ack(message.msg_id);
+
         // TODO implement
         Ok(())
     }
