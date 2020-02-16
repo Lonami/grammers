@@ -53,14 +53,20 @@ macro_rules! push_entity {
 /// ```
 macro_rules! update_entity_len {
     ( $ty:ident($end_offset:expr) => $vector:expr ) => {
+        let mut remove = false;
         let end_offset = $end_offset;
-        $vector.iter_mut().rposition(|e| match e {
+        let pos = $vector.iter_mut().rposition(|e| match e {
             tl::enums::MessageEntity::$ty(e) => {
                 e.length = end_offset - e.offset;
+                remove = e.length == 0;
                 true
             }
             _ => false,
         });
+
+        if remove {
+            $vector.remove(pos.unwrap());
+        }
     };
 }
 
@@ -555,6 +561,24 @@ mod tests {
                 }
                 .into(),
             ]
+        );
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn parse_empty_pre_and_lang_html() {
+        let (text, entities) = parse_html_message(
+            "Some empty <pre></pre> and <code class=\"language-rust\">code</code>",
+        );
+
+        assert_eq!(text, "Some empty  and code");
+        assert_eq!(
+            entities,
+            vec![tl::types::MessageEntityCode {
+                offset: 16,
+                length: 4,
+            }
+            .into(),]
         );
     }
 

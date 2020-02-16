@@ -21,7 +21,7 @@ html = ["html5ever"]
 grammers-mtproto = "0.1.0"
 grammers-mtsender = "0.1.0"
 grammers-session = "0.1.0"
-grammers-tl-types = "0.1.0"
+grammers-tl-types = { version = "0.1.0", features = ["tl-mtproto"] }
 os_info = { version = "2.0.0", default_features = false }
 locate-locale = "0.1.0"
 
