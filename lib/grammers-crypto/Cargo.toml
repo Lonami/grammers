@@ -14,8 +14,11 @@ categories = ["cryptography"]
 edition = "2018"
 
 [dependencies]
-aes = "0.3.2"
+aes-soft = "0.3"
+aesni = { version = "0.6", default-features = false, features = ["nocheck"] }
+block-cipher-trait = "0.6"
 getrandom = "0.1.14"
+lazy_static = "1.4.0"
 num-bigint = "0.2.6"
 sha1 = "0.6.0"
 sha2 = "0.8.1"
