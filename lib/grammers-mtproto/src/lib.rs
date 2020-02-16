@@ -555,10 +555,8 @@ impl MTProto {
             // Request for several future salts
             tl::types::FutureSalt::CONSTRUCTOR_ID => self.handle_future_salt(message),
             tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(message),
-            // Ping Messages (PING/PONG) & Deferred Connection Closure + PING
-            tl::types::Pong::CONSTRUCTOR_ID | tl::types::PingDelayDisconnect::CONSTRUCTOR_ID => {
-                self.handle_pong(message)
-            }
+            // Ping Messages (PING/PONG)
+            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(message),
             // Request to Destroy Session
             tl::types::DestroySessionOk::CONSTRUCTOR_ID
             | tl::types::DestroySessionNone::CONSTRUCTOR_ID => self.handle_destroy_session(message),
@@ -1043,6 +1041,10 @@ impl MTProto {
         self.response_queue
             .push_back((MsgId(salts.req_msg_id), Ok(message.body.clone())));
         Ok(())
+    }
+
+    fn handle_future_salt(&mut self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
+        panic!("no request should trigger a `future_salt` result")
     }
 
     /// **[Ping Messages (PING/PONG)]**

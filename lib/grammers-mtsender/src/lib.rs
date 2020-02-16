@@ -84,6 +84,9 @@ pub enum InvocationError {
     /// could not process it successfully.
     RPC(RPCError),
 
+    /// The request was cancelled or dropped, and the results won't arrive.
+    Dropped,
+
     /// The error occured during the deserialization of the response.
     Deserialize(DeserializeError),
 
@@ -98,6 +101,7 @@ impl fmt::Display for InvocationError {
         match self {
             Self::IO(err) => write!(f, "request error, IO failed: {}", err),
             Self::RPC(err) => write!(f, "request error, invoking failed: {}", err),
+            Self::Dropped => write!(f, "request was dropped (cancelled)"),
             Self::Deserialize(err) => write!(f, "request error, bad response: {}", err),
             Self::Serialize(err) => write!(f, "request error, bad request: {}", err),
         }
@@ -286,6 +290,9 @@ impl MTSender {
                         }
                         Err(RequestError::RPCError(error)) => {
                             return Err(InvocationError::RPC(error));
+                        }
+                        Err(RequestError::Dropped) => {
+                            return Err(InvocationError::Dropped);
                         }
                         Err(RequestError::BadMessage { .. }) => {
                             // Need to retransmit

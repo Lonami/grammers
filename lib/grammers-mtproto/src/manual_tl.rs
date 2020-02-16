@@ -174,6 +174,24 @@ impl Deserializable for MessageContainer {
 /// This struct represents the following TL definition:
 ///
 /// ```tl
+/// msg_copy#e06046b2 orig_message:Message = MessageCopy;
+/// ```
+///
+/// Note that this is "not used", in favour of `msg_container`.
+// Even though we use `MessageCopy::CONSTRUCTOR_ID, the dead code lint fires.
+#[allow(dead_code)]
+pub(crate) struct MessageCopy {
+    pub orig_message: Vec<Message>,
+}
+
+impl Identifiable for MessageCopy {
+    #[allow(clippy::unreadable_literal)]
+    const CONSTRUCTOR_ID: u32 = 0xe06046b2;
+}
+
+/// This struct represents the following TL definition:
+///
+/// ```tl
 /// gzip_packed#3072cfa1 packed_data:string = Object;
 /// ```
 pub(crate) struct GzipPacked {
