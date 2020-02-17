@@ -19,7 +19,6 @@ pub use intermediate::TransportIntermediate;
 
 use std::error::Error;
 use std::fmt;
-use std::io::{Read, Result, Write};
 
 /// This error occurs when the data to be read is too long.
 #[derive(Debug)]
@@ -57,24 +56,27 @@ impl fmt::Display for InvalidCrc32 {
 /// The trait used by [MTProto transports].
 ///
 /// [MTProto transports]: index.html
-pub trait Transport {
+pub trait Transport: Default {
     /// The maximum data that can be received in a single packet.
     /// Anything bigger than this will result in an error to avoid attacks.
     const MAXIMUM_DATA: u32 = 2 * 1024 * 1024;
 
-    /// Send a packet.
-    fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()>;
+    /// How much overhead does the transport incur, at a maximum.
+    // TODO review naming inconsistencies
+    const MAX_OVERHEAD: usize;
 
-    /// Receive a packet into an existing buffer.
-    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()>;
+    // TODO consider more specific types
+    /// Write the packet from `input` into `output`.
+    ///
+    /// On success, return how many bytes were written.
+    ///
+    /// On failure, return how many bytes long the output buffer should have been.
+    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
 
-    /// Create a new buffer to hold an incoming message,
-    /// and then receive one into it.
-    fn receive<R: Read>(&mut self, channel: &mut R) -> Result<Vec<u8>> {
-        let mut buffer = Vec::new();
-        match self.receive_into(channel, &mut buffer) {
-            Ok(_) => Ok(buffer),
-            Err(e) => Err(e),
-        }
-    }
+    /// Read a packet from `input` and return the body subslice.
+    ///
+    /// On success, return how many bytes were written.
+    ///
+    /// On failure, return how many bytes long the input buffer should have been.
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize>;
 }

@@ -5,9 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::{InvalidCrc32, LengthTooLong, Transport};
+use crate::transports::Transport;
 use crc::crc32::{self, Hasher32};
-use std::io::{Error, ErrorKind, Read, Result, Write};
 
 /// The basic MTProto transport protocol. This is an implementation of the
 /// [full transport].
@@ -34,51 +33,77 @@ impl Default for TransportFull {
     }
 }
 
+/// Serializes the input payload as follows:
+///
+/// ```text
+/// +----+----+----...----+----+
+/// | len| seq|  payload  | crc|
+/// +----+----+----...----+----+
+///  ^^^^ 4 bytes
+/// ```
 impl Transport for TransportFull {
-    fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()> {
+    const MAX_OVERHEAD: usize = 12;
+
+    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
-        let len = (payload.len() + 4 + 4 + 4) as u32;
-        let len = len.to_le_bytes();
+        let len = input.len() + 4 + 4 + 4;
+        if output.len() < len {
+            return Err(len);
+        }
+
+        let len_bytes = (len as u32).to_le_bytes();
         let counter = self.send_counter.to_le_bytes();
 
         let crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&len);
+            digest.write(&len_bytes);
             digest.write(&counter);
-            digest.write(payload);
+            digest.write(input);
             digest.sum32().to_le_bytes()
         };
 
-        channel.write_all(&len)?;
-        channel.write_all(&counter)?;
-        channel.write_all(payload)?;
-        channel.write_all(&crc)?;
+        // We could use `io::Cursor`, and even though we know `write_all`
+        // would never fail (we checked `output.len()` above), we would
+        // still need to add several `unwrap()`. The only benefit would
+        // be not keeping track of the offsets manually. Not worth it.
+        output[0..4].copy_from_slice(&len_bytes);
+        output[4..8].copy_from_slice(&counter);
+        output[8..len - 4].copy_from_slice(input);
+        output[len - 4..len].copy_from_slice(&crc);
+
         self.send_counter += 1;
-        Ok(())
+        Ok(len)
     }
 
-    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+        // TODO the input and output len can probably be abstracted away
+        //      ("minimal input" and "calculate output len")
+        // Need 4 bytes for the initial length
+        if input.len() < 4 {
+            return Err(4);
+        }
+
         // payload len
         let mut len_data = [0; 4];
-        channel.read_exact(&mut len_data)?;
-        let len = u32::from_le_bytes(len_data);
-        if len > Self::MAXIMUM_DATA {
-            return Err(Error::new(ErrorKind::InvalidInput, LengthTooLong { len }));
+        len_data.copy_from_slice(&input[0..4]);
+        let len = u32::from_le_bytes(len_data) as usize;
+        if input.len() < len {
+            return Err(len);
         }
 
         // receive counter
+        // TODO probably validate counter
         let mut counter_data = [0; 4];
-        channel.read_exact(&mut counter_data)?;
+        counter_data.copy_from_slice(&input[4..8]);
         let _counter = u32::from_le_bytes(counter_data);
 
         // payload
-        buffer.resize((len - 12) as usize, 0);
-        channel.read_exact(buffer)?;
+        let output = &input[8..len - 4];
 
         // crc32
         let crc = {
             let mut buf = [0; 4];
-            channel.read_exact(&mut buf)?;
+            buf.copy_from_slice(&input[len - 4..len]);
             u32::from_le_bytes(buf)
         };
 
@@ -86,19 +111,15 @@ impl Transport for TransportFull {
             let mut digest = crc32::Digest::new(crc32::IEEE);
             digest.write(&len_data);
             digest.write(&counter_data);
-            digest.write(buffer);
+            digest.write(output);
             digest.sum32()
         };
         if crc != valid_crc {
-            return Err(Error::new(
-                ErrorKind::InvalidInput,
-                InvalidCrc32 {
-                    got: crc,
-                    expected: valid_crc,
-                },
-            ));
+            // TODO maybe with a `type TransportError` and return
+            //      `Err(MissingBytes | TransportError)`
+            unimplemented!("return InvalidCrc32 error")
         }
 
-        Ok(())
+        Ok(output)
     }
 }

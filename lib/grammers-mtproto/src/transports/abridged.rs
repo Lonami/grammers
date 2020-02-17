@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::{LengthTooLong, Transport};
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use crate::transports::Transport;
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -26,51 +25,78 @@ impl TransportAbridged {
     }
 }
 
+/// Serializes the input payload as follows.
+///
+/// When the length is small enough:
+///
+/// ```text
+/// +-+----...----+
+/// |L|  payload  |
+/// +-+----...----+
+///  ^ 1 byte
+/// ```
+///
+/// Otherwise:
+///
+/// ```text
+/// +----+----...----+
+/// | len|  payload  |
+/// +----+----...----+
+///  ^^^^ 4 bytes
+/// ```
 impl Transport for TransportAbridged {
-    fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()> {
-        let len = payload.len() / 4;
+    const MAX_OVERHEAD: usize = 4;
+
+    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+        let output_len;
+        let len = input.len() / 4;
         if len < 127 {
-            channel.write_all(&[len as u8])?;
-        } else {
-            let mut len = len.to_le_bytes();
-            // shift to the right to make room in the first byte
-            for i in (1..len.len()).rev() {
-                len[i] = len[i - 1];
+            output_len = input.len() + 1;
+            if output.len() < output_len {
+                return Err(len);
             }
-            len[0] = 0x7f;
-            channel.write_all(&len)?;
+
+            output[0] = len as u8;
+        } else {
+            output_len = input.len() + 4;
+            if output.len() < output_len {
+                return Err(len);
+            }
+
+            output[0] = 0x7f;
+            output[1..4].copy_from_slice(&len.to_le_bytes()[..3]);
         }
 
-        channel.write_all(payload)?;
-        Ok(())
+        output[output_len - input.len()..output_len].copy_from_slice(input);
+        Ok(output_len)
     }
 
-    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
-        let len = {
-            let mut buf = [0; 1];
-            channel.read_exact(&mut buf)?;
-            buf[0]
-        };
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+        if input.len() < 1 {
+            return Err(1);
+        }
 
+        let header_len;
+        let len = input[0];
         let len = if len < 127 {
+            header_len = 1;
             len as u32
         } else {
-            let mut buf = [0; 3];
-            channel.read_exact(&mut buf)?;
+            if input.len() < 4 {
+                return Err(4);
+            }
 
+            header_len = 4;
             let mut len = [0; 4];
-            len[..buf.len()].copy_from_slice(&buf);
+            len[..3].copy_from_slice(&input[1..4]);
             u32::from_le_bytes(len)
         };
 
-        let len = len * 4;
-
-        if len > Self::MAXIMUM_DATA {
-            return Err(Error::new(ErrorKind::InvalidInput, LengthTooLong { len }));
+        let len = len as usize * 4;
+        if input.len() < header_len + len {
+            return Err(header_len + len);
         }
 
-        buffer.resize(len as usize, 0);
-        channel.read_exact(buffer)?;
-        Ok(())
+        Ok(&input[header_len..header_len + len])
     }
 }

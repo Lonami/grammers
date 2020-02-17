@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::{LengthTooLong, Transport};
-use std::io::{Error, ErrorKind, Read, Result, Write};
+use crate::transports::Transport;
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -26,29 +25,46 @@ impl TransportIntermediate {
     }
 }
 
+/// Serializes the input payload as follows:
+///
+/// ```text
+/// +----+----...----+
+/// | len|  payload  |
+/// +----+----...----+
+///  ^^^^ 4 bytes
+/// ```
 impl Transport for TransportIntermediate {
-    fn send<W: Write>(&mut self, channel: &mut W, payload: &[u8]) -> Result<()> {
+    const MAX_OVERHEAD: usize = 4;
+
+    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
-        let len = payload.len() as u32;
-        channel.write_all(&len.to_le_bytes())?;
-        channel.write_all(payload)?;
-        Ok(())
-    }
-
-    fn receive_into<R: Read>(&mut self, channel: &mut R, buffer: &mut Vec<u8>) -> Result<()> {
-        let len = {
-            let mut buf = [0; 4];
-            channel.read_exact(&mut buf)?;
-            u32::from_le_bytes(buf)
-        };
-
-        if len > Self::MAXIMUM_DATA {
-            return Err(Error::new(ErrorKind::InvalidInput, LengthTooLong { len }));
+        let len = input.len() + 4;
+        if output.len() < len {
+            return Err(len);
         }
 
-        buffer.resize((len - 12) as usize, 0);
-        channel.read_exact(buffer)?;
+        output[0..4].copy_from_slice(&(input.len() as u32).to_le_bytes());
+        output[4..len].copy_from_slice(input);
+        Ok(len)
+    }
 
-        Ok(())
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+        if input.len() < 4 {
+            return Err(4);
+        }
+
+        let len = {
+            let mut buf = [0; 4];
+            buf.copy_from_slice(&input[0..4]);
+            u32::from_le_bytes(buf)
+        } as usize
+            + 4;
+
+        if input.len() < len {
+            return Err(len);
+        }
+
+        let output = &input[4..len - 4];
+        Ok(output)
     }
 }
