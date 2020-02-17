@@ -1,11 +1,9 @@
 use block_cipher_trait::generic_array::GenericArray;
 use block_cipher_trait::BlockCipher;
-use lazy_static::lazy_static;
+use once_cell::sync::Lazy;
 
-lazy_static! {
-    static ref USE_AES_NI: bool =
-        is_x86_feature_detected!("aes") && is_x86_feature_detected!("sse2");
-}
+static USE_AES_NI: Lazy<bool> =
+    Lazy::new(|| is_x86_feature_detected!("aes") && is_x86_feature_detected!("sse2"));
 
 macro_rules! do_encrypt {
     ( $root:ident($plaintext:expr, $key:expr, $iv:expr) ) => {{
