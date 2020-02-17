@@ -11,9 +11,13 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtsender::MTSender;
+use tokio::runtime::Runtime;
 
 #[test]
 fn test_auth_key_generation() {
-    let mut sender = MTSender::connect(TELEGRAM_DEFAULT_TEST_DC).unwrap();
-    assert!(sender.generate_auth_key().is_ok());
+    let mut rt = Runtime::new().unwrap();
+    rt.block_on(async {
+        let mut sender = MTSender::connect(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
+        assert!(sender.generate_auth_key().await.is_ok());
+    })
 }

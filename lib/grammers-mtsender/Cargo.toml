@@ -17,6 +17,7 @@ edition = "2018"
 getrandom = "0.1.14"
 grammers-crypto = "0.1.0"
 grammers-mtproto = "0.1.0"
+tokio = { version = "0.2", features = ["tcp", "io-util"] }
 
 [dependencies.grammers-tl-types]
 version = "0.1.0"

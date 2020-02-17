@@ -5,10 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+mod tcp_transport;
+
+use tcp_transport::TcpTransport;
+
 use grammers_crypto::auth_key::generation::AuthKeyGenError;
 use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::errors::{DeserializeError, RPCError, RequestError, SerializeError};
-use grammers_mtproto::transports::{Transport, TransportFull};
+use grammers_mtproto::transports::TransportFull;
 use grammers_mtproto::MTProto;
 pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
 use grammers_tl_types::{Deserializable, RPC};
@@ -16,10 +20,7 @@ use grammers_tl_types::{Deserializable, RPC};
 use std::error::Error;
 use std::fmt;
 use std::io;
-use std::net::{TcpStream, ToSocketAddrs};
-use std::time::Duration;
-
-pub const DEFAULT_TIMEOUT: Option<Duration> = Some(Duration::from_secs(10));
+use std::net::ToSocketAddrs;
 
 /// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
@@ -136,7 +137,6 @@ impl From<RPCError> for InvocationError {
 pub struct MTSenderBuilder {
     compression_threshold: Option<usize>,
     auth_key: Option<AuthKey>,
-    timeout: Option<Duration>,
 }
 
 /// A Mobile Transport sender, using the [Mobile Transport Protocol]
@@ -145,9 +145,8 @@ pub struct MTSenderBuilder {
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub struct MTSender {
     protocol: MTProto,
-    stream: TcpStream,
     // TODO let the user change the type of transport used
-    transport: TransportFull,
+    transport: TcpTransport<TransportFull>,
 }
 
 impl MTSenderBuilder {
@@ -155,7 +154,6 @@ impl MTSenderBuilder {
         Self {
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
             auth_key: None,
-            timeout: DEFAULT_TIMEOUT,
         }
     }
 
@@ -173,17 +171,10 @@ impl MTSenderBuilder {
         self
     }
 
-    /// Configures the network timeout to use when performing network
-    /// operations.
-    pub fn timeout(mut self, timeout: Option<Duration>) -> Self {
-        self.timeout = timeout;
-        self
-    }
-
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn connect<A: ToSocketAddrs>(self, addr: A) -> io::Result<MTSender> {
-        MTSender::with_builder(self, addr)
+    pub async fn connect<A: ToSocketAddrs>(self, addr: A) -> io::Result<MTSender> {
+        MTSender::with_builder(self, addr).await
     }
 }
 
@@ -194,14 +185,14 @@ impl MTSender {
     }
 
     /// Creates and connects a new instance with default settings.
-    pub fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
-        Self::build().connect(addr)
+    pub async fn connect<A: ToSocketAddrs>(addr: A) -> io::Result<Self> {
+        Self::build().connect(addr).await
     }
 
     /// Constructs an instance using a finished builder.
-    fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> io::Result<Self> {
-        let stream = TcpStream::connect(addr)?;
-        stream.set_read_timeout(builder.timeout)?;
+    async fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> io::Result<Self> {
+        let addr = addr.to_socket_addrs()?.next().unwrap();
+        let transport = TcpTransport::connect(addr).await?;
 
         let mut protocol = MTProto::build().compression_threshold(builder.compression_threshold);
 
@@ -209,10 +200,11 @@ impl MTSender {
             protocol = protocol.auth_key(auth_key);
         }
 
+        let protocol = protocol.finish();
+
         Ok(Self {
-            protocol: protocol.finish(),
-            stream,
-            transport: TransportFull::new(),
+            protocol,
+            transport,
         })
     }
 
@@ -220,15 +212,15 @@ impl MTSender {
     /// key that can be used to safely transmit data to and from the server.
     ///
     /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub fn generate_auth_key(&mut self) -> Result<AuthKey, AuthorizationError> {
+    pub async fn generate_auth_key(&mut self) -> Result<AuthKey, AuthorizationError> {
         let (request, data) = auth_key::generation::step1()?;
-        let response = self.invoke_plain_request(&request)?;
+        let response = self.invoke_plain_request(&request).await?;
 
         let (request, data) = auth_key::generation::step2(data, response)?;
-        let response = self.invoke_plain_request(&request)?;
+        let response = self.invoke_plain_request(&request).await?;
 
         let (request, data) = auth_key::generation::step3(data, response)?;
-        let response = self.invoke_plain_request(&request)?;
+        let response = self.invoke_plain_request(&request).await?;
 
         let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
         self.protocol.set_auth_key(auth_key.clone(), time_offset);
@@ -242,13 +234,13 @@ impl MTSender {
     }
 
     /// Invoke a serialized request in plaintext.
-    fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
+    async fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
         // Send
         let payload = self.protocol.serialize_plain_message(request);
-        self.transport.send(&mut self.stream, &payload)?;
+        self.transport.send(&payload).await?;
 
         // Receive
-        let response = self.receive_message()?;
+        let response = self.receive_message().await?;
         self.protocol
             .deserialize_plain_message(&response)
             .map(|x| x.to_vec())
@@ -263,17 +255,17 @@ impl MTSender {
     /// If the request is both sent and received successfully, then the
     /// request itself was understood by the server, but it could not be
     /// executed. This is represented by the innermost result.
-    pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
+    pub async fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         let mut msg_id = self.protocol.enqueue_request(request.to_bytes())?;
         loop {
             // The protocol may generate more outgoing requests, so we need
             // to constantly check for those until we receive a response.
             while let Some(payload) = self.protocol.serialize_encrypted_messages()? {
-                self.transport.send(&mut self.stream, &payload)?;
+                self.transport.send(&payload).await?;
             }
 
             // Process all messages we receive.
-            let response = self.receive_message()?;
+            let response = self.receive_message().await?;
             self.protocol.process_encrypted_response(&response)?;
 
             // TODO dispatch this somehow
@@ -305,12 +297,10 @@ impl MTSender {
     }
 
     /// Receives a single message from the server
-    fn receive_message(&mut self) -> Result<Vec<u8>, io::Error> {
-        self.transport
-            .receive(&mut self.stream)
-            .map_err(|e| match e.kind() {
-                io::ErrorKind::UnexpectedEof => io::Error::new(io::ErrorKind::ConnectionReset, e),
-                _ => e,
-            })
+    async fn receive_message(&mut self) -> Result<Vec<u8>, io::Error> {
+        self.transport.recv().await.map_err(|e| match e.kind() {
+            io::ErrorKind::UnexpectedEof => io::Error::new(io::ErrorKind::ConnectionReset, e),
+            _ => e,
+        })
     }
 }
