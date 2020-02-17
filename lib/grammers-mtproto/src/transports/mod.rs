@@ -57,12 +57,7 @@ impl fmt::Display for InvalidCrc32 {
 ///
 /// [MTProto transports]: index.html
 pub trait Transport: Default {
-    /// The maximum data that can be received in a single packet.
-    /// Anything bigger than this will result in an error to avoid attacks.
-    const MAXIMUM_DATA: u32 = 2 * 1024 * 1024;
-
     /// How much overhead does the transport incur, at a maximum.
-    // TODO review naming inconsistencies
     const MAX_OVERHEAD: usize;
 
     // TODO consider more specific types
