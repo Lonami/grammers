@@ -376,7 +376,7 @@ mod tests {
     fn ensure_generic_reads_blob() {
         let blob = [103, 64, 11, 51, 72];
         assert_eq!(
-            <crate::functions::InvokeWithLayer as crate::RPC>::Return::from_bytes(&blob)
+            <crate::functions::InvokeWithLayer as crate::RemoteCall>::Return::from_bytes(&blob)
                 .unwrap()
                 .0,
             blob

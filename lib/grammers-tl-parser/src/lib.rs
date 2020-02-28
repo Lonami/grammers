@@ -24,7 +24,7 @@ mod utils;
 
 use errors::ParseError;
 use tl::Definition;
-use tl_iterator::TLIterator;
+use tl_iterator::TlIterator;
 
 /// Parses a file full of [Type Language] definitions.
 ///
@@ -50,5 +50,5 @@ use tl_iterator::TLIterator;
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
 pub fn parse_tl_file(contents: &str) -> impl Iterator<Item = Result<Definition, ParseError>> {
-    TLIterator::new(contents)
+    TlIterator::new(contents)
 }

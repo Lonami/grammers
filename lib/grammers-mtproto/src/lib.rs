@@ -31,13 +31,13 @@ use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
 /// The default compression threshold to be used.
 pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 
-/// A builder to configure [`MTProto`] instances.
+/// A builder to configure [`Mtp`] instances.
 ///
-/// Use the [`MTProto::build`] method to create builder instances.
+/// Use the [`Mtp::build`] method to create builder instances.
 ///
-/// [`MTProto`]: struct.mtproto.html
-/// [`MTProto::build`]: fn.mtproto.build.html
-pub struct MTProtoBuilder {
+/// [`Mtp`]: struct.mtp.html
+/// [`Mtp::build`]: fn.mtp.build.html
+pub struct MtpBuilder {
     compression_threshold: Option<usize>,
     auth_key: Option<AuthKey>,
 }
@@ -71,7 +71,7 @@ pub struct MTProtoBuilder {
 /// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
 /// [`process_encrypted_response`]: #method.process_encrypted_response
 /// [`poll_response`]: #method.poll_response
-pub struct MTProto {
+pub struct Mtp {
     /// The authorization key to use to encrypt payload.
     auth_key: Option<AuthKey>,
 
@@ -124,9 +124,9 @@ pub struct MTProto {
 #[derive(Copy, Clone, Debug, Hash, PartialEq)]
 pub struct MsgId(i64);
 
-impl MTProtoBuilder {
+impl MtpBuilder {
     fn new() -> Self {
-        Self {
+        MtpBuilder {
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
             auth_key: None,
         }
@@ -148,21 +148,21 @@ impl MTProtoBuilder {
 
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn finish(self) -> MTProto {
-        let mut result = MTProto::new();
+    pub fn finish(self) -> Mtp {
+        let mut result = Mtp::new();
         result.compression_threshold = self.compression_threshold;
         result.auth_key = self.auth_key;
         result
     }
 }
 
-impl Default for MTProto {
+impl Default for Mtp {
     fn default() -> Self {
         Self::new()
     }
 }
 
-impl MTProto {
+impl Mtp {
     // Constructors
     // ========================================
 
@@ -174,7 +174,7 @@ impl MTProto {
             i64::from_le_bytes(buffer)
         };
 
-        Self {
+        Mtp {
             auth_key: None,
             time_offset: 0,
             salt: 0,
@@ -190,8 +190,8 @@ impl MTProto {
     }
 
     /// Returns a builder to configure certain parameters.
-    pub fn build() -> MTProtoBuilder {
-        MTProtoBuilder::new()
+    pub fn build() -> MtpBuilder {
+        MtpBuilder::new()
     }
 
     // State management

@@ -14,15 +14,15 @@ use tcp_transport::TcpTransport;
 use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::errors::RequestError;
 use grammers_mtproto::transports::TransportFull;
-use grammers_mtproto::MTProto;
+use grammers_mtproto::Mtp;
 pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
-use grammers_tl_types::{Deserializable, RPC};
+use grammers_tl_types::{Deserializable, RemoteCall};
 
 use std::io;
 use std::net::ToSocketAddrs;
 
 /// A builder to configure `MTSender` instances.
-pub struct MTSenderBuilder {
+pub struct MtpSenderBuilder {
     compression_threshold: Option<usize>,
     auth_key: Option<AuthKey>,
 }
@@ -31,15 +31,15 @@ pub struct MTSenderBuilder {
 /// underneath.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
-pub struct MTSender {
-    protocol: MTProto,
+pub struct MtpSender {
+    protocol: Mtp,
     // TODO let the user change the type of transport used
     transport: TcpTransport<TransportFull>,
 }
 
-impl MTSenderBuilder {
+impl MtpSenderBuilder {
     fn new() -> Self {
-        Self {
+        MtpSenderBuilder {
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
             auth_key: None,
         }
@@ -61,15 +61,15 @@ impl MTSenderBuilder {
 
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub async fn connect<A: ToSocketAddrs>(self, addr: A) -> io::Result<MTSender> {
-        MTSender::with_builder(self, addr).await
+    pub async fn connect<A: ToSocketAddrs>(self, addr: A) -> io::Result<MtpSender> {
+        MtpSender::with_builder(self, addr).await
     }
 }
 
-impl MTSender {
+impl MtpSender {
     /// Returns a builder to configure certain parameters.
-    pub fn build() -> MTSenderBuilder {
-        MTSenderBuilder::new()
+    pub fn build() -> MtpSenderBuilder {
+        MtpSenderBuilder::new()
     }
 
     /// Creates and connects a new instance with default settings.
@@ -78,11 +78,11 @@ impl MTSender {
     }
 
     /// Constructs an instance using a finished builder.
-    async fn with_builder<A: ToSocketAddrs>(builder: MTSenderBuilder, addr: A) -> io::Result<Self> {
+    async fn with_builder<A: ToSocketAddrs>(builder: MtpSenderBuilder, addr: A) -> io::Result<Self> {
         let addr = addr.to_socket_addrs()?.next().unwrap();
         let transport = TcpTransport::connect(addr).await?;
 
-        let mut protocol = MTProto::build().compression_threshold(builder.compression_threshold);
+        let mut protocol = Mtp::build().compression_threshold(builder.compression_threshold);
 
         if let Some(auth_key) = builder.auth_key {
             protocol = protocol.auth_key(auth_key);
@@ -90,7 +90,7 @@ impl MTSender {
 
         let protocol = protocol.finish();
 
-        Ok(Self {
+        Ok(MtpSender {
             protocol,
             transport,
         })
@@ -143,7 +143,7 @@ impl MTSender {
     /// If the request is both sent and received successfully, then the
     /// request itself was understood by the server, but it could not be
     /// executed. This is represented by the innermost result.
-    pub async fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
+    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         let mut msg_id = self.protocol.enqueue_request(request.to_bytes())?;
         loop {
             // The protocol may generate more outgoing requests, so we need

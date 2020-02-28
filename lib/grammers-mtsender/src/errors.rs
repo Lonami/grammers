@@ -10,7 +10,7 @@ use std::fmt;
 use std::io;
 
 use grammers_crypto::auth_key::generation::AuthKeyGenError;
-use grammers_mtproto::errors::{DeserializeError, RPCError, SerializeError};
+use grammers_mtproto::errors::{DeserializeError, RpcError, SerializeError};
 
 /// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
@@ -73,7 +73,7 @@ pub enum InvocationError {
 
     /// The request invocation failed because it was invalid or the server
     /// could not process it successfully.
-    RPC(RPCError),
+    RPC(RpcError),
 
     /// The request was cancelled or dropped, and the results won't arrive.
     Dropped,
@@ -117,8 +117,8 @@ impl From<SerializeError> for InvocationError {
     }
 }
 
-impl From<RPCError> for InvocationError {
-    fn from(error: RPCError) -> Self {
+impl From<RpcError> for InvocationError {
+    fn from(error: RpcError) -> Self {
         Self::RPC(error)
     }
 }

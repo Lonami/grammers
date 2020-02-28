@@ -137,7 +137,7 @@ impl fmt::Display for SerializeError {
 pub enum RequestError {
     /// The parameters used in the request were invalid and caused a
     /// Remote Procedure Call error.
-    RPCError(RPCError),
+    RPCError(RpcError),
 
     /// The call was dropped (cancelled), so the server will not process it.
     Dropped,
@@ -161,7 +161,7 @@ impl RequestError {
 
 /// The error type reported by the server when a request is misused.
 #[derive(Debug, PartialEq)]
-pub struct RPCError {
+pub struct RpcError {
     /// A numerical value similar to HTTP status codes.
     pub code: i32,
 
@@ -172,9 +172,9 @@ pub struct RPCError {
     pub value: Option<u32>,
 }
 
-impl Error for RPCError {}
+impl Error for RpcError {}
 
-impl fmt::Display for RPCError {
+impl fmt::Display for RpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "rpc error {}: {}", self.code, self.name)?;
         if let Some(value) = self.value {
@@ -184,7 +184,7 @@ impl fmt::Display for RPCError {
     }
 }
 
-impl From<tl::types::RpcError> for RPCError {
+impl From<tl::types::RpcError> for RpcError {
     fn from(error: tl::types::RpcError) -> Self {
         // Extract the numeric value in the error, if any
         if let Some(value) = error

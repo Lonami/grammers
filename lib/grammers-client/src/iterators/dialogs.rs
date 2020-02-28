@@ -11,14 +11,14 @@ use std::convert::TryInto;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 
-use crate::iterators::{RPCIterBuffer, RPCIterator};
+use crate::iterators::{RpcIterBuffer, RpcIterator};
 use crate::types;
 use crate::Client;
 
 const MAX_DIALOGS_PER_REQUEST: i32 = 100;
 
 pub struct Dialogs {
-    buffer: RPCIterBuffer<tl::functions::messages::GetDialogs, types::Dialog>,
+    buffer: RpcIterBuffer<tl::functions::messages::GetDialogs, types::Dialog>,
 
     // We reuse the same map for the sake of avoiding allocations
     entities: HashMap<i32, types::Entity>,
@@ -48,7 +48,7 @@ fn message_id(message: &tl::enums::Message) -> Option<(i32, i32)> {
 impl Dialogs {
     pub fn iter() -> Self {
         Self {
-            buffer: RPCIterBuffer::new(tl::functions::messages::GetDialogs {
+            buffer: RpcIterBuffer::new(tl::functions::messages::GetDialogs {
                 exclude_pinned: false,
                 folder_id: None,
                 offset_date: 0,
@@ -145,7 +145,7 @@ impl Dialogs {
     }
 }
 
-impl RPCIterator<types::Dialog> for Dialogs {
+impl RpcIterator<types::Dialog> for Dialogs {
     fn total(&self) -> Option<usize> {
         self.buffer.total
     }

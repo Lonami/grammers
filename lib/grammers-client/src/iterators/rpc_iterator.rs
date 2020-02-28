@@ -10,7 +10,7 @@ use grammers_mtsender::InvocationError;
 use crate::Client;
 
 /// A trait implemented by iterators backed by RPC.
-pub trait RPCIterator<T> {
+pub trait RpcIterator<T> {
     /// If the total amount of items corresponding to invoking this request
     /// is known, such value is returned. Note that this may not correspond
     /// with the amount of items that are yield.

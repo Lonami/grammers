@@ -314,10 +314,10 @@ fn write_deserializable<W: Write>(
     Ok(())
 }
 
-/// Defines the `impl RPC` corresponding to the definition:
+/// Defines the `impl RemoteCall` corresponding to the definition:
 ///
 /// ```
-/// impl crate::RPC for Name {
+/// impl crate::RemoteCall for Name {
 ///     type Return = Name;
 /// }
 /// ```
@@ -329,7 +329,7 @@ fn write_rpc<W: Write>(
 ) -> io::Result<()> {
     writeln!(
         file,
-        "{}impl crate::RPC for {} {{",
+        "{}impl crate::RemoteCall for {} {{",
         indent,
         rusty_class_name(&def.name)
     )?;

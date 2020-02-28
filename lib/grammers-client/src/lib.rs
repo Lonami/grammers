@@ -13,11 +13,11 @@ use std::convert::TryInto;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-use grammers_mtproto::errors::RPCError;
+use grammers_mtproto::errors::RpcError;
 use grammers_mtsender::MTSender;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{MemorySession, Session};
-use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
+use grammers_tl_types::{self as tl, Deserializable, Serializable, RemoteCall};
 
 pub use iterators::Dialogs;
 
@@ -210,7 +210,7 @@ impl Client {
 
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request) {
             Ok(x) => x.into(),
-            Err(InvocationError::RPC(RPCError { name, value, .. })) if name == "PHONE_MIGRATE" => {
+            Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "PHONE_MIGRATE" => {
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
                 // authorization and re-import it at a different datacenter.
@@ -253,7 +253,7 @@ impl Client {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
                 })
             }
-            Err(InvocationError::RPC(RPCError { name, .. })) if name.starts_with("PHONE_CODE_") => {
+            Err(InvocationError::RPC(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
             }
             Err(error) => Err(SignInError::Other(error)),
@@ -276,7 +276,7 @@ impl Client {
 
         let _result = match self.invoke(&request) {
             Ok(x) => x,
-            Err(InvocationError::RPC(RPCError { name, value, .. })) if name == "USER_MIGRATE" => {
+            Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 self.replace_mtsender(value.unwrap() as i32)?;
                 self.init_invoke(&request)?
             }
@@ -390,7 +390,7 @@ impl Client {
 
     /// Wraps the request in `invokeWithLayer(initConnection(...))` and
     /// invokes that. Should be used by the first request after connect.
-    fn init_invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
+    fn init_invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         let info = os_info::get();
 
         let mut system_lang_code = locate_locale::system();
@@ -432,7 +432,7 @@ impl Client {
     }
 
     /// Invokes a raw request, and returns its result.
-    pub fn invoke<R: RPC>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
+    pub fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
         self.sender.invoke(request)
     }
 }

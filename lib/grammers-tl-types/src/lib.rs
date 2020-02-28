@@ -84,7 +84,7 @@ pub trait Identifiable {
 /// Structures implementing this trait indicate that they are suitable for
 /// use to perform Remote Procedure Calls (RPC), and know what the type of
 /// the response will be.
-pub trait RPC: Serializable {
+pub trait RemoteCall: Serializable {
     /// The type of the "return" value coming from the other end of the
     /// connection.
     type Return: Deserializable;

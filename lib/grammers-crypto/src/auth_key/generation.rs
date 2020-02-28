@@ -39,7 +39,7 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
-use grammers_tl_types::{self as tl, Deserializable, Serializable, RPC};
+use grammers_tl_types::{self as tl, Deserializable, Serializable, RemoteCall};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
@@ -256,7 +256,7 @@ fn do_step2(
     // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
     let Step1 { nonce } = data;
     let tl::enums::ResPQ::ResPQ(res_pq) =
-        <tl::functions::ReqPqMulti as RPC>::Return::from_bytes(&response)?;
+        <tl::functions::ReqPqMulti as RemoteCall>::Return::from_bytes(&response)?;
 
     check_nonce(&res_pq.nonce, &nonce)?;
 
@@ -378,7 +378,7 @@ fn do_step3(
         server_nonce,
         new_nonce,
     } = data;
-    let server_dh_params = <tl::functions::ReqDHParams as RPC>::Return::from_bytes(&response)?;
+    let server_dh_params = <tl::functions::ReqDHParams as RemoteCall>::Return::from_bytes(&response)?;
 
     // Step 3. Factorize PQ and construct the request for DH params.
     let server_dh_params = match server_dh_params {
@@ -531,9 +531,9 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
         gab,
         time_offset,
     } = data;
-    let dh_gen = <tl::functions::SetClientDHParams as RPC>::Return::from_bytes(&response)?;
+    let dh_gen = <tl::functions::SetClientDHParams as RemoteCall>::Return::from_bytes(&response)?;
 
-    struct DHGenData {
+    struct DhGenData {
         nonce: [u8; 16],
         server_nonce: [u8; 16],
         new_nonce_hash: [u8; 16],
@@ -541,19 +541,19 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
     }
 
     let dh_gen = match dh_gen {
-        tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => DHGenData {
+        tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash1,
             nonce_number: 1,
         },
-        tl::enums::SetClientDHParamsAnswer::DhGenRetry(x) => DHGenData {
+        tl::enums::SetClientDHParamsAnswer::DhGenRetry(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash2,
             nonce_number: 2,
         },
-        tl::enums::SetClientDHParamsAnswer::DhGenFail(x) => DHGenData {
+        tl::enums::SetClientDHParamsAnswer::DhGenFail(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash3,

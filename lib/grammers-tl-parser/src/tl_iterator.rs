@@ -16,15 +16,15 @@ const TYPES_SEP: &str = "---types---";
 /// An iterator over [Type Language] definitions.
 ///
 /// [Type Language]: https://core.telegram.org/mtproto/TL
-pub struct TLIterator {
+pub struct TlIterator {
     contents: String,
     index: usize,
     category: Category,
 }
 
-impl TLIterator {
+impl TlIterator {
     pub(crate) fn new(contents: &str) -> Self {
-        Self {
+        TlIterator {
             contents: remove_tl_comments(contents),
             index: 0,
             category: Category::Types,
@@ -32,7 +32,7 @@ impl TLIterator {
     }
 }
 
-impl Iterator for TLIterator {
+impl Iterator for TlIterator {
     type Item = Result<Definition, ParseError>;
 
     fn next(&mut self) -> Option<Self::Item> {
@@ -87,14 +87,14 @@ mod tests {
 
     #[test]
     fn parse_bad_separator() {
-        let mut it = TLIterator::new("---foo---");
+        let mut it = TlIterator::new("---foo---");
         assert_eq!(it.next(), Some(Err(ParseError::UnknownSeparator)));
         assert_eq!(it.next(), None);
     }
 
     #[test]
     fn parse_file() {
-        let mut it = TLIterator::new(
+        let mut it = TlIterator::new(
             "
             // leading; comment
             first#1 = t; // inline comment
