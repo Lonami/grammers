@@ -1177,7 +1177,7 @@ impl Mtp {
     ) -> Result<(), DeserializeError> {
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
-            tl::enums::NewSession::NewSessionCreated(x) => {
+            tl::enums::NewSession::Created(x) => {
                 self.salt = x.server_salt;
             }
         }

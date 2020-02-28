@@ -12,7 +12,7 @@ use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier::{
     rusty_attr_name, rusty_class_name, rusty_namespaced_class_name, rusty_namespaced_type_name,
-    rusty_type, rusty_type_name, rusty_type_path,
+    rusty_type, rusty_type_name, rusty_type_path, rusty_variant_name,
 };
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
@@ -383,7 +383,7 @@ fn write_impl_from<W: Write>(
         "{}            {cls}::{name}(x) => {ok}{deref}x{paren},",
         indent,
         cls = rusty_namespaced_class_name(&def.ty),
-        name = rusty_class_name(&def.name),
+        name = rusty_variant_name(def),
         ok = if infallible { "" } else { "Ok(" },
         deref = if metadata.is_recursive_def(def) {
             "*"

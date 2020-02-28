@@ -60,7 +60,7 @@ pub trait IntoInput<T> {
 impl IntoInput<tl::enums::InputPeer> for tl::types::User {
     fn convert(&self, _client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
         if let Some(access_hash) = self.access_hash {
-            Ok(tl::enums::InputPeer::InputPeerUser(
+            Ok(tl::enums::InputPeer::User(
                 tl::types::InputPeerUser {
                     user_id: self.id,
                     access_hash,
@@ -81,7 +81,7 @@ impl IntoInput<tl::enums::InputPeer> for tl::types::User {
 impl IntoInput<tl::enums::InputPeer> for &str {
     fn convert(&self, client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
         if self.eq_ignore_ascii_case("me") {
-            Ok(tl::enums::InputPeer::InputPeerSelf(
+            Ok(tl::enums::InputPeer::PeerSelf(
                 tl::types::InputPeerSelf {},
             ))
         } else if let Some(user) = client.resolve_username(self)? {
@@ -248,7 +248,7 @@ impl Client {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
                 Ok(x.user.try_into().unwrap())
             }
-            Ok(tl::enums::auth::Authorization::AuthorizationSignUpRequired(x)) => {
+            Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
                 Err(SignInError::SignUpRequired {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
                 })
@@ -330,7 +330,7 @@ impl Client {
         })?;
 
         match peer {
-            tl::enums::Peer::PeerUser(tl::types::PeerUser { user_id }) => {
+            tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
                 return Ok(users
                     .into_iter()
                     .filter_map(|user| match user {
@@ -341,12 +341,12 @@ impl Client {
                                 None
                             }
                         }
-                        tl::enums::User::UserEmpty(_) => None,
+                        tl::enums::User::Empty(_) => None,
                     })
                     .next());
             }
-            tl::enums::Peer::PeerChat(_) => {}
-            tl::enums::Peer::PeerChannel(_) => {}
+            tl::enums::Peer::Chat(_) => {}
+            tl::enums::Peer::Channel(_) => {}
         }
 
         Ok(None)

@@ -200,7 +200,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         match self.entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't add `<code>`;
                             // we most likely want to indicate `class="language-foo"`.
-                            Some(tl::enums::MessageEntity::MessageEntityPre(e))
+                            Some(tl::enums::MessageEntity::Pre(e))
                                 if e.length == 0 =>
                             {
                                 e.language = attrs
@@ -258,7 +258,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         match self.entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't update `<code>` len;
                             // we most likely want to indicate `class="language-foo"`.
-                            Some(tl::enums::MessageEntity::MessageEntityPre(e))
+                            Some(tl::enums::MessageEntity::Pre(e))
                                 if e.length == 0 => {}
                             _ => {
                                 update_entity_len!(MessageEntityCode(self.offset) => self.entities);

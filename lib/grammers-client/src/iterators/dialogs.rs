@@ -28,9 +28,9 @@ pub struct Dialogs {
 // TODO more reusable methods to get ids from things
 fn peer_id(peer: &tl::enums::Peer) -> i32 {
     match peer {
-        tl::enums::Peer::PeerUser(user) => user.user_id,
-        tl::enums::Peer::PeerChat(chat) => chat.chat_id,
-        tl::enums::Peer::PeerChannel(channel) => channel.channel_id,
+        tl::enums::Peer::User(user) => user.user_id,
+        tl::enums::Peer::Chat(chat) => chat.chat_id,
+        tl::enums::Peer::Channel(channel) => channel.channel_id,
     }
 }
 
@@ -40,8 +40,8 @@ fn message_id(message: &tl::enums::Message) -> Option<(i32, i32)> {
             // TODO this will probably fail in pm
             Some((peer_id(&message.to_id), message.id))
         }
-        tl::enums::Message::MessageService(message) => Some((peer_id(&message.to_id), message.id)),
-        tl::enums::Message::MessageEmpty(_) => None,
+        tl::enums::Message::Service(message) => Some((peer_id(&message.to_id), message.id)),
+        tl::enums::Message::Empty(_) => None,
     }
 }
 
@@ -114,7 +114,7 @@ impl Dialogs {
                         });
                     }
                 }
-                tl::enums::Dialog::DialogFolder(_) => {}
+                tl::enums::Dialog::Folder(_) => {}
             });
     }
 
@@ -131,11 +131,11 @@ impl Dialogs {
                         self.buffer.request.offset_id = message.id;
                         self.buffer.request.offset_date = message.date;
                     }
-                    tl::enums::Message::MessageService(message) => {
+                    tl::enums::Message::Service(message) => {
                         self.buffer.request.offset_id = message.id;
                         self.buffer.request.offset_date = message.date;
                     }
-                    tl::enums::Message::MessageEmpty(message) => {
+                    tl::enums::Message::Empty(message) => {
                         self.buffer.request.offset_id = message.id;
                     }
                 }

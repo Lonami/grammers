@@ -95,7 +95,7 @@ pub enum AuthKeyGenError {
     },
 
     /// An error occured while trying to read the DH inner data.
-    InvalidDHInnerData {
+    InvalidDhInnerData {
         /// The inner error that occured when reading the data.
         error: io::Error,
     },
@@ -156,7 +156,7 @@ impl fmt::Display for AuthKeyGenError {
                 "the encrypted server response was {} bytes long, which is not correctly padded",
                 len
             ),
-            Self::InvalidDHInnerData { error } => {
+            Self::InvalidDhInnerData { error } => {
                 write!(f, "could not deserialize DH inner data: {}", error)
             }
             Self::GParameterOutOfRange { low, high, value } => write!(
@@ -255,7 +255,7 @@ fn do_step2(
 ) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
     // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
     let Step1 { nonce } = data;
-    let tl::enums::ResPQ::ResPQ(res_pq) =
+    let tl::enums::ResPq::Pq(res_pq) =
         <tl::functions::ReqPqMulti as RemoteCall>::Return::from_bytes(&response)?;
 
     check_nonce(&res_pq.nonce, &nonce)?;
@@ -305,7 +305,7 @@ fn do_step2(
 
     // "pq is a representation of a natural number (in binary big endian format)"
     // https://core.telegram.org/mtproto/auth_key#dh-exchange-initiation
-    let pq_inner_data = tl::enums::PQInnerData::PQInnerData(tl::types::PQInnerData {
+    let pq_inner_data = tl::enums::PQInnerData::Data(tl::types::PQInnerData {
         pq: pq.to_be_bytes().to_vec(),
         p: p_bytes.clone(),
         q: q_bytes.clone(),
@@ -335,7 +335,7 @@ fn do_step2(
     let ciphertext = rsa::encrypt_hashed(&pq_inner_data, &key, &random_bytes);
 
     Ok((
-        tl::functions::ReqDHParams {
+        tl::functions::ReqDhParams {
             nonce,
             server_nonce: res_pq.server_nonce,
             p: p_bytes,
@@ -378,11 +378,11 @@ fn do_step3(
         server_nonce,
         new_nonce,
     } = data;
-    let server_dh_params = <tl::functions::ReqDHParams as RemoteCall>::Return::from_bytes(&response)?;
+    let server_dh_params = <tl::functions::ReqDhParams as RemoteCall>::Return::from_bytes(&response)?;
 
     // Step 3. Factorize PQ and construct the request for DH params.
     let server_dh_params = match server_dh_params {
-        tl::enums::ServerDHParams::ServerDHParamsFail(server_dh_params) => {
+        tl::enums::ServerDhParams::Fail(server_dh_params) => {
             // Even though this is a failing case, we should still perform
             // all the security checks.
             check_nonce(&server_dh_params.nonce, &nonce)?;
@@ -397,7 +397,7 @@ fn do_step3(
 
             return Err(AuthKeyGenError::DHParamsFail);
         }
-        tl::enums::ServerDHParams::ServerDHParamsOk(x) => x,
+        tl::enums::ServerDhParams::Ok(x) => x,
     };
 
     check_nonce(&server_dh_params.nonce, &nonce)?;
@@ -424,9 +424,9 @@ fn do_step3(
     // Use a cursor explicitly so we know where it ends (and most importantly
     // where the padding starts).
     let mut plain_text_cursor = io::Cursor::new(&plain_text_answer[20..]);
-    let server_dh_inner = match tl::enums::ServerDHInnerData::deserialize(&mut plain_text_cursor) {
-        Ok(tl::enums::ServerDHInnerData::ServerDHInnerData(x)) => x,
-        Err(error) => return Err(AuthKeyGenError::InvalidDHInnerData { error }),
+    let server_dh_inner = match tl::enums::ServerDhInnerData::deserialize(&mut plain_text_cursor) {
+        Ok(tl::enums::ServerDhInnerData::Data(x)) => x,
+        Err(error) => return Err(AuthKeyGenError::InvalidDhInnerData { error }),
     };
 
     let expected_answer_hash = {
@@ -480,7 +480,7 @@ fn do_step3(
 
     // Prepare client DH Inner Data
     let client_dh_inner =
-        tl::enums::ClientDHInnerData::ClientDHInnerData(tl::types::ClientDHInnerData {
+        tl::enums::ClientDhInnerData::Data(tl::types::ClientDhInnerData {
             nonce,
             server_nonce,
             retry_id: 0, // TODO use an actual retry_id
@@ -506,7 +506,7 @@ fn do_step3(
     let client_dh_encrypted = crate::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
 
     Ok((
-        tl::functions::SetClientDHParams {
+        tl::functions::SetClientDhParams {
             nonce,
             server_nonce,
             encrypted_data: client_dh_encrypted,
@@ -531,7 +531,7 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
         gab,
         time_offset,
     } = data;
-    let dh_gen = <tl::functions::SetClientDHParams as RemoteCall>::Return::from_bytes(&response)?;
+    let dh_gen = <tl::functions::SetClientDhParams as RemoteCall>::Return::from_bytes(&response)?;
 
     struct DhGenData {
         nonce: [u8; 16],
@@ -541,19 +541,19 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
     }
 
     let dh_gen = match dh_gen {
-        tl::enums::SetClientDHParamsAnswer::DhGenOk(x) => DhGenData {
+        tl::enums::SetClientDhParamsAnswer::DhGenOk(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash1,
             nonce_number: 1,
         },
-        tl::enums::SetClientDHParamsAnswer::DhGenRetry(x) => DhGenData {
+        tl::enums::SetClientDhParamsAnswer::DhGenRetry(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash2,
             nonce_number: 2,
         },
-        tl::enums::SetClientDHParamsAnswer::DhGenFail(x) => DhGenData {
+        tl::enums::SetClientDhParamsAnswer::DhGenFail(x) => DhGenData {
             nonce: x.nonce,
             server_nonce: x.server_nonce,
             new_nonce_hash: x.new_nonce_hash3,
