@@ -15,20 +15,43 @@ use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 /// # Examples
 ///
 /// ```
-/// assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOKName");
+/// assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOkName");
 /// ```
 pub(crate) fn rusty_class_name(name: &str) -> String {
+    enum Casing {
+        Upper,
+        Lower,
+        Preserve,
+    }
+
     let mut result = String::with_capacity(name.len());
 
-    name.chars().fold(true, |upper, c| {
+    name.chars().fold(Casing::Upper, |casing, c| {
         if c == '_' {
-            true
-        } else if upper {
-            result.push(c.to_ascii_uppercase());
-            false
-        } else {
-            result.push(c);
-            false
+            return Casing::Upper;
+        }
+
+        match casing {
+            Casing::Upper => {
+                result.push(c.to_ascii_uppercase());
+                Casing::Lower
+            }
+            Casing::Lower => {
+                result.push(c.to_ascii_lowercase());
+                if c.is_ascii_uppercase() {
+                    Casing::Lower
+                } else {
+                    Casing::Preserve
+                }
+            }
+            Casing::Preserve => {
+                result.push(c);
+                if c.is_ascii_uppercase() {
+                    Casing::Lower
+                } else {
+                    Casing::Preserve
+                }
+            }
         }
     });
 
@@ -49,6 +72,50 @@ pub(crate) fn rusty_namespaced_class_name(ty: &Type) -> String {
     });
     result.push_str(&rusty_class_name(&ty.name));
     result
+}
+
+/// Get a rusty enum variant name removing the common prefix.
+pub(crate) fn rusty_variant_name(def: &Definition) -> String {
+    let variant = if def
+        .name
+        .to_ascii_lowercase()
+        .starts_with(&def.ty.name.to_ascii_lowercase())
+    {
+        &def.name[def.ty.name.len()..]
+    } else {
+        &def.name
+    };
+
+    match variant {
+        "" => {
+            // Use the name from the last uppercase letter
+            let mut name = rusty_class_name(&def.name);
+            name.replace_range(
+                0..name
+                    .as_bytes()
+                    .into_iter()
+                    .rposition(|c| c.is_ascii_uppercase())
+                    .unwrap_or(0),
+                "",
+            );
+            name
+        }
+        "Self" => {
+            // Use the name from the second-to-last uppercase letter
+            let mut name = rusty_class_name(&def.name);
+            name.replace_range(
+                0..name
+                    .as_bytes()
+                    .into_iter()
+                    .take(name.len() - variant.len())
+                    .rposition(|c| c.is_ascii_uppercase())
+                    .unwrap_or(0),
+                "",
+            );
+            name
+        }
+        _ => rusty_class_name(variant),
+    }
 }
 
 // TODO come up with better names and clean-up this file

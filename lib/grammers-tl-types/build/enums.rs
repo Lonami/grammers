@@ -10,7 +10,7 @@
 
 use crate::grouper;
 use crate::metadata::Metadata;
-use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name};
+use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name, rusty_variant_name};
 use grammers_tl_parser::tl::{Category, Definition};
 use std::io::{self, Write};
 
@@ -35,7 +35,7 @@ fn write_enum<W: Write>(
     writeln!(file, "{}#[derive(PartialEq)]", indent)?;
     writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
     for d in type_defs.iter() {
-        write!(file, "{}    {}(", indent, rusty_class_name(&d.name))?;
+        write!(file, "{}    {}(", indent, rusty_variant_name(d))?;
 
         if metadata.is_recursive_def(d) {
             write!(file, "Box<")?;
@@ -95,7 +95,7 @@ fn write_serializable<W: Write>(
                 file,
                 "{}            Self::{}(x) => {{",
                 indent,
-                rusty_class_name(&d.name)
+                rusty_variant_name(d)
             )?;
             writeln!(
                 file,
@@ -153,7 +153,7 @@ fn write_deserializable<W: Write>(
             "{}            {}::CONSTRUCTOR_ID => Self::{}(",
             indent,
             rusty_namespaced_type_name(&d),
-            rusty_class_name(&d.name),
+            rusty_variant_name(d),
         )?;
 
         if metadata.is_recursive_def(d) {
@@ -218,7 +218,7 @@ fn write_impl_from<W: Write>(
             } else {
                 ""
             },
-            variant = rusty_class_name(&def.name),
+            variant = rusty_variant_name(def),
             paren = if metadata.is_recursive_def(def) {
                 ")"
             } else {
