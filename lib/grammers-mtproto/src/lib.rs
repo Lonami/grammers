@@ -383,7 +383,7 @@ impl Mtp {
         if !self.pending_ack.is_empty() {
             let msg_ids = std::mem::take(&mut self.pending_ack);
             self.enqueue_body(
-                tl::enums::MsgsAck::MsgsAck(tl::types::MsgsAck { msg_ids }).to_bytes(),
+                tl::enums::MsgsAck::Ack(tl::types::MsgsAck { msg_ids }).to_bytes(),
                 false,
             );
         }
@@ -685,7 +685,7 @@ impl Mtp {
             // RPC Error
             tl::types::RpcError::CONSTRUCTOR_ID => {
                 match tl::enums::RpcError::from_bytes(&result)? {
-                    tl::enums::RpcError::RpcError(error) => self
+                    tl::enums::RpcError::Error(error) => self
                         .response_queue
                         .push_back((msg_id, Err(RequestError::RPCError(error.into())))),
                 }
@@ -833,7 +833,7 @@ impl Mtp {
 
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
         let bad_msg = match bad_msg {
-            tl::enums::BadMsgNotification::BadMsgNotification(x) => x,
+            tl::enums::BadMsgNotification::Notification(x) => x,
             tl::enums::BadMsgNotification::BadServerSalt(x) => {
                 self.response_queue.push_back((
                     MsgId(x.bad_msg_id),
@@ -996,7 +996,7 @@ impl Mtp {
         // TODO https://github.com/telegramdesktop/tdesktop/blob/8f82880b938e06b7a2a27685ef9301edb12b4648/Telegram/SourceFiles/mtproto/connection.cpp#L1822-L1845
         let msg_detailed = tl::enums::MsgDetailedInfo::from_bytes(&message.body)?;
         match msg_detailed {
-            tl::enums::MsgDetailedInfo::MsgDetailedInfo(x) => {
+            tl::enums::MsgDetailedInfo::Info(x) => {
                 self.pending_ack.push(x.answer_msg_id);
             }
             tl::enums::MsgDetailedInfo::MsgNewDetailedInfo(x) => {
@@ -1066,7 +1066,7 @@ impl Mtp {
         // "does not require an acknowledgment itself"
         self.remove_pending_ack(message.msg_id);
 
-        let tl::enums::FutureSalts::FutureSalts(salts) =
+        let tl::enums::FutureSalts::Salts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
         self.response_queue

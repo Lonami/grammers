@@ -74,48 +74,39 @@ pub(crate) fn rusty_namespaced_class_name(ty: &Type) -> String {
     result
 }
 
+// TODO we need a way to test this e.g. on `new_session_created`
 /// Get a rusty enum variant name removing the common prefix.
 pub(crate) fn rusty_variant_name(def: &Definition) -> String {
-    let variant = if def
-        .name
-        .to_ascii_lowercase()
-        .starts_with(&def.ty.name.to_ascii_lowercase())
-    {
-        &def.name[def.ty.name.len()..]
+    let name = rusty_class_name(&def.name);
+    let ty_name = rusty_class_name(&def.ty.name);
+
+    let variant = if name.starts_with(&ty_name) {
+        &name[ty_name.len()..]
     } else {
-        &def.name
+        &name
     };
 
     match variant {
         "" => {
             // Use the name from the last uppercase letter
-            let mut name = rusty_class_name(&def.name);
-            name.replace_range(
-                0..name
-                    .as_bytes()
-                    .into_iter()
-                    .rposition(|c| c.is_ascii_uppercase())
-                    .unwrap_or(0),
-                "",
-            );
-            name
+            &name[name
+                .as_bytes()
+                .into_iter()
+                .rposition(|c| c.is_ascii_uppercase())
+                .unwrap_or(0)..]
         }
         "Self" => {
             // Use the name from the second-to-last uppercase letter
-            let mut name = rusty_class_name(&def.name);
-            name.replace_range(
-                0..name
-                    .as_bytes()
-                    .into_iter()
-                    .take(name.len() - variant.len())
-                    .rposition(|c| c.is_ascii_uppercase())
-                    .unwrap_or(0),
-                "",
-            );
-            name
+            &name[name
+                .as_bytes()
+                .into_iter()
+                .take(name.len() - variant.len())
+                .rposition(|c| c.is_ascii_uppercase())
+                .unwrap_or(0)..]
         }
-        _ => rusty_class_name(variant),
+        _ => variant,
     }
+    .to_string()
 }
 
 // TODO come up with better names and clean-up this file
