@@ -24,6 +24,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
+use grammers_tl_types::{Serializable};
 
 /*
 use tcp_transport::TcpTransport;
@@ -191,58 +192,27 @@ pub struct MtpSender {
 }
 
 impl MtpSender {
-    /// Performs the handshake necessary to generate a new authorization
-    /// key that can be used to safely transmit data to and from the server.
-    ///
-    /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub async fn generate_auth_key(&mut self) -> Result<AuthKey, AuthorizationError> {
-        let (request, data) = auth_key::generation::step1()?;
-        let response = self.invoke_plain_request(&request).await.unwrap();
-
-        let (request, data) = auth_key::generation::step2(data, response)?;
-        let response = self.invoke_plain_request(&request).await.unwrap();
-
-        let (request, data) = auth_key::generation::step3(data, response)?;
-        let response = self.invoke_plain_request(&request).await.unwrap();
-
-        let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
-        self.request_channel.send(Request::UpdateAuthKey {
-            auth_key: auth_key.clone(),
-            time_offset,
-        });
-
-        Ok(auth_key)
-    }
-
-    /// Invoke a serialized request in plaintext.
-    async fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
+    /// Invoking a single Remote Procedure Call and `await` its result.
+    async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
         let (sender, receiver) = oneshot::channel();
-        self.request_channel.send(Request::Plain {
-            data: request.to_vec(),
+        self.request_channel.send(Request {
+            data: request.to_bytes(),
             response_channel: sender,
         });
+        // TODO don't unwrap
         Ok(receiver.await.unwrap())
     }
 }
 
-enum Request {
-    Plain {
-        data: Vec<u8>,
-        response_channel: oneshot::Sender<Response>,
-    },
-    Encrypted {
-        data: Vec<u8>,
-        response_channel: oneshot::Sender<Response>,
-    },
-    UpdateAuthKey {
-        auth_key: AuthKey,
-        time_offset: i32,
-    },
+struct Request {
+    data: Vec<u8>,
+    response_channel: oneshot::Sender<Response>,
 }
 
 type Response = Vec<u8>;
 
 pub struct MtpHandler<RW: AsyncRead + AsyncWrite + Clone + Unpin> {
+    protocol: Mtp,
     transport: TransportFull,
     io_stream: RW,
     request_channel: mpsc::Receiver<Request>,
@@ -256,16 +226,16 @@ enum StateUpdate {
 impl<RW: AsyncRead + AsyncWrite + Clone + Unpin> MtpHandler<RW> {
     pub async fn run(self) {
         let Self {
+            protocol,
             transport,
             io_stream,
             request_channel,
         } = self;
 
-        let protocol = Arc::new(Mutex::new(Mtp::new()));
+        let protocol = Arc::new(Mutex::new(protocol));
         let (mut encoder, mut decoder) = transport.split();
         let mut in_stream = io_stream.clone();
         let mut out_stream = io_stream;
-        //let (sender, receiver) = mpsc::channel(100);
 
         future::join(
             send_loop(request_channel, Arc::clone(&protocol), encoder, out_stream),
@@ -283,22 +253,15 @@ async fn send_loop(
 ) {
     let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
     while let Some(request) = request_channel.next().await {
-        let mut protocol_guard = protocol.lock().await;
-        let payload: Vec<u8> = match request {
-            Request::Plain {
-                data,
-                response_channel,
-            } => protocol_guard.serialize_plain_message(&data),
-            Request::Encrypted {
-                data,
-                response_channel,
-            } => todo!(),
-            Request::UpdateAuthKey {
-                auth_key,
-                time_offset,
-            } => todo!(),
+        let payload = {
+            let mut protocol_guard = protocol.lock().await;
+            // TODO properly handle errors
+            protocol_guard.enqueue_request(request.to_bytes()).unwrap();
+
+            // TODO we don't want to serialize as soon as we enqueued.
+            //      We want to enqueue many and serialize as soon as we can send more.
+            protocol_guard.serialize_encrypted_messages().unwrap().unwrap()
         };
-        drop(protocol_guard);
 
         let size = encoder
             .write_into(&payload, send_buffer.as_mut())
@@ -370,15 +333,36 @@ async fn recv_loop(
     }
 }
 
-fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(
+async fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(
     io_stream: RW,
+    auth_key: Option<AuthKey>,
 ) -> (MtpSender, MtpHandler<RW>) {
+    let mut protocol = Mtp::new();
+    if let Some(auth_key) = auth_key {
+        protocol.set_auth_key(auth_key, 0);
+    } else {
+        // A sender is not usable without an authorization key; generate one
+        // TODO don't unwrap
+        let (request, data) = auth_key::generation::step1().unwrap();
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (request, data) = auth_key::generation::step2(data, response).unwrap();
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (request, data) = auth_key::generation::step3(data, response).unwrap();
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (auth_key, time_offset) = auth_key::generation::create_key(data, response).unwrap();
+        protocol.set_auth_key(auth_key, time_offset);
+    }
+
     let (request_sender, request_receiver) = mpsc::channel(100);
     (
         MtpSender {
             request_channel: request_sender,
         },
         MtpHandler {
+            protocol,
             transport: TransportFull::default(),
             io_stream,
             request_channel: request_receiver,
@@ -394,5 +378,5 @@ pub async fn connect_mtp<A: ToSocketAddrs>(
 )> {
     let addr = addr.to_socket_addrs()?.next().unwrap();
     let stream = TcpStream::connect(addr).await?;
-    Ok(create_mtp(stream))
+    Ok(create_mtp(stream, None).await)
 }
