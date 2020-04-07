@@ -81,6 +81,7 @@ struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
     protocol: Arc<Mutex<Mtp>>,
     decoder: D,
     in_stream: R,
+    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
 }
 
 impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
@@ -114,24 +115,11 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
     }
 
     async fn network_loop(mut self) {
-        let mut plain_channel: Option<oneshot::Sender<Vec<u8>>> = None;
-        let mut response_channels: BTreeMap<MsgId, oneshot::Sender<Vec<u8>>> = BTreeMap::new();
-
         loop {
             let response = self.receive().await;
 
             // Pass the response on to the MTP to handle
             let mut protocol_guard = self.protocol.lock().await;
-
-            // TODO properly deal with plain-or-encrypted state by only handling
-            //      plain responses while we have no `auth_key` (and probably
-            //      panic if we're used incorrectly).
-            if let Some(plain_channel) = plain_channel.take() {
-                let plaintext = protocol_guard.deserialize_plain_message(&response);
-                // TODO don't unwrap
-                plain_channel.send(plaintext.unwrap().to_vec()).unwrap();
-                continue;
-            }
 
             // TODO properly handle error case
             protocol_guard
@@ -144,8 +132,9 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             }
 
             // See if there are responses to prior requests
+            let mut map_guard = self.response_map.lock().await;
             while let Some((response_id, response)) = protocol_guard.poll_response() {
-                if let Some(channel) = response_channels.remove(&response_id) {
+                if let Some(channel) = map_guard.remove(&response_id) {
                     // TODO properly handle error case
                     channel.send(response.unwrap()).unwrap();
                 } else {
@@ -165,6 +154,7 @@ struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
     protocol: Arc<Mutex<Mtp>>,
     encoder: E,
     out_stream: W,
+    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
 }
 
 impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
@@ -190,11 +180,18 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
         while let Some(request) = self.request_channel.next().await {
             let payload = {
                 let mut protocol_guard = self.protocol.lock().await;
+
                 // TODO properly handle errors
-                protocol_guard.enqueue_request(request.data).unwrap();
+                let msg_id = protocol_guard.enqueue_request(request.data).unwrap();
+                {
+                    // TODO maybe we don't want to do this until we've sent it?
+                    let mut map_guard = self.response_map.lock().await;
+                    map_guard.insert(msg_id, request.response_channel);
+                }
 
                 // TODO we don't want to serialize as soon as we enqueued.
                 //      We want to enqueue many and serialize as soon as we can send more.
+                //      Maybe yet another Enqueuer struct?
                 protocol_guard
                     .serialize_encrypted_messages()
                     .unwrap()
@@ -202,8 +199,6 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
             };
 
             self.send(&payload).await;
-            // TODO don't unwrap
-            request.response_channel.send(vec![]).unwrap();
         }
     }
 }
@@ -222,6 +217,7 @@ async fn create_mtp(
     let in_stream = io_stream.clone();
     let out_stream = io_stream;
     let (request_sender, request_receiver) = mpsc::channel(100);
+    let response_map = Arc::new(Mutex::new(BTreeMap::new()));
 
     let mut sender = Sender {
         buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
@@ -229,6 +225,7 @@ async fn create_mtp(
         protocol: Arc::clone(&protocol),
         encoder,
         out_stream,
+        response_map: Arc::clone(&response_map),
     };
 
     let mut receiver = Receiver {
@@ -236,6 +233,7 @@ async fn create_mtp(
         protocol: Arc::clone(&protocol),
         decoder,
         in_stream,
+        response_map,
     };
 
     if let Some(auth_key) = auth_key {
