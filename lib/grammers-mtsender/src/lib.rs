@@ -24,7 +24,7 @@ use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use grammers_tl_types::{Serializable};
+use grammers_tl_types::{RemoteCall, Serializable};
 
 /*
 use tcp_transport::TcpTransport;
@@ -211,12 +211,12 @@ struct Request {
 
 type Response = Vec<u8>;
 
-pub struct MtpHandler<RW: AsyncRead + AsyncWrite + Clone + Unpin> {
-    sender: Sender,
-    receiver: Receiver,
+pub struct MtpHandler<D: Decoder, E: Encoder, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
+    sender: Sender<E, W>,
+    receiver: Receiver<D, R>,
 }
 
-impl<RW: AsyncRead + AsyncWrite + Clone + Unpin> MtpHandler<RW> {
+impl<D: Decoder, E: Encoder, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<D, E, R, W> {
     pub async fn run(self) {
         let Self { sender, receiver } = self;
         future::join(sender.network_loop(), receiver.network_loop()).await;
@@ -230,15 +230,16 @@ struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
     in_stream: R,
 }
 
-impl Receiver {
-    async fn receive(&mut self) {
-        let len = 0;
+impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
+    async fn receive(&mut self) -> Vec<u8> {
+        let mut len = 0;
         loop {
-            match self.decoder.read(&recv_buffer[..len]) {
-                Ok(response) => break response,
+            match self.decoder.read(&self.buffer[..len]) {
+                // TODO try to avoid to_vec
+                Ok(response) => break response.to_vec(),
                 Err(required_len) => {
-                    in_stream
-                        .read_exact(&mut recv_buffer[len..required_len])
+                    self.in_stream
+                        .read_exact(&mut self.buffer[len..required_len])
                         .await;
                     len = required_len;
                 }
@@ -246,7 +247,7 @@ impl Receiver {
         }
     }
 
-    async fn receive_plain(&mut self) {
+    async fn receive_plain(&mut self) -> Vec<u8> {
         todo!()
     }
 
@@ -255,16 +256,16 @@ impl Receiver {
         let mut response_channels: BTreeMap<MsgId, oneshot::Sender<Vec<u8>>> = BTreeMap::new();
 
         loop {
-            let response = self.receive();
+            let response = self.receive().await;
 
             // Pass the response on to the MTP to handle
-            let mut protocol_guard = protocol.lock().await;
+            let mut protocol_guard = self.protocol.lock().await;
 
             // TODO properly deal with plain-or-encrypted state by only handling
             //      plain responses while we have no `auth_key` (and probably
             //      panic if we're used incorrectly).
             if let Some(plain_channel) = plain_channel.take() {
-                let plaintext = protocol_guard.deserialize_plain_message(response);
+                let plaintext = protocol_guard.deserialize_plain_message(&response);
                 plain_channel.send(plaintext.unwrap().to_vec());
                 continue;
             }
@@ -303,7 +304,7 @@ struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
     out_stream: W,
 }
 
-impl Sender {
+impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     async fn send(&mut self, payload: &[u8]) {
         let size = self.encoder
             .write_into(payload, self.buffer.as_mut())
@@ -312,16 +313,16 @@ impl Sender {
         self.out_stream.write_all(&self.buffer[..size]).await;
     }
 
-    async fn send_plain(&mut self) {
+    async fn send_plain(&mut self, payload: &[u8]) {
         todo!()
     }
 
     async fn network_loop(mut self) {
-        while let Some(request) = request_channel.next().await {
+        while let Some(request) = self.request_channel.next().await {
             let payload = {
-                let mut protocol_guard = protocol.lock().await;
+                let mut protocol_guard = self.protocol.lock().await;
                 // TODO properly handle errors
-                protocol_guard.enqueue_request(request.to_bytes()).unwrap();
+                protocol_guard.enqueue_request(request.data).unwrap();
     
                 // TODO we don't want to serialize as soon as we enqueued.
                 //      We want to enqueue many and serialize as soon as we can send more.
@@ -333,54 +334,62 @@ impl Sender {
     }
 }
 
-async fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(
-    io_stream: RW,
+async fn create_mtp(
+    io_stream: impl AsyncRead + AsyncWrite + Clone + Unpin,
     auth_key: Option<AuthKey>,
-) -> (MtpSender, MtpHandler<RW>) {
-    let mut protocol = Mtp::new();
+) -> (MtpSender, MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>) {
 
-    let protocol = Arc::new(Mutex::new(protocol));
+    let protocol = Arc::new(Mutex::new(Mtp::new()));
+
+    let transport = TransportFull::default();
     let (mut encoder, mut decoder) = transport.split();
     let mut in_stream = io_stream.clone();
     let mut out_stream = io_stream;
+    let (request_sender, request_receiver) = mpsc::channel(100);
 
-    let sender = todo!();
-    let receiver = todo!();
+    let mut sender = Sender {
+        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
+        request_channel: request_receiver,
+        protocol: Arc::clone(&protocol),
+        encoder,
+        out_stream,
+    };
 
-    let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
-    let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
+    let mut receiver = Receiver {
+        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
+        protocol: Arc::clone(&protocol),
+        decoder,
+        in_stream,
+    };
 
     if let Some(auth_key) = auth_key {
-        protocol.set_auth_key(auth_key, 0);
+        protocol.lock().await.set_auth_key(auth_key, 0);
     } else {
         // A sender is not usable without an authorization key; generate one
         // TODO don't unwrap
         let (request, data) = auth_key::generation::step1().unwrap();
-        sender.send_plain(&request).await.unwrap();
-        let response = receiver.receive_plain().await.unwrap();
+        sender.send_plain(&request).await;
+        let response = receiver.receive_plain().await;
 
         let (request, data) = auth_key::generation::step2(data, response).unwrap();
-        sender.send_plain(&request).await.unwrap();
-        let response = receiver.receive_plain().await.unwrap();
+        sender.send_plain(&request).await;
+        let response = receiver.receive_plain().await;
 
         let (request, data) = auth_key::generation::step3(data, response).unwrap();
-        sender.send_plain(&request).await.unwrap();
-        let response = receiver.receive_plain().await.unwrap();
+        sender.send_plain(&request).await;
+        let response = receiver.receive_plain().await;
 
         let (auth_key, time_offset) = auth_key::generation::create_key(data, response).unwrap();
-        protocol.set_auth_key(auth_key, time_offset);
+        protocol.lock().await.set_auth_key(auth_key, time_offset);
     }
 
-    let (request_sender, request_receiver) = mpsc::channel(100);
     (
         MtpSender {
             request_channel: request_sender,
         },
         MtpHandler {
-            protocol,
-            transport: TransportFull::default(),
-            io_stream,
-            request_channel: request_receiver,
+            sender,
+            receiver
         },
     )
 }
@@ -389,7 +398,7 @@ pub async fn connect_mtp<A: ToSocketAddrs>(
     addr: A,
 ) -> io::Result<(
     MtpSender,
-    MtpHandler<impl AsyncRead + AsyncWrite + Clone + Unpin>,
+    MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
 )> {
     let addr = addr.to_socket_addrs()?.next().unwrap();
     let stream = TcpStream::connect(addr).await?;
