@@ -16,10 +16,10 @@ use futures::lock::Mutex;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use grammers_crypto::{auth_key, AuthKey};
+use grammers_mtproto::errors::RequestError;
 use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
-use grammers_mtproto::MsgId;
-use grammers_mtproto::Mtp;
-use grammers_tl_types::RemoteCall;
+use grammers_mtproto::{MsgId, Mtp};
+use grammers_tl_types::{Deserializable, RemoteCall};
 use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
@@ -41,7 +41,7 @@ struct Request {
     response_channel: oneshot::Sender<Response>,
 }
 
-type Response = Vec<u8>;
+type Response = Result<Vec<u8>, RequestError>;
 
 pub struct MtpSender {
     request_channel: mpsc::Sender<Request>,
@@ -49,18 +49,37 @@ pub struct MtpSender {
 
 impl MtpSender {
     /// Invoking a single Remote Procedure Call and `await` its result.
-    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-        let (sender, receiver) = oneshot::channel();
-        // TODO don't unwrap
-        self.request_channel
-            .send(Request {
-                data: request.to_bytes(),
-                response_channel: sender,
-            })
-            .await
-            .unwrap();
-        // TODO don't unwrap
-        Ok(receiver.await.unwrap())
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        loop {
+            let (sender, receiver) = oneshot::channel();
+            self.request_channel
+                .send(Request {
+                    data: request.to_bytes(),
+                    response_channel: sender,
+                })
+                .await
+                .unwrap();
+
+            match receiver
+                .await
+                .map_err(|_canceled| InvocationError::Dropped)?
+            {
+                Ok(x) => break Ok(R::Return::from_bytes(&x)?),
+                Err(RequestError::RPCError(error)) => {
+                    break Err(InvocationError::RPC(error));
+                }
+                Err(RequestError::Dropped) => {
+                    break Err(InvocationError::Dropped);
+                }
+                Err(RequestError::BadMessage { .. }) => {
+                    // Need to retransmit (another loop iteration)
+                    continue;
+                }
+            }
+        }
     }
 }
 
@@ -136,7 +155,7 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             while let Some((response_id, response)) = protocol_guard.poll_response() {
                 if let Some(channel) = map_guard.remove(&response_id) {
                     // TODO properly handle error case
-                    channel.send(response.unwrap()).unwrap();
+                    channel.send(response).unwrap();
                 } else {
                     eprintln!(
                         "Got encrypted response for unknown message: {:?}",

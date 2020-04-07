@@ -13,9 +13,8 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use async_std::task;
 use grammers_mtsender::connect_mtp;
-use grammers_tl_types::functions;
+use grammers_tl_types::{enums, functions};
 
-/*
 #[test]
 fn test_auth_key_generation() {
     task::block_on(async {
@@ -25,14 +24,15 @@ fn test_auth_key_generation() {
         let (mut sender, net_handler) = connect_mtp(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
     })
 }
-*/
 
 #[test]
 fn test_invoke_encrypted_method() {
     task::block_on(async {
         let (mut sender, net_handler) = connect_mtp(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
         task::spawn(net_handler.run());
-        dbg!(sender.invoke(&functions::help::GetNearestDc {}).await);
-        panic!("It works!");
+        match sender.invoke(&functions::help::GetNearestDc {}).await {
+            Ok(enums::NearestDc::Dc(_)) => {}
+            x => panic!(format!("did not get nearest dc, got: {:?}", x)),
+        }
     })
 }
