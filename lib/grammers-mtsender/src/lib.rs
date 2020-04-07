@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 mod errors;
-//mod tcp_transport;
 
 use async_std::net::TcpStream;
 pub use errors::{AuthorizationError, InvocationError};
@@ -20,11 +19,11 @@ use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
 use grammers_mtproto::MsgId;
 use grammers_mtproto::Mtp;
+use grammers_tl_types::{RemoteCall, Serializable};
 use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
 use std::sync::Arc;
-use grammers_tl_types::{RemoteCall, Serializable};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -36,6 +35,13 @@ use grammers_tl_types::{RemoteCall, Serializable};
 /// so to account for the transports' own overhead, we add a few extra
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
+
+struct Request {
+    data: Vec<u8>,
+    response_channel: oneshot::Sender<Response>,
+}
+
+type Response = Vec<u8>;
 
 pub struct MtpSender {
     request_channel: mpsc::Sender<Request>,
@@ -53,13 +59,6 @@ impl MtpSender {
         Ok(receiver.await.unwrap())
     }
 }
-
-struct Request {
-    data: Vec<u8>,
-    response_channel: oneshot::Sender<Response>,
-}
-
-type Response = Vec<u8>;
 
 pub struct MtpHandler<D: Decoder, E: Encoder, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
     sender: Sender<E, W>,
@@ -156,7 +155,8 @@ struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
 
 impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     async fn send(&mut self, payload: &[u8]) {
-        let size = self.encoder
+        let size = self
+            .encoder
             .write_into(payload, self.buffer.as_mut())
             .expect("tried to send more than MAXIMUM_DATA in a single frame");
 
@@ -173,12 +173,15 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
                 let mut protocol_guard = self.protocol.lock().await;
                 // TODO properly handle errors
                 protocol_guard.enqueue_request(request.data).unwrap();
-    
+
                 // TODO we don't want to serialize as soon as we enqueued.
                 //      We want to enqueue many and serialize as soon as we can send more.
-                protocol_guard.serialize_encrypted_messages().unwrap().unwrap()
+                protocol_guard
+                    .serialize_encrypted_messages()
+                    .unwrap()
+                    .unwrap()
             };
-    
+
             self.send(&payload);
         }
     }
@@ -187,8 +190,10 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 async fn create_mtp(
     io_stream: impl AsyncRead + AsyncWrite + Clone + Unpin,
     auth_key: Option<AuthKey>,
-) -> (MtpSender, MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>) {
-
+) -> (
+    MtpSender,
+    MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
+) {
     let protocol = Arc::new(Mutex::new(Mtp::new()));
 
     let transport = TransportFull::default();
@@ -237,10 +242,7 @@ async fn create_mtp(
         MtpSender {
             request_channel: request_sender,
         },
-        MtpHandler {
-            sender,
-            receiver
-        },
+        MtpHandler { sender, receiver },
     )
 }
 
