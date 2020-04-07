@@ -9,13 +9,13 @@
 //! Implementation of the several [MTProto transports].
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
-mod abridged;
+//mod abridged;
 mod full;
-mod intermediate;
+//mod intermediate;
 
-pub use abridged::TransportAbridged;
+//pub use abridged::TransportAbridged;
 pub use full::TransportFull;
-pub use intermediate::TransportIntermediate;
+//pub use intermediate::TransportIntermediate;
 
 use std::error::Error;
 use std::fmt;
@@ -59,7 +59,9 @@ impl fmt::Display for InvalidCrc32 {
 pub trait Transport: Default {
     /// How much overhead does the transport incur, at a maximum.
     const MAX_OVERHEAD: usize;
+}
 
+pub trait Encoder {
     // TODO consider more specific types
     /// Write the packet from `input` into `output`.
     ///
@@ -67,7 +69,9 @@ pub trait Transport: Default {
     ///
     /// On failure, return how many bytes long the output buffer should have been.
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
+}
 
+pub trait Decoder {
     /// Read a packet from `input` and return the body subslice.
     ///
     /// On success, return how many bytes were written.
