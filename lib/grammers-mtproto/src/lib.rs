@@ -121,7 +121,7 @@ pub struct Mtp {
 /// response to a previous request. You can now  `pop_response` to get
 /// all the server responses, and if one matches your original identifier,
 /// you will know the response corresponds to it.
-#[derive(Copy, Clone, Debug, Hash, PartialEq)]
+#[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
 pub struct MsgId(i64);
 
 impl MtpBuilder {

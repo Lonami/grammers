@@ -9,17 +9,21 @@ mod errors;
 //mod tcp_transport;
 
 use async_std::net::TcpStream;
-use futures::channel::mpsc;
+pub use errors::{AuthorizationError, InvocationError};
+use futures::channel::{mpsc, oneshot};
 use futures::future;
 use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures::lock::Mutex;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
+use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
+use grammers_mtproto::MsgId;
+use grammers_mtproto::Mtp;
+use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
-use grammers_mtproto::Mtp;
-use grammers_crypto::{auth_key, AuthKey};
-pub use errors::{AuthorizationError, InvocationError};
+use std::sync::Arc;
 
 /*
 use tcp_transport::TcpTransport;
@@ -183,9 +187,7 @@ impl MtpSender {
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
 pub struct MtpSender {
-    protocol: Mtp,
-    requests: mpsc::Sender<Request>,
-    responses: mpsc::Receiver<Response>,
+    request_channel: mpsc::Sender<Request>,
 }
 
 impl MtpSender {
@@ -204,95 +206,165 @@ impl MtpSender {
         let response = self.invoke_plain_request(&request).await.unwrap();
 
         let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
-        self.protocol.set_auth_key(auth_key.clone(), time_offset);
+        self.request_channel.send(Request::UpdateAuthKey {
+            auth_key: auth_key.clone(),
+            time_offset,
+        });
 
         Ok(auth_key)
     }
 
     /// Invoke a serialized request in plaintext.
     async fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
-        // Send
-        let payload = self.protocol.serialize_plain_message(request);
-        self.requests.send(payload).await.unwrap();
-
-        // Receive
-        let response = self.responses.next().await.unwrap();
-        self.protocol
-            .deserialize_plain_message(&response)
-            .map(|x| x.to_vec())
-            .map_err(InvocationError::from)
+        let (sender, receiver) = oneshot::channel();
+        self.request_channel.send(Request::Plain {
+            data: request.to_vec(),
+            response_channel: sender,
+        });
+        Ok(receiver.await.unwrap())
     }
 }
 
-type Request = Vec<u8>;
+enum Request {
+    Plain {
+        data: Vec<u8>,
+        response_channel: oneshot::Sender<Response>,
+    },
+    Encrypted {
+        data: Vec<u8>,
+        response_channel: oneshot::Sender<Response>,
+    },
+    UpdateAuthKey {
+        auth_key: AuthKey,
+        time_offset: i32,
+    },
+}
+
 type Response = Vec<u8>;
 
 pub struct MtpHandler<RW: AsyncRead + AsyncWrite + Clone + Unpin> {
     transport: TransportFull,
-    io: RW,
-    requests: mpsc::Receiver<Request>,
-    responses: mpsc::Sender<Response>,
+    io_stream: RW,
+    request_channel: mpsc::Receiver<Request>,
 }
+
+enum StateUpdate {
+    NewPlain,
+    NewEncrypted(MsgId),
+}
+
 impl<RW: AsyncRead + AsyncWrite + Clone + Unpin> MtpHandler<RW> {
     pub async fn run(self) {
         let Self {
             transport,
-            io,
-            mut requests,
-            mut responses,
+            io_stream,
+            request_channel,
         } = self;
+
+        let protocol = Arc::new(Mutex::new(Mtp::new()));
         let (mut encoder, mut decoder) = transport.split();
-        let mut reader = io.clone();
-        let mut writer = io;
+        let mut in_stream = io_stream.clone();
+        let mut out_stream = io_stream;
+        //let (sender, receiver) = mpsc::channel(100);
+
         future::join(
-            async move {
-                let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
-                loop {
-                    let mut len = 0;
-                    loop {
-                        match decoder.read(&recv_buffer[..len]) {
-                            Ok(data) => {
-                                responses.send(data.to_vec()).await;
-                                break;
-                            }
-                            Err(required_len) => {
-                                reader.read_exact(&mut recv_buffer[len..required_len]).await;
-
-                                len = required_len;
-                            }
-                        }
-                    }
-                }
-            },
-            async move {
-                let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
-                while let Some(request) = requests.next().await {
-                    let size = encoder
-                        .write_into(&request, send_buffer.as_mut())
-                        .expect("tried to send more than MAXIMUM_DATA in a single frame");
-
-                    writer.write_all(&send_buffer[..size]).await;
-                }
-            },
+            send_loop(request_channel, Arc::clone(&protocol), encoder, out_stream),
+            recv_loop(Arc::clone(&protocol), decoder, in_stream),
         )
         .await;
     }
 }
 
-fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(io: RW) -> (MtpSender, MtpHandler<RW>) {
+async fn send_loop(
+    mut request_channel: mpsc::Receiver<Request>,
+    protocol: Arc<Mutex<Mtp>>,
+    mut encoder: impl Encoder,
+    mut out_stream: impl AsyncWrite + Unpin,
+) {
+    let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
+    while let Some(request) = request_channel.next().await {
+        let payload: Vec<u8>;
+        match request {
+            Request::Plain {
+                data,
+                response_channel,
+            } => {
+                todo!()
+                //payload = self.protocol.serialize_plain_message(data);
+                //self.plain_response = Some(reply);
+            }
+            Request::Encrypted {
+                data,
+                response_channel,
+            } => todo!(),
+            Request::UpdateAuthKey {
+                auth_key,
+                time_offset,
+            } => todo!(),
+        }
+
+        let size = encoder
+            .write_into(&payload, send_buffer.as_mut())
+            .expect("tried to send more than MAXIMUM_DATA in a single frame");
+
+        out_stream.write_all(&send_buffer[..size]).await;
+    }
+}
+
+async fn recv_loop(
+    protocol: Arc<Mutex<Mtp>>,
+    mut decoder: impl Decoder,
+    mut in_stream: impl AsyncRead + Unpin,
+) {
+    /*
+
+    let response = self.responses.next().await.unwrap();
+    self.protocol
+        .deserialize_plain_message(&response)
+        .map(|x| x.to_vec())
+        .map_err(InvocationError::from)
+        },
+
+    */
+
+    let mut plain_response: Option<oneshot::Sender<Vec<u8>>> = None;
+    let mut responses: BTreeMap<MsgId, oneshot::Sender<Vec<u8>>> = BTreeMap::new();
+
+    let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
+    let mut len = 0;
+    loop {
+        len = 0;
+        let data = loop {
+            match decoder.read(&recv_buffer[..len]) {
+                Ok(data) => break data,
+                Err(required_len) => {
+                    in_stream
+                        .read_exact(&mut recv_buffer[len..required_len])
+                        .await;
+                    len = required_len;
+                }
+            };
+        };
+
+        if let Some(plain_response) = plain_response.take() {
+            let plain_text = todo!();
+            plain_response.send(data.to_vec());
+        }
+    }
+}
+
+fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(
+    io_stream: RW,
+) -> (MtpSender, MtpHandler<RW>) {
     let (request_sender, request_receiver) = mpsc::channel(100);
-    let (response_sender, response_receiver) = mpsc::channel(100);
     (
         MtpSender {
-            protocol: Mtp::new(),
-            requests: request_sender,
-            responses: response_receiver,
+            request_channel: request_sender,
         },
         MtpHandler {
             transport: TransportFull::default(),
-            io,
-            requests: request_receiver,
-            responses: response_sender,
+            io_stream,
+            request_channel: request_receiver,
         },
     )
 }
