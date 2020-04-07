@@ -19,7 +19,7 @@ use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
 use grammers_mtproto::MsgId;
 use grammers_mtproto::Mtp;
-use grammers_tl_types::{RemoteCall, Serializable};
+use grammers_tl_types::RemoteCall;
 use std::collections::BTreeMap;
 use std::io;
 use std::net::ToSocketAddrs;
@@ -49,12 +49,16 @@ pub struct MtpSender {
 
 impl MtpSender {
     /// Invoking a single Remote Procedure Call and `await` its result.
-    async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
+    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
         let (sender, receiver) = oneshot::channel();
-        self.request_channel.send(Request {
-            data: request.to_bytes(),
-            response_channel: sender,
-        });
+        // TODO don't unwrap
+        self.request_channel
+            .send(Request {
+                data: request.to_bytes(),
+                response_channel: sender,
+            })
+            .await
+            .unwrap();
         // TODO don't unwrap
         Ok(receiver.await.unwrap())
     }
@@ -85,11 +89,13 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
         loop {
             match self.decoder.read(&self.buffer[..len]) {
                 // TODO try to avoid to_vec
+                // TODO don't unwrap
                 Ok(response) => break response.to_vec(),
                 Err(required_len) => {
                     self.in_stream
                         .read_exact(&mut self.buffer[len..required_len])
-                        .await;
+                        .await
+                        .unwrap();
                     len = required_len;
                 }
             };
@@ -122,7 +128,8 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             //      panic if we're used incorrectly).
             if let Some(plain_channel) = plain_channel.take() {
                 let plaintext = protocol_guard.deserialize_plain_message(&response);
-                plain_channel.send(plaintext.unwrap().to_vec());
+                // TODO don't unwrap
+                plain_channel.send(plaintext.unwrap().to_vec()).unwrap();
                 continue;
             }
 
@@ -140,7 +147,7 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             while let Some((response_id, response)) = protocol_guard.poll_response() {
                 if let Some(channel) = response_channels.remove(&response_id) {
                     // TODO properly handle error case
-                    channel.send(response.unwrap());
+                    channel.send(response.unwrap()).unwrap();
                 } else {
                     eprintln!(
                         "Got encrypted response for unknown message: {:?}",
@@ -167,7 +174,11 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
             .write_into(payload, self.buffer.as_mut())
             .expect("tried to send more than MAXIMUM_DATA in a single frame");
 
-        self.out_stream.write_all(&self.buffer[..size]).await;
+        // TODO don't unwrap
+        self.out_stream
+            .write_all(&self.buffer[..size])
+            .await
+            .unwrap();
     }
 
     async fn send_plain(&mut self, payload: &[u8]) {
@@ -190,7 +201,9 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
                     .unwrap()
             };
 
-            self.send(&payload);
+            self.send(&payload).await;
+            // TODO don't unwrap
+            request.response_channel.send(vec![]).unwrap();
         }
     }
 }
@@ -205,9 +218,9 @@ async fn create_mtp(
     let protocol = Arc::new(Mutex::new(Mtp::new()));
 
     let transport = TransportFull::default();
-    let (mut encoder, mut decoder) = transport.split();
-    let mut in_stream = io_stream.clone();
-    let mut out_stream = io_stream;
+    let (encoder, decoder) = transport.split();
+    let in_stream = io_stream.clone();
+    let out_stream = io_stream;
     let (request_sender, request_receiver) = mpsc::channel(100);
 
     let mut sender = Sender {
