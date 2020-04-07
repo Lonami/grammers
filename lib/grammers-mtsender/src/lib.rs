@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//mod errors;
+mod errors;
 //mod tcp_transport;
 
 use async_std::net::TcpStream;
@@ -17,15 +17,15 @@ use futures::stream::StreamExt;
 use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
 use std::io;
 use std::net::ToSocketAddrs;
+use grammers_mtproto::Mtp;
+use grammers_crypto::{auth_key, AuthKey};
+pub use errors::{AuthorizationError, InvocationError};
 
 /*
-pub use errors::{AuthorizationError, InvocationError};
 use tcp_transport::TcpTransport;
 
-use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::errors::RequestError;
 use grammers_mtproto::transports::TransportFull;
-use grammers_mtproto::Mtp;
 pub use grammers_mtproto::DEFAULT_COMPRESSION_THRESHOLD;
 use grammers_tl_types::{Deserializable, RemoteCall};
 
@@ -107,43 +107,9 @@ impl MtpSender {
         })
     }
 
-    /// Performs the handshake necessary to generate a new authorization
-    /// key that can be used to safely transmit data to and from the server.
-    ///
-    /// See also: https://core.telegram.org/mtproto/auth_key.
-    pub async fn generate_auth_key(&mut self) -> Result<AuthKey, AuthorizationError> {
-        let (request, data) = auth_key::generation::step1()?;
-        let response = self.invoke_plain_request(&request).await?;
-
-        let (request, data) = auth_key::generation::step2(data, response)?;
-        let response = self.invoke_plain_request(&request).await?;
-
-        let (request, data) = auth_key::generation::step3(data, response)?;
-        let response = self.invoke_plain_request(&request).await?;
-
-        let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
-        self.protocol.set_auth_key(auth_key.clone(), time_offset);
-
-        Ok(auth_key)
-    }
-
     /// Changes the authorization key data for a different one.
     pub fn set_auth_key(&mut self, data: [u8; 256]) {
         self.protocol.set_auth_key(AuthKey::from_bytes(data), 0);
-    }
-
-    /// Invoke a serialized request in plaintext.
-    async fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
-        // Send
-        let payload = self.protocol.serialize_plain_message(request);
-        self.transport.send(&payload).await?;
-
-        // Receive
-        let response = self.receive_message().await?;
-        self.protocol
-            .deserialize_plain_message(&response)
-            .map(|x| x.to_vec())
-            .map_err(InvocationError::from)
     }
 
     /// Block invoking a single Remote Procedure Call and return its result.
@@ -217,15 +183,47 @@ impl MtpSender {
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
 pub struct MtpSender {
+    protocol: Mtp,
     requests: mpsc::Sender<Request>,
     responses: mpsc::Receiver<Response>,
 }
 
 impl MtpSender {
-    pub async fn generate_auth_key(&self) -> Result<(), ()> {
-        Ok(())
+    /// Performs the handshake necessary to generate a new authorization
+    /// key that can be used to safely transmit data to and from the server.
+    ///
+    /// See also: https://core.telegram.org/mtproto/auth_key.
+    pub async fn generate_auth_key(&mut self) -> Result<AuthKey, AuthorizationError> {
+        let (request, data) = auth_key::generation::step1()?;
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (request, data) = auth_key::generation::step2(data, response)?;
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (request, data) = auth_key::generation::step3(data, response)?;
+        let response = self.invoke_plain_request(&request).await.unwrap();
+
+        let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
+        self.protocol.set_auth_key(auth_key.clone(), time_offset);
+
+        Ok(auth_key)
+    }
+
+    /// Invoke a serialized request in plaintext.
+    async fn invoke_plain_request(&mut self, request: &[u8]) -> Result<Vec<u8>, InvocationError> {
+        // Send
+        let payload = self.protocol.serialize_plain_message(request);
+        self.requests.send(payload).await.unwrap();
+
+        // Receive
+        let response = self.responses.next().await.unwrap();
+        self.protocol
+            .deserialize_plain_message(&response)
+            .map(|x| x.to_vec())
+            .map_err(InvocationError::from)
     }
 }
+
 type Request = Vec<u8>;
 type Response = Vec<u8>;
 
@@ -286,6 +284,7 @@ fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(io: RW) -> (MtpSender,
     let (response_sender, response_receiver) = mpsc::channel(100);
     (
         MtpSender {
+            protocol: Mtp::new(),
             requests: request_sender,
             responses: response_receiver,
         },
