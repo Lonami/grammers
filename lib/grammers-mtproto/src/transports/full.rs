@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::Transport;
+use crate::transports::{Decoder, Encoder, Transport};
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -16,14 +16,22 @@ use crc::crc32::{self, Hasher32};
 /// * Maximum envelope length: 12 bytes.
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
-pub struct TransportFull {
+pub struct TransportFull {}
+
+pub struct FullEncoder {
     send_counter: u32,
 }
+
+pub struct FullDecoder;
 
 impl TransportFull {
     /// Creates a new instance of a `TransportFull`.
     pub fn new() -> Self {
-        Self { send_counter: 0 }
+        Self {}
+    }
+
+    pub fn split(self) -> (FullEncoder, FullDecoder) {
+        (FullEncoder { send_counter: 0 }, FullDecoder)
     }
 }
 
@@ -43,7 +51,9 @@ impl Default for TransportFull {
 /// ```
 impl Transport for TransportFull {
     const MAX_OVERHEAD: usize = 12;
+}
 
+impl Encoder for FullEncoder {
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
@@ -74,7 +84,9 @@ impl Transport for TransportFull {
         self.send_counter += 1;
         Ok(len)
     }
+}
 
+impl Decoder for FullDecoder {
     fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
         // TODO the input and output len can probably be abstracted away
         //      ("minimal input" and "calculate output len")

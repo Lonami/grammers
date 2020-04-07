@@ -5,9 +5,20 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod errors;
-mod tcp_transport;
+//mod errors;
+//mod tcp_transport;
 
+use async_std::net::TcpStream;
+use futures::channel::mpsc;
+use futures::future;
+use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use futures::sink::SinkExt;
+use futures::stream::StreamExt;
+use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
+use std::io;
+use std::net::ToSocketAddrs;
+
+/*
 pub use errors::{AuthorizationError, InvocationError};
 use tcp_transport::TcpTransport;
 
@@ -191,4 +202,108 @@ impl MtpSender {
             _ => e,
         })
     }
+}
+*/
+
+/// The maximum data that we're willing to send or receive at once.
+///
+/// By having a fixed-size buffer, we can avoid unnecessary allocations
+/// and trivially prevent allocating more than this limit if we ever
+/// received invalid data.
+///
+/// Telegram will close the connection with roughly a megabyte of data,
+/// so to account for the transports' own overhead, we add a few extra
+/// kilobytes to the maximum data size.
+const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
+
+pub struct MtpSender {
+    requests: mpsc::Sender<Request>,
+    responses: mpsc::Receiver<Response>,
+}
+
+impl MtpSender {
+    pub async fn generate_auth_key(&self) -> Result<(), ()> {
+        Ok(())
+    }
+}
+type Request = Vec<u8>;
+type Response = Vec<u8>;
+
+pub struct MtpHandler<RW: AsyncRead + AsyncWrite + Clone + Unpin> {
+    transport: TransportFull,
+    io: RW,
+    requests: mpsc::Receiver<Request>,
+    responses: mpsc::Sender<Response>,
+}
+impl<RW: AsyncRead + AsyncWrite + Clone + Unpin> MtpHandler<RW> {
+    pub async fn run(self) {
+        let Self {
+            transport,
+            io,
+            mut requests,
+            mut responses,
+        } = self;
+        let (mut encoder, mut decoder) = transport.split();
+        let mut reader = io.clone();
+        let mut writer = io;
+        future::join(
+            async move {
+                loop {
+                    let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
+                    let mut len = 0;
+                    loop {
+                        match decoder.read(&recv_buffer[..len]) {
+                            Ok(data) => {
+                                responses.send(data.to_vec()).await;
+                            }
+                            Err(required_len) => {
+                                reader.read_exact(&mut recv_buffer[len..required_len]).await;
+
+                                len = required_len;
+                            }
+                        }
+                    }
+                }
+            },
+            async move {
+                let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
+                while let Some(request) = requests.next().await {
+                    let size = encoder
+                        .write_into(&request, send_buffer.as_mut())
+                        .expect("tried to send more than MAXIMUM_DATA in a single frame");
+
+                    writer.write_all(&send_buffer[..size]).await;
+                }
+            },
+        )
+        .await;
+    }
+}
+
+fn create_mtp<RW: AsyncRead + AsyncWrite + Clone + Unpin>(io: RW) -> (MtpSender, MtpHandler<RW>) {
+    let (request_sender, request_receiver) = mpsc::channel(100);
+    let (response_sender, response_receiver) = mpsc::channel(100);
+    (
+        MtpSender {
+            requests: request_sender,
+            responses: response_receiver,
+        },
+        MtpHandler {
+            transport: TransportFull::default(),
+            io,
+            requests: request_receiver,
+            responses: response_sender,
+        },
+    )
+}
+
+pub async fn connect_mtp<A: ToSocketAddrs>(
+    addr: A,
+) -> io::Result<(
+    MtpSender,
+    MtpHandler<impl AsyncRead + AsyncWrite + Clone + Unpin>,
+)> {
+    let addr = addr.to_socket_addrs()?.next().unwrap();
+    let stream = TcpStream::connect(addr).await?;
+    Ok(create_mtp(stream))
 }
