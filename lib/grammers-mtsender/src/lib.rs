@@ -97,7 +97,14 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
     }
 
     async fn receive_plain(&mut self) -> Vec<u8> {
-        todo!()
+        let response = self.receive().await;
+        // TODO don't unwrap
+        self.protocol
+            .lock()
+            .await
+            .deserialize_plain_message(&response)
+            .unwrap()
+            .to_vec()
     }
 
     async fn network_loop(mut self) {
@@ -164,7 +171,8 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     }
 
     async fn send_plain(&mut self, payload: &[u8]) {
-        todo!()
+        let payload = self.protocol.lock().await.serialize_plain_message(payload);
+        self.send(&payload).await
     }
 
     async fn network_loop(mut self) {
@@ -218,8 +226,10 @@ async fn create_mtp(
     };
 
     if let Some(auth_key) = auth_key {
+        eprintln!("Using input auth_key");
         protocol.lock().await.set_auth_key(auth_key, 0);
     } else {
+        eprintln!("No input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
         // TODO don't unwrap
         let (request, data) = auth_key::generation::step1().unwrap();
@@ -236,6 +246,7 @@ async fn create_mtp(
 
         let (auth_key, time_offset) = auth_key::generation::create_key(data, response).unwrap();
         protocol.lock().await.set_auth_key(auth_key, time_offset);
+        eprintln!("New auth_key generation success");
     }
 
     (

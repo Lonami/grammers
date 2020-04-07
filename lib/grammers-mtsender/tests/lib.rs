@@ -17,8 +17,9 @@ use grammers_mtsender::connect_mtp;
 #[test]
 fn test_auth_key_generation() {
     task::block_on(async {
+        // Creating a sender without explicitly providing an input auth_key
+        // will cause it to generate a new one, because they are otherwise
+        // not usable.
         let (mut sender, receiver) = connect_mtp(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
-        task::spawn(receiver.run());
-        assert!(sender.generate_auth_key().await.is_ok());
     })
 }
