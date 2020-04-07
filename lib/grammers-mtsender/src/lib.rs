@@ -283,16 +283,12 @@ async fn send_loop(
 ) {
     let mut send_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
     while let Some(request) = request_channel.next().await {
-        let payload: Vec<u8>;
-        match request {
+        let mut protocol_guard = protocol.lock().await;
+        let payload: Vec<u8> = match request {
             Request::Plain {
                 data,
                 response_channel,
-            } => {
-                todo!()
-                //payload = self.protocol.serialize_plain_message(data);
-                //self.plain_response = Some(reply);
-            }
+            } => protocol_guard.serialize_plain_message(&data),
             Request::Encrypted {
                 data,
                 response_channel,
@@ -301,7 +297,8 @@ async fn send_loop(
                 auth_key,
                 time_offset,
             } => todo!(),
-        }
+        };
+        drop(protocol_guard);
 
         let size = encoder
             .write_into(&payload, send_buffer.as_mut())
@@ -312,31 +309,21 @@ async fn send_loop(
 }
 
 async fn recv_loop(
-    protocol: Arc<Mutex<Mtp>>,
+    mut protocol: Arc<Mutex<Mtp>>,
     mut decoder: impl Decoder,
     mut in_stream: impl AsyncRead + Unpin,
 ) {
-    /*
-
-    let response = self.responses.next().await.unwrap();
-    self.protocol
-        .deserialize_plain_message(&response)
-        .map(|x| x.to_vec())
-        .map_err(InvocationError::from)
-        },
-
-    */
-
-    let mut plain_response: Option<oneshot::Sender<Vec<u8>>> = None;
-    let mut responses: BTreeMap<MsgId, oneshot::Sender<Vec<u8>>> = BTreeMap::new();
+    let mut plain_channel: Option<oneshot::Sender<Vec<u8>>> = None;
+    let mut response_channels: BTreeMap<MsgId, oneshot::Sender<Vec<u8>>> = BTreeMap::new();
 
     let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
     let mut len = 0;
     loop {
+        // Receive a response from the network
         len = 0;
-        let data = loop {
+        let response = loop {
             match decoder.read(&recv_buffer[..len]) {
-                Ok(data) => break data,
+                Ok(response) => break response,
                 Err(required_len) => {
                     in_stream
                         .read_exact(&mut recv_buffer[len..required_len])
@@ -346,9 +333,39 @@ async fn recv_loop(
             };
         };
 
-        if let Some(plain_response) = plain_response.take() {
-            let plain_text = todo!();
-            plain_response.send(data.to_vec());
+        // Pass the response on to the MTP to handle
+        let mut protocol_guard = protocol.lock().await;
+
+        // TODO properly deal with plain-or-encrypted state by only handling
+        //      plain responses while we have no `auth_key` (and probably
+        //      panic if we're used incorrectly).
+        if let Some(plain_channel) = plain_channel.take() {
+            let plaintext = protocol_guard.deserialize_plain_message(response);
+            plain_channel.send(plaintext.unwrap().to_vec());
+            continue;
+        }
+
+        // TODO properly handle error case
+        protocol_guard
+            .process_encrypted_response(&response)
+            .unwrap();
+
+        // TODO dispatch this somehow
+        while let Some(update) = protocol_guard.poll_update() {
+            eprintln!("Received update data: {:?}", update);
+        }
+
+        // See if there are responses to prior requests
+        while let Some((response_id, response)) = protocol_guard.poll_response() {
+            if let Some(channel) = response_channels.remove(&response_id) {
+                // TODO properly handle error case
+                channel.send(response.unwrap());
+            } else {
+                eprintln!(
+                    "Got encrypted response for unknown message: {:?}",
+                    response_id
+                );
+            }
         }
     }
 }
