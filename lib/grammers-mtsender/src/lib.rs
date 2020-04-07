@@ -248,13 +248,14 @@ impl<RW: AsyncRead + AsyncWrite + Clone + Unpin> MtpHandler<RW> {
         let mut writer = io;
         future::join(
             async move {
+                let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
                 loop {
-                    let mut recv_buffer = vec![0; MAXIMUM_DATA].into_boxed_slice();
                     let mut len = 0;
                     loop {
                         match decoder.read(&recv_buffer[..len]) {
                             Ok(data) => {
                                 responses.send(data.to_vec()).await;
+                                break;
                             }
                             Err(required_len) => {
                                 reader.read_exact(&mut recv_buffer[len..required_len]).await;
