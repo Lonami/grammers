@@ -7,7 +7,6 @@
 // except according to those terms.
 mod errors;
 
-use async_std::net::TcpStream;
 pub use errors::{AuthorizationError, InvocationError};
 use futures::channel::{mpsc, oneshot};
 use futures::future;
@@ -21,8 +20,6 @@ use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
 use grammers_mtproto::{MsgId, Mtp};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use std::collections::BTreeMap;
-use std::io;
-use std::net::ToSocketAddrs;
 use std::sync::Arc;
 
 /// The maximum data that we're willing to send or receive at once.
@@ -222,7 +219,7 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     }
 }
 
-async fn create_mtp(
+pub async fn create_mtp(
     io_stream: impl AsyncRead + AsyncWrite + Clone + Unpin,
     auth_key: Option<AuthKey>,
 ) -> (
@@ -287,13 +284,14 @@ async fn create_mtp(
     )
 }
 
-pub async fn connect_mtp<A: ToSocketAddrs>(
+#[cfg(feature = "async-std")]
+pub async fn connect_mtp<A: std::net::ToSocketAddrs>(
     addr: A,
-) -> io::Result<(
+) -> std::io::Result<(
     MtpSender,
     MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
 )> {
     let addr = addr.to_socket_addrs()?.next().unwrap();
-    let stream = TcpStream::connect(addr).await?;
+    let stream = async_std::net::TcpStream::connect(addr).await?;
     Ok(create_mtp(stream, None).await)
 }

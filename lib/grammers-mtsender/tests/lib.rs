@@ -11,25 +11,22 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 /// The default datacenter to connect to for testing.
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
+use async_std::net::TcpStream;
 use async_std::task;
-use grammers_mtsender::connect_mtp;
+use grammers_mtsender::create_mtp;
 use grammers_tl_types::{enums, functions};
-
-#[test]
-fn test_auth_key_generation() {
-    task::block_on(async {
-        // Creating a sender without explicitly providing an input auth_key
-        // will cause it to generate a new one, because they are otherwise
-        // not usable.
-        let (mut sender, net_handler) = connect_mtp(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
-    })
-}
 
 #[test]
 fn test_invoke_encrypted_method() {
     task::block_on(async {
-        let (mut sender, net_handler) = connect_mtp(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
-        task::spawn(net_handler.run());
+        let stream = TcpStream::connect(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
+
+        // Creating a sender without explicitly providing an input auth_key
+        // will cause it to generate a new one, because they are otherwise
+        // not usable. We're also making sure that works here.
+        let (mut sender, handler) = create_mtp(stream, None).await;
+
+        task::spawn(handler.run());
         match sender.invoke(&functions::help::GetNearestDc {}).await {
             Ok(enums::NearestDc::Dc(_)) => {}
             x => panic!(format!("did not get nearest dc, got: {:?}", x)),
