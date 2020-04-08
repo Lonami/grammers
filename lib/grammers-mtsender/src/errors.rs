@@ -61,14 +61,15 @@ impl From<InvocationError> for AuthorizationError {
 /// variant is `InvalidParameters`.
 #[derive(Debug)]
 pub enum InvocationError {
+    /// The connection was closed or has been dropped, and the sender
+    /// is no longer connected. Nothing can be sent unless connected.
+    NotConnected,
+
     /// The request invocation failed due to network problems.
     ///
     /// This includes being unable to send malformed packets to the server
     /// (such as a packet being large) because attempting to send those would
     /// cause the server to disconnect.
-    ///
-    /// This also includes being unable to deserialize incoming messages,
-    /// simply because it's more convenient to have those errors here.
     IO(io::Error),
 
     /// The request invocation failed because it was invalid or the server
@@ -90,6 +91,7 @@ impl Error for InvocationError {}
 impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
+            Self::NotConnected => write!(f, "request error, not connected"),
             Self::IO(err) => write!(f, "request error, IO failed: {}", err),
             Self::RPC(err) => write!(f, "request error, invoking failed: {}", err),
             Self::Dropped => write!(f, "request was dropped (cancelled)"),

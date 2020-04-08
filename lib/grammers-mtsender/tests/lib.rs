@@ -24,7 +24,7 @@ fn test_invoke_encrypted_method() {
         // Creating a sender without explicitly providing an input auth_key
         // will cause it to generate a new one, because they are otherwise
         // not usable. We're also making sure that works here.
-        let (mut sender, handler) = create_mtp(stream, None).await;
+        let (mut sender, handler) = create_mtp(stream, None).await.unwrap();
 
         task::spawn(handler.run());
         match sender.invoke(&functions::help::GetNearestDc {}).await {
