@@ -121,7 +121,7 @@ pub mod definitions {
 pub mod parameters {
     use super::*;
 
-    pub(crate) fn type_name(param: &Parameter) -> String {
+    pub fn type_name(param: &Parameter) -> String {
         match &param.ty {
             ParameterType::Flags => "u32".into(),
             ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => {
@@ -194,7 +194,7 @@ pub mod types {
     }
 
     /// Sanitizes a name to be legal.
-    pub(crate) fn push_sanitized_name(result: &mut String, ty: &Type) {
+    pub fn push_sanitized_name(result: &mut String, ty: &Type) {
         let base = match ty.name.as_ref() {
             "Bool" => "bool",
             "bytes" => "Vec<u8>",
@@ -217,7 +217,7 @@ pub mod types {
     }
 
     /// Sanitizes a path to be legal.
-    pub(crate) fn push_sanitized_path(result: &mut String, ty: &Type) {
+    pub fn push_sanitized_path(result: &mut String, ty: &Type) {
         // All sanitized names are valid paths except for a few base cases.
         let base = match ty.name.as_ref() {
             "bytes" => "Vec::<u8>",
@@ -234,7 +234,7 @@ pub mod types {
     }
 
     /// Get the rusty type name for a certain type.
-    pub(crate) fn rusty_type(ty: &Type) -> String {
+    pub fn rusty_type(ty: &Type) -> String {
         let mut result = String::new();
         if ty.generic_ref {
             result.push_str("crate::Blob")
