@@ -25,7 +25,7 @@ fn write_enum<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    type_defs: &Vec<&Definition>,
+    type_defs: &[&Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     if cfg!(feature = "impl-debug") {
@@ -70,7 +70,7 @@ fn write_serializable<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    type_defs: &Vec<&Definition>,
+    type_defs: &[&Definition],
     _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -130,7 +130,7 @@ fn write_deserializable<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    type_defs: &Vec<&Definition>,
+    type_defs: &[&Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -191,7 +191,7 @@ fn write_impl_from<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    type_defs: &Vec<&Definition>,
+    type_defs: &[&Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     for def in type_defs.iter() {
@@ -236,7 +236,7 @@ fn write_definition<W: Write>(
     file: &mut W,
     indent: &str,
     name: &str,
-    type_defs: &Vec<&Definition>,
+    type_defs: &[&Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     // TODO move type_defs into metadata
@@ -252,7 +252,7 @@ fn write_definition<W: Write>(
 /// Write the entire module dedicated to enums.
 pub(crate) fn write_enums_mod<W: Write>(
     mut file: &mut W,
-    definitions: &Vec<Definition>,
+    definitions: &[Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     // Begin outermost mod

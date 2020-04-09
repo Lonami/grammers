@@ -13,7 +13,7 @@ use std::collections::HashMap;
 
 /// Group the input vector by namespace, filtering by a certain category.
 pub(crate) fn group_by_ns(
-    definitions: &Vec<Definition>,
+    definitions: &[Definition],
     category: Category,
 ) -> HashMap<String, Vec<&Definition>> {
     let mut result = HashMap::new();
@@ -34,9 +34,7 @@ pub(crate) fn group_by_ns(
 }
 
 /// Similar to `group_by_ns`, but for the definition types.
-pub(crate) fn group_types_by_ns(
-    definitions: &Vec<Definition>,
-) -> HashMap<Option<String>, Vec<&str>> {
+pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&str>> {
     let mut result = HashMap::new();
     definitions
         .into_iter()

@@ -431,7 +431,7 @@ fn write_definition<W: Write>(
 pub(crate) fn write_category_mod<W: Write>(
     mut file: &mut W,
     category: Category,
-    definitions: &Vec<Definition>,
+    definitions: &[Definition],
     metadata: &Metadata,
 ) -> io::Result<()> {
     // Begin outermost mod

@@ -20,7 +20,7 @@ use std::io::{self, Write};
 
 pub fn generate_code(
     file: &mut impl Write,
-    definitions: &Vec<Definition>,
+    definitions: &[Definition],
     layer: i32,
 ) -> io::Result<()> {
     writeln!(
