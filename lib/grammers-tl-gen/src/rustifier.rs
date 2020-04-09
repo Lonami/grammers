@@ -121,32 +121,6 @@ pub mod definitions {
 pub mod parameters {
     use super::*;
 
-    pub fn type_name(param: &Parameter) -> String {
-        match &param.ty {
-            ParameterType::Flags => "u32".into(),
-            ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => {
-                // Special-case: `flags.i?true` are just `bool`.
-                "bool".into()
-            }
-            ParameterType::Normal { ty, flag } => {
-                let mut result = String::new();
-                if flag.is_some() {
-                    result.push_str("Option<");
-                }
-
-                // Special-case: generic references can represent any type.
-                //
-                // Using an array of bytes lets us store any data without
-                // caring about the type (no generics is also more FFI-friendly).
-                result.push_str(&types::type_name(ty));
-                if flag.is_some() {
-                    result.push('>');
-                }
-                result
-            }
-        }
-    }
-
     pub fn qual_name(param: &Parameter) -> String {
         match &param.ty {
             ParameterType::Flags => "u32".into(),
@@ -191,62 +165,6 @@ pub mod types {
 
     pub fn type_name(ty: &Type) -> String {
         rusty_type_name(&ty.name)
-    }
-
-    /// Sanitizes a name to be legal.
-    pub fn push_sanitized_name(result: &mut String, ty: &Type) {
-        let base = match ty.name.as_ref() {
-            "Bool" => "bool",
-            "bytes" => "Vec<u8>",
-            "double" => "f64",
-            "int" => "i32",
-            "int128" => "[u8; 16]",
-            "int256" => "[u8; 32]",
-            "long" => "i64",
-            "string" => "String",
-            "true" => "bool",
-            "vector" => "crate::RawVec",
-            "Vector" => "Vec",
-            _ => "",
-        };
-        if base.is_empty() {
-            result.push_str(&qual_name(ty));
-        } else {
-            result.push_str(base);
-        }
-    }
-
-    /// Sanitizes a path to be legal.
-    pub fn push_sanitized_path(result: &mut String, ty: &Type) {
-        // All sanitized names are valid paths except for a few base cases.
-        let base = match ty.name.as_ref() {
-            "bytes" => "Vec::<u8>",
-            "int128" => "<[u8; 16]>",
-            "int256" => "<[u8; 32]>",
-            _ => "",
-        };
-
-        if base.is_empty() {
-            push_sanitized_name(result, ty);
-        } else {
-            result.push_str(base);
-        }
-    }
-
-    /// Get the rusty type name for a certain type.
-    pub fn rusty_type(ty: &Type) -> String {
-        let mut result = String::new();
-        if ty.generic_ref {
-            result.push_str("crate::Blob")
-        } else {
-            push_sanitized_name(&mut result, ty);
-            if let Some(arg) = &ty.generic_arg {
-                result.push('<');
-                push_sanitized_name(&mut result, arg);
-                result.push('>');
-            }
-        }
-        result
     }
 
     pub fn qual_name(ty: &Type) -> String {
