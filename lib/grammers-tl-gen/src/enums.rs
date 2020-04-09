@@ -11,9 +11,10 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name, rusty_variant_name};
-use grammers_tl_parser::tl::{Category, Definition};
+use grammers_tl_parser::tl::{Definition, Type};
 use std::io::{self, Write};
 
+// TODO don't use rusty_class_name(str), we have the full type
 /// Writes an enumeration listing all types such as the following rust code:
 ///
 /// ```ignore
@@ -24,8 +25,7 @@ use std::io::{self, Write};
 fn write_enum<W: Write>(
     file: &mut W,
     indent: &str,
-    name: &str,
-    type_defs: &[&Definition],
+    ty: &Type,
     metadata: &Metadata,
 ) -> io::Result<()> {
     if cfg!(feature = "impl-debug") {
@@ -33,8 +33,8 @@ fn write_enum<W: Write>(
     }
 
     writeln!(file, "{}#[derive(PartialEq)]", indent)?;
-    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(name))?;
-    for d in type_defs.iter() {
+    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(&ty.name))?;
+    for d in metadata.defs_with_type(ty) {
         write!(file, "{}    {}(", indent, rusty_variant_name(d))?;
 
         if metadata.is_recursive_def(d) {
@@ -69,15 +69,14 @@ fn write_enum<W: Write>(
 fn write_serializable<W: Write>(
     file: &mut W,
     indent: &str,
-    name: &str,
-    type_defs: &[&Definition],
-    _metadata: &Metadata,
+    ty: &Type,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Serializable for {} {{",
         indent,
-        rusty_class_name(name)
+        rusty_class_name(&ty.name)
     )?;
     writeln!(
         file,
@@ -85,12 +84,13 @@ fn write_serializable<W: Write>(
         indent
     )?;
 
-    if type_defs.is_empty() {
+    if false {
+        // TODO remove branch (kept to help have a clean diff)
         writeln!(file, "{}        Ok(())", indent)?;
     } else {
         writeln!(file, "{}        use crate::Identifiable;", indent)?;
         writeln!(file, "{}        match self {{", indent)?;
-        for d in type_defs.iter() {
+        for d in metadata.defs_with_type(ty) {
             writeln!(
                 file,
                 "{}            Self::{}(x) => {{",
@@ -129,15 +129,14 @@ fn write_serializable<W: Write>(
 fn write_deserializable<W: Write>(
     file: &mut W,
     indent: &str,
-    name: &str,
-    type_defs: &[&Definition],
+    ty: &Type,
     metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
         file,
         "{}impl crate::Deserializable for {} {{",
         indent,
-        rusty_class_name(name)
+        rusty_class_name(&ty.name)
     )?;
     writeln!(
         file,
@@ -147,7 +146,7 @@ fn write_deserializable<W: Write>(
     writeln!(file, "{}        use crate::Identifiable;", indent)?;
     writeln!(file, "{}        let id = u32::deserialize(buf)?;", indent)?;
     writeln!(file, "{}        Ok(match id {{", indent)?;
-    for d in type_defs.iter() {
+    for d in metadata.defs_with_type(ty) {
         write!(
             file,
             "{}            {}::CONSTRUCTOR_ID => Self::{}(",
@@ -190,29 +189,28 @@ fn write_deserializable<W: Write>(
 fn write_impl_from<W: Write>(
     file: &mut W,
     indent: &str,
-    name: &str,
-    type_defs: &[&Definition],
+    ty: &Type,
     metadata: &Metadata,
 ) -> io::Result<()> {
-    for def in type_defs.iter() {
+    for def in metadata.defs_with_type(ty) {
         writeln!(
             file,
             "{}impl From<{}> for {} {{",
             indent,
-            rusty_namespaced_type_name(&def),
-            rusty_class_name(name),
+            rusty_namespaced_type_name(def),
+            rusty_class_name(&ty.name),
         )?;
         writeln!(
             file,
             "{}    fn from(x: {}) -> Self {{",
             indent,
-            rusty_namespaced_type_name(&def),
+            rusty_namespaced_type_name(def),
         )?;
         writeln!(
             file,
             "{}        {cls}::{variant}({box_}x{paren})",
             indent,
-            cls = rusty_class_name(name),
+            cls = rusty_class_name(&ty.name),
             box_ = if metadata.is_recursive_def(def) {
                 "Box::new("
             } else {
@@ -235,16 +233,14 @@ fn write_impl_from<W: Write>(
 fn write_definition<W: Write>(
     file: &mut W,
     indent: &str,
-    name: &str,
-    type_defs: &[&Definition],
+    ty: &Type,
     metadata: &Metadata,
 ) -> io::Result<()> {
-    // TODO move type_defs into metadata
-    write_enum(file, indent, name, type_defs, metadata)?;
-    write_serializable(file, indent, name, type_defs, metadata)?;
-    write_deserializable(file, indent, name, type_defs, metadata)?;
+    write_enum(file, indent, ty, metadata)?;
+    write_serializable(file, indent, ty, metadata)?;
+    write_deserializable(file, indent, ty, metadata)?;
     if cfg!(feature = "impl-from-type") {
-        write_impl_from(file, indent, name, type_defs, metadata)?;
+        write_impl_from(file, indent, ty, metadata)?;
     }
     Ok(())
 }
@@ -283,18 +279,8 @@ pub(crate) fn write_enums_mod<W: Write>(
             "    "
         };
 
-        for name in grouped[key].iter() {
-            let type_defs: Vec<&Definition> = definitions
-                .into_iter()
-                .filter(|d| {
-                    d.category == Category::Types
-                        && d.ty.namespace.get(0) == key.as_ref()
-                        && d.ty.name == **name
-                })
-                .collect();
-
-            assert!(!type_defs.is_empty(), "type defs should not be empty");
-            write_definition(&mut file, indent, name, &type_defs, metadata)?;
+        for ty in grouped[key].iter() {
+            write_definition(&mut file, indent, ty, metadata)?;
         }
 
         // End possibly inner mod

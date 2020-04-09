@@ -8,7 +8,7 @@
 
 //! Several functions to group definitions by a certain criteria.
 
-use grammers_tl_parser::tl::{Category, Definition};
+use grammers_tl_parser::tl::{Category, Definition, Type};
 use std::collections::HashMap;
 
 /// Group the input vector by namespace, filtering by a certain category.
@@ -34,7 +34,7 @@ pub(crate) fn group_by_ns(
 }
 
 /// Similar to `group_by_ns`, but for the definition types.
-pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&str>> {
+pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&Type>> {
     let mut result = HashMap::new();
     definitions
         .into_iter()
@@ -45,11 +45,11 @@ pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<St
             result
                 .entry(d.namespace.get(0).map(Clone::clone))
                 .or_insert_with(Vec::new)
-                .push(&d.ty.name[..]);
+                .push(&d.ty);
         });
 
     for (_, vec) in result.iter_mut() {
-        vec.sort();
+        vec.sort_by_key(|t| &t.name);
         vec.dedup();
     }
     result
