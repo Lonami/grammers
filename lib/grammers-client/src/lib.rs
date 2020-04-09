@@ -5,21 +5,23 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub mod iterators;
-mod parsers;
-pub mod types;
+//pub mod iterators;
+//mod parsers;
+//pub mod types;
 
 use std::convert::TryInto;
 use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use async_std::net::TcpStream;
+use async_std::task::{self, JoinHandle};
 use grammers_mtproto::errors::RpcError;
-use grammers_mtsender::MTSender;
+use grammers_mtsender::{create_mtp, MtpSender};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{MemorySession, Session};
-use grammers_tl_types::{self as tl, Deserializable, Serializable, RemoteCall};
+use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
 
-pub use iterators::Dialogs;
+//pub use iterators::Dialogs;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -44,13 +46,14 @@ const DEFAULT_LOCALE: &str = "en";
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
     api_id: i32,
-    sender: MTSender,
-    session: Box<dyn Session>,
+    sender: MtpSender,
+    handler: JoinHandle<()>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
     last_phone_hash: Option<(String, String)>,
 }
 
+/*
 /// Implementors of this trait have a way to turn themselves into the
 /// desired input parameter.
 pub trait IntoInput<T> {
@@ -119,8 +122,28 @@ impl From<io::Error> for SignInError {
         Self::Other(error.into())
     }
 }
+*/
 
 impl Client {
+    // TODO we should be created with some session as input
+    pub async fn connect() -> Result<Self, AuthorizationError> {
+        let stream = TcpStream::connect(DC_ADDRESSES[DEFAULT_DC_ID]).await?;
+
+        let (mut sender, handler) = create_mtp(stream, None).await?;
+        let handler = task::spawn(handler.run());
+
+        // TODO user-provided api key
+        let mut client = Client {
+            api_id: 6,
+            sender,
+            handler,
+            last_phone_hash: None,
+        };
+        client.init_connection().await?;
+        Ok(client)
+    }
+
+    /*
     /// Returns a new client instance connected to Telegram and returns it.
     ///
     /// This method will generate a new authorization key and connect to a
@@ -378,19 +401,23 @@ impl Client {
         })?;
         Ok(())
     }
+    */
 
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
-    fn init_connection(&mut self) -> Result<(), InvocationError> {
+    async fn init_connection(&mut self) -> Result<(), InvocationError> {
         // TODO store config
-        let _config = self.init_invoke(&tl::functions::help::GetConfig {})?;
+        let _config = self.init_invoke(&tl::functions::help::GetConfig {}).await?;
         Ok(())
     }
 
     /// Wraps the request in `invokeWithLayer(initConnection(...))` and
     /// invokes that. Should be used by the first request after connect.
-    fn init_invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
+    async fn init_invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
         let info = os_info::get();
 
         let mut system_lang_code = locate_locale::system();
@@ -411,28 +438,33 @@ impl Client {
         // a second call to getConfig will work just fine though.
         //
         // this also seems to have triggered RPC_CALL_FAIL
-        let data = self.invoke(&tl::functions::InvokeWithLayer {
-            layer: tl::LAYER,
-            query: tl::functions::InitConnection {
-                api_id: self.api_id,
-                device_model: format!("{} {}", info.os_type(), info.bitness()),
-                system_version: info.version().to_string(),
-                app_version: env!("CARGO_PKG_VERSION").into(),
-                system_lang_code,
-                lang_pack: "".into(),
-                lang_code,
-                proxy: None,
-                query: request.to_bytes().into(),
-            }
-            .to_bytes()
-            .into(),
-        })?;
+        let data = self
+            .invoke(&tl::functions::InvokeWithLayer {
+                layer: tl::LAYER,
+                query: tl::functions::InitConnection {
+                    api_id: self.api_id,
+                    device_model: format!("{} {}", info.os_type(), info.bitness()),
+                    system_version: info.version().to_string(),
+                    app_version: env!("CARGO_PKG_VERSION").into(),
+                    system_lang_code,
+                    lang_pack: "".into(),
+                    lang_code,
+                    proxy: None,
+                    query: request.to_bytes().into(),
+                }
+                .to_bytes()
+                .into(),
+            })
+            .await?;
 
         Ok(R::Return::from_bytes(&data.0)?)
     }
 
     /// Invokes a raw request, and returns its result.
-    pub fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return, InvocationError> {
-        self.sender.invoke(request)
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        self.sender.invoke(request).await
     }
 }
