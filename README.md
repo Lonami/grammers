@@ -12,6 +12,7 @@ The following libraries can be used to work with Telegram in some way:
 * **[grammers-mtproto]**: implementation of the [Mobile Transport Protocol].
 * **[grammers-mtsender]**: network connection to Telegram.
 * **[grammers-session]**: session storages for the client.
+* **[grammers-tl-gen]**: Rust code generator from TL definitions.
 * **[grammers-tl-parser]**: a [Type Language] parser.
 * **[grammers-tl-types]**: generated Rust types for a certain layer.
 
@@ -39,6 +40,7 @@ dual licensed as above, without any additional terms or conditions.
 [grammers-mtproto]: lib/grammers-mtproto/
 [grammers-mtsender]: lib/grammers-mtsender/
 [grammers-session]: lib/grammers-session/
+[grammers-tl-gen]: lib/grammers-tl-gen/
 [grammers-tl-parser]: lib/grammers-tl-parser/
 [grammers-tl-types]: lib/grammers-tl-types/
 [LICENSE-APACHE]: LICENSE-APACHE

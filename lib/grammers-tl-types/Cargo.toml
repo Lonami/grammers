@@ -12,14 +12,14 @@ repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = ["data-structures", "encoding"]
 edition = "2018"
-build = "build/main.rs"
 include = [
-    "build/*.rs",
+    "build.rs",
     "src/*.rs",
     "tl/*.tl",
 ]
 
 [build-dependencies]
+grammers-tl-gen = "0.1.0"
 grammers-tl-parser = "1.0.0"
 
 [features]

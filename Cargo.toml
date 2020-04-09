@@ -6,6 +6,7 @@ members = [
     "lib/grammers-mtproto",
     "lib/grammers-mtsender",
     "lib/grammers-session",
+    "lib/grammers-tl-gen",
     "lib/grammers-tl-parser",
     "lib/grammers-tl-types"
 ]
@@ -16,5 +17,6 @@ grammers-crypto = { path = "lib/grammers-crypto" }
 grammers-mtproto = { path = "lib/grammers-mtproto" }
 grammers-mtsender = { path = "lib/grammers-mtsender" }
 grammers-session = { path = "lib/grammers-session" }
+grammers-tl-gen = { path = "lib/grammers-tl-gen" }
 grammers-tl-parser = { path = "lib/grammers-tl-parser" }
 grammers-tl-types = { path = "lib/grammers-tl-types" }
