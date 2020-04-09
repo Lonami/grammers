@@ -11,8 +11,8 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier::{
-    rusty_attr_name, rusty_class_name, rusty_namespaced_class_name, rusty_namespaced_type_name,
-    rusty_type, rusty_type_name, rusty_type_path, rusty_variant_name,
+    rusty_attr_name, rusty_definition_name, rusty_namespaced_class_name,
+    rusty_namespaced_type_name, rusty_type, rusty_type_name, rusty_type_path, rusty_variant_name,
 };
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
@@ -40,7 +40,7 @@ fn write_struct<W: Write>(
         file,
         "{}pub struct {} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
     for param in def.params.iter() {
         match param.ty {
@@ -79,7 +79,7 @@ fn write_identifiable<W: Write>(
         file,
         "{}impl crate::Identifiable for {} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
     writeln!(
         file,
@@ -110,7 +110,7 @@ fn write_serializable<W: Write>(
         file,
         "{}impl crate::Serializable for {} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
     writeln!(
         file,
@@ -217,7 +217,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}impl crate::Deserializable for {} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
     writeln!(
         file,
@@ -296,7 +296,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}        Ok({} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
 
     for param in def.params.iter() {
@@ -331,7 +331,7 @@ fn write_rpc<W: Write>(
         file,
         "{}impl crate::RemoteCall for {} {{",
         indent,
-        rusty_class_name(&def.name)
+        rusty_definition_name(def)
     )?;
     writeln!(file, "{}    type Return = {};", indent, rusty_type(&def.ty))?;
     writeln!(file, "{}}}", indent)?;

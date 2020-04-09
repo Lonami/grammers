@@ -11,7 +11,7 @@
 use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 
 /// Get the rusty class name for a certain definition, excluding namespace.
-pub(crate) fn rusty_class_name(name: &str) -> String {
+fn rusty_class_name(name: &str) -> String {
     enum Casing {
         Upper,
         Lower,
@@ -108,7 +108,7 @@ pub(crate) fn rusty_variant_name(def: &Definition) -> String {
     .to_string()
 }
 
-// TODO come up with better names and clean-up this file
+// TODO come up with better names, dedup, and clean-up this file
 /// Get a rusty class name, including namespaces, for the type of the definition.
 pub(crate) fn rusty_namespaced_type_name(def: &Definition) -> String {
     let mut result = String::new();
@@ -119,6 +119,14 @@ pub(crate) fn rusty_namespaced_type_name(def: &Definition) -> String {
     });
     result.push_str(&rusty_class_name(&def.name));
     result
+}
+
+pub(crate) fn rusty_definition_name(def: &Definition) -> String {
+    rusty_class_name(&def.name)
+}
+
+pub(crate) fn rusty_ty_name(ty: &Type) -> String {
+    rusty_class_name(&ty.name)
 }
 
 /// Get the rusty attribute name for a certain parameter.

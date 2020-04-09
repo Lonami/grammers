@@ -10,11 +10,10 @@
 
 use crate::grouper;
 use crate::metadata::Metadata;
-use crate::rustifier::{rusty_class_name, rusty_namespaced_type_name, rusty_variant_name};
+use crate::rustifier::{rusty_namespaced_type_name, rusty_ty_name, rusty_variant_name};
 use grammers_tl_parser::tl::{Definition, Type};
 use std::io::{self, Write};
 
-// TODO don't use rusty_class_name(str), we have the full type
 /// Writes an enumeration listing all types such as the following rust code:
 ///
 /// ```ignore
@@ -33,7 +32,7 @@ fn write_enum<W: Write>(
     }
 
     writeln!(file, "{}#[derive(PartialEq)]", indent)?;
-    writeln!(file, "{}pub enum {} {{", indent, rusty_class_name(&ty.name))?;
+    writeln!(file, "{}pub enum {} {{", indent, rusty_ty_name(ty))?;
     for d in metadata.defs_with_type(ty) {
         write!(file, "{}    {}(", indent, rusty_variant_name(d))?;
 
@@ -76,7 +75,7 @@ fn write_serializable<W: Write>(
         file,
         "{}impl crate::Serializable for {} {{",
         indent,
-        rusty_class_name(&ty.name)
+        rusty_ty_name(ty)
     )?;
     writeln!(
         file,
@@ -131,7 +130,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}impl crate::Deserializable for {} {{",
         indent,
-        rusty_class_name(&ty.name)
+        rusty_ty_name(ty)
     )?;
     writeln!(
         file,
@@ -193,7 +192,7 @@ fn write_impl_from<W: Write>(
             "{}impl From<{}> for {} {{",
             indent,
             rusty_namespaced_type_name(def),
-            rusty_class_name(&ty.name),
+            rusty_ty_name(ty),
         )?;
         writeln!(
             file,
@@ -205,7 +204,7 @@ fn write_impl_from<W: Write>(
             file,
             "{}        {cls}::{variant}({box_}x{paren})",
             indent,
-            cls = rusty_class_name(&ty.name),
+            cls = rusty_ty_name(ty),
             box_ = if metadata.is_recursive_def(def) {
                 "Box::new("
             } else {
