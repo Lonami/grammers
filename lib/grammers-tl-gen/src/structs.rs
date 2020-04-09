@@ -19,7 +19,7 @@ use std::io::{self, Write};
 
 /// Defines the `struct` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// pub struct Name {
 ///     pub field: Type,
 /// }
@@ -64,7 +64,7 @@ fn write_struct<W: Write>(
 
 /// Defines the `impl Identifiable` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl crate::Identifiable for Name {
 ///     fn constructor_id() -> u32 { 123 }
 /// }
@@ -92,7 +92,7 @@ fn write_identifiable<W: Write>(
 
 /// Defines the `impl Serializable` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl crate::Serializable for Name {
 ///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
 ///         self.field.serialize(buf)?;
@@ -199,7 +199,7 @@ fn write_serializable<W: Write>(
 
 /// Defines the `impl Deserializable` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl crate::Deserializable for Name {
 ///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
 ///         let field = FieldType::deserialize(buf)?;
@@ -316,7 +316,7 @@ fn write_deserializable<W: Write>(
 
 /// Defines the `impl RemoteCall` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl crate::RemoteCall for Name {
 ///     type Return = Name;
 /// }
@@ -340,7 +340,7 @@ fn write_rpc<W: Write>(
 
 /// Defines the `impl TryFrom` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl impl TryFrom<Enum> for Name {
 ///     type Error = crate::errors::WrongVariant;
 /// }

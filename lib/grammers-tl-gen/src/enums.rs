@@ -16,7 +16,7 @@ use std::io::{self, Write};
 
 /// Writes an enumeration listing all types such as the following rust code:
 ///
-/// ```
+/// ```ignore
 /// pub enum Name {
 ///     Variant(crate::types::Name),
 /// }
@@ -53,7 +53,7 @@ fn write_enum<W: Write>(
 
 /// Defines the `impl Serializable` corresponding to the type definitions:
 ///
-/// ```
+/// ```ignore
 /// impl crate::Serializable for Name {
 ///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
 ///         use crate::Identifiable;
@@ -115,7 +115,7 @@ fn write_serializable<W: Write>(
 
 /// Defines the `impl Deserializable` corresponding to the type definitions:
 ///
-/// ```
+/// ```ignore
 /// impl crate::Deserializable for Name {
 ///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
 ///         use crate::Identifiable;
@@ -183,7 +183,7 @@ fn write_deserializable<W: Write>(
 
 /// Defines the `impl From` corresponding to the definition:
 ///
-/// ```
+/// ```ignore
 /// impl impl From<Name> for Enum {
 /// }
 /// ```

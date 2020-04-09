@@ -11,18 +11,18 @@
 use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 
 /// Get the rusty class name for a certain definition, excluding namespace.
-///
-/// # Examples
-///
-/// ```
-/// assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOkName");
-/// ```
 pub(crate) fn rusty_class_name(name: &str) -> String {
     enum Casing {
         Upper,
         Lower,
         Preserve,
     }
+
+    let name = if let Some(pos) = name.rfind('.') {
+        &name[pos + 1..]
+    } else {
+        name
+    };
 
     let mut result = String::with_capacity(name.len());
 
@@ -242,5 +242,15 @@ pub(crate) fn rusty_type_path(param: &Parameter) -> String {
             }
             result
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn check_rusty_class_name() {
+        assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOkName");
     }
 }
