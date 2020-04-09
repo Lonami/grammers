@@ -270,43 +270,31 @@ mod tests {
     use super::*;
     use grammers_tl_parser::tl::Category;
 
-    fn get_definition(name: &str, ty: &str) -> Definition {
-        Definition {
-            namespace: vec![],
-            name: name.to_string(),
-            id: 0,
-            params: vec![],
-            ty: Type {
-                namespace: vec![],
-                name: ty.to_string(),
-                bare: false,
-                generic_ref: false,
-                generic_arg: None,
-            },
-            category: Category::Functions,
-        }
-    }
-
     #[test]
     fn check_rusty_type_name() {
-        assert_eq!(definitions::type_name("ns.some_OK_name"), "SomeOkName");
+        assert_eq!(rusty_type_name("ns.some_OK_name"), "SomeOkName");
     }
 
     #[test]
-    fn check_rusty_variant_name() {
-        let name = definitions::variant_name(&get_definition("new_session_created", "NewSession"));
+    fn check_def_variant_name() {
+        let def = "new_session_created = NewSession".parse().unwrap();
+        let name = definitions::variant_name(&def);
         assert_eq!(name, "Created");
     }
 
     #[test]
-    fn check_rusty_empty_variant_name() {
-        let name = definitions::variant_name(&get_definition("true", "True"));
+    fn check_def_empty_variant_name() {
+        let def = "true = True".parse().unwrap();
+        let name = definitions::variant_name(&def);
         assert_eq!(name, "True");
     }
 
     #[test]
-    fn check_rusty_self_variant_name() {
-        let name = definitions::variant_name(&get_definition("inputPeerSelf", "InputPeer"));
+    fn check_def_self_variant_name() {
+        let def = "inputPeerSelf = InputPeer".parse().unwrap();
+        let name = definitions::variant_name(&def);
         assert_eq!(name, "PeerSelf");
     }
+
+    // TODO test EVERY function that tl-types relies on to compile
 }
