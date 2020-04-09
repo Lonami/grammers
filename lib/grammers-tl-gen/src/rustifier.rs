@@ -186,11 +186,30 @@ pub mod types {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use grammers_tl_parser::tl::Category;
+
+    // Core methods
 
     #[test]
     fn check_rusty_type_name() {
         assert_eq!(rusty_type_name("ns.some_OK_name"), "SomeOkName");
+    }
+
+    // TODO adjust tests until tl-types compiles and use those cases as tests
+
+    // Definition methods
+
+    #[test]
+    fn check_def_type_name() {
+        let def = "true = True".parse().unwrap();
+        let name = definitions::type_name(&def);
+        assert_eq!(name, "True");
+    }
+
+    #[test]
+    fn check_def_qual_name() {
+        let def = "true = True".parse().unwrap();
+        let name = definitions::qual_name(&def);
+        assert_eq!(name, "crate::types::True");
     }
 
     #[test]
@@ -214,5 +233,60 @@ mod tests {
         assert_eq!(name, "PeerSelf");
     }
 
-    // TODO test EVERY function that tl-types relies on to compile
+    // Parameter methods
+
+    // TODO test flags
+
+    #[test]
+    fn check_param_qual_name() {
+        let param = "big:flags.0?true".parse().unwrap();
+        let name = parameters::qual_name(&param);
+        assert_eq!(name, "bool");
+    }
+
+    #[test]
+    fn check_param_attr_name() {
+        let param = "access_hash:long".parse().unwrap();
+        let name = parameters::attr_name(&param);
+        assert_eq!(name, "access_hash");
+    }
+
+    // Type methods
+
+    // TODO test vector, Vector, generic, stuff one would find in parameters really
+
+    #[test]
+    fn check_type_type_name() {
+        let ty = "storage.FileType".parse().unwrap();
+        let name = types::type_name(&ty);
+        assert_eq!(name, "FileType");
+    }
+
+    #[test]
+    fn check_type_qual_name() {
+        let ty = "InputPeer".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::enums::InputPeer");
+    }
+
+    #[test]
+    fn check_type_qual_namespaced_name() {
+        let ty = "storage.FileType".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::enums::storage::FileType");
+    }
+
+    #[test]
+    fn check_type_qual_bare_name() {
+        let ty = "ipPort".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::types::IpPort");
+    }
+
+    #[test]
+    fn check_type_qual_namespaced_bare_name() {
+        let ty = "storage.fileUnknown".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::types::storage::FileUnknown");
+    }
 }
