@@ -460,8 +460,13 @@ pub(crate) fn write_category_mod<W: Write>(
             /// represented by a `struct`. All of them implement\n\
             /// [`Identifiable`] and [`Serializable`].\n\
             ///\n\
+            /// To find out the type that Telegram will return upon\n\
+            /// invoking one of these requests, check out the associated\n\
+            /// type in the corresponding [`RemoteCall`] trait impl.\n\
+            ///\n\
             /// [`Identifiable`]: ../trait.Identifiable.html\n\
             /// [`Serializable`]: ../trait.Serializable.html\n\
+            /// [`RemoteCall`]: trait.RemoteCall.html\n\
             #[allow(clippy::cognitive_complexity, clippy::identity_op, clippy::unreadable_literal)]\n\
             pub mod functions {{
             "

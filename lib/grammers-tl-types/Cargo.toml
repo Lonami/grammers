@@ -23,11 +23,11 @@ include = [
 grammers-tl-parser = "1.0.0"
 
 [features]
-default = ["tl-api", "impl-debug", "impl-from-type", "impl-from-enum"]
+default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]
 
-tl-api = []
-tl-mtproto = []
 deserializable-functions = []
 impl-debug = []
-impl-from-type = []
 impl-from-enum = []
+impl-from-type = []
+tl-api = []
+tl-mtproto = []

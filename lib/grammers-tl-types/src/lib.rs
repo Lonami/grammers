@@ -10,6 +10,30 @@
 //! [`functions`] in the form of `struct` and `enum`. All of them implement
 //! [`Serializable`], and by default only types implement [`Deserializable`].
 //!
+//! If you're here because you want to invoke the "raw API" methods Telegram
+//! has to offer, use the search or read through the available [`functions`]
+//! to find out what "parameters" such remote call needs. Then, create an
+//! instance of it and pass it to some higher level library that can talk
+//! with Telegram's servers.
+//!
+//! To preserve compatibility with older applications, the API has a concept
+//! of "layers", where new layers can change, remove or add new  definitions.
+//! The [`LAYER`] constant indicates which of the many layers was used to
+//! generate the definitions present in this version of this crate.
+//!
+//! # Usage
+//!
+//! The primary purpose is using these definitions to create requests
+//! (known as [`functions`]) which can be serialized and sent to Telegram.
+//! Note that this crate has no way to "invoke" any of these requests,
+//! this is to be done by a higher-level crate.
+//!
+//! All of the requests implement [`RemoteCall`]. This trait's associated
+//! type indicates what type the response from Telegram will be when invoked.
+//!
+//! After opening one of the many [`types`], you can inspect their fields
+//! to figure out what data Telegram will return.
+//!
 //! # Features
 //!
 //! The default feature set is intended to make the use of the library
@@ -19,18 +43,12 @@
 //!
 //! The default feature set includes:
 //!
-//! * `tl-api`.
 //! * `impl-debug`.
-//! * `impl-from-type`.
 //! * `impl-from-enum`.
+//! * `impl-from-type`.
+//! * `tl-api`.
 //!
 //! The available features are:
-//!
-//! * `tl-api`: generates code for the `api.tl`.
-//!   This is what high-level libraries often need.
-//!
-//! * `mtproto-api`: generates code for the `mtproto.tl`.
-//!   Only useful for low-level libraries.
 //!
 //! * `deserializable-functions`: implements [`Deserializable`] for
 //!   [`functions`]. This might be of interest for server implementations,
@@ -38,13 +56,23 @@
 //!   required.
 //!
 //! * `impl-debug`: implements `Debug` for the generated code.
-//! * `impl-from-type`: implements `From<Type> for Enum`.
+//!
 //! * `impl-from-enum`: implements `TryFrom<Enum> for Type`.
+//!
+//! * `impl-from-type`: implements `From<Type> for Enum`.
+//!
+//! * `tl-api`: generates code for the `api.tl`.
+//!   This is what high-level libraries often need.
+//!
+//! * `tl-mtproto`: generates code for the `mtproto.tl`.
+//!   Only useful for low-level libraries.
 //!
 //! [`types`]: types/index.html
 //! [`functions`]: functions/index.html
+//! [`RemoteCall`]: trait.RemoteCall.html
 //! [`Serializable`]: trait.Serializable.html
 //! [`Deserializable`]: trait.Deserializable.html
+//! [`LAYER`]: constant.LAYER.html
 mod deserializable;
 pub mod errors;
 mod generated;
