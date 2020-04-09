@@ -84,30 +84,25 @@ fn write_serializable<W: Write>(
         indent
     )?;
 
-    if false {
-        // TODO remove branch (kept to help have a clean diff)
-        writeln!(file, "{}        Ok(())", indent)?;
-    } else {
-        writeln!(file, "{}        use crate::Identifiable;", indent)?;
-        writeln!(file, "{}        match self {{", indent)?;
-        for d in metadata.defs_with_type(ty) {
-            writeln!(
-                file,
-                "{}            Self::{}(x) => {{",
-                indent,
-                rusty_variant_name(d)
-            )?;
-            writeln!(
-                file,
-                "{}                {}::CONSTRUCTOR_ID.serialize(buf)?;",
-                indent,
-                rusty_namespaced_type_name(&d)
-            )?;
-            writeln!(file, "{}                x.serialize(buf)", indent)?;
-            writeln!(file, "{}            }},", indent)?;
-        }
-        writeln!(file, "{}        }}", indent)?;
+    writeln!(file, "{}        use crate::Identifiable;", indent)?;
+    writeln!(file, "{}        match self {{", indent)?;
+    for d in metadata.defs_with_type(ty) {
+        writeln!(
+            file,
+            "{}            Self::{}(x) => {{",
+            indent,
+            rusty_variant_name(d)
+        )?;
+        writeln!(
+            file,
+            "{}                {}::CONSTRUCTOR_ID.serialize(buf)?;",
+            indent,
+            rusty_namespaced_type_name(&d)
+        )?;
+        writeln!(file, "{}                x.serialize(buf)", indent)?;
+        writeln!(file, "{}            }},", indent)?;
     }
+    writeln!(file, "{}        }}", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
