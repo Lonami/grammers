@@ -74,7 +74,6 @@ pub(crate) fn rusty_namespaced_class_name(ty: &Type) -> String {
     result
 }
 
-// TODO we need a way to test this e.g. on `new_session_created`
 /// Get a rusty enum variant name removing the common prefix.
 pub(crate) fn rusty_variant_name(def: &Definition) -> String {
     let name = rusty_class_name(&def.name);
@@ -248,9 +247,45 @@ pub(crate) fn rusty_type_path(param: &Parameter) -> String {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use grammers_tl_parser::tl::Category;
+
+    fn get_definition(name: &str, ty: &str) -> Definition {
+        Definition {
+            namespace: vec![],
+            name: name.to_string(),
+            id: 0,
+            params: vec![],
+            ty: Type {
+                namespace: vec![],
+                name: ty.to_string(),
+                bare: false,
+                generic_ref: false,
+                generic_arg: None,
+            },
+            category: Category::Functions,
+        }
+    }
 
     #[test]
     fn check_rusty_class_name() {
         assert_eq!(rusty_class_name("ns.some_OK_name"), "SomeOkName");
+    }
+
+    #[test]
+    fn check_rusty_variant_name() {
+        let name = rusty_variant_name(&get_definition("new_session_created", "NewSession"));
+        assert_eq!(name, "Created");
+    }
+
+    #[test]
+    fn check_rusty_empty_variant_name() {
+        let name = rusty_variant_name(&get_definition("true", "True"));
+        assert_eq!(name, "True");
+    }
+
+    #[test]
+    fn check_rusty_self_variant_name() {
+        let name = rusty_variant_name(&get_definition("inputPeerSelf", "InputPeer"));
+        assert_eq!(name, "PeerSelf");
     }
 }
