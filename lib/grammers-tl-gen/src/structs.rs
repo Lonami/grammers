@@ -10,10 +10,7 @@
 
 use crate::grouper;
 use crate::metadata::Metadata;
-use crate::rustifier::{
-    rusty_attr_name, rusty_definition_name, rusty_namespaced_class_name,
-    rusty_namespaced_type_name, rusty_type, rusty_type_name, rusty_type_path, rusty_variant_name,
-};
+use crate::rustifier;
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
@@ -40,7 +37,7 @@ fn write_struct<W: Write>(
         file,
         "{}pub struct {} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
     for param in def.params.iter() {
         match param.ty {
@@ -52,8 +49,8 @@ fn write_struct<W: Write>(
                     file,
                     "{}    pub {}: {},",
                     indent,
-                    rusty_attr_name(param),
-                    rusty_type_name(param)
+                    rustifier::parameters::attr_name(param),
+                    rustifier::parameters::qual_name(param),
                 )?;
             }
         }
@@ -79,7 +76,7 @@ fn write_identifiable<W: Write>(
         file,
         "{}impl crate::Identifiable for {} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
     writeln!(
         file,
@@ -110,7 +107,7 @@ fn write_serializable<W: Write>(
         file,
         "{}impl crate::Serializable for {} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
     writeln!(
         file,
@@ -159,7 +156,7 @@ fn write_serializable<W: Write>(
                             write!(
                                 file,
                                 " | if self.{}{} {{ {} }} else {{ 0 }}",
-                                rusty_attr_name(p),
+                                rustifier::parameters::attr_name(p),
                                 if ty.name == "true" { "" } else { ".is_some()" },
                                 1 << flag.index
                             )?;
@@ -179,12 +176,16 @@ fn write_serializable<W: Write>(
                         writeln!(
                             file,
                             "if let Some(ref x) = self.{} {{ ",
-                            rusty_attr_name(param)
+                            rustifier::parameters::attr_name(param)
                         )?;
                         writeln!(file, "{}            x.serialize(buf)?;", indent)?;
                         writeln!(file, "{}        }}", indent)?;
                     } else {
-                        writeln!(file, "self.{}.serialize(buf)?;", rusty_attr_name(param))?;
+                        writeln!(
+                            file,
+                            "self.{}.serialize(buf)?;",
+                            rustifier::parameters::attr_name(param)
+                        )?;
                     }
                 }
             }
@@ -217,7 +218,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}impl crate::Deserializable for {} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
     writeln!(
         file,
@@ -233,7 +234,7 @@ fn write_deserializable<W: Write>(
                 writeln!(
                     file,
                     "let {} = u32::deserialize(buf)?;",
-                    rusty_attr_name(param)
+                    rustifier::parameters::attr_name(param)
                 )?;
             }
             ParameterType::Normal { ty, flag } => {
@@ -244,12 +245,12 @@ fn write_deserializable<W: Write>(
                     writeln!(
                         file,
                         "let {} = ({} & {}) != 0;",
-                        rusty_attr_name(param),
+                        rustifier::parameters::attr_name(param),
                         flag.name,
                         1 << flag.index
                     )?;
                 } else {
-                    write!(file, "let {} = ", rusty_attr_name(param))?;
+                    write!(file, "let {} = ", rustifier::parameters::attr_name(param))?;
                     if let Some(ref flag) = flag {
                         writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
                         write!(file, "{}            Some(", indent)?;
@@ -278,7 +279,11 @@ fn write_deserializable<W: Write>(
                             )?;
                         }
                     } else {
-                        write!(file, "{}::deserialize(buf)?", rusty_type_path(param))?;
+                        write!(
+                            file,
+                            "{}::deserialize(buf)?",
+                            rustifier::parameters::qual_name(param)
+                        )?;
                     }
                     if flag.is_some() {
                         writeln!(file, ")")?;
@@ -296,7 +301,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}        Ok({} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
 
     for param in def.params.iter() {
@@ -304,7 +309,7 @@ fn write_deserializable<W: Write>(
         match &param.ty {
             ParameterType::Flags => {}
             ParameterType::Normal { .. } => {
-                writeln!(file, "{},", rusty_attr_name(param))?;
+                writeln!(file, "{},", rustifier::parameters::attr_name(param))?;
             }
         }
     }
@@ -331,9 +336,14 @@ fn write_rpc<W: Write>(
         file,
         "{}impl crate::RemoteCall for {} {{",
         indent,
-        rusty_definition_name(def)
+        rustifier::definitions::type_name(def)
     )?;
-    writeln!(file, "{}    type Return = {};", indent, rusty_type(&def.ty))?;
+    writeln!(
+        file,
+        "{}    type Return = {};",
+        indent,
+        rustifier::types::type_name(&def.ty)
+    )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
 }
@@ -358,8 +368,8 @@ fn write_impl_from<W: Write>(
         "{}impl {}From<{}> for {} {{",
         indent,
         if infallible { "" } else { "Try" },
-        rusty_namespaced_class_name(&def.ty),
-        rusty_namespaced_type_name(&def),
+        rustifier::types::qual_name(&def.ty),
+        rustifier::definitions::qual_name(&def),
     )?;
     if !infallible {
         writeln!(
@@ -373,7 +383,7 @@ fn write_impl_from<W: Write>(
         "{}    fn {try_}from(x: {cls}) -> {result}Self{error} {{",
         indent,
         try_ = if infallible { "" } else { "try_" },
-        cls = rusty_namespaced_class_name(&def.ty),
+        cls = rustifier::types::qual_name(&def.ty),
         result = if infallible { "" } else { "Result<" },
         error = if infallible { "" } else { ", Self::Error>" },
     )?;
@@ -382,8 +392,8 @@ fn write_impl_from<W: Write>(
         file,
         "{}            {cls}::{name}(x) => {ok}{deref}x{paren},",
         indent,
-        cls = rusty_namespaced_class_name(&def.ty),
-        name = rusty_variant_name(def),
+        cls = rustifier::types::qual_name(&def.ty),
+        name = rustifier::definitions::variant_name(def),
         ok = if infallible { "" } else { "Ok(" },
         deref = if metadata.is_recursive_def(def) {
             "*"

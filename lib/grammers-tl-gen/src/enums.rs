@@ -10,7 +10,7 @@
 
 use crate::grouper;
 use crate::metadata::Metadata;
-use crate::rustifier::{rusty_namespaced_type_name, rusty_ty_name, rusty_variant_name};
+use crate::rustifier;
 use grammers_tl_parser::tl::{Definition, Type};
 use std::io::{self, Write};
 
@@ -32,14 +32,24 @@ fn write_enum<W: Write>(
     }
 
     writeln!(file, "{}#[derive(PartialEq)]", indent)?;
-    writeln!(file, "{}pub enum {} {{", indent, rusty_ty_name(ty))?;
+    writeln!(
+        file,
+        "{}pub enum {} {{",
+        indent,
+        rustifier::types::type_name(ty)
+    )?;
     for d in metadata.defs_with_type(ty) {
-        write!(file, "{}    {}(", indent, rusty_variant_name(d))?;
+        write!(
+            file,
+            "{}    {}(",
+            indent,
+            rustifier::definitions::variant_name(d)
+        )?;
 
         if metadata.is_recursive_def(d) {
             write!(file, "Box<")?;
         }
-        write!(file, "{}", rusty_namespaced_type_name(&d))?;
+        write!(file, "{}", rustifier::definitions::qual_name(&d))?;
         if metadata.is_recursive_def(d) {
             write!(file, ">")?;
         }
@@ -75,7 +85,7 @@ fn write_serializable<W: Write>(
         file,
         "{}impl crate::Serializable for {} {{",
         indent,
-        rusty_ty_name(ty)
+        rustifier::types::type_name(ty)
     )?;
     writeln!(
         file,
@@ -90,13 +100,13 @@ fn write_serializable<W: Write>(
             file,
             "{}            Self::{}(x) => {{",
             indent,
-            rusty_variant_name(d)
+            rustifier::definitions::variant_name(d)
         )?;
         writeln!(
             file,
             "{}                {}::CONSTRUCTOR_ID.serialize(buf)?;",
             indent,
-            rusty_namespaced_type_name(&d)
+            rustifier::definitions::qual_name(d)
         )?;
         writeln!(file, "{}                x.serialize(buf)", indent)?;
         writeln!(file, "{}            }},", indent)?;
@@ -130,7 +140,7 @@ fn write_deserializable<W: Write>(
         file,
         "{}impl crate::Deserializable for {} {{",
         indent,
-        rusty_ty_name(ty)
+        rustifier::types::type_name(ty)
     )?;
     writeln!(
         file,
@@ -145,8 +155,8 @@ fn write_deserializable<W: Write>(
             file,
             "{}            {}::CONSTRUCTOR_ID => Self::{}(",
             indent,
-            rusty_namespaced_type_name(&d),
-            rusty_variant_name(d),
+            rustifier::definitions::qual_name(d),
+            rustifier::definitions::variant_name(d),
         )?;
 
         if metadata.is_recursive_def(d) {
@@ -155,7 +165,7 @@ fn write_deserializable<W: Write>(
         write!(
             file,
             "{}::deserialize(buf)?",
-            rusty_namespaced_type_name(&d)
+            rustifier::definitions::qual_name(d)
         )?;
         if metadata.is_recursive_def(d) {
             write!(file, ")")?;
@@ -191,26 +201,26 @@ fn write_impl_from<W: Write>(
             file,
             "{}impl From<{}> for {} {{",
             indent,
-            rusty_namespaced_type_name(def),
-            rusty_ty_name(ty),
+            rustifier::definitions::qual_name(def),
+            rustifier::types::type_name(ty),
         )?;
         writeln!(
             file,
             "{}    fn from(x: {}) -> Self {{",
             indent,
-            rusty_namespaced_type_name(def),
+            rustifier::definitions::qual_name(def),
         )?;
         writeln!(
             file,
             "{}        {cls}::{variant}({box_}x{paren})",
             indent,
-            cls = rusty_ty_name(ty),
+            cls = rustifier::types::type_name(ty),
             box_ = if metadata.is_recursive_def(def) {
                 "Box::new("
             } else {
                 ""
             },
-            variant = rusty_variant_name(def),
+            variant = rustifier::definitions::variant_name(def),
             paren = if metadata.is_recursive_def(def) {
                 ")"
             } else {
