@@ -18,7 +18,11 @@ use grammers_tl_parser::tl::Category;
 use grammers_tl_parser::tl::Definition;
 use std::io::{self, Write};
 
-pub fn generate_code(file: &mut impl Write, definitions: &Vec<Definition>, layer: i32) -> io::Result<()> {
+pub fn generate_code(
+    file: &mut impl Write,
+    definitions: &Vec<Definition>,
+    layer: i32,
+) -> io::Result<()> {
     writeln!(
         file,
         "\

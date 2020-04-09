@@ -39,7 +39,7 @@ use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
-use grammers_tl_types::{self as tl, Deserializable, Serializable, RemoteCall};
+use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
@@ -378,7 +378,8 @@ fn do_step3(
         server_nonce,
         new_nonce,
     } = data;
-    let server_dh_params = <tl::functions::ReqDhParams as RemoteCall>::Return::from_bytes(&response)?;
+    let server_dh_params =
+        <tl::functions::ReqDhParams as RemoteCall>::Return::from_bytes(&response)?;
 
     // Step 3. Factorize PQ and construct the request for DH params.
     let server_dh_params = match server_dh_params {
@@ -479,14 +480,13 @@ fn do_step3(
     check_g_in_range(&g_b, &safety_range, &(&dh_prime - &safety_range))?;
 
     // Prepare client DH Inner Data
-    let client_dh_inner =
-        tl::enums::ClientDhInnerData::Data(tl::types::ClientDhInnerData {
-            nonce,
-            server_nonce,
-            retry_id: 0, // TODO use an actual retry_id
-            g_b: g_b.to_bytes_be(),
-        })
-        .to_bytes();
+    let client_dh_inner = tl::enums::ClientDhInnerData::Data(tl::types::ClientDhInnerData {
+        nonce,
+        server_nonce,
+        retry_id: 0, // TODO use an actual retry_id
+        g_b: g_b.to_bytes_be(),
+    })
+    .to_bytes();
 
     // sha1(client_dh_inner).digest() + client_dh_inner
     let client_dh_inner_hashed = {
