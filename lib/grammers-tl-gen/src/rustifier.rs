@@ -119,46 +119,6 @@ pub mod definitions {
     }
 }
 
-pub mod parameters {
-    use super::*;
-
-    // TODO not entirely happy with this naming
-    pub fn qual_name(param: &Parameter) -> String {
-        match &param.ty {
-            ParameterType::Flags => "u32".into(),
-            ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => {
-                "bool".into()
-            }
-            ParameterType::Normal { ty, flag } => {
-                let mut result = String::new();
-                if flag.is_some() {
-                    result.push_str("Option<");
-                }
-                result.push_str(&types::qual_name(ty));
-                if flag.is_some() {
-                    result.push('>');
-                }
-                result
-            }
-        }
-    }
-
-    pub fn attr_name(param: &Parameter) -> String {
-        match &param.name[..] {
-            "final" => "r#final".into(),
-            "loop" => "r#loop".into(),
-            "self" => "is_self".into(),
-            "static" => "r#static".into(),
-            "type" => "r#type".into(),
-            _ => {
-                let mut result = param.name.clone();
-                result[..].make_ascii_lowercase();
-                result
-            }
-        }
-    }
-}
-
 pub mod types {
     use super::*;
 
@@ -259,6 +219,46 @@ pub mod types {
     }
 }
 
+pub mod parameters {
+    use super::*;
+
+    // TODO not entirely happy with this naming
+    pub fn qual_name(param: &Parameter) -> String {
+        match &param.ty {
+            ParameterType::Flags => "u32".into(),
+            ParameterType::Normal { ty, flag } if flag.is_some() && ty.name == "true" => {
+                "bool".into()
+            }
+            ParameterType::Normal { ty, flag } => {
+                let mut result = String::new();
+                if flag.is_some() {
+                    result.push_str("Option<");
+                }
+                result.push_str(&types::qual_name(ty));
+                if flag.is_some() {
+                    result.push('>');
+                }
+                result
+            }
+        }
+    }
+
+    pub fn attr_name(param: &Parameter) -> String {
+        match &param.name[..] {
+            "final" => "r#final".into(),
+            "loop" => "r#loop".into(),
+            "self" => "is_self".into(),
+            "static" => "r#static".into(),
+            "type" => "r#type".into(),
+            _ => {
+                let mut result = param.name.clone();
+                result[..].make_ascii_lowercase();
+                result
+            }
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -309,24 +309,6 @@ mod tests {
         assert_eq!(name, "PeerSelf");
     }
 
-    // Parameter methods
-
-    // TODO test flags
-
-    #[test]
-    fn check_param_qual_name() {
-        let param = "big:flags.0?true".parse().unwrap();
-        let name = parameters::qual_name(&param);
-        assert_eq!(name, "bool");
-    }
-
-    #[test]
-    fn check_param_attr_name() {
-        let param = "access_hash:long".parse().unwrap();
-        let name = parameters::attr_name(&param);
-        assert_eq!(name, "access_hash");
-    }
-
     // Type methods
 
     // TODO test vector, Vector, generic, stuff one would find in parameters really
@@ -371,5 +353,23 @@ mod tests {
         let ty = "Vector<FileHash>".parse().unwrap();
         let name = types::type_path(&ty);
         assert_eq!(name, "Vec::<crate::enums::FileHash>");
+    }
+
+    // Parameter methods
+
+    // TODO test flags
+
+    #[test]
+    fn check_param_qual_name() {
+        let param = "big:flags.0?true".parse().unwrap();
+        let name = parameters::qual_name(&param);
+        assert_eq!(name, "bool");
+    }
+
+    #[test]
+    fn check_param_attr_name() {
+        let param = "access_hash:long".parse().unwrap();
+        let name = parameters::attr_name(&param);
+        assert_eq!(name, "access_hash");
     }
 }
