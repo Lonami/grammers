@@ -282,7 +282,7 @@ fn write_deserializable<W: Write>(
                         write!(
                             file,
                             "{}::deserialize(buf)?",
-                            rustifier::parameters::qual_name(param)
+                            rustifier::types::type_path(ty)
                         )?;
                     }
                     if flag.is_some() {
@@ -342,7 +342,7 @@ fn write_rpc<W: Write>(
         file,
         "{}    type Return = {};",
         indent,
-        rustifier::types::type_name(&def.ty)
+        rustifier::types::qual_name(&def.ty)
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
@@ -369,7 +369,7 @@ fn write_impl_from<W: Write>(
         indent,
         if infallible { "" } else { "Try" },
         rustifier::types::qual_name(&def.ty),
-        rustifier::definitions::qual_name(&def),
+        rustifier::definitions::type_name(&def),
     )?;
     if !infallible {
         writeln!(
