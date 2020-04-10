@@ -260,22 +260,27 @@ mod tests {
         assert_eq!(rusty_type_name("ns.some_OK_name"), "SomeOkName");
     }
 
-    // TODO adjust tests until tl-types compiles and use those cases as tests
-
     // Definition methods
 
     #[test]
     fn check_def_type_name() {
-        let def = "true = True".parse().unwrap();
+        let def = "userEmpty = User".parse().unwrap();
         let name = definitions::type_name(&def);
-        assert_eq!(name, "True");
+        assert_eq!(name, "UserEmpty");
     }
 
     #[test]
     fn check_def_qual_name() {
-        let def = "true = True".parse().unwrap();
+        let def = "userEmpty = User".parse().unwrap();
         let name = definitions::qual_name(&def);
-        assert_eq!(name, "crate::types::True");
+        assert_eq!(name, "crate::types::UserEmpty");
+    }
+
+    #[test]
+    fn check_def_namespaced_qual_name() {
+        let def = "upload.fileCdnRedirect = upload.File".parse().unwrap();
+        let name = definitions::qual_name(&def);
+        assert_eq!(name, "crate::types::upload::FileCdnRedirect");
     }
 
     #[test]
@@ -300,8 +305,6 @@ mod tests {
     }
 
     // Type methods
-
-    // TODO test vector, Vector, generic, stuff one would find in parameters really
 
     #[test]
     fn check_type_type_name() {
@@ -339,18 +342,87 @@ mod tests {
     }
 
     #[test]
+    fn check_type_bytes_qual_name() {
+        let ty = "bytes".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "Vec<u8>");
+    }
+
+    #[test]
+    fn check_type_large_int_qual_name() {
+        let ty = "int256".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "[u8; 32]");
+    }
+
+    #[test]
+    fn check_type_raw_vec_qual_name() {
+        let ty = "vector<long>".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::RawVec<i64>");
+    }
+
+    #[test]
+    fn check_type_vec_qual_name() {
+        let ty = "Vector<Bool>".parse().unwrap();
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "Vec<bool>");
+    }
+
+    #[test]
+    fn check_type_generic_ref_qual_name() {
+        let mut ty: Type = "X".parse().unwrap();
+        ty.generic_ref = true;
+        let name = types::qual_name(&ty);
+        assert_eq!(name, "crate::Blob");
+    }
+
+    #[test]
     fn check_type_item_path() {
         let ty = "Vector<FileHash>".parse().unwrap();
         let name = types::item_path(&ty);
         assert_eq!(name, "Vec::<crate::enums::FileHash>");
     }
 
-    // Parameter methods
+    #[test]
+    fn check_type_bytes_item_path() {
+        let ty = "bytes".parse().unwrap();
+        let name = types::item_path(&ty);
+        assert_eq!(name, "Vec::<u8>");
+    }
 
-    // TODO test flags
+    #[test]
+    fn check_type_large_int_item_path() {
+        let ty = "int256".parse().unwrap();
+        let name = types::item_path(&ty);
+        assert_eq!(name, "<[u8; 32]>");
+    }
+
+    // Parameter methods
 
     #[test]
     fn check_param_qual_name() {
+        let param = "pts:int".parse().unwrap();
+        let name = parameters::qual_name(&param);
+        assert_eq!(name, "i32");
+    }
+
+    #[test]
+    fn check_param_flag_def_qual_name() {
+        let param = "flags:#".parse().unwrap();
+        let name = parameters::qual_name(&param);
+        assert_eq!(name, "u32");
+    }
+
+    #[test]
+    fn check_param_flags_qual_name() {
+        let param = "timeout:flags.1?int".parse().unwrap();
+        let name = parameters::qual_name(&param);
+        assert_eq!(name, "Option<i32>");
+    }
+
+    #[test]
+    fn check_param_true_flags_qual_name() {
         let param = "big:flags.0?true".parse().unwrap();
         let name = parameters::qual_name(&param);
         assert_eq!(name, "bool");
@@ -361,5 +433,19 @@ mod tests {
         let param = "access_hash:long".parse().unwrap();
         let name = parameters::attr_name(&param);
         assert_eq!(name, "access_hash");
+    }
+
+    #[test]
+    fn check_param_reserved_attr_name() {
+        let param = "final:flags.0?true".parse().unwrap();
+        let name = parameters::attr_name(&param);
+        assert_eq!(name, "r#final");
+    }
+
+    #[test]
+    fn check_param_self_attr_name() {
+        let param = "self:flags.0?true".parse().unwrap();
+        let name = parameters::attr_name(&param);
+        assert_eq!(name, "is_self");
     }
 }
