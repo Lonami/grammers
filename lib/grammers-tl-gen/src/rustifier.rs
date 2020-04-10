@@ -14,12 +14,14 @@
 //! * `type_name` for use after a type definition (`type FooBar`, `enum FooBar`).
 //! * `qual_name` for the qualified type name (`crate::foo::BarBaz`).
 //! * `variant_name` for use inside `enum` variants (`Foo`).
+//! * `item_path` for use as a qualified item path (`Vec::<u8>`).
 //! * `attr_name` for use as an attribute name (`foo_bar: ()`).
-//! * `type_path` for use as a qualified item path (`Vec::<u8>`).
 
 use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 
 /// Get the rusty type name for a certain definition, excluding namespace.
+///
+/// For example, transforms `"ns.some_OK_name"` into `"SomeOkName"`.
 fn rusty_type_name(name: &str) -> String {
     enum Casing {
         Upper,
@@ -81,13 +83,13 @@ pub mod definitions {
             result.push_str(ns);
             result.push_str("::");
         });
-        result.push_str(&rusty_type_name(&def.name));
+        result.push_str(&type_name(def));
         result
     }
 
     pub fn variant_name(def: &Definition) -> String {
-        let name = rusty_type_name(&def.name);
-        let ty_name = rusty_type_name(&def.ty.name);
+        let name = type_name(def);
+        let ty_name = types::type_name(&def.ty);
 
         let variant = if name.starts_with(&ty_name) {
             &name[ty_name.len()..]
@@ -122,7 +124,6 @@ pub mod definitions {
 pub mod types {
     use super::*;
 
-    // TODO this is messy once more
     fn builtin_type(ty: &Type, path: bool) -> Option<&'static str> {
         Some(match ty.name.as_ref() {
             "Bool" => "bool",
@@ -158,11 +159,30 @@ pub mod types {
         })
     }
 
-    fn get_type_name(ty: &Type, path: bool) -> String {
+    // There are only minor differences between qualified
+    // name and item paths so this method is used for both:
+    // 1. use `::<...>` instead of `<...>` to specify type arguments
+    // 2. missing angle brackets in associated item path
+    fn get_path(ty: &Type, path: bool) -> String {
+        if ty.generic_ref {
+            return "crate::Blob".to_string();
+        }
+
         let mut result = if let Some(name) = builtin_type(ty, path) {
             name.to_string()
         } else {
-            rusty_type_name(&ty.name)
+            let mut result = String::new();
+            if ty.bare {
+                result.push_str("crate::types::");
+            } else {
+                result.push_str("crate::enums::");
+            }
+            ty.namespace.iter().for_each(|ns| {
+                result.push_str(ns);
+                result.push_str("::");
+            });
+            result.push_str(&type_name(ty));
+            result
         };
 
         if let Some(generic_ty) = &ty.generic_arg {
@@ -173,56 +193,26 @@ pub mod types {
             result.push_str(&qual_name(generic_ty));
             result.push('>');
         }
+
         result
     }
 
     pub fn type_name(ty: &Type) -> String {
-        get_type_name(ty, false)
-    }
-
-    fn get_qual_name(ty: &Type, path: bool) -> String {
-        if ty.generic_ref {
-            return "crate::Blob".to_string();
-        }
-        if builtin_type(ty, path).is_some() {
-            return get_type_name(ty, path);
-        }
-
-        let mut result = String::new();
-        if ty.bare {
-            result.push_str("crate::types::");
-        } else {
-            result.push_str("crate::enums::");
-        }
-        ty.namespace.iter().for_each(|ns| {
-            result.push_str(ns);
-            result.push_str("::");
-        });
-        result.push_str(&type_name(ty));
-        result
+        rusty_type_name(&ty.name)
     }
 
     pub fn qual_name(ty: &Type) -> String {
-        get_qual_name(ty, false)
+        get_path(ty, false)
     }
 
-    pub fn type_path(ty: &Type) -> String {
-        // Item paths are slightly different than qualified names:
-        // 1. use `::<...>` instead of `<...>` to specify type arguments
-        // 2. missing angle brackets in associated item path
-        match ty.name.as_ref() {
-            "bytes" => "Vec::<u8>".to_string(),
-            "int128" => "<[u8; 16]>".to_string(),
-            "int256" => "<[u8; 32]>".to_string(),
-            _ => get_qual_name(ty, true),
-        }
+    pub fn item_path(ty: &Type) -> String {
+        get_path(ty, true)
     }
 }
 
 pub mod parameters {
     use super::*;
 
-    // TODO not entirely happy with this naming
     pub fn qual_name(param: &Parameter) -> String {
         match &param.ty {
             ParameterType::Flags => "u32".into(),
@@ -351,7 +341,7 @@ mod tests {
     #[test]
     fn check_type_item_path() {
         let ty = "Vector<FileHash>".parse().unwrap();
-        let name = types::type_path(&ty);
+        let name = types::item_path(&ty);
         assert_eq!(name, "Vec::<crate::enums::FileHash>");
     }
 

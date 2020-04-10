@@ -282,7 +282,7 @@ fn write_deserializable<W: Write>(
                         write!(
                             file,
                             "{}::deserialize(buf)?",
-                            rustifier::types::type_path(ty)
+                            rustifier::types::item_path(ty)
                         )?;
                     }
                     if flag.is_some() {
