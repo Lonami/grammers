@@ -25,15 +25,17 @@ use crc::crc32::{self, Hasher32};
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
 pub fn full_transport() -> (FullEncoder, FullDecoder) {
-    (FullEncoder { send_counter: 0 }, FullDecoder {})
+    (FullEncoder { counter: 0 }, FullDecoder { counter: 0 })
 }
 
 pub struct FullEncoder {
-    send_counter: u32,
+    counter: u32,
 }
 
 #[non_exhaustive]
-pub struct FullDecoder {}
+pub struct FullDecoder {
+    counter: u32,
+}
 
 impl Encoder for FullEncoder {
     fn max_overhead(&self) -> usize {
@@ -48,7 +50,7 @@ impl Encoder for FullEncoder {
         }
 
         let len_bytes = (len as u32).to_le_bytes();
-        let counter = self.send_counter.to_le_bytes();
+        let counter = self.counter.to_le_bytes();
 
         let crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
@@ -67,7 +69,7 @@ impl Encoder for FullEncoder {
         output[8..len - 4].copy_from_slice(input);
         output[len - 4..len].copy_from_slice(&crc);
 
-        self.send_counter += 1;
+        self.counter += 1;
         Ok(len)
     }
 }
@@ -90,10 +92,11 @@ impl Decoder for FullDecoder {
         }
 
         // receive counter
-        // TODO probably validate counter
         let mut counter_data = [0; 4];
         counter_data.copy_from_slice(&input[4..8]);
-        let _counter = u32::from_le_bytes(counter_data);
+        let counter = u32::from_le_bytes(counter_data);
+        // TODO don't panic, return err
+        assert_eq!(counter, self.counter);
 
         // payload
         let output = &input[8..len - 4];
@@ -118,6 +121,7 @@ impl Decoder for FullDecoder {
             unimplemented!("return InvalidCrc32 error")
         }
 
+        self.counter += 1;
         Ok(output)
     }
 }
