@@ -58,7 +58,7 @@ impl fmt::Display for InvalidCrc32 {
 /// [MTProto transports]: index.html
 pub trait Encoder {
     /// How much overhead does the transport incur, at a maximum.
-    const MAX_OVERHEAD: usize;
+    fn max_overhead(&self) -> usize;
 
     /// Write the packet from `input` into `output`.
     ///

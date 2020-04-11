@@ -36,7 +36,9 @@ pub struct FullEncoder {
 pub struct FullDecoder {}
 
 impl Encoder for FullEncoder {
-    const MAX_OVERHEAD: usize = 12;
+    fn max_overhead(&self) -> usize {
+        12
+    }
 
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
@@ -117,5 +119,74 @@ impl Decoder for FullDecoder {
         }
 
         Ok(output)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_data(n: usize) -> Vec<u8> {
+        let mut result = Vec::with_capacity(n);
+        for i in 0..n {
+            result.push((i & 0xff) as u8);
+        }
+        result
+    }
+
+    #[test]
+    fn check_encoding() {
+        let (mut encoder, _) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+        assert_eq!(encoder.write_into(&input, &mut output), Ok(137));
+
+        assert_eq!(&output[..4], &[137, 0, 0, 0]);
+        assert_eq!(&output[4..8], &[0, 0, 0, 0]);
+        assert_eq!(&output[8..8 + input.len()], &input[..]);
+        assert_eq!(&output[8 + input.len()..], &[123, 5, 195, 46]);
+    }
+
+    #[test]
+    fn check_repeated_encoding() {
+        let (mut encoder, _) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+        assert!(encoder.write_into(&input, &mut output).is_ok());
+        assert!(encoder.write_into(&input, &mut output).is_ok());
+
+        assert_eq!(&output[..4], &[137, 0, 0, 0]);
+        assert_eq!(&output[4..8], &[1, 0, 0, 0]);
+        assert_eq!(&output[8..8 + input.len()], &input[..]);
+        assert_eq!(&output[8 + input.len()..], &[152, 155, 32, 145]);
+    }
+
+    #[test]
+    fn check_encoding_small_buffer() {
+        let (mut encoder, _) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 8];
+        assert_eq!(encoder.write_into(&input, &mut output), Err(137));
+    }
+
+    #[test]
+    fn check_decoding() {
+        let (mut encoder, mut decoder) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
+    }
+
+    #[test]
+    fn check_repeating_decoding() {
+        let (mut encoder, mut decoder) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
     }
 }
