@@ -9,15 +9,15 @@
 //! Implementation of the several [MTProto transports].
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
-//mod abridged;
+mod abridged;
 mod full;
-//mod intermediate;
+mod intermediate;
 
 use crate::errors::TransportError;
 
-//pub use abridged::TransportAbridged;
+pub use abridged::abridged_transport;
 pub use full::full_transport;
-//pub use intermediate::TransportIntermediate;
+pub use intermediate::intermediate_transport;
 
 /// The trait used by [MTProto transports]' encoders.
 ///

@@ -5,7 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::Transport;
+use crate::errors::TransportError;
+use crate::transports::{Decoder, Encoder};
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -14,18 +15,7 @@ use crate::transports::Transport;
 /// * Minimum envelope length: 4 bytes.
 /// * Maximum envelope length: 4 bytes.
 ///
-/// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
-#[derive(Default)]
-pub struct TransportIntermediate;
-
-impl TransportIntermediate {
-    /// Creates a new instance of a `TransportIntermediate`.
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-/// Serializes the input payload as follows:
+/// It serializes the input payload as follows:
 ///
 /// ```text
 /// +----+----...----+
@@ -33,8 +23,22 @@ impl TransportIntermediate {
 /// +----+----...----+
 ///  ^^^^ 4 bytes
 /// ```
-impl Transport for TransportIntermediate {
-    const MAX_OVERHEAD: usize = 4;
+///
+/// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
+pub fn intermediate_transport() -> (IntermediateEncoder, IntermediateDecoder) {
+    (IntermediateEncoder, IntermediateDecoder)
+}
+
+#[non_exhaustive]
+pub struct IntermediateEncoder;
+
+#[non_exhaustive]
+pub struct IntermediateDecoder;
+
+impl Encoder for IntermediateEncoder {
+    fn max_overhead(&self) -> usize {
+        4
+    }
 
     fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
         if output.len() < 4 {
@@ -56,10 +60,12 @@ impl Transport for TransportIntermediate {
         output[4..len].copy_from_slice(input);
         Ok(len)
     }
+}
 
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+impl Decoder for IntermediateDecoder {
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
         if input.len() < 4 {
-            return Err(4);
+            return Err(TransportError::MissingBytes(4));
         }
 
         let len = {
@@ -70,7 +76,7 @@ impl Transport for TransportIntermediate {
             + 4;
 
         if input.len() < len {
-            return Err(len);
+            return Err(TransportError::MissingBytes(len));
         }
 
         let output = &input[4..len - 4];

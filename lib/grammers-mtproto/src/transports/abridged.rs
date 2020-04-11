@@ -5,7 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::Transport;
+use crate::errors::TransportError;
+use crate::transports::{Decoder, Encoder};
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -14,20 +15,7 @@ use crate::transports::Transport;
 /// * Minimum envelope length: 1 byte.
 /// * Maximum envelope length: 4 bytes.
 ///
-/// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
-#[derive(Default)]
-pub struct TransportAbridged;
-
-impl TransportAbridged {
-    /// Creates a new instance of a `TransportAbridged`.
-    pub fn new() -> Self {
-        Self
-    }
-}
-
-/// Serializes the input payload as follows.
-///
-/// When the length is small enough:
+/// It serializes the input payload as follows, if the length is small enough:
 ///
 /// ```text
 /// +-+----...----+
@@ -44,8 +32,22 @@ impl TransportAbridged {
 /// +----+----...----+
 ///  ^^^^ 4 bytes
 /// ```
-impl Transport for TransportAbridged {
-    const MAX_OVERHEAD: usize = 4;
+///
+/// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
+pub fn abridged_transport() -> (AbridgedEncoder, AbridgedDecoder) {
+    (AbridgedEncoder, AbridgedDecoder)
+}
+
+#[non_exhaustive]
+pub struct AbridgedEncoder;
+
+#[non_exhaustive]
+pub struct AbridgedDecoder;
+
+impl Encoder for AbridgedEncoder {
+    fn max_overhead(&self) -> usize {
+        4
+    }
 
     fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
         if output.len() < 1 {
@@ -79,10 +81,12 @@ impl Transport for TransportAbridged {
         output[output_len - input.len()..output_len].copy_from_slice(input);
         Ok(output_len)
     }
+}
 
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+impl Decoder for AbridgedDecoder {
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
         if input.len() < 1 {
-            return Err(1);
+            return Err(TransportError::MissingBytes(1));
         }
 
         let header_len;
@@ -92,7 +96,7 @@ impl Transport for TransportAbridged {
             len as u32
         } else {
             if input.len() < 4 {
-                return Err(4);
+                return Err(TransportError::MissingBytes(4));
             }
 
             header_len = 4;
@@ -103,7 +107,7 @@ impl Transport for TransportAbridged {
 
         let len = len as usize * 4;
         if input.len() < header_len + len {
-            return Err(header_len + len);
+            return Err(TransportError::MissingBytes(header_len + len));
         }
 
         Ok(&input[header_len..header_len + len])
