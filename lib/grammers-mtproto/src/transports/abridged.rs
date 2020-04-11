@@ -59,7 +59,8 @@ impl Encoder for AbridgedEncoder {
     }
 
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
-        // TODO assert input len is a multiple of 4 (in all transports)
+        assert_eq!(input.len() % 4, 0);
+
         let output_len;
         let len = input.len() / 4;
         if len < 127 {
@@ -133,6 +134,15 @@ mod tests {
         let mut output = [0];
         assert_eq!(encoder.write_magic(&mut output), Ok(1));
         assert_eq!(output, [0xef]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_non_padded_encoding() {
+        let (mut encoder, _) = abridged_transport();
+        let input = get_data(7);
+        let mut output = vec![0; 7 + encoder.max_overhead()];
+        drop(encoder.write_into(&input, &mut output));
     }
 
     #[test]

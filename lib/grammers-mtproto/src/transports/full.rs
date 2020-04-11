@@ -47,6 +47,8 @@ impl Encoder for FullEncoder {
     }
 
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+        assert_eq!(input.len() % 4, 0);
+
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
         if output.len() < len {
@@ -149,45 +151,54 @@ mod tests {
     }
 
     #[test]
+    #[should_panic]
+    fn check_non_padded_encoding() {
+        let (mut encoder, _) = full_transport();
+        let input = get_data(7);
+        let mut output = vec![0; 7 + encoder.max_overhead()];
+        drop(encoder.write_into(&input, &mut output));
+    }
+
+    #[test]
     fn check_encoding() {
         let (mut encoder, _) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
-        assert_eq!(encoder.write_into(&input, &mut output), Ok(137));
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
+        assert_eq!(encoder.write_into(&input, &mut output), Ok(140));
 
-        assert_eq!(&output[..4], &[137, 0, 0, 0]);
+        assert_eq!(&output[..4], &[140, 0, 0, 0]);
         assert_eq!(&output[4..8], &[0, 0, 0, 0]);
         assert_eq!(&output[8..8 + input.len()], &input[..]);
-        assert_eq!(&output[8 + input.len()..], &[123, 5, 195, 46]);
+        assert_eq!(&output[8 + input.len()..], &[134, 115, 149, 55]);
     }
 
     #[test]
     fn check_repeated_encoding() {
         let (mut encoder, _) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
         assert!(encoder.write_into(&input, &mut output).is_ok());
         assert!(encoder.write_into(&input, &mut output).is_ok());
 
-        assert_eq!(&output[..4], &[137, 0, 0, 0]);
+        assert_eq!(&output[..4], &[140, 0, 0, 0]);
         assert_eq!(&output[4..8], &[1, 0, 0, 0]);
         assert_eq!(&output[8..8 + input.len()], &input[..]);
-        assert_eq!(&output[8 + input.len()..], &[152, 155, 32, 145]);
+        assert_eq!(&output[8 + input.len()..], &[150, 9, 240, 74]);
     }
 
     #[test]
     fn check_encoding_small_buffer() {
         let (mut encoder, _) = full_transport();
-        let input = get_data(125);
+        let input = get_data(128);
         let mut output = vec![0; 8];
-        assert_eq!(encoder.write_into(&input, &mut output), Err(137));
+        assert_eq!(encoder.write_into(&input, &mut output), Err(140));
     }
 
     #[test]
     fn check_decoding() {
         let (mut encoder, mut decoder) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
         encoder.write_into(&input, &mut output).unwrap();
         assert_eq!(decoder.read(&output), Ok(&input[..]));
     }
@@ -195,8 +206,8 @@ mod tests {
     #[test]
     fn check_repeating_decoding() {
         let (mut encoder, mut decoder) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
 
         encoder.write_into(&input, &mut output).unwrap();
         assert_eq!(decoder.read(&output), Ok(&input[..]));
@@ -207,8 +218,8 @@ mod tests {
     #[test]
     fn check_bad_crc_decoding() {
         let (mut encoder, mut decoder) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
 
         encoder.write_into(&input, &mut output).unwrap();
         let out_len = output.len() - 1;
@@ -222,8 +233,8 @@ mod tests {
     #[test]
     fn check_bad_repeating_decoding() {
         let (mut encoder, mut decoder) = full_transport();
-        let input = get_data(125);
-        let mut output = vec![0; 125 + encoder.max_overhead()];
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
 
         encoder.write_into(&input, &mut output).unwrap();
         assert_eq!(decoder.read(&output), Ok(&input[..]));

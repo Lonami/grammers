@@ -38,6 +38,10 @@ pub trait Encoder {
     /// On success, return how many bytes were written.
     ///
     /// On failure, return how many bytes long the output buffer should have been.
+    ///
+    /// # Panics
+    ///
+    /// The input length must be a multiple of 4, or else a panic will occur.
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
 }
 

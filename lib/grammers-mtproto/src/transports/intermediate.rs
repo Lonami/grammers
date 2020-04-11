@@ -50,7 +50,8 @@ impl Encoder for IntermediateEncoder {
     }
 
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
-        // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
+        assert_eq!(input.len() % 4, 0);
+
         let len = input.len() + 4;
         if output.len() < len {
             return Err(len);
@@ -102,6 +103,15 @@ mod tests {
         let mut output = [0, 0, 0, 0];
         assert_eq!(encoder.write_magic(&mut output), Ok(4));
         assert_eq!(output, [0xee, 0xee, 0xee, 0xee]);
+    }
+
+    #[test]
+    #[should_panic]
+    fn check_non_padded_encoding() {
+        let (mut encoder, _) = intermediate_transport();
+        let input = get_data(7);
+        let mut output = vec![0; 7 + encoder.max_overhead()];
+        drop(encoder.write_into(&input, &mut output));
     }
 
     #[test]
