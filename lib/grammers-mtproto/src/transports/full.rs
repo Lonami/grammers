@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::errors::TransportError;
 use crate::transports::{Decoder, Encoder};
 use crc::crc32::{self, Hasher32};
 
@@ -32,7 +33,6 @@ pub struct FullEncoder {
     counter: u32,
 }
 
-#[non_exhaustive]
 pub struct FullDecoder {
     counter: u32,
 }
@@ -75,12 +75,12 @@ impl Encoder for FullEncoder {
 }
 
 impl Decoder for FullDecoder {
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize> {
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
         // TODO the input and output len can probably be abstracted away
         //      ("minimal input" and "calculate output len")
         // Need 4 bytes for the initial length
         if input.len() < 4 {
-            return Err(4);
+            return Err(TransportError::MissingBytes(4));
         }
 
         // payload len
@@ -88,15 +88,16 @@ impl Decoder for FullDecoder {
         len_data.copy_from_slice(&input[0..4]);
         let len = u32::from_le_bytes(len_data) as usize;
         if input.len() < len {
-            return Err(len);
+            return Err(TransportError::MissingBytes(len));
         }
 
         // receive counter
         let mut counter_data = [0; 4];
         counter_data.copy_from_slice(&input[4..8]);
         let counter = u32::from_le_bytes(counter_data);
-        // TODO don't panic, return err
-        assert_eq!(counter, self.counter);
+        if counter != self.counter {
+            return Err(TransportError::UnexpectedData("seq"));
+        }
 
         // payload
         let output = &input[8..len - 4];
@@ -116,9 +117,7 @@ impl Decoder for FullDecoder {
             digest.sum32()
         };
         if crc != valid_crc {
-            // TODO maybe with a `type TransportError` and return
-            //      `Err(MissingBytes | TransportError)`
-            unimplemented!("return InvalidCrc32 error")
+            return Err(TransportError::UnexpectedData("crc"));
         }
 
         self.counter += 1;
@@ -192,5 +191,41 @@ mod tests {
         assert_eq!(decoder.read(&output), Ok(&input[..]));
         encoder.write_into(&input, &mut output).unwrap();
         assert_eq!(decoder.read(&output), Ok(&input[..]));
+    }
+
+    #[test]
+    fn check_bad_crc_decoding() {
+        let (mut encoder, mut decoder) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+
+        encoder.write_into(&input, &mut output).unwrap();
+        let out_len = output.len() - 1;
+        output[out_len] ^= 0xff;
+        assert_eq!(
+            decoder.read(&output),
+            Err(TransportError::UnexpectedData("crc"))
+        );
+    }
+
+    #[test]
+    fn check_bad_repeating_decoding() {
+        let (mut encoder, mut decoder) = full_transport();
+        let input = get_data(125);
+        let mut output = vec![0; 125 + encoder.max_overhead()];
+
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
+        assert_eq!(
+            decoder.read(&output),
+            Err(TransportError::UnexpectedData("seq"))
+        );
+    }
+
+    #[test]
+    fn check_decoding_small_buffer() {
+        let (_, mut decoder) = full_transport();
+        let input = get_data(3);
+        assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(4)));
     }
 }

@@ -211,6 +211,29 @@ impl From<tl::types::RpcError> for RpcError {
     }
 }
 
+/// The error type reported by the different transports when something is wrong.
+#[derive(Debug, PartialEq)]
+pub enum TransportError {
+    /// Not enough bytes are provided, and the amount here is required.
+    MissingBytes(usize),
+
+    /// The input data does not conform to our expectancies
+    /// and the connection should not be continued.
+    UnexpectedData(&'static str),
+}
+
+impl Error for TransportError {}
+
+impl fmt::Display for TransportError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "transport error: ")?;
+        match self {
+            TransportError::MissingBytes(n) => write!(f, "need {} bytes", n),
+            TransportError::UnexpectedData(what) => write!(f, "unexpected data: {}", what),
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

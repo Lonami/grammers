@@ -13,45 +13,11 @@
 mod full;
 //mod intermediate;
 
+use crate::errors::TransportError;
+
 //pub use abridged::TransportAbridged;
 pub use full::full_transport;
 //pub use intermediate::TransportIntermediate;
-
-use std::error::Error;
-use std::fmt;
-
-/// This error occurs when the data to be read is too long.
-#[derive(Debug)]
-pub struct LengthTooLong {
-    pub len: u32,
-}
-
-impl Error for LengthTooLong {}
-
-impl fmt::Display for LengthTooLong {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "incoming packet length is too long: {:08x}", self.len)
-    }
-}
-
-/// This error occurs when the received data's checksum does not match.
-#[derive(Debug)]
-pub struct InvalidCrc32 {
-    pub got: u32,
-    pub expected: u32,
-}
-
-impl Error for InvalidCrc32 {}
-
-impl fmt::Display for InvalidCrc32 {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(
-            f,
-            "incoming packet's crc32 does not match: got {:08x}, expected {:08x}",
-            self.got, self.expected
-        )
-    }
-}
 
 /// The trait used by [MTProto transports]' encoders.
 ///
@@ -76,6 +42,7 @@ pub trait Decoder {
     ///
     /// On success, return how many bytes were written.
     ///
-    /// On failure, return how many bytes long the input buffer should have been.
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], usize>;
+    /// On failure, return either how many bytes long the input buffer should
+    /// have been or decoding failure in which case the connection should end.
+    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError>;
 }
