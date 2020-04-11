@@ -218,11 +218,11 @@ mod tests {
     #[test]
     fn check_rpc_error_parsing() {
         assert_eq!(
-            RPCError::from(tl::types::RpcError {
+            RpcError::from(tl::types::RpcError {
                 error_code: 400,
                 error_message: "CHAT_INVALID".into(),
             }),
-            RPCError {
+            RpcError {
                 code: 400,
                 name: "CHAT_INVALID".into(),
                 value: None
@@ -230,11 +230,11 @@ mod tests {
         );
 
         assert_eq!(
-            RPCError::from(tl::types::RpcError {
+            RpcError::from(tl::types::RpcError {
                 error_code: 420,
                 error_message: "FLOOD_WAIT_31".into(),
             }),
-            RPCError {
+            RpcError {
                 code: 420,
                 name: "FLOOD_WAIT".into(),
                 value: Some(31)
@@ -242,11 +242,11 @@ mod tests {
         );
 
         assert_eq!(
-            RPCError::from(tl::types::RpcError {
+            RpcError::from(tl::types::RpcError {
                 error_code: 500,
                 error_message: "INTERDC_2_CALL_ERROR".into(),
             }),
-            RPCError {
+            RpcError {
                 code: 500,
                 name: "INTERDC_CALL_ERROR".into(),
                 value: Some(2)

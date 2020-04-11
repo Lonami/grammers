@@ -1366,7 +1366,7 @@ mod tests {
     fn ensure_buffer_used_exact_capacity() {
         {
             // Single body (no container)
-            let mut mtproto = MTProto::build().compression_threshold(None).finish();
+            let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
             mtproto
                 .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1376,7 +1376,7 @@ mod tests {
         }
         {
             // Multiple bodies (using a container)
-            let mut mtproto = MTProto::build().compression_threshold(None).finish();
+            let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
             mtproto
                 .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1402,7 +1402,7 @@ mod tests {
 
     #[test]
     fn ensure_serialization_has_salt_client_id() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1421,7 +1421,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_single_serialization() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1433,7 +1433,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_multi_serialization() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1465,7 +1465,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_single_large_serialization() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
         let data = vec![0x7f; 768 * 1024];
 
         mtproto.enqueue_request(data.clone()).unwrap();
@@ -1475,7 +1475,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_multi_large_serialization() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
         let data = vec![0x7f; 768 * 1024];
 
         mtproto.enqueue_request(data.clone()).unwrap();
@@ -1493,7 +1493,7 @@ mod tests {
 
     #[test]
     fn ensure_queue_is_clear() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         assert!(mtproto.pop_queued_messages().is_none());
         mtproto
@@ -1506,7 +1506,7 @@ mod tests {
 
     #[test]
     fn ensure_large_payload_errors() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
             Err(SerializeError::PayloadTooLarge) => true,
@@ -1529,7 +1529,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn ensure_non_padded_payload_panics() {
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
 
         drop(mtproto.enqueue_request(vec![1, 2, 3]));
     }
@@ -1537,7 +1537,7 @@ mod tests {
     #[test]
     fn ensure_no_compression_is_honored() {
         // A large vector of null bytes should compress
-        let mut mtproto = MTProto::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish();
         mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
         let buffer = mtproto.pop_queued_messages().unwrap();
         assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
@@ -1548,7 +1548,7 @@ mod tests {
         // A large vector of null bytes should compress
         {
             // High threshold not reached, should not compress
-            let mut mtproto = MTProto::build()
+            let mut mtproto = Mtp::build()
                 .compression_threshold(Some(768 * 1024))
                 .finish();
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
@@ -1557,7 +1557,7 @@ mod tests {
         }
         {
             // Low threshold is exceeded, should compress
-            let mut mtproto = MTProto::build()
+            let mut mtproto = Mtp::build()
                 .compression_threshold(Some(256 * 1024))
                 .finish();
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
@@ -1566,7 +1566,7 @@ mod tests {
         }
         {
             // The default should compress
-            let mut mtproto = MTProto::new();
+            let mut mtproto = Mtp::new();
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
