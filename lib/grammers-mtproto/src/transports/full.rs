@@ -42,6 +42,10 @@ impl Encoder for FullEncoder {
         12
     }
 
+    fn write_magic(&mut self, _output: &mut [u8]) -> Result<usize, usize> {
+        Ok(0)
+    }
+
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
@@ -135,6 +139,13 @@ mod tests {
             result.push((i & 0xff) as u8);
         }
         result
+    }
+
+    #[test]
+    fn check_magic() {
+        let (mut encoder, _) = full_transport();
+        let mut output = [];
+        assert_eq!(encoder.write_magic(&mut output), Ok(0));
     }
 
     #[test]

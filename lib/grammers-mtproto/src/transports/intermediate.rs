@@ -36,6 +36,15 @@ impl TransportIntermediate {
 impl Transport for TransportIntermediate {
     const MAX_OVERHEAD: usize = 4;
 
+    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
+        if output.len() < 4 {
+            Err(4)
+        } else {
+            output[..4].copy_from_slice(&[0xee, 0xee, 0xee, 0xee]);
+            Ok(4)
+        }
+    }
+
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4;

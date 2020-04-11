@@ -26,6 +26,13 @@ pub trait Encoder {
     /// How much overhead does the transport incur, at a maximum.
     fn max_overhead(&self) -> usize;
 
+    /// Write the protocol's magic into `output`.
+    ///
+    /// On success, return how many bytes were written.
+    ///
+    /// On failure, return how many bytes long the output buffer should have been.
+    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize>;
+
     /// Write the packet from `input` into `output`.
     ///
     /// On success, return how many bytes were written.

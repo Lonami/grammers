@@ -47,6 +47,15 @@ impl TransportAbridged {
 impl Transport for TransportAbridged {
     const MAX_OVERHEAD: usize = 4;
 
+    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
+        if output.len() < 1 {
+            Err(1)
+        } else {
+            output[0] = 0xef;
+            Ok(1)
+        }
+    }
+
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         let output_len;
         let len = input.len() / 4;
