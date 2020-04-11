@@ -79,7 +79,7 @@ impl Decoder for IntermediateDecoder {
             return Err(TransportError::MissingBytes(len));
         }
 
-        let output = &input[4..len - 4];
+        let output = &input[4..len];
         Ok(output)
     }
 }

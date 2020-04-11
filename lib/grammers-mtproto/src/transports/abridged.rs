@@ -59,19 +59,20 @@ impl Encoder for AbridgedEncoder {
     }
 
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+        // TODO assert input len is a multiple of 4 (in all transports)
         let output_len;
         let len = input.len() / 4;
         if len < 127 {
             output_len = input.len() + 1;
             if output.len() < output_len {
-                return Err(len);
+                return Err(output_len);
             }
 
             output[0] = len as u8;
         } else {
             output_len = input.len() + 4;
             if output.len() < output_len {
-                return Err(len);
+                return Err(output_len);
             }
 
             output[0] = 0x7f;
