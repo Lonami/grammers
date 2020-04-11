@@ -113,3 +113,79 @@ impl Decoder for AbridgedDecoder {
         Ok(&input[header_len..header_len + len])
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn get_data(n: usize) -> Vec<u8> {
+        let mut result = Vec::with_capacity(n);
+        for i in 0..n {
+            result.push((i & 0xff) as u8);
+        }
+        result
+    }
+
+    #[test]
+    fn check_magic() {
+        let (mut encoder, _) = abridged_transport();
+        let mut output = [0];
+        assert_eq!(encoder.write_magic(&mut output), Ok(1));
+        assert_eq!(output, [0xef]);
+    }
+
+    #[test]
+    fn check_encoding() {
+        let (mut encoder, _) = abridged_transport();
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
+        let len = encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(&output[..1], &[32]);
+        assert_eq!(&output[1..len], &input[..]);
+    }
+
+    #[test]
+    fn check_large_encoding() {
+        let (mut encoder, _) = abridged_transport();
+        let input = get_data(1024);
+        let mut output = vec![0; 1024 + encoder.max_overhead()];
+        assert!(encoder.write_into(&input, &mut output).is_ok());
+
+        assert_eq!(&output[..4], &[127, 0, 1, 0]);
+        assert_eq!(&output[4..], &input[..]);
+    }
+
+    #[test]
+    fn check_encoding_small_buffer() {
+        let (mut encoder, _) = abridged_transport();
+        let input = get_data(128);
+        let mut output = vec![0; 64];
+        assert_eq!(encoder.write_into(&input, &mut output), Err(129));
+    }
+
+    #[test]
+    fn check_decoding() {
+        let (mut encoder, mut decoder) = abridged_transport();
+        let input = get_data(128);
+        let mut output = vec![0; 128 + encoder.max_overhead()];
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
+    }
+
+    #[test]
+    fn check_large_decoding() {
+        let (mut encoder, mut decoder) = abridged_transport();
+        let input = get_data(1024);
+        let mut output = vec![0; 1024 + encoder.max_overhead()];
+
+        encoder.write_into(&input, &mut output).unwrap();
+        assert_eq!(decoder.read(&output), Ok(&input[..]));
+    }
+
+    #[test]
+    fn check_decoding_small_buffer() {
+        let (_, mut decoder) = abridged_transport();
+        let input = [1];
+        assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(5)));
+    }
+}
