@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::transports::{Decoder, Encoder, Transport};
+use crate::transports::{Decoder, Encoder};
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -15,45 +15,29 @@ use crc::crc32::{self, Hasher32};
 /// * Minimum envelope length: 12 bytes.
 /// * Maximum envelope length: 12 bytes.
 ///
-/// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
-pub struct TransportFull {}
-
-pub struct FullEncoder {
-    send_counter: u32,
-}
-
-pub struct FullDecoder;
-
-impl TransportFull {
-    /// Creates a new instance of a `TransportFull`.
-    pub fn new() -> Self {
-        Self {}
-    }
-
-    pub fn split(self) -> (FullEncoder, FullDecoder) {
-        (FullEncoder { send_counter: 0 }, FullDecoder)
-    }
-}
-
-impl Default for TransportFull {
-    fn default() -> Self {
-        Self::new()
-    }
-}
-
-/// Serializes the input payload as follows:
+/// It serializes the input payload as follows:
 ///
 /// ```text
 /// +----+----+----...----+----+
 /// | len| seq|  payload  | crc|
 /// +----+----+----...----+----+
 ///  ^^^^ 4 bytes
-/// ```
-impl Transport for TransportFull {
-    const MAX_OVERHEAD: usize = 12;
+///
+/// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
+pub fn full_transport() -> (FullEncoder, FullDecoder) {
+    (FullEncoder { send_counter: 0 }, FullDecoder {})
 }
 
+pub struct FullEncoder {
+    send_counter: u32,
+}
+
+#[non_exhaustive]
+pub struct FullDecoder {}
+
 impl Encoder for FullEncoder {
+    const MAX_OVERHEAD: usize = 12;
+
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;

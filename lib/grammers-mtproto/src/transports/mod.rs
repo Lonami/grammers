@@ -14,7 +14,7 @@ mod full;
 //mod intermediate;
 
 //pub use abridged::TransportAbridged;
-pub use full::TransportFull;
+pub use full::full_transport;
 //pub use intermediate::TransportIntermediate;
 
 use std::error::Error;
@@ -53,16 +53,13 @@ impl fmt::Display for InvalidCrc32 {
     }
 }
 
-/// The trait used by [MTProto transports].
+/// The trait used by [MTProto transports]' encoders.
 ///
 /// [MTProto transports]: index.html
-pub trait Transport: Default {
+pub trait Encoder {
     /// How much overhead does the transport incur, at a maximum.
     const MAX_OVERHEAD: usize;
-}
 
-pub trait Encoder {
-    // TODO consider more specific types
     /// Write the packet from `input` into `output`.
     ///
     /// On success, return how many bytes were written.
@@ -71,6 +68,9 @@ pub trait Encoder {
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
 }
 
+/// The trait used by [MTProto transports]' decoders.
+///
+/// [MTProto transports]: index.html
 pub trait Decoder {
     /// Read a packet from `input` and return the body subslice.
     ///
