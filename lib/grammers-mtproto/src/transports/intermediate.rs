@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder};
+use crate::transports::{Decoder, Encoder, Transport};
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -25,8 +25,15 @@ use crate::transports::{Decoder, Encoder};
 /// ```
 ///
 /// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
-pub fn intermediate_transport() -> (IntermediateEncoder, IntermediateDecoder) {
-    (IntermediateEncoder, IntermediateDecoder)
+pub struct TransportIntermediate;
+
+impl Transport for TransportIntermediate {
+    type Encoder = IntermediateEncoder;
+    type Decoder = IntermediateDecoder;
+
+    fn instance() -> (Self::Encoder, Self::Decoder) {
+        (Self::Encoder {}, Self::Decoder {})
+    }
 }
 
 #[non_exhaustive]

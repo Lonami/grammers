@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder};
+use crate::transports::{Decoder, Encoder, Transport};
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -23,10 +23,18 @@ use crc::crc32::{self, Hasher32};
 /// | len| seq|  payload  | crc|
 /// +----+----+----...----+----+
 ///  ^^^^ 4 bytes
+/// ```
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
-pub fn full_transport() -> (FullEncoder, FullDecoder) {
-    (FullEncoder { counter: 0 }, FullDecoder { counter: 0 })
+pub struct TransportFull;
+
+impl Transport for TransportFull {
+    type Encoder = FullEncoder;
+    type Decoder = FullDecoder;
+
+    fn instance() -> (Self::Encoder, Self::Decoder) {
+        (Self::Encoder { counter: 0 }, Self::Decoder { counter: 0 })
+    }
 }
 
 pub struct FullEncoder {

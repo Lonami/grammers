@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder};
+use crate::transports::{Decoder, Encoder, Transport};
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -34,8 +34,15 @@ use crate::transports::{Decoder, Encoder};
 /// ```
 ///
 /// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
-pub fn abridged_transport() -> (AbridgedEncoder, AbridgedDecoder) {
-    (AbridgedEncoder, AbridgedDecoder)
+pub struct TransportAbridged;
+
+impl Transport for TransportAbridged {
+    type Encoder = AbridgedEncoder;
+    type Decoder = AbridgedDecoder;
+
+    fn instance() -> (Self::Encoder, Self::Decoder) {
+        (Self::Encoder {}, Self::Decoder {})
+    }
 }
 
 #[non_exhaustive]

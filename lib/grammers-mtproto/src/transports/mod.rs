@@ -14,14 +14,19 @@ mod full;
 mod intermediate;
 
 use crate::errors::TransportError;
+pub use abridged::TransportAbridged;
+pub use full::TransportFull;
+pub use intermediate::TransportIntermediate;
 
-pub use abridged::abridged_transport;
-pub use full::full_transport;
-pub use intermediate::intermediate_transport;
+/// The trait used by the transports to create instances of themselves.
+pub trait Transport {
+    type Encoder: Encoder;
+    type Decoder: Decoder;
 
-/// The trait used by [MTProto transports]' encoders.
-///
-/// [MTProto transports]: index.html
+    fn instance() -> (Self::Encoder, Self::Decoder);
+}
+
+/// The trait used by the encoder part of a concrete transport.
 pub trait Encoder {
     /// How much overhead does the transport incur, at a maximum.
     fn max_overhead(&self) -> usize;
@@ -45,9 +50,7 @@ pub trait Encoder {
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
 }
 
-/// The trait used by [MTProto transports]' decoders.
-///
-/// [MTProto transports]: index.html
+/// The trait used by the decoder part of a concrete transport.
 pub trait Decoder {
     /// Read a packet from `input` and return the body subslice.
     ///
