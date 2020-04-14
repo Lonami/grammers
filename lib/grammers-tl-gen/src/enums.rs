@@ -11,7 +11,7 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
-use crate::Config;
+use crate::{ignore_type, Config};
 use grammers_tl_parser::tl::{Definition, Type};
 use std::io::{self, Write};
 
@@ -287,7 +287,7 @@ pub(crate) fn write_enums_mod<W: Write>(
             "    "
         };
 
-        for ty in grouped[key].iter() {
+        for ty in grouped[key].iter().filter(|ty| !ignore_type(*ty)) {
             write_definition(&mut file, indent, ty, metadata, config)?;
         }
 

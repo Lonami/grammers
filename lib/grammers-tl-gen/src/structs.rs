@@ -11,7 +11,7 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
-use crate::Config;
+use crate::{ignore_type, Config};
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
@@ -508,7 +508,7 @@ pub(crate) fn write_category_mod<W: Write>(
             writeln!(file, "{}use std::convert::TryFrom;", indent)?;
         }
 
-        for definition in grouped[key].iter() {
+        for definition in grouped[key].iter().filter(|def| !ignore_type(&def.ty)) {
             write_definition(&mut file, indent, definition, metadata, config)?;
         }
 

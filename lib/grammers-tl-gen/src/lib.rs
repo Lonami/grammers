@@ -14,8 +14,7 @@ mod metadata;
 mod rustifier;
 mod structs;
 
-use grammers_tl_parser::tl::Category;
-use grammers_tl_parser::tl::Definition;
+use grammers_tl_parser::tl::{Category, Definition, Type};
 use std::io::{self, Write};
 
 pub struct Config {
@@ -34,6 +33,17 @@ impl Default for Config {
             impl_from_enum: true,
         }
     }
+}
+
+/// Don't generate types for definitions of this type,
+/// since they are "core" types and treated differently.
+const SPECIAL_CASED_TYPES: [&str; 1] = ["Bool"];
+
+fn ignore_type(ty: &Type) -> bool {
+    SPECIAL_CASED_TYPES
+        .iter()
+        .find(|&&x| x == ty.name)
+        .is_some()
 }
 
 pub fn generate_rust_code(
