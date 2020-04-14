@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::generate_code;
+use grammers_tl_gen::{generate_rust_code, Config};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::env;
@@ -71,7 +71,14 @@ fn main() -> std::io::Result<()> {
         Path::new(&env::var("OUT_DIR").unwrap()).join("generated.rs"),
     )?);
 
-    generate_code(&mut file, &definitions, layer)?;
+    let config = Config {
+        deserializable_functions: cfg!(feature = "deserializable-functions"),
+        impl_debug: cfg!(feature = "impl-debug"),
+        impl_from_enum: cfg!(feature = "impl-from-enum"),
+        impl_from_type: cfg!(feature = "impl-from-type"),
+    };
+
+    generate_rust_code(&mut file, &definitions, layer, &config)?;
     file.flush()?;
     Ok(())
 }

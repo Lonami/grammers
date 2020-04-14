@@ -11,6 +11,7 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
+use crate::Config;
 use grammers_tl_parser::tl::{Definition, Type};
 use std::io::{self, Write};
 
@@ -26,8 +27,9 @@ fn write_enum<W: Write>(
     indent: &str,
     ty: &Type,
     metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
-    if cfg!(feature = "impl-debug") {
+    if config.impl_debug {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
     }
 
@@ -239,11 +241,12 @@ fn write_definition<W: Write>(
     indent: &str,
     ty: &Type,
     metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
-    write_enum(file, indent, ty, metadata)?;
+    write_enum(file, indent, ty, metadata, config)?;
     write_serializable(file, indent, ty, metadata)?;
     write_deserializable(file, indent, ty, metadata)?;
-    if cfg!(feature = "impl-from-type") {
+    if config.impl_from_type {
         write_impl_from(file, indent, ty, metadata)?;
     }
     Ok(())
@@ -254,6 +257,7 @@ pub(crate) fn write_enums_mod<W: Write>(
     mut file: &mut W,
     definitions: &[Definition],
     metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
     // Begin outermost mod
     write!(
@@ -284,7 +288,7 @@ pub(crate) fn write_enums_mod<W: Write>(
         };
 
         for ty in grouped[key].iter() {
-            write_definition(&mut file, indent, ty, metadata)?;
+            write_definition(&mut file, indent, ty, metadata, config)?;
         }
 
         // End possibly inner mod

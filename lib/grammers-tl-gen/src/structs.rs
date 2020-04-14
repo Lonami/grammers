@@ -11,6 +11,7 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
+use crate::Config;
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
@@ -26,9 +27,10 @@ fn write_struct<W: Write>(
     indent: &str,
     def: &Definition,
     _metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
     // Define struct
-    if cfg!(feature = "impl-debug") {
+    if config.impl_debug {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
     }
 
@@ -421,17 +423,18 @@ fn write_definition<W: Write>(
     indent: &str,
     def: &Definition,
     metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
-    write_struct(file, indent, def, metadata)?;
+    write_struct(file, indent, def, metadata, config)?;
     write_identifiable(file, indent, def, metadata)?;
     write_serializable(file, indent, def, metadata)?;
-    if def.category == Category::Types || cfg!(feature = "deserializable-functions") {
+    if def.category == Category::Types || config.deserializable_functions {
         write_deserializable(file, indent, def, metadata)?;
     }
     if def.category == Category::Functions {
         write_rpc(file, indent, def, metadata)?;
     }
-    if def.category == Category::Types && cfg!(feature = "impl-from-enum") {
+    if def.category == Category::Types && config.impl_from_enum {
         write_impl_from(file, indent, def, metadata)?;
     }
     Ok(())
@@ -443,6 +446,7 @@ pub(crate) fn write_category_mod<W: Write>(
     category: Category,
     definitions: &[Definition],
     metadata: &Metadata,
+    config: &Config,
 ) -> io::Result<()> {
     // Begin outermost mod
     match category {
@@ -497,7 +501,7 @@ pub(crate) fn write_category_mod<W: Write>(
             "        "
         };
 
-        if category == Category::Types && cfg!(feature = "impl-from-enum") {
+        if category == Category::Types && config.impl_from_enum {
             // If all of the conversions are infallible this will be unused.
             // Don't bother checking this beforehand, just allow warnings.
             writeln!(file, "{}#[allow(unused_imports)]", indent)?;
@@ -505,7 +509,7 @@ pub(crate) fn write_category_mod<W: Write>(
         }
 
         for definition in grouped[key].iter() {
-            write_definition(&mut file, indent, definition, metadata)?;
+            write_definition(&mut file, indent, definition, metadata, config)?;
         }
 
         // End possibly inner mod

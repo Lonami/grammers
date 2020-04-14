@@ -18,10 +18,29 @@ use grammers_tl_parser::tl::Category;
 use grammers_tl_parser::tl::Definition;
 use std::io::{self, Write};
 
-pub fn generate_code(
+pub struct Config {
+    pub deserializable_functions: bool,
+    pub impl_debug: bool,
+    pub impl_from_type: bool,
+    pub impl_from_enum: bool,
+}
+
+impl Default for Config {
+    fn default() -> Self {
+        Self {
+            deserializable_functions: false,
+            impl_debug: true,
+            impl_from_type: true,
+            impl_from_enum: true,
+        }
+    }
+}
+
+pub fn generate_rust_code(
     file: &mut impl Write,
     definitions: &[Definition],
     layer: i32,
+    config: &Config,
 ) -> io::Result<()> {
     writeln!(
         file,
@@ -41,9 +60,9 @@ pub fn generate_code(
     )?;
 
     let metadata = metadata::Metadata::new(&definitions);
-    structs::write_category_mod(file, Category::Types, definitions, &metadata)?;
-    structs::write_category_mod(file, Category::Functions, definitions, &metadata)?;
-    enums::write_enums_mod(file, definitions, &metadata)?;
+    structs::write_category_mod(file, Category::Types, definitions, &metadata, config)?;
+    structs::write_category_mod(file, Category::Functions, definitions, &metadata, config)?;
+    enums::write_enums_mod(file, definitions, &metadata, config)?;
 
     Ok(())
 }
