@@ -15,8 +15,8 @@ use futures::lock::Mutex;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
 use grammers_crypto::{auth_key, AuthKey};
-use grammers_mtproto::errors::RequestError;
-use grammers_mtproto::transports::{Decoder, Encoder, TransportFull};
+use grammers_mtproto::errors::{RequestError, TransportError};
+use grammers_mtproto::transports::{Decoder, Encoder, Transport};
 use grammers_mtproto::{MsgId, Mtp};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use std::collections::BTreeMap;
@@ -84,12 +84,12 @@ impl MtpSender {
     }
 }
 
-pub struct MtpHandler<D: Decoder, E: Encoder, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
-    sender: Sender<E, W>,
-    receiver: Receiver<D, R>,
+pub struct MtpHandler<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
+    sender: Sender<T::Encoder, W>,
+    receiver: Receiver<T::Decoder, R>,
 }
 
-impl<D: Decoder, E: Encoder, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<D, E, R, W> {
+impl<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<T, R, W> {
     pub async fn run(self) {
         let Self { sender, receiver } = self;
         future::join(sender.network_loop(), receiver.network_loop()).await;
@@ -111,11 +111,14 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             match self.decoder.read(&self.buffer[..len]) {
                 // TODO try to avoid to_vec
                 Ok(response) => break Ok(response.to_vec()),
-                Err(required_len) => {
+                Err(TransportError::MissingBytes(required_len)) => {
                     self.in_stream
                         .read_exact(&mut self.buffer[len..required_len])
                         .await?;
                     len = required_len;
+                }
+                Err(TransportError::UnexpectedData(what)) => {
+                    break Err(io::Error::new(io::ErrorKind::InvalidData, what))
                 }
             };
         }
@@ -257,20 +260,19 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     }
 }
 
-pub async fn create_mtp(
+pub async fn create_mtp<T: Transport>(
     io_stream: impl AsyncRead + AsyncWrite + Clone + Unpin,
     auth_key: Option<AuthKey>,
 ) -> Result<
     (
         MtpSender,
-        MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
+        MtpHandler<T, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
     ),
     AuthorizationError,
 > {
     let protocol = Arc::new(Mutex::new(Mtp::new()));
 
-    let transport = TransportFull::default();
-    let (encoder, decoder) = transport.split();
+    let (encoder, decoder) = T::instance();
     let in_stream = io_stream.clone();
     let out_stream = io_stream;
     let (request_sender, request_receiver) = mpsc::channel(100);
@@ -330,7 +332,7 @@ pub async fn connect_mtp<A: std::net::ToSocketAddrs>(
 ) -> Result<
     (
         MtpSender,
-        MtpHandler<impl Decoder, impl Encoder, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
+        MtpHandler<impl Transport, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
     ),
     AuthorizationError,
 > {
