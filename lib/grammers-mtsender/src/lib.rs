@@ -260,21 +260,12 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     }
 }
 
-pub async fn create_mtp<T: Transport>(
-    io_stream: impl AsyncRead + AsyncWrite + Clone + Unpin,
+pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
+    (in_stream, out_stream): (R, W),
     auth_key: Option<AuthKey>,
-) -> Result<
-    (
-        MtpSender,
-        MtpHandler<T, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
-    ),
-    AuthorizationError,
-> {
+) -> Result<(MtpSender, MtpHandler<T, R, W>), AuthorizationError> {
     let protocol = Arc::new(Mutex::new(Mtp::new()));
-
     let (encoder, decoder) = T::instance();
-    let in_stream = io_stream.clone();
-    let out_stream = io_stream;
     let (request_sender, request_receiver) = mpsc::channel(100);
     let response_map = Arc::new(Mutex::new(BTreeMap::new()));
 
