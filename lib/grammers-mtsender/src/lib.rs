@@ -19,6 +19,7 @@ use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::transports::{Decoder, Encoder, Transport};
 use grammers_mtproto::{MsgId, Mtp};
 use grammers_tl_types::{Deserializable, RemoteCall};
+use log::{error, warn};
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;
@@ -140,8 +141,8 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
         loop {
             let response = match self.receive().await {
                 Ok(response) => response,
-                Err(_) => {
-                    // TODO log
+                Err(err) => {
+                    warn!("receiving response failed: {:?}", err);
                     break;
                 }
             };
@@ -149,12 +150,9 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             // Pass the response on to the MTP to handle
             let mut protocol_guard = self.protocol.lock().await;
 
-            if protocol_guard
-                .process_encrypted_response(&response)
-                .is_err()
-            {
-                // TODO some errors here are probably OK;
-                //      log them and figure out which are resumable
+            if let Err(err) = protocol_guard.process_encrypted_response(&response) {
+                // TODO some errors here are probably OK; figure out which are resumable
+                error!("processing response failed: {:?}", err);
                 break;
             }
 
@@ -252,14 +250,15 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 
             // If sending over IO fails we won't be able to send anything else.
             // Break out of the loop.
-            if self.send(&payload).await.is_err() {
-                // TODO log properly
+            if let Err(err) = self.send(&payload).await {
+                warn!("sending payload failed: {:?}", err);
                 break;
             }
         }
     }
 }
 
+// TODO this needs a better name ("create mtp" is just "Mtp::new()")
 pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
     (in_stream, out_stream): (R, W),
     auth_key: Option<AuthKey>,

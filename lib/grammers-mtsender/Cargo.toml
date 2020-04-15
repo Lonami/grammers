@@ -20,6 +20,7 @@ grammers-mtproto = "0.1.0"
 grammers-tl-types = { version = "0.1.0", features = [ "tl-mtproto" ]}
 futures = "0.3"
 async-std = { version = "1.5", optional = true }
+log = "0.4"
 
 [dev-dependencies]
 async-std = { version = "1.5" }
