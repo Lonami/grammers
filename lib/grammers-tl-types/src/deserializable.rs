@@ -16,11 +16,20 @@ pub struct Cursor<'a> {
 
 impl Cursor<'_> {
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
-        todo!()
+        if self.pos + buf.len() > self.buf.len() {
+            Err(DeserializeError::UnexpectedEof)
+        } else {
+            buf.copy_from_slice(&self.buf[self.pos..self.pos + buf.len()]);
+            self.pos += buf.len();
+            Ok(())
+        }
     }
 
     fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
-        todo!()
+        buf.extend(&self.buf[self.pos..]);
+        let old = self.pos;
+        self.pos = self.buf.len();
+        Ok(self.pos - old)
     }
 }
 
