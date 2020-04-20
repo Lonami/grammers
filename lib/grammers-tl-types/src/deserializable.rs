@@ -15,6 +15,16 @@ pub struct Cursor<'a> {
 }
 
 impl Cursor<'_> {
+    fn read_byte(&mut self) -> Result<u8> {
+        if self.pos < self.buf.len() {
+            let byte = self.buf[self.pos];
+            self.pos += 1;
+            Ok(byte)
+        } else {
+            Err(DeserializeError::UnexpectedEof)
+        }
+    }
+
     fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         if self.pos + buf.len() > self.buf.len() {
             Err(DeserializeError::UnexpectedEof)
@@ -36,16 +46,8 @@ impl Cursor<'_> {
 /// The problem with being generic over `std::io::Read` is that it's
 /// fallible, but in practice, we're always going to serialize in-memory,
 /// so instead we just use a `[u8]` as our buffer.
-// TODO not a fan of aliasing references
 pub(crate) type Buffer<'a, 'b> = &'a mut Cursor<'b>;
 pub(crate) type Result<T> = std::result::Result<T, DeserializeError>;
-
-/// Read a single byte from the buffer.
-#[inline(always)]
-fn read_byte(buf: Buffer) -> Result<u8> {
-    let mut buffer = [0u8; 1];
-    buf.read_exact(&mut buffer).map(|_| buffer[0])
-}
 
 /// This trait allows for data serialized according to the
 /// [Binary Data Serialization] to be deserialized into concrete instances.
@@ -358,7 +360,7 @@ impl Deserializable for Vec<u8> {
     /// assert_eq!(Vec::<u8>::from_bytes(&[0x01, 0x7f, 0x00, 0x00]).unwrap(), vec![0x7f_u8]);
     /// ```
     fn deserialize(buf: Buffer) -> Result<Self> {
-        let first_byte = read_byte(buf)?;
+        let first_byte = buf.read_byte()?;
         let (len, padding) = if first_byte == 254 {
             let mut buffer = [0u8; 3];
             buf.read_exact(&mut buffer)?;
@@ -376,7 +378,7 @@ impl Deserializable for Vec<u8> {
 
         if padding > 0 {
             for _ in 0..(4 - padding) {
-                read_byte(buf)?;
+                buf.read_byte()?;
             }
         }
 
