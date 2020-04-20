@@ -26,7 +26,7 @@ impl<'a> Cursor<'a> {
         self.pos
     }
 
-    fn read_byte(&mut self) -> Result<u8> {
+    pub fn read_byte(&mut self) -> Result<u8> {
         if self.pos < self.buf.len() {
             let byte = self.buf[self.pos];
             self.pos += 1;
@@ -36,7 +36,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+    pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         if self.pos + buf.len() > self.buf.len() {
             Err(DeserializeError::UnexpectedEof)
         } else {
@@ -46,7 +46,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
-    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+    pub fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         buf.extend(&self.buf[self.pos..]);
         let old = self.pos;
         self.pos = self.buf.len();

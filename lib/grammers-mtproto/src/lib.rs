@@ -21,12 +21,11 @@ mod utils;
 use crate::errors::{DeserializeError, RequestError};
 
 use std::collections::VecDeque;
-use std::io::{self, Write};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
-use grammers_tl_types::{self as tl, Deserializable, Identifiable, Serializable};
+use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
 
 /// The default compression threshold to be used.
 pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
@@ -74,18 +73,17 @@ impl PlainMtp {
     ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
     pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
-        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
-        // Safe to unwrap because we're serializing into a memory buffer.
-        0i64.serialize(&mut buf).unwrap();
+        let mut buf = Vec::with_capacity(body.len() + 8 + 8 + 4);
+        0i64.serialize(&mut buf);
 
         // Even though https://core.telegram.org/mtproto/samples-auth_key
         // seems to imply the `msg_id` has to follow some rules, there is
         // no need to generate a valid `msg_id`, it seems. Just use `0`.
-        0i64.serialize(&mut buf).unwrap();
+        0i64.serialize(&mut buf);
 
-        (body.len() as u32).serialize(&mut buf).unwrap();
-        buf.write_all(&body).unwrap();
-        buf.into_inner()
+        (body.len() as u32).serialize(&mut buf);
+        buf.extend(body);
+        buf
     }
 
     /// Validates that the returned data is a correct plain message, and
@@ -98,7 +96,7 @@ impl PlainMtp {
     ) -> Result<&'a [u8], DeserializeError> {
         utils::check_message_buffer(message)?;
 
-        let mut buf = io::Cursor::new(message);
+        let mut buf = Cursor::from_slice(message);
         let auth_key_id = i64::deserialize(&mut buf)?;
         if auth_key_id != 0 {
             return Err(DeserializeError::BadAuthKey {
@@ -437,12 +435,10 @@ impl Mtp {
 
         // Allocate enough size for the final message:
         //     8 bytes `salt` + 8 bytes `client_id` + `batch_size` bytes body
-        let mut buf = io::Cursor::new(Vec::with_capacity(8 + 8 + batch_size));
+        let mut buf = Vec::with_capacity(8 + 8 + batch_size);
 
-        // All of the `serialize(...).unwrap()` are safe because we have an
-        // in-memory buffer.
-        self.salt.serialize(&mut buf).unwrap();
-        self.client_id.serialize(&mut buf).unwrap();
+        self.salt.serialize(&mut buf);
+        self.client_id.serialize(&mut buf);
 
         // If we're sending more than one, write the `MessageContainer` header.
         // This should be the moral equivalent of `MessageContainer.serialize(...)`.
@@ -452,27 +448,23 @@ impl Mtp {
             let msg_id = self.get_new_msg_id();
             let seq_no = self.get_seq_no(false);
 
-            msg_id.serialize(&mut buf).unwrap();
-            seq_no.serialize(&mut buf).unwrap();
-            ((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32)
-                .serialize(&mut buf)
-                .unwrap();
+            msg_id.serialize(&mut buf);
+            seq_no.serialize(&mut buf);
+            ((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32).serialize(&mut buf);
 
-            manual_tl::MessageContainer::CONSTRUCTOR_ID
-                .serialize(&mut buf)
-                .unwrap();
-            (batch_len as i32).serialize(&mut buf).unwrap();
+            manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut buf);
+            (batch_len as i32).serialize(&mut buf);
         }
 
         // Pop `batch_len` requests and append them to the final message.
         (0..batch_len).for_each(|_| {
             // Safe to unwrap because the length cannot exceed the queue's.
             let message = self.message_queue.pop_front().unwrap();
-            message.serialize(&mut buf).unwrap();
+            message.serialize(&mut buf);
         });
 
         // Our message is ready.
-        Some(buf.into_inner())
+        Some(buf)
     }
 
     /// If there is one or more requests enqueued, this method will pack as
@@ -500,7 +492,7 @@ impl Mtp {
         utils::check_message_buffer(ciphertext)?;
 
         let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
-        let mut buffer = io::Cursor::new(plaintext);
+        let mut buffer = Cursor::from_slice(&plaintext[..]);
 
         let _salt = i64::deserialize(&mut buffer)?;
         let client_id = i64::deserialize(&mut buffer)?;
@@ -1269,12 +1261,9 @@ impl Mtp {
     ///
     /// [Packed Object]: https://core.telegram.org/mtproto/service_messages#packed-object
     fn handle_gzip_packed(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
-        // TODO custom error, don't use a string
         let container = manual_tl::GzipPacked::from_bytes(&message.body)?;
         self.process_message(manual_tl::Message {
-            body: container
-                .decompress()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "decompression failed"))?,
+            body: container.decompress()?,
             ..message
         })
         .map(|_| ())

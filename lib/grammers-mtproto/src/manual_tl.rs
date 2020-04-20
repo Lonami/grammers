@@ -7,12 +7,11 @@
 // except according to those terms.
 
 //! This module contains additional, manual structures for some TL types.
-use crate::errors::DeserializeError;
 use flate2::write::{GzDecoder, GzEncoder};
 use flate2::Compression;
-use grammers_tl_types::errors::UnexpectedConstructor;
-use grammers_tl_types::{Deserializable, Identifiable, Serializable};
-use std::io::{self, Read, Write};
+use grammers_tl_types::errors::DeserializeError;
+use grammers_tl_types::{Cursor, Deserializable, Identifiable, Serializable};
+use std::io::Write;
 
 /// This struct represents the following TL definition:
 ///
@@ -36,9 +35,8 @@ impl Message {
     pub const SIZE_OVERHEAD: usize = 16;
 
     /// Peek the constructor ID from the body.
-    pub fn constructor_id(&self) -> io::Result<u32> {
-        let mut buffer = io::Cursor::new(&self.body);
-        u32::deserialize(&mut buffer)
+    pub fn constructor_id(&self) -> Result<u32, DeserializeError> {
+        u32::from_bytes(&self.body)
     }
 
     /// Determine the size this serialized message will occupy.
@@ -49,17 +47,16 @@ impl Message {
 }
 
 impl Serializable for Message {
-    fn serialize<B: Write>(&self, buf: &mut B) -> io::Result<()> {
-        self.msg_id.serialize(buf)?;
-        self.seq_no.serialize(buf)?;
-        (self.body.len() as i32).serialize(buf)?;
-        buf.write_all(&self.body)?;
-        Ok(())
+    fn serialize(&self, buf: &mut Vec<u8>) {
+        self.msg_id.serialize(buf);
+        self.seq_no.serialize(buf);
+        (self.body.len() as i32).serialize(buf);
+        buf.write_all(&self.body);
     }
 }
 
 impl Deserializable for Message {
-    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+    fn deserialize(buf: &mut Cursor) -> Result<Self, DeserializeError> {
         let msg_id = i64::deserialize(buf)?;
         let seq_no = i32::deserialize(buf)?;
         let len = i32::deserialize(buf)?;
@@ -87,9 +84,8 @@ pub(crate) struct RpcResult {
 
 impl RpcResult {
     /// Peek the constructor ID from the body.
-    pub fn inner_constructor(&self) -> io::Result<u32> {
-        let mut buffer = io::Cursor::new(&self.result);
-        u32::deserialize(&mut buffer)
+    pub fn inner_constructor(&self) -> Result<u32, DeserializeError> {
+        u32::from_bytes(&self.result)
     }
 }
 
@@ -99,13 +95,10 @@ impl Identifiable for RpcResult {
 }
 
 impl Deserializable for RpcResult {
-    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+    fn deserialize(buf: &mut Cursor) -> Result<Self, DeserializeError> {
         let constructor_id = u32::deserialize(buf)?;
         if constructor_id != Self::CONSTRUCTOR_ID {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                UnexpectedConstructor { id: constructor_id },
-            ));
+            return Err(DeserializeError::UnexpectedConstructor { id: constructor_id });
         }
 
         let req_msg_id = i64::deserialize(buf)?;
@@ -151,13 +144,10 @@ impl Identifiable for MessageContainer {
 }
 
 impl Deserializable for MessageContainer {
-    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+    fn deserialize(buf: &mut Cursor) -> Result<Self, DeserializeError> {
         let constructor_id = u32::deserialize(buf)?;
         if constructor_id != Self::CONSTRUCTOR_ID {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                UnexpectedConstructor { id: constructor_id },
-            ));
+            return Err(DeserializeError::UnexpectedConstructor { id: constructor_id });
         }
 
         let len = i32::deserialize(buf)?;
@@ -207,15 +197,15 @@ impl GzipPacked {
         Self { packed_data }
     }
 
-    pub fn decompress(&self) -> Result<Vec<u8>, DeserializeError> {
+    pub fn decompress(&self) -> Result<Vec<u8>, crate::errors::DeserializeError> {
         let writer = Vec::new();
         let mut decoder = GzDecoder::new(writer);
         decoder
             .write_all(&self.packed_data[..])
-            .map_err(|_| DeserializeError::DecompressionFailed)?;
+            .map_err(|_| crate::errors::DeserializeError::DecompressionFailed)?;
         decoder
             .finish()
-            .map_err(|_| DeserializeError::DecompressionFailed)
+            .map_err(|_| crate::errors::DeserializeError::DecompressionFailed)
     }
 }
 
@@ -225,21 +215,17 @@ impl Identifiable for GzipPacked {
 }
 
 impl Serializable for GzipPacked {
-    fn serialize<B: Write>(&self, buf: &mut B) -> io::Result<()> {
-        Self::CONSTRUCTOR_ID.serialize(buf)?;
-        self.packed_data.serialize(buf)?;
-        Ok(())
+    fn serialize(&self, buf: &mut Vec<u8>) {
+        Self::CONSTRUCTOR_ID.serialize(buf);
+        self.packed_data.serialize(buf);
     }
 }
 
 impl Deserializable for GzipPacked {
-    fn deserialize<B: Read>(buf: &mut B) -> io::Result<Self> {
+    fn deserialize(buf: &mut Cursor) -> Result<Self, DeserializeError> {
         let constructor_id = u32::deserialize(buf)?;
         if constructor_id != Self::CONSTRUCTOR_ID {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                UnexpectedConstructor { id: constructor_id },
-            ));
+            return Err(DeserializeError::UnexpectedConstructor { id: constructor_id });
         }
 
         let packed_data = Vec::<u8>::deserialize(buf)?;
