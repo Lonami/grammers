@@ -53,16 +53,6 @@ fn read_byte(buf: Buffer) -> Result<u8> {
 /// [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
 pub trait Deserializable {
     /// Deserializes an instance of the type from a given buffer.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use std::io::Cursor;
-    /// use grammers_tl_types::Deserializable;
-    ///
-    /// let mut cursor = Cursor::new([0xb5, 0x75, 0x72, 0x99]);
-    /// assert_eq!(bool::deserialize(&mut cursor).unwrap(), true);
-    /// ```
     fn deserialize(buf: Buffer) -> Result<Self>
     where
         Self: std::marker::Sized;
