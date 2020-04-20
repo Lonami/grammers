@@ -66,7 +66,7 @@ fn write_enum<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::Buffer) {
+///     fn serialize(&self, buf: crate::OutBuffer) {
 ///         use crate::Identifiable;
 ///         match self {
 ///             Self::Variant(x) => {
@@ -91,7 +91,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, buf: crate::Buffer) {{",
+        "{}    fn serialize(&self, buf: crate::OutBuffer) {{",
         indent
     )?;
 
@@ -123,7 +123,7 @@ fn write_serializable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Deserializable for Name {
-///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
+///     fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {
 ///         use crate::Identifiable;
 ///         Ok(match u32::deserialize(buf)? {
 ///             crate::types::Name::CONSTRUCTOR_ID => Self::Variant(crate::types::Name::deserialize(buf)?),
@@ -146,7 +146,7 @@ fn write_deserializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {{",
+        "{}    fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {{",
         indent
     )?;
     writeln!(file, "{}        use crate::Identifiable;", indent)?;
@@ -176,8 +176,8 @@ fn write_deserializable<W: Write>(
     }
     writeln!(
         file,
-        "{}            _ => return Err(std::io::Error::new(std::io::ErrorKind::InvalidData, \
-         crate::errors::UnexpectedConstructor {{ id }})),",
+        "{}            _ => return Err(\
+         crate::errors::DeserializeError::UnexpectedConstructor {{ id }}),",
         indent
     )?;
     writeln!(file, "{}        }})", indent)?;

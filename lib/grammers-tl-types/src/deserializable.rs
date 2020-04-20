@@ -5,12 +5,35 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::UnexpectedConstructor;
-use std::io::{Cursor, Error, ErrorKind, Read, Result};
+use crate::errors::DeserializeError;
+
+/// Re-implement `Cursor` to only work over in-memory buffers and greatly
+/// narrow the possible error cases.
+pub struct Cursor<'a> {
+    buf: &'a [u8],
+    pos: usize,
+}
+
+impl Cursor<'_> {
+    fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
+        todo!()
+    }
+
+    fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
+        todo!()
+    }
+}
+
+/// The problem with being generic over `std::io::Read` is that it's
+/// fallible, but in practice, we're always going to serialize in-memory,
+/// so instead we just use a `[u8]` as our buffer.
+// TODO not a fan of aliasing references
+pub(crate) type Buffer<'a, 'b> = &'a mut Cursor<'b>;
+pub(crate) type Result<T> = std::result::Result<T, DeserializeError>;
 
 /// Read a single byte from the buffer.
 #[inline(always)]
-fn read_byte<B: Read>(buf: &mut B) -> Result<u8> {
+fn read_byte(buf: Buffer) -> Result<u8> {
     let mut buffer = [0u8; 1];
     buf.read_exact(&mut buffer).map(|_| buffer[0])
 }
@@ -31,7 +54,7 @@ pub trait Deserializable {
     /// let mut cursor = Cursor::new([0xb5, 0x75, 0x72, 0x99]);
     /// assert_eq!(bool::deserialize(&mut cursor).unwrap(), true);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self>
+    fn deserialize(buf: Buffer) -> Result<Self>
     where
         Self: std::marker::Sized;
 
@@ -48,7 +71,7 @@ pub trait Deserializable {
     where
         Self: std::marker::Sized,
     {
-        Self::deserialize(&mut Cursor::new(buf))
+        Self::deserialize(&mut Cursor { buf, pos: 0 })
     }
 }
 
@@ -67,15 +90,12 @@ impl Deserializable for bool {
     /// assert_eq!(bool::from_bytes(&[0x37, 0x97, 0x79, 0xbc]).unwrap(), false);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         match id {
             0x997275b5u32 => Ok(true),
             0xbc799737u32 => Ok(false),
-            _ => Err(Error::new(
-                ErrorKind::InvalidData,
-                UnexpectedConstructor { id },
-            )),
+            _ => Err(DeserializeError::UnexpectedConstructor { id }),
         }
     }
 }
@@ -97,7 +117,7 @@ impl Deserializable for i32 {
     /// assert_eq!(i32::from_bytes(&[0xff, 0xff, 0xff, 0x7f]).unwrap(), i32::max_value());
     /// assert_eq!(i32::from_bytes(&[0x00, 0x00, 0x00, 0x80]).unwrap(), i32::min_value());
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 4];
         buf.read_exact(&mut buffer)?;
         Ok(Self::from_le_bytes(buffer))
@@ -120,7 +140,7 @@ impl Deserializable for u32 {
     /// assert_eq!(u32::from_bytes(&[0xff, 0xff, 0xff, 0xff]).unwrap(), u32::max_value());
     /// assert_eq!(u32::from_bytes(&[0x00, 0x00, 0x00, 0x00]).unwrap(), u32::min_value());
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 4];
         buf.read_exact(&mut buffer)?;
         Ok(Self::from_le_bytes(buffer))
@@ -144,7 +164,7 @@ impl Deserializable for i64 {
     /// assert_eq!(i64::from_bytes(&[0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]).unwrap(), i64::max_value());
     /// assert_eq!(i64::from_bytes(&[0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x80]).unwrap(), i64::min_value());
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 8];
         buf.read_exact(&mut buffer)?;
         Ok(Self::from_le_bytes(buffer))
@@ -166,7 +186,7 @@ impl Deserializable for [u8; 16] {
     ///
     /// assert_eq!(<[u8; 16]>::from_bytes(&data).unwrap(), data);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 16];
         buf.read_exact(&mut buffer)?;
         Ok(buffer)
@@ -189,7 +209,7 @@ impl Deserializable for [u8; 32] {
     ///
     /// assert_eq!(<[u8; 32]>::from_bytes(&data).unwrap(), data);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 32];
         buf.read_exact(&mut buffer)?;
         Ok(buffer)
@@ -214,7 +234,7 @@ impl Deserializable for f64 {
     /// assert_eq!(f64::from_bytes(&[0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0x7f]).unwrap(), f64::INFINITY);
     /// assert_eq!(f64::from_bytes(&[0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0xff]).unwrap(), f64::NEG_INFINITY);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut buffer = [0u8; 8];
         buf.read_exact(&mut buffer)?;
         Ok(Self::from_le_bytes(buffer))
@@ -237,13 +257,10 @@ impl<T: Deserializable> Deserializable for Vec<T> {
     ///            vec![0x7f_i32]);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         if id != 0x1cb5c415u32 {
-            return Err(Error::new(
-                ErrorKind::InvalidData,
-                UnexpectedConstructor { id },
-            ));
+            return Err(DeserializeError::UnexpectedConstructor { id });
         }
         let len = u32::deserialize(buf)?;
         Ok((0..len)
@@ -266,8 +283,12 @@ impl<T: Deserializable> Deserializable for crate::RawVec<T> {
     /// assert_eq!(RawVec::<i32>::from_bytes(&[0x0, 0x0, 0x0, 0x0]).unwrap().0, Vec::<i32>::new());
     /// assert_eq!(RawVec::<i32>::from_bytes(&[0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]).unwrap().0, vec![0x7f_i32]);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let len = u32::deserialize(buf)?;
+        let mut result = Vec::with_capacity(len as usize);
+        for _ in 0..len {
+            result.push(T::deserialize(buf)?);
+        }
         Ok(Self(
             (0..len)
                 .map(|_| T::deserialize(buf))
@@ -278,7 +299,7 @@ impl<T: Deserializable> Deserializable for crate::RawVec<T> {
 
 impl Deserializable for crate::Blob {
     /// Deserializes a blob by doing no parsing or interpretation.
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let mut result = Vec::new();
         buf.read_to_end(&mut result)?;
         Ok(Self(result))
@@ -322,7 +343,7 @@ impl Deserializable for String {
     ///      &[0x00, 0x00, 0x00]
     /// );
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         Ok(String::from_utf8_lossy(&Vec::<u8>::deserialize(buf)?).into())
     }
 }
@@ -341,7 +362,7 @@ impl Deserializable for Vec<u8> {
     /// assert_eq!(Vec::<u8>::from_bytes(&[0x00, 0x00, 0x00, 0x00]).unwrap(), Vec::new());
     /// assert_eq!(Vec::<u8>::from_bytes(&[0x01, 0x7f, 0x00, 0x00]).unwrap(), vec![0x7f_u8]);
     /// ```
-    fn deserialize<B: Read>(buf: &mut B) -> Result<Self> {
+    fn deserialize(buf: Buffer) -> Result<Self> {
         let first_byte = read_byte(buf)?;
         let (len, padding) = if first_byte == 254 {
             let mut buffer = [0u8; 3];

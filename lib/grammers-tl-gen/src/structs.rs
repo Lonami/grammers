@@ -93,7 +93,7 @@ fn write_identifiable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::Buffer) {
+///     fn serialize(&self, buf: crate::OutBuffer) {
 ///         self.field.serialize(buf);
 ///     }
 /// }
@@ -112,7 +112,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, {}buf: crate::Buffer) {{",
+        "{}    fn serialize(&self, {}buf: crate::OutBuffer) {{",
         indent,
         if def.category == Category::Types && def.params.is_empty() {
             "_"
@@ -202,7 +202,7 @@ fn write_serializable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Deserializable for Name {
-///     fn deserialize<B: std::io::Read>(buf: &mut B) -> std::io::Result<Self> {
+///     fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {
 ///         let field = FieldType::deserialize(buf)?;
 ///         Ok(Name { field })
 ///     }
@@ -222,7 +222,7 @@ fn write_deserializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize<B: std::io::Read>({}buf: &mut B) -> std::io::Result<Self> {{",
+        "{}    fn deserialize({}buf: crate::InBuffer) -> crate::DeserializeResult<Self> {{",
         indent,
         if def.params.is_empty() { "_" } else { "" }
     )?;
