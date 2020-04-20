@@ -9,7 +9,7 @@ use num_bigint::BigUint;
 use sha1::Sha1;
 
 /// RSA key.
-pub(crate) struct Key {
+pub struct Key {
     n: BigUint,
     e: BigUint,
 }
@@ -24,7 +24,7 @@ impl Key {
 }
 
 /// Encrypt the given data, prefixing it with a hash before, using RSA.
-pub(crate) fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u8> {
+pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u8> {
     // Sha1::digest's len is always 20, we're left with 255 - 20 - x padding.
     let to_encrypt = {
         // sha1

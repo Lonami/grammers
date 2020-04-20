@@ -9,7 +9,7 @@ use std::error::Error;
 use std::fmt;
 use std::io;
 
-use grammers_crypto::auth_key::generation::AuthKeyGenError;
+use grammers_mtproto::authentication::AuthKeyGenError;
 use grammers_mtproto::errors::{DeserializeError, RpcError};
 use grammers_tl_types as tl;
 

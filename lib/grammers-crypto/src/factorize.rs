@@ -41,7 +41,7 @@ fn modpow(mut n: u128, mut e: u128, m: u128) -> u128 {
 /// Pollard's rho algorithm: https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
 /// Richard Brent: https://maths-people.anu.edu.au/~brent/pd/rpb051i.pdf
 #[allow(clippy::many_single_char_names)]
-pub(crate) fn factorize(pq: u64) -> (u64, u64) {
+pub fn factorize(pq: u64) -> (u64, u64) {
     if pq % 2 == 0 {
         return (2, pq);
     }

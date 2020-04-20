@@ -23,11 +23,6 @@ once_cell = "1.3.1"
 sha1 = "0.6.0"
 sha2 = "0.8.1"
 
-[dependencies.grammers-tl-types]
-version = "0.1.0"
-default-features = false
-features = ["tl-mtproto"]
-
 [dev-dependencies]
 criterion = "0.3"
 

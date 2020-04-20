@@ -14,10 +14,10 @@ use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
 use futures::lock::Mutex;
 use futures::sink::SinkExt;
 use futures::stream::StreamExt;
-use grammers_crypto::{auth_key, AuthKey};
+use grammers_crypto::AuthKey;
 use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::transports::{Decoder, Encoder, Transport};
-use grammers_mtproto::{MsgId, Mtp, PlainMtp};
+use grammers_mtproto::{authentication, MsgId, Mtp, PlainMtp};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use log::{error, warn};
 use std::collections::BTreeMap;
@@ -260,26 +260,26 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
         eprintln!("No input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
         // TODO avoid to_vec()'s
-        let (request, data) = auth_key::generation::step1()?;
+        let (request, data) = authentication::step1()?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
         let response = mtp
             .deserialize_plain_message(&receiver.receive().await?)?
             .to_vec();
 
-        let (request, data) = auth_key::generation::step2(data, response)?;
+        let (request, data) = authentication::step2(data, response)?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
         let response = mtp
             .deserialize_plain_message(&receiver.receive().await?)?
             .to_vec();
 
-        let (request, data) = auth_key::generation::step3(data, response)?;
+        let (request, data) = authentication::step3(data, response)?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
         let response = mtp
             .deserialize_plain_message(&receiver.receive().await?)?
             .to_vec();
 
         // TODO use time_offset
-        let (auth_key, _time_offset) = auth_key::generation::create_key(data, response)?;
+        let (auth_key, _time_offset) = authentication::create_key(data, response)?;
         eprintln!("New auth_key generation success");
         auth_key
     };

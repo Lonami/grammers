@@ -43,7 +43,7 @@ use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializ
 use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
-use crate::{factorize::factorize, rsa, AuthKey};
+use grammers_crypto::{factorize::factorize, rsa, AuthKey};
 
 /// Represents an error that occured during the generation of an
 /// authorization key.
@@ -411,10 +411,11 @@ fn do_step3(
     }
 
     // Complete DH Exchange
-    let (key, iv) = crate::generate_key_data_from_nonce(&server_nonce, &new_nonce);
+    let (key, iv) = grammers_crypto::generate_key_data_from_nonce(&server_nonce, &new_nonce);
 
     // sha1 hash + plain text + padding
-    let plain_text_answer = crate::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
+    let plain_text_answer =
+        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
 
     let got_answer_hash = {
         let mut buffer = [0; 20];
@@ -503,7 +504,7 @@ fn do_step3(
         buffer
     };
 
-    let client_dh_encrypted = crate::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
+    let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
 
     Ok((
         tl::functions::SetClientDhParams {

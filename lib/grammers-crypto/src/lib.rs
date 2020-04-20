@@ -7,8 +7,8 @@
 // except according to those terms.
 pub mod aes;
 pub mod auth_key;
-mod factorize;
-mod rsa;
+pub mod factorize;
+pub mod rsa;
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use sha1::Sha1;

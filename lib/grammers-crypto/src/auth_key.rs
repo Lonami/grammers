@@ -5,8 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub mod generation;
-
 use sha1::Sha1;
 use std::fmt;
 
