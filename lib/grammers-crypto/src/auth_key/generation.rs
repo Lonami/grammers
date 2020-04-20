@@ -35,11 +35,11 @@
 //! ```
 use std::error::Error;
 use std::fmt;
-use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use getrandom::getrandom;
-use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
+use grammers_tl_types::errors::DeserializeError;
+use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
 
@@ -52,7 +52,7 @@ pub enum AuthKeyGenError {
     /// The response data was invalid and did not match our expectations.
     InvalidResponse {
         /// The inner error that caused the invalid response.
-        error: io::Error,
+        error: DeserializeError,
     },
 
     /// The server's nonce did not match ours.
@@ -97,7 +97,7 @@ pub enum AuthKeyGenError {
     /// An error occured while trying to read the DH inner data.
     InvalidDhInnerData {
         /// The inner error that occured when reading the data.
-        error: io::Error,
+        error: DeserializeError,
     },
 
     /// Some parameter (`g`, `g_a` or `g_b`) was out of range.
@@ -180,8 +180,8 @@ impl fmt::Display for AuthKeyGenError {
     }
 }
 
-impl From<io::Error> for AuthKeyGenError {
-    fn from(error: io::Error) -> Self {
+impl From<DeserializeError> for AuthKeyGenError {
+    fn from(error: DeserializeError) -> Self {
         Self::InvalidResponse { error }
     }
 }
@@ -424,14 +424,14 @@ fn do_step3(
 
     // Use a cursor explicitly so we know where it ends (and most importantly
     // where the padding starts).
-    let mut plain_text_cursor = io::Cursor::new(&plain_text_answer[20..]);
+    let mut plain_text_cursor = Cursor::from_slice(&plain_text_answer[20..]);
     let server_dh_inner = match tl::enums::ServerDhInnerData::deserialize(&mut plain_text_cursor) {
         Ok(tl::enums::ServerDhInnerData::Data(x)) => x,
         Err(error) => return Err(AuthKeyGenError::InvalidDhInnerData { error }),
     };
 
     let expected_answer_hash = {
-        Sha1::from(&plain_text_answer[20..20 + plain_text_cursor.position() as usize])
+        Sha1::from(&plain_text_answer[20..20 + plain_text_cursor.pos()])
             .digest()
             .bytes()
     };

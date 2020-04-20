@@ -14,7 +14,18 @@ pub struct Cursor<'a> {
     pos: usize,
 }
 
-impl Cursor<'_> {
+impl<'a> Cursor<'a> {
+    pub fn from_slice(buf: &'a [u8]) -> Self {
+        Self { buf, pos: 0 }
+    }
+
+    // TODO not a fan we need to expose this (and a way to create `Cursor`),
+    //      but crypto needs it because it needs to know where deserialization
+    //      of some inner data ends.
+    pub fn pos(&self) -> usize {
+        self.pos
+    }
+
     fn read_byte(&mut self) -> Result<u8> {
         if self.pos < self.buf.len() {
             let byte = self.buf[self.pos];
@@ -72,7 +83,7 @@ pub trait Deserializable {
     where
         Self: std::marker::Sized,
     {
-        Self::deserialize(&mut Cursor { buf, pos: 0 })
+        Self::deserialize(&mut Cursor::from_slice(buf))
     }
 }
 

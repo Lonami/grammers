@@ -78,8 +78,8 @@ pub mod errors;
 mod generated;
 mod serializable;
 
-pub use deserializable::Deserializable;
 pub(crate) use deserializable::{Buffer as InBuffer, Result as DeserializeResult};
+pub use deserializable::{Cursor, Deserializable};
 pub use generated::{enums, functions, types, LAYER};
 pub(crate) use serializable::Buffer as OutBuffer;
 pub use serializable::Serializable;
