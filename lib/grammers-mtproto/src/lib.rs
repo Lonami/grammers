@@ -42,7 +42,93 @@ pub struct MtpBuilder {
     auth_key: Option<AuthKey>,
 }
 
-/// An implementation of the [Mobile Transport Protocol].
+/// An implementation of the [Mobile Transport Protocol] for plaintext
+/// (unencrypted) messages.
+///
+/// The reason to separate the plaintext and encrypted implementations
+/// for serializing messages is that, even though they are similar, the
+/// benefits outweight some minor code reuse.
+///
+/// This way, the encryption key for [`Mtp`] is mandatory so errors
+/// for trying to encrypt data without a key are completely eliminated.
+///
+/// Also, the plaintext part of the protocol does not need to deal with
+/// the complexity of the full protocol once encrypted messages are used,
+/// so being able to keep a simpler implementation separate is a bonus.
+///
+/// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+/// [`Mtp`]: struct.Mtp.html
+#[non_exhaustive]
+pub struct PlainMtp;
+
+impl PlainMtp {
+    pub fn new() -> Self {
+        Self
+    }
+
+    /// Wraps a request's data into a plain message (also known as
+    /// [unencrypted messages]), and returns its serialized contents.
+    ///
+    /// Plain messages may be used for requests that don't require an
+    /// authorization key to be present, such as those needed to generate
+    /// the authorization key itself.
+    ///
+    /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
+    pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
+        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
+        // Safe to unwrap because we're serializing into a memory buffer.
+        0i64.serialize(&mut buf).unwrap();
+
+        // No need to generate a valid `msg_id`, it seems. Just use `0`.
+        0i64.serialize(&mut buf).unwrap();
+
+        (body.len() as u32).serialize(&mut buf).unwrap();
+        buf.write_all(&body).unwrap();
+        buf.into_inner()
+    }
+
+    /// Validates that the returned data is a correct plain message, and
+    /// if it is, the method returns the inner contents of the message.
+    ///
+    /// [`serialize_plain_message`]: #method.serialize_plain_message
+    pub fn deserialize_plain_message<'a>(
+        &self,
+        message: &'a [u8],
+    ) -> Result<&'a [u8], DeserializeError> {
+        utils::check_message_buffer(message)?;
+
+        let mut buf = io::Cursor::new(message);
+        let auth_key_id = i64::deserialize(&mut buf)?;
+        if auth_key_id != 0 {
+            return Err(DeserializeError::BadAuthKey {
+                got: auth_key_id,
+                expected: 0,
+            });
+        }
+
+        let msg_id = i64::deserialize(&mut buf)?;
+        if msg_id == 0 {
+            // TODO make sure it's close to our system time
+            return Err(DeserializeError::BadMessageId { got: msg_id });
+        }
+
+        let len = i32::deserialize(&mut buf)?;
+        if len <= 0 {
+            return Err(DeserializeError::NegativeMessageLength { got: len });
+        }
+        if (20 + len) as usize > message.len() {
+            return Err(DeserializeError::TooLongMessageLength {
+                got: len as usize,
+                max_length: message.len() - 20,
+            });
+        }
+
+        Ok(&message[20..20 + len as usize])
+    }
+}
+
+/// An implementation of the [Mobile Transport Protocol] for ciphertext
+/// (encrypted) messages.
 ///
 /// When working with unencrypted data (for example, when generating a new
 /// authorization key), the [`serialize_plain_message`] may be used to wrap
@@ -259,66 +345,6 @@ impl Mtp {
         if let Some(pos) = self.pending_ack.iter().rposition(|&p| p == msg_id) {
             self.pending_ack.remove(pos);
         }
-    }
-
-    // Plain requests
-    // ========================================
-
-    /// Wraps a request's data into a plain message (also known as
-    /// [unencrypted messages]), and returns its serialized contents.
-    ///
-    /// Plain messages may be used for requests that don't require an
-    /// authorization key to be present, such as those needed to generate
-    /// the authorization key itself.
-    ///
-    /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    pub fn serialize_plain_message(&mut self, body: &[u8]) -> Vec<u8> {
-        let mut buf = io::Cursor::new(Vec::with_capacity(body.len() + 8 + 8 + 4));
-        // Safe to unwrap because we're serializing into a memory buffer.
-        0i64.serialize(&mut buf).unwrap();
-        self.get_new_msg_id().serialize(&mut buf).unwrap();
-        (body.len() as u32).serialize(&mut buf).unwrap();
-        buf.write_all(&body).unwrap();
-        buf.into_inner()
-    }
-
-    /// Validates that the returned data is a correct plain message, and
-    /// if it is, the method returns the inner contents of the message.
-    ///
-    /// [`serialize_plain_message`]: #method.serialize_plain_message
-    pub fn deserialize_plain_message<'a>(
-        &self,
-        message: &'a [u8],
-    ) -> Result<&'a [u8], DeserializeError> {
-        utils::check_message_buffer(message)?;
-
-        let mut buf = io::Cursor::new(message);
-        let auth_key_id = i64::deserialize(&mut buf)?;
-        if auth_key_id != 0 {
-            return Err(DeserializeError::BadAuthKey {
-                got: auth_key_id,
-                expected: 0,
-            });
-        }
-
-        let msg_id = i64::deserialize(&mut buf)?;
-        if msg_id == 0 {
-            // TODO make sure it's close to our system time
-            return Err(DeserializeError::BadMessageId { got: msg_id });
-        }
-
-        let len = i32::deserialize(&mut buf)?;
-        if len <= 0 {
-            return Err(DeserializeError::NegativeMessageLength { got: len });
-        }
-        if (20 + len) as usize > message.len() {
-            return Err(DeserializeError::TooLongMessageLength {
-                got: len as usize,
-                max_length: message.len() - 20,
-            });
-        }
-
-        Ok(&message[20..20 + len as usize])
     }
 
     // Encrypted requests
