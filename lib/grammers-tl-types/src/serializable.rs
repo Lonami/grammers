@@ -195,9 +195,7 @@ impl<T: Serializable> Serializable for Vec<T> {
     fn serialize(&self, buf: Buffer) {
         0x1cb5c415u32.serialize(buf);
         (self.len() as i32).serialize(buf);
-        for x in self {
-            x.serialize(buf);
-        }
+        self.iter().for_each(|x| x.serialize(buf));
     }
 }
 
@@ -217,9 +215,7 @@ impl<T: Serializable> Serializable for crate::RawVec<T> {
     /// ```
     fn serialize(&self, buf: Buffer) {
         (self.0.len() as i32).serialize(buf);
-        for x in self.0.iter() {
-            x.serialize(buf);
-        }
+        self.0.iter().for_each(|x| x.serialize(buf));
     }
 }
 
@@ -305,7 +301,7 @@ impl Serializable for &[u8] {
     /// ```
     fn serialize(&self, buf: Buffer) {
         let len = if self.len() <= 253 {
-            buf.extend(&[self.len() as u8]);
+            buf.push(self.len() as u8);
             self.len() + 1
         } else {
             buf.extend(&[
@@ -319,8 +315,6 @@ impl Serializable for &[u8] {
         let padding = (4 - (len % 4)) % 4;
 
         buf.extend(*self);
-        for _ in 0..padding {
-            buf.push(0);
-        }
+        (0..padding).for_each(|_| buf.push(0));
     }
 }
