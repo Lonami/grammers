@@ -17,7 +17,7 @@ use futures::stream::StreamExt;
 use grammers_crypto::{auth_key, AuthKey};
 use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::transports::{Decoder, Encoder, Transport};
-use grammers_mtproto::{MsgId, Mtp};
+use grammers_mtproto::{MsgId, Mtp, PlainMtp};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use log::{error, warn};
 use std::collections::BTreeMap;
@@ -97,15 +97,21 @@ impl<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<T, R,
     }
 }
 
-struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
+/// Small adapter between network and transport containers.
+// TODO "plain" is probably not the best prefix for this, "plain basic"
+struct PlainReceiver<D: Decoder, R: AsyncRead + Unpin> {
     buffer: Box<[u8]>,
-    protocol: Arc<Mutex<Mtp>>,
     decoder: D,
     in_stream: R,
+}
+
+struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
+    plain: PlainReceiver<D, R>,
+    protocol: Arc<Mutex<Mtp>>,
     response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
 }
 
-impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
+impl<D: Decoder, R: AsyncRead + Unpin> PlainReceiver<D, R> {
     async fn receive(&mut self) -> io::Result<Vec<u8>> {
         let mut len = 0;
         loop {
@@ -124,22 +130,12 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
             };
         }
     }
+}
 
-    // TODO having such a generic Err (InvocationError) is not ideal
-    async fn receive_plain(&mut self) -> Result<Vec<u8>, InvocationError> {
-        let response = self.receive().await?;
-        Ok(self
-            .protocol
-            .lock()
-            .await
-            .deserialize_plain_message(&response)
-            .map_err(InvocationError::from)?
-            .to_vec())
-    }
-
+impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
     async fn network_loop(mut self) {
         loop {
-            let response = match self.receive().await {
+            let response = match self.plain.receive().await {
                 Ok(response) => response,
                 Err(err) => {
                     warn!("receiving response failed: {:?}", err);
@@ -179,16 +175,21 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
     }
 }
 
-struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
+/// Small adapter between network and transport containers.
+struct PlainSender<E: Encoder, W: AsyncWrite + Unpin> {
     buffer: Box<[u8]>,
-    request_channel: mpsc::Receiver<Request>,
-    protocol: Arc<Mutex<Mtp>>,
     encoder: E,
     out_stream: W,
+}
+
+struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
+    plain: PlainSender<E, W>,
+    protocol: Arc<Mutex<Mtp>>,
+    request_channel: mpsc::Receiver<Request>,
     response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
 }
 
-impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
+impl<E: Encoder, W: AsyncWrite + Unpin> PlainSender<E, W> {
     async fn send(&mut self, payload: &[u8]) -> io::Result<()> {
         let size = self
             .encoder
@@ -197,49 +198,22 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 
         self.out_stream.write_all(&self.buffer[..size]).await
     }
+}
 
-    async fn send_plain(&mut self, payload: &[u8]) -> io::Result<()> {
-        let payload = self.protocol.lock().await.serialize_plain_message(payload);
-        self.send(&payload).await
-    }
-
+impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
     async fn network_loop(mut self) {
         while let Some(request) = self.request_channel.next().await {
             let payload = {
                 let mut protocol_guard = self.protocol.lock().await;
 
-                let msg_id = match protocol_guard.enqueue_request(request.data) {
-                    Ok(msg_id) => msg_id,
-                    Err(_) => {
-                        // We were given a request that failed to be serialized, so
-                        // notify the error immediately and don't bother sending it.
-
-                        // Drop the result; if the user closed the channel it simply means
-                        // they no longer need this result so it's okay to fail to send it.
-                        // TODO proper error (with more info)
-                        drop(request.response_channel.send(Err(RequestError::Dropped)));
-                        continue;
-                    }
-                };
+                let msg_id = protocol_guard.enqueue_request(request.data);
 
                 // TODO we don't want to serialize as soon as we enqueued.
                 //      We want to enqueue many and serialize as soon as we can send more.
                 //      Maybe yet another Enqueuer struct?
                 //
-                // TODO why can serialize_encrypted_messages fail if we checked that in enqueue_request?
-                //      furthermore, we always have an authkey by this point so that error is undesirable.
-                let payload = match protocol_guard.serialize_encrypted_messages() {
-                    Ok(option) => {
-                        // Safe, we know it's Some (we just inserted something)
-                        option.unwrap()
-                    }
-                    Err(_) => {
-                        // Same as above.
-                        // TODO proper error (with more info)
-                        drop(request.response_channel.send(Err(RequestError::Dropped)));
-                        continue;
-                    }
-                };
+                // Safe, we know it's Some (we just inserted something)
+                let payload = protocol_guard.serialize_encrypted_messages().unwrap();
 
                 // TODO maybe we don't want to do this until we've sent it?
                 let mut map_guard = self.response_map.lock().await;
@@ -250,7 +224,7 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 
             // If sending over IO fails we won't be able to send anything else.
             // Break out of the loop.
-            if let Err(err) = self.send(&payload).await {
+            if let Err(err) = self.plain.send(&payload).await {
                 warn!("sending payload failed: {:?}", err);
                 break;
             }
@@ -263,50 +237,69 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
     (in_stream, out_stream): (R, W),
     auth_key: Option<AuthKey>,
 ) -> Result<(MtpSender, MtpHandler<T, R, W>), AuthorizationError> {
-    let protocol = Arc::new(Mutex::new(Mtp::new()));
     let (encoder, decoder) = T::instance();
-    let (request_sender, request_receiver) = mpsc::channel(100);
-    let response_map = Arc::new(Mutex::new(BTreeMap::new()));
 
-    let mut sender = Sender {
+    let mut sender = PlainSender {
         buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        request_channel: request_receiver,
-        protocol: Arc::clone(&protocol),
         encoder,
         out_stream,
-        response_map: Arc::clone(&response_map),
     };
 
-    let mut receiver = Receiver {
+    let mut receiver = PlainReceiver {
         buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        protocol: Arc::clone(&protocol),
         decoder,
         in_stream,
-        response_map,
     };
 
-    if let Some(auth_key) = auth_key {
+    let mut mtp = PlainMtp::new();
+
+    let auth_key = if let Some(auth_key) = auth_key {
         eprintln!("Using input auth_key");
-        protocol.lock().await.set_auth_key(auth_key, 0);
+        auth_key
     } else {
         eprintln!("No input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
+        // TODO avoid to_vec()'s
         let (request, data) = auth_key::generation::step1()?;
-        sender.send_plain(&request).await?;
-        let response = receiver.receive_plain().await?;
+        sender.send(&mtp.serialize_plain_message(&request)).await?;
+        let response = mtp
+            .deserialize_plain_message(&receiver.receive().await?)?
+            .to_vec();
 
         let (request, data) = auth_key::generation::step2(data, response)?;
-        sender.send_plain(&request).await?;
-        let response = receiver.receive_plain().await?;
+        sender.send(&mtp.serialize_plain_message(&request)).await?;
+        let response = mtp
+            .deserialize_plain_message(&receiver.receive().await?)?
+            .to_vec();
 
         let (request, data) = auth_key::generation::step3(data, response)?;
-        sender.send_plain(&request).await?;
-        let response = receiver.receive_plain().await?;
+        sender.send(&mtp.serialize_plain_message(&request)).await?;
+        let response = mtp
+            .deserialize_plain_message(&receiver.receive().await?)?
+            .to_vec();
 
-        let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
-        protocol.lock().await.set_auth_key(auth_key, time_offset);
+        // TODO use time_offset
+        let (auth_key, _time_offset) = auth_key::generation::create_key(data, response)?;
         eprintln!("New auth_key generation success");
-    }
+        auth_key
+    };
+
+    let protocol = Arc::new(Mutex::new(Mtp::new(auth_key)));
+    let (request_sender, request_receiver) = mpsc::channel(100);
+    let response_map = Arc::new(Mutex::new(BTreeMap::new()));
+
+    let sender = Sender {
+        plain: sender,
+        request_channel: request_receiver,
+        protocol: Arc::clone(&protocol),
+        response_map: Arc::clone(&response_map),
+    };
+
+    let receiver = Receiver {
+        plain: receiver,
+        protocol: Arc::clone(&protocol),
+        response_map,
+    };
 
     Ok((
         MtpSender {

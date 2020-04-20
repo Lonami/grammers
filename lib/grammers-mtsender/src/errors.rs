@@ -10,7 +10,8 @@ use std::fmt;
 use std::io;
 
 use grammers_crypto::auth_key::generation::AuthKeyGenError;
-use grammers_mtproto::errors::{DeserializeError, RpcError, SerializeError};
+use grammers_mtproto::errors::{DeserializeError, RpcError};
+use grammers_tl_types as tl;
 
 /// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
@@ -55,6 +56,12 @@ impl From<InvocationError> for AuthorizationError {
     }
 }
 
+impl From<DeserializeError> for AuthorizationError {
+    fn from(error: DeserializeError) -> Self {
+        Self::from(InvocationError::from(error))
+    }
+}
+
 /// This error occurs when a Remote Procedure call was unsuccessful.
 ///
 /// The request should be retransmited when this happens, unless the
@@ -81,9 +88,6 @@ pub enum InvocationError {
 
     /// The error occured during the deserialization of the response.
     Deserialize(DeserializeError),
-
-    /// The error occured during the serialization of the request.
-    Serialize(SerializeError),
 }
 
 impl Error for InvocationError {}
@@ -96,7 +100,6 @@ impl fmt::Display for InvocationError {
             Self::RPC(err) => write!(f, "request error, invoking failed: {}", err),
             Self::Dropped => write!(f, "request was dropped (cancelled)"),
             Self::Deserialize(err) => write!(f, "request error, bad response: {}", err),
-            Self::Serialize(err) => write!(f, "request error, bad request: {}", err),
         }
     }
 }
@@ -113,14 +116,9 @@ impl From<DeserializeError> for InvocationError {
     }
 }
 
-impl From<SerializeError> for InvocationError {
-    fn from(error: SerializeError) -> Self {
-        Self::Serialize(error)
-    }
-}
-
-impl From<RpcError> for InvocationError {
-    fn from(error: RpcError) -> Self {
-        Self::RPC(error)
+// TODO clean-up (or at least review) this cast mess
+impl From<tl::errors::DeserializeError> for InvocationError {
+    fn from(error: tl::errors::DeserializeError) -> Self {
+        Self::from(DeserializeError::from(error))
     }
 }
