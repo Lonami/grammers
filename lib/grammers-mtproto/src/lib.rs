@@ -18,7 +18,7 @@ mod manual_tl;
 pub mod transports;
 mod utils;
 
-use crate::errors::{DeserializeError, RequestError, SerializeError};
+use crate::errors::{DeserializeError, RequestError};
 
 use std::collections::VecDeque;
 use std::io::{self, Write};
@@ -344,12 +344,21 @@ impl Mtp {
     /// serialization of requests will always be correctly padded, so adding
     /// an error case for this rare case (impossible with the expected inputs)
     /// would simply be unnecessary.
-    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> Result<MsgId, SerializeError> {
-        if body.len() + manual_tl::Message::SIZE_OVERHEAD
-            > manual_tl::MessageContainer::MAXIMUM_SIZE
-        {
-            return Err(SerializeError::PayloadTooLarge);
-        }
+    ///
+    /// The method also panics if the body length is too large for similar
+    /// reasons. It is not reasonable to construct huge requests (although
+    /// possible) because they would likely fail with a RPC error anyway,
+    /// so we avoid another error case by simply panicking.
+    ///
+    /// The definition of "too large" is roughly 1MB, so as long as the
+    /// payload is below that mark, it's safe to call.
+    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> MsgId {
+        // Requests that are too large would cause Telegram to close the
+        // connection but are so uncommon it's not worth returning `Err`.
+        assert!(
+            body.len() + manual_tl::Message::SIZE_OVERHEAD
+                <= manual_tl::MessageContainer::MAXIMUM_SIZE
+        );
 
         // Serialized requests will always be well-formed
         assert!(body.len() % 4 == 0);
@@ -365,7 +374,7 @@ impl Mtp {
             }
         }
 
-        Ok(self.enqueue_body(body, true))
+        self.enqueue_body(body, true)
     }
 
     fn enqueue_body(&mut self, body: Vec<u8>, content_related: bool) -> MsgId {
@@ -471,16 +480,12 @@ impl Mtp {
     /// encrypted using the current authorization key as indicated by the
     /// [MTProto 2.0 guidelines].
     ///
-    /// The function will fail if there is no valid authorization key present.
-    ///
-    /// If there are no enqueued requests, the method succeeds but returns
-    /// `None`.
+    /// If there are no enqueued requests, the method returns `None`.
     ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    pub fn serialize_encrypted_messages(&mut self) -> Result<Option<Vec<u8>>, SerializeError> {
-        Ok(self
-            .pop_queued_messages()
-            .map(|payload| encrypt_data_v2(&payload, &self.auth_key)))
+    pub fn serialize_encrypted_messages(&mut self) -> Option<Vec<u8>> {
+        self.pop_queued_messages()
+            .map(|payload| encrypt_data_v2(&payload, &self.auth_key))
     }
 
     /// Processes an encrypted response from the server. If the response
@@ -1362,9 +1367,7 @@ mod tests {
             // Single body (no container)
             let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-            mtproto
-                .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-                .unwrap();
+            mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert_eq!(buffer.capacity(), buffer.len());
         }
@@ -1372,12 +1375,8 @@ mod tests {
             // Multiple bodies (using a container)
             let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-            mtproto
-                .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-                .unwrap();
-            mtproto
-                .enqueue_request(vec![b'B', b'y', b'e', b'!'])
-                .unwrap();
+            mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
+            mtproto.enqueue_request(vec![b'B', b'y', b'e', b'!']);
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert_eq!(buffer.capacity(), buffer.len());
         }
@@ -1398,9 +1397,7 @@ mod tests {
     fn ensure_serialization_has_salt_client_id() {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
+        mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
         let buffer = mtproto.pop_queued_messages().unwrap();
 
         // salt comes first, it's zero by default.
@@ -1417,9 +1414,7 @@ mod tests {
     fn ensure_correct_single_serialization() {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
+        mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
 
         let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
         ensure_buffer_is_message(&buffer, b"Hey!", 1);
@@ -1429,12 +1424,8 @@ mod tests {
     fn ensure_correct_multi_serialization() {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
-        mtproto
-            .enqueue_request(vec![b'B', b'y', b'e', b'!'])
-            .unwrap();
+        mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
+        mtproto.enqueue_request(vec![b'B', b'y', b'e', b'!']);
         let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
 
         // buffer[0..8] is the msg_id for the container
@@ -1462,7 +1453,7 @@ mod tests {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
-        mtproto.enqueue_request(data.clone()).unwrap();
+        mtproto.enqueue_request(data.clone());
         let buffer = &mtproto.pop_queued_messages().unwrap()[MESSAGE_PREFIX_LEN..];
         assert_eq!(buffer.len(), 16 + data.len());
     }
@@ -1472,9 +1463,9 @@ mod tests {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
-        mtproto.enqueue_request(data.clone()).unwrap();
+        mtproto.enqueue_request(data.clone());
 
-        mtproto.enqueue_request(data.clone()).unwrap();
+        mtproto.enqueue_request(data.clone());
 
         // The messages are large enough that they should not be able to go in
         // a container together (so there are two things to pop).
@@ -1490,34 +1481,18 @@ mod tests {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         assert!(mtproto.pop_queued_messages().is_none());
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
+        mtproto.enqueue_request(vec![b'H', b'e', b'y', b'!']);
 
         assert!(mtproto.pop_queued_messages().is_some());
         assert!(mtproto.pop_queued_messages().is_none());
     }
 
     #[test]
-    fn ensure_large_payload_errors() {
+    #[should_panic]
+    fn ensure_large_payload_panics() {
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
-        assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
-            Err(SerializeError::PayloadTooLarge) => true,
-            _ => false,
-        });
-
-        assert!(mtproto.pop_queued_messages().is_none());
-
-        // Make sure the queue is not in a broken state
-        mtproto
-            .enqueue_request(vec![b'H', b'e', b'y', b'!'])
-            .unwrap();
-
-        assert_eq!(
-            mtproto.pop_queued_messages().unwrap().len(),
-            20 + MESSAGE_PREFIX_LEN
-        );
+        drop(mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]));
     }
 
     #[test]
@@ -1532,7 +1507,7 @@ mod tests {
     fn ensure_no_compression_is_honored() {
         // A large vector of null bytes should compress
         let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
-        mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+        mtproto.enqueue_request(vec![0; 512 * 1024]);
         let buffer = mtproto.pop_queued_messages().unwrap();
         assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
     }
@@ -1545,7 +1520,7 @@ mod tests {
             let mut mtproto = Mtp::build()
                 .compression_threshold(Some(768 * 1024))
                 .finish(auth_key());
-            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            mtproto.enqueue_request(vec![0; 512 * 1024]);
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
@@ -1554,14 +1529,14 @@ mod tests {
             let mut mtproto = Mtp::build()
                 .compression_threshold(Some(256 * 1024))
                 .finish(auth_key());
-            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            mtproto.enqueue_request(vec![0; 512 * 1024]);
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
         {
             // The default should compress
             let mut mtproto = Mtp::new(auth_key());
-            mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
+            mtproto.enqueue_request(vec![0; 512 * 1024]);
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }

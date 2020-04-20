@@ -18,9 +18,6 @@ use grammers_tl_types as tl;
 /// The error type for the deserialization of server messages.
 #[derive(Debug)]
 pub enum DeserializeError {
-    /// The authorization key is missing, so data cannot be decrypted.
-    MissingAuthKey,
-
     /// The server's authorization key did not match our expectations.
     BadAuthKey { got: i64, expected: i64 },
 
@@ -65,7 +62,6 @@ impl Error for DeserializeError {}
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Self::MissingAuthKey => write!(f, "missing auth key"),
             Self::BadAuthKey { got, expected } => write!(
                 f,
                 "bad server auth key (got {}, expected {})",
@@ -103,29 +99,6 @@ impl From<io::Error> for DeserializeError {
 impl From<DecryptionError> for DeserializeError {
     fn from(error: DecryptionError) -> Self {
         Self::DecryptionError(error)
-    }
-}
-
-/// The error type for the serialization of outgoing messages.
-#[derive(Debug)]
-pub enum SerializeError {
-    /// The authorization key is missing, so data cannot be encrypted.
-    MissingAuthKey,
-
-    /// The serialization would be considered invalid because the request
-    /// payload is too large and cannot possibly be sent. Telegram would
-    /// forcibly close the connection if it was ever sent.
-    PayloadTooLarge,
-}
-
-impl Error for SerializeError {}
-
-impl fmt::Display for SerializeError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match *self {
-            Self::MissingAuthKey => write!(f, "missing auth key"),
-            Self::PayloadTooLarge => write!(f, "request payload too large"),
-        }
     }
 }
 
