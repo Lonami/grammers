@@ -259,24 +259,20 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
     } else {
         eprintln!("No input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
-        // TODO avoid to_vec()'s
         let (request, data) = authentication::step1()?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = mtp
-            .deserialize_plain_message(&receiver.receive().await?)?
-            .to_vec();
+        let response = receiver.receive().await?;
+        let response = mtp.deserialize_plain_message(&response)?;
 
         let (request, data) = authentication::step2(data, response)?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = mtp
-            .deserialize_plain_message(&receiver.receive().await?)?
-            .to_vec();
+        let response = receiver.receive().await?;
+        let response = mtp.deserialize_plain_message(&response)?;
 
         let (request, data) = authentication::step3(data, response)?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = mtp
-            .deserialize_plain_message(&receiver.receive().await?)?
-            .to_vec();
+        let response = receiver.receive().await?;
+        let response = mtp.deserialize_plain_message(&response)?;
 
         // TODO use time_offset
         let (auth_key, _time_offset) = authentication::create_key(data, response)?;

@@ -93,7 +93,7 @@ fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), AuthKeyGenError
 }
 
 /// The second step of the process to generate an authorization key.
-pub fn step2(data: Step1, response: Vec<u8>) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
+pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
     let random_bytes = {
         let mut buffer = [0; 32 + 256];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
@@ -105,13 +105,13 @@ pub fn step2(data: Step1, response: Vec<u8>) -> Result<(Vec<u8>, Step2), AuthKey
 
 fn do_step2(
     data: Step1,
-    response: Vec<u8>,
+    response: &[u8],
     random_bytes: &[u8; 32 + 256],
 ) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
     // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
     let Step1 { nonce } = data;
     let tl::enums::ResPq::Pq(res_pq) =
-        <tl::functions::ReqPqMulti as RemoteCall>::Return::from_bytes(&response)?;
+        <tl::functions::ReqPqMulti as RemoteCall>::Return::from_bytes(response)?;
 
     check_nonce(&res_pq.nonce, &nonce)?;
 
@@ -208,7 +208,7 @@ fn do_step2(
 }
 
 /// The third step of the process to generate an authorization key.
-pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
+pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
     let random_bytes = {
         let mut buffer = [0; 256 + 16];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
@@ -224,7 +224,7 @@ pub fn step3(data: Step2, response: Vec<u8>) -> Result<(Vec<u8>, Step3), AuthKey
 
 fn do_step3(
     data: Step2,
-    response: Vec<u8>,
+    response: &[u8],
     random_bytes: &[u8; 256 + 16],
     now: i32,
 ) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
@@ -234,7 +234,7 @@ fn do_step3(
         new_nonce,
     } = data;
     let server_dh_params =
-        <tl::functions::ReqDhParams as RemoteCall>::Return::from_bytes(&response)?;
+        <tl::functions::ReqDhParams as RemoteCall>::Return::from_bytes(response)?;
 
     // Step 3. Factorize PQ and construct the request for DH params.
     let server_dh_params = match server_dh_params {
@@ -379,7 +379,7 @@ fn do_step3(
 }
 
 /// The last step of the process to generate an authorization key.
-pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), AuthKeyGenError> {
+pub fn create_key(data: Step3, response: &[u8]) -> Result<(AuthKey, i32), AuthKeyGenError> {
     let Step3 {
         nonce,
         server_nonce,
@@ -387,7 +387,7 @@ pub fn create_key(data: Step3, response: Vec<u8>) -> Result<(AuthKey, i32), Auth
         gab,
         time_offset,
     } = data;
-    let dh_gen = <tl::functions::SetClientDhParams as RemoteCall>::Return::from_bytes(&response)?;
+    let dh_gen = <tl::functions::SetClientDhParams as RemoteCall>::Return::from_bytes(response)?;
 
     struct DhGenData {
         nonce: [u8; 16],
