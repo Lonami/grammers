@@ -284,10 +284,6 @@ impl<T: Deserializable> Deserializable for crate::RawVec<T> {
     /// ```
     fn deserialize(buf: Buffer) -> Result<Self> {
         let len = u32::deserialize(buf)?;
-        let mut result = Vec::with_capacity(len as usize);
-        for _ in 0..len {
-            result.push(T::deserialize(buf)?);
-        }
         Ok(Self(
             (0..len)
                 .map(|_| T::deserialize(buf))
