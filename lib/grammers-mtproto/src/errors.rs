@@ -43,14 +43,18 @@ pub enum DeserializeError {
     /// [transport level]: https://core.telegram.org/mtproto/mtproto-transports#transport-errors
     TransportError { code: i32 },
 
-    /// The received buffer is too small to contain a valid response message.
+    /// The received buffer is too small to contain a valid response message,
+    /// or the response seemed valid at first but trying to deserialize it
+    /// proved the buffer to be too small.
     MessageBufferTooSmall,
 
     /// The server responded with compressed data which we failed to decompress.
     DecompressionFailed,
 
-    /// Reading from the buffer failed in some way.
-    BufferError(tl::errors::DeserializeError),
+    /// While deserializing the response types one of them had a constructor
+    /// that did not match our expectations. The invalid ID is contained
+    /// within this variant.
+    UnexpectedConstructor { id: u32 },
 
     /// Attempting to decrypt the message failed in some way.
     DecryptionError(DecryptionError),
@@ -83,7 +87,7 @@ impl fmt::Display for DeserializeError {
                 "server responded with a payload that's too small to fit a valid message"
             ),
             Self::DecompressionFailed => write!(f, "failed to decompress server's data"),
-            Self::BufferError(ref error) => write!(f, "failed to deserialize message: {}", error),
+            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {:08x}", id),
             Self::DecryptionError(ref error) => write!(f, "failed to decrypt message: {}", error),
         }
     }
@@ -91,7 +95,12 @@ impl fmt::Display for DeserializeError {
 
 impl From<tl::errors::DeserializeError> for DeserializeError {
     fn from(error: tl::errors::DeserializeError) -> Self {
-        Self::BufferError(error)
+        use tl::errors::DeserializeError::*;
+
+        match error {
+            UnexpectedEof => DeserializeError::MessageBufferTooSmall,
+            UnexpectedConstructor { id } => DeserializeError::UnexpectedConstructor { id },
+        }
     }
 }
 
