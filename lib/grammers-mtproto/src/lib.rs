@@ -79,7 +79,9 @@ impl PlainMtp {
         // Safe to unwrap because we're serializing into a memory buffer.
         0i64.serialize(&mut buf).unwrap();
 
-        // No need to generate a valid `msg_id`, it seems. Just use `0`.
+        // Even though https://core.telegram.org/mtproto/samples-auth_key
+        // seems to imply the `msg_id` has to follow some rules, there is
+        // no need to generate a valid `msg_id`, it seems. Just use `0`.
         0i64.serialize(&mut buf).unwrap();
 
         (body.len() as u32).serialize(&mut buf).unwrap();
@@ -107,8 +109,14 @@ impl PlainMtp {
         }
 
         let msg_id = i64::deserialize(&mut buf)?;
-        if msg_id == 0 {
-            // TODO make sure it's close to our system time
+        // We can't validate it's close to our system time because our sytem
+        // time may be wrong at this point (it only matters once encrypted
+        // communication begins). However, we can validate the following:
+        //
+        // > server message identifiers modulo 4 yield 1 if
+        // > the message is a response to a client message
+        // https://core.telegram.org/mtproto/description#message-identifier-msg-id
+        if msg_id <= 0 || (msg_id % 4) != 1 {
             return Err(DeserializeError::BadMessageId { got: msg_id });
         }
 
