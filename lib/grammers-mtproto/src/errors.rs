@@ -8,11 +8,11 @@
 
 //! Errors that can occur when using the library's functions.
 
-use std::error::Error;
-use std::fmt;
-
 use grammers_crypto::DecryptionError;
 use grammers_tl_types as tl;
+use num_bigint::BigUint;
+use std::error::Error;
+use std::fmt;
 
 /// The error type for the deserialization of server messages.
 #[derive(Debug)]
@@ -212,6 +212,147 @@ impl fmt::Display for TransportError {
             TransportError::MissingBytes(n) => write!(f, "need {} bytes", n),
             TransportError::UnexpectedData(what) => write!(f, "unexpected data: {}", what),
         }
+    }
+}
+
+/// Represents an error that occured during the generation of an
+/// authorization key.
+#[derive(Debug)]
+pub enum AuthKeyGenError {
+    /// The response data was invalid and did not match our expectations.
+    InvalidResponse {
+        /// The inner error that caused the invalid response.
+        error: tl::errors::DeserializeError,
+    },
+
+    /// The server's nonce did not match ours.
+    InvalidNonce {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+
+    /// The server's PQ number was not of the right size.
+    InvalidPQSize {
+        /// The unexpected size that we got.
+        size: usize,
+    },
+
+    /// None of the server fingerprints are known to us.
+    UnknownFingerprints {
+        /// The list of fingerprint that we got.
+        fingerprints: Vec<i64>,
+    },
+
+    /// The server failed to send the Diffie-Hellman parameters.
+    DHParamsFail,
+
+    /// The server's nonce has changed during the key exchange.
+    InvalidServerNonce {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+
+    /// The server's `encrypted_data` is not correctly padded.
+    EncryptedResponseNotPadded {
+        /// The non-padded length of the response.
+        len: usize,
+    },
+
+    /// An error occured while trying to read the DH inner data.
+    InvalidDhInnerData {
+        /// The inner error that occured when reading the data.
+        error: tl::errors::DeserializeError,
+    },
+
+    /// Some parameter (`g`, `g_a` or `g_b`) was out of range.
+    GParameterOutOfRange {
+        value: BigUint,
+        low: BigUint,
+        high: BigUint,
+    },
+
+    // The generation of Diffie-Hellman parameters is to be retried.
+    DHGenRetry,
+
+    // The generation of Diffie-Hellman parameters failed.
+    DHGenFail,
+
+    /// The plaintext answer hash did not match.
+    InvalidAnswerHash {
+        /// The unexpected hash that we got.
+        got: [u8; 20],
+
+        /// The expected hash.
+        expected: [u8; 20],
+    },
+
+    // The new nonce hash did not match.
+    InvalidNewNonceHash {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+}
+
+impl Error for AuthKeyGenError {}
+
+impl fmt::Display for AuthKeyGenError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidResponse { error } => write!(f, "invalid server response: {}", error),
+            Self::InvalidNonce { got, expected } => {
+                write!(f, "invalid nonce: got {:?}, expected {:?}", got, expected)
+            }
+            Self::InvalidPQSize { size } => write!(f, "invalid pq size {}", size),
+            Self::UnknownFingerprints { fingerprints } => {
+                write!(f, "all server fingerprints are unknown: {:?}", fingerprints)
+            }
+            Self::DHParamsFail => write!(f, "the generation of DH parameters by the server failed"),
+            Self::InvalidServerNonce { got, expected } => write!(
+                f,
+                "invalid server nonce: got {:?}, expected {:?}",
+                got, expected
+            ),
+            Self::EncryptedResponseNotPadded { len } => write!(
+                f,
+                "the encrypted server response was {} bytes long, which is not correctly padded",
+                len
+            ),
+            Self::InvalidDhInnerData { error } => {
+                write!(f, "could not deserialize DH inner data: {}", error)
+            }
+            Self::GParameterOutOfRange { low, high, value } => write!(
+                f,
+                "the parameter g = {} was not in the range {}..{}",
+                value, low, high
+            ),
+            Self::DHGenRetry => write!(f, "the generation of DH parameters should be retried"),
+            Self::DHGenFail => write!(f, "the generation of DH parameters failed"),
+            Self::InvalidAnswerHash { got, expected } => write!(
+                f,
+                "invalid answer hash: got {:?}, expected {:?}",
+                got, expected
+            ),
+            Self::InvalidNewNonceHash { got, expected } => write!(
+                f,
+                "invalid new nonce hash: got {:?}, expected {:?}",
+                got, expected
+            ),
+        }
+    }
+}
+
+impl From<tl::errors::DeserializeError> for AuthKeyGenError {
+    fn from(error: tl::errors::DeserializeError) -> Self {
+        Self::InvalidResponse { error }
     }
 }
 

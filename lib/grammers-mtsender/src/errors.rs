@@ -5,13 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_mtproto::errors::{AuthKeyGenError, DeserializeError, RpcError};
+use grammers_tl_types as tl;
 use std::error::Error;
 use std::fmt;
 use std::io;
-
-use grammers_mtproto::authentication::AuthKeyGenError;
-use grammers_mtproto::errors::{DeserializeError, RpcError};
-use grammers_tl_types as tl;
 
 /// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
