@@ -51,7 +51,7 @@ impl Serializable for Message {
         self.msg_id.serialize(buf);
         self.seq_no.serialize(buf);
         (self.body.len() as i32).serialize(buf);
-        buf.write_all(&self.body);
+        buf.extend(&self.body);
     }
 }
 
