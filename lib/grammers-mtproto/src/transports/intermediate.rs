@@ -106,7 +106,7 @@ mod tests {
 
     #[test]
     fn check_magic() {
-        let (mut encoder, _) = intermediate_transport();
+        let (mut encoder, _) = TransportIntermediate::instance();
         let mut output = [0, 0, 0, 0];
         assert_eq!(encoder.write_magic(&mut output), Ok(4));
         assert_eq!(output, [0xee, 0xee, 0xee, 0xee]);
@@ -115,7 +115,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn check_non_padded_encoding() {
-        let (mut encoder, _) = intermediate_transport();
+        let (mut encoder, _) = TransportIntermediate::instance();
         let input = get_data(7);
         let mut output = vec![0; 7 + encoder.max_overhead()];
         drop(encoder.write_into(&input, &mut output));
@@ -123,7 +123,7 @@ mod tests {
 
     #[test]
     fn check_encoding() {
-        let (mut encoder, _) = intermediate_transport();
+        let (mut encoder, _) = TransportIntermediate::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
         assert_eq!(encoder.write_into(&input, &mut output), Ok(132));
@@ -134,7 +134,7 @@ mod tests {
 
     #[test]
     fn check_encoding_small_buffer() {
-        let (mut encoder, _) = intermediate_transport();
+        let (mut encoder, _) = TransportIntermediate::instance();
         let input = get_data(128);
         let mut output = vec![0; 8];
         assert_eq!(encoder.write_into(&input, &mut output), Err(132));
@@ -142,7 +142,7 @@ mod tests {
 
     #[test]
     fn check_decoding() {
-        let (mut encoder, mut decoder) = intermediate_transport();
+        let (mut encoder, mut decoder) = TransportIntermediate::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
         encoder.write_into(&input, &mut output).unwrap();
@@ -151,7 +151,7 @@ mod tests {
 
     #[test]
     fn check_decoding_small_buffer() {
-        let (_, mut decoder) = intermediate_transport();
+        let (_, mut decoder) = TransportIntermediate::instance();
         let input = get_data(3);
         assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(4)));
     }

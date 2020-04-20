@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn check_magic() {
-        let (mut encoder, _) = full_transport();
+        let (mut encoder, _) = TransportFull::instance();
         let mut output = [];
         assert_eq!(encoder.write_magic(&mut output), Ok(0));
     }
@@ -161,7 +161,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn check_non_padded_encoding() {
-        let (mut encoder, _) = full_transport();
+        let (mut encoder, _) = TransportFull::instance();
         let input = get_data(7);
         let mut output = vec![0; 7 + encoder.max_overhead()];
         drop(encoder.write_into(&input, &mut output));
@@ -169,7 +169,7 @@ mod tests {
 
     #[test]
     fn check_encoding() {
-        let (mut encoder, _) = full_transport();
+        let (mut encoder, _) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
         assert_eq!(encoder.write_into(&input, &mut output), Ok(140));
@@ -182,7 +182,7 @@ mod tests {
 
     #[test]
     fn check_repeated_encoding() {
-        let (mut encoder, _) = full_transport();
+        let (mut encoder, _) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
         assert!(encoder.write_into(&input, &mut output).is_ok());
@@ -196,7 +196,7 @@ mod tests {
 
     #[test]
     fn check_encoding_small_buffer() {
-        let (mut encoder, _) = full_transport();
+        let (mut encoder, _) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 8];
         assert_eq!(encoder.write_into(&input, &mut output), Err(140));
@@ -204,7 +204,7 @@ mod tests {
 
     #[test]
     fn check_decoding() {
-        let (mut encoder, mut decoder) = full_transport();
+        let (mut encoder, mut decoder) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
         encoder.write_into(&input, &mut output).unwrap();
@@ -213,7 +213,7 @@ mod tests {
 
     #[test]
     fn check_repeating_decoding() {
-        let (mut encoder, mut decoder) = full_transport();
+        let (mut encoder, mut decoder) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
 
@@ -225,7 +225,7 @@ mod tests {
 
     #[test]
     fn check_bad_crc_decoding() {
-        let (mut encoder, mut decoder) = full_transport();
+        let (mut encoder, mut decoder) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
 
@@ -240,7 +240,7 @@ mod tests {
 
     #[test]
     fn check_bad_repeating_decoding() {
-        let (mut encoder, mut decoder) = full_transport();
+        let (mut encoder, mut decoder) = TransportFull::instance();
         let input = get_data(128);
         let mut output = vec![0; 128 + encoder.max_overhead()];
 
@@ -254,7 +254,7 @@ mod tests {
 
     #[test]
     fn check_decoding_small_buffer() {
-        let (_, mut decoder) = full_transport();
+        let (_, mut decoder) = TransportFull::instance();
         let input = get_data(3);
         assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(4)));
     }
