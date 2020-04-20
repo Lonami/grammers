@@ -10,7 +10,6 @@
 
 use std::error::Error;
 use std::fmt;
-use std::io;
 
 use grammers_crypto::DecryptionError;
 use grammers_tl_types as tl;
@@ -51,7 +50,7 @@ pub enum DeserializeError {
     DecompressionFailed,
 
     /// Reading from the buffer failed in some way.
-    BufferError(io::Error),
+    BufferError(tl::errors::DeserializeError),
 
     /// Attempting to decrypt the message failed in some way.
     DecryptionError(DecryptionError),
@@ -90,8 +89,8 @@ impl fmt::Display for DeserializeError {
     }
 }
 
-impl From<io::Error> for DeserializeError {
-    fn from(error: io::Error) -> Self {
+impl From<tl::errors::DeserializeError> for DeserializeError {
+    fn from(error: tl::errors::DeserializeError) -> Self {
         Self::BufferError(error)
     }
 }
