@@ -39,7 +39,6 @@ pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 /// [`Mtp::build`]: fn.mtp.build.html
 pub struct MtpBuilder {
     compression_threshold: Option<usize>,
-    auth_key: Option<AuthKey>,
 }
 
 /// An implementation of the [Mobile Transport Protocol] for plaintext
@@ -167,7 +166,7 @@ impl PlainMtp {
 /// [`poll_response`]: #method.poll_response
 pub struct Mtp {
     /// The authorization key to use to encrypt payload.
-    auth_key: Option<AuthKey>,
+    auth_key: AuthKey,
 
     /// The time offset from the server's time, in seconds.
     time_offset: i32,
@@ -222,7 +221,6 @@ impl MtpBuilder {
     fn new() -> Self {
         MtpBuilder {
             compression_threshold: DEFAULT_COMPRESSION_THRESHOLD,
-            auth_key: None,
         }
     }
 
@@ -232,27 +230,12 @@ impl MtpBuilder {
         self
     }
 
-    /// Sets the authorization key to be used. Otherwise, no authorization
-    /// key will be present, and a new one will have to be generated before
-    /// being able to create encrypted messages.
-    pub fn auth_key(mut self, auth_key: AuthKey) -> Self {
-        self.auth_key = Some(auth_key);
-        self
-    }
-
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn finish(self) -> Mtp {
-        let mut result = Mtp::new();
+    pub fn finish(self, auth_key: AuthKey) -> Mtp {
+        let mut result = Mtp::new(auth_key);
         result.compression_threshold = self.compression_threshold;
-        result.auth_key = self.auth_key;
         result
-    }
-}
-
-impl Default for Mtp {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -261,7 +244,7 @@ impl Mtp {
     // ========================================
 
     /// Creates a new instance with default settings.
-    pub fn new() -> Self {
+    pub fn new(auth_key: AuthKey) -> Self {
         let client_id = {
             let mut buffer = [0u8; 8];
             getrandom(&mut buffer).expect("failed to generate a secure client_id");
@@ -269,7 +252,7 @@ impl Mtp {
         };
 
         Mtp {
-            auth_key: None,
+            auth_key,
             time_offset: 0,
             salt: 0,
             client_id,
@@ -290,20 +273,6 @@ impl Mtp {
 
     // State management
     // ========================================
-
-    /// Sets a generated authorization key as the current one, and also
-    /// updates the time offset to be correct.
-    ///
-    /// An authorization key must be set before calling the
-    /// [`serialize_encrypted_messages`] and [`process_encrypted_response`]
-    /// methods, or they will return a missing key error.
-    ///
-    /// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
-    /// [`process_encrypted_response`]: #method.process_encrypted_response
-    pub fn set_auth_key(&mut self, auth_key: AuthKey, time_offset: i32) {
-        self.auth_key = Some(auth_key);
-        self.time_offset = time_offset;
-    }
 
     /// Correct our time offset based on a known valid message ID.
     fn correct_time_offset(&mut self, msg_id: i64) {
@@ -509,17 +478,9 @@ impl Mtp {
     ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
     pub fn serialize_encrypted_messages(&mut self) -> Result<Option<Vec<u8>>, SerializeError> {
-        // Attempting to encrypt something with an authorization key full of
-        // zeros will cause Telegram to reply with -404, presumably for no
-        // authorization key.
-        if self.auth_key.is_none() {
-            return Err(SerializeError::MissingAuthKey);
-        }
-
-        // TODO try to avoid unwrap even though it's safe
         Ok(self
             .pop_queued_messages()
-            .map(|payload| encrypt_data_v2(&payload, self.auth_key.as_ref().unwrap())))
+            .map(|payload| encrypt_data_v2(&payload, &self.auth_key)))
     }
 
     /// Processes an encrypted response from the server. If the response
@@ -531,14 +492,9 @@ impl Mtp {
         &mut self,
         ciphertext: &[u8],
     ) -> Result<(), DeserializeError> {
-        let auth_key = match &self.auth_key {
-            Some(x) => x,
-            None => return Err(DeserializeError::MissingAuthKey),
-        };
-
         utils::check_message_buffer(ciphertext)?;
 
-        let plaintext = decrypt_data_v2(ciphertext, auth_key)?;
+        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
         let mut buffer = io::Cursor::new(plaintext);
 
         let _salt = i64::deserialize(&mut buffer)?;
@@ -1396,11 +1352,15 @@ mod tests {
     // msg_container#73f1f8dc messages:vector<message> = MessageContainer;
     const MSG_CONTAINER_HEADER: [u8; 4] = [0xdc, 0xf8, 0xf1, 0x73];
 
+    fn auth_key() -> AuthKey {
+        AuthKey::from_bytes([0; 256])
+    }
+
     #[test]
     fn ensure_buffer_used_exact_capacity() {
         {
             // Single body (no container)
-            let mut mtproto = Mtp::build().compression_threshold(None).finish();
+            let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
             mtproto
                 .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1410,7 +1370,7 @@ mod tests {
         }
         {
             // Multiple bodies (using a container)
-            let mut mtproto = Mtp::build().compression_threshold(None).finish();
+            let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
             mtproto
                 .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1436,7 +1396,7 @@ mod tests {
 
     #[test]
     fn ensure_serialization_has_salt_client_id() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1455,7 +1415,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_single_serialization() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1467,7 +1427,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_multi_serialization() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         mtproto
             .enqueue_request(vec![b'H', b'e', b'y', b'!'])
@@ -1499,7 +1459,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_single_large_serialization() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
         mtproto.enqueue_request(data.clone()).unwrap();
@@ -1509,7 +1469,7 @@ mod tests {
 
     #[test]
     fn ensure_correct_multi_large_serialization() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
         mtproto.enqueue_request(data.clone()).unwrap();
@@ -1527,7 +1487,7 @@ mod tests {
 
     #[test]
     fn ensure_queue_is_clear() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         assert!(mtproto.pop_queued_messages().is_none());
         mtproto
@@ -1540,7 +1500,7 @@ mod tests {
 
     #[test]
     fn ensure_large_payload_errors() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         assert!(match mtproto.enqueue_request(vec![0; 2 * 1024 * 1024]) {
             Err(SerializeError::PayloadTooLarge) => true,
@@ -1563,7 +1523,7 @@ mod tests {
     #[test]
     #[should_panic]
     fn ensure_non_padded_payload_panics() {
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
 
         drop(mtproto.enqueue_request(vec![1, 2, 3]));
     }
@@ -1571,7 +1531,7 @@ mod tests {
     #[test]
     fn ensure_no_compression_is_honored() {
         // A large vector of null bytes should compress
-        let mut mtproto = Mtp::build().compression_threshold(None).finish();
+        let mut mtproto = Mtp::build().compression_threshold(None).finish(auth_key());
         mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
         let buffer = mtproto.pop_queued_messages().unwrap();
         assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
@@ -1584,7 +1544,7 @@ mod tests {
             // High threshold not reached, should not compress
             let mut mtproto = Mtp::build()
                 .compression_threshold(Some(768 * 1024))
-                .finish();
+                .finish(auth_key());
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
@@ -1593,14 +1553,14 @@ mod tests {
             // Low threshold is exceeded, should compress
             let mut mtproto = Mtp::build()
                 .compression_threshold(Some(256 * 1024))
-                .finish();
+                .finish(auth_key());
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
         {
             // The default should compress
-            let mut mtproto = Mtp::new();
+            let mut mtproto = Mtp::new(auth_key());
             mtproto.enqueue_request(vec![0; 512 * 1024]).unwrap();
             let buffer = mtproto.pop_queued_messages().unwrap();
             assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
