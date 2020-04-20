@@ -80,6 +80,7 @@ mod serializable;
 
 pub use deserializable::Deserializable;
 pub use generated::{enums, functions, types, LAYER};
+pub(crate) use serializable::Buffer;
 pub use serializable::Serializable;
 
 /// This struct represents the concrete type of a vector, that is,

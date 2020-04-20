@@ -5,7 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::io::{Result, Write};
+
+/// The problem with being generic over `std::io::Write` is that it's
+/// fallible, but in practice, we're always going to serialize in-memory,
+/// so instead we just use a `Vec<u8>` as our buffer.
+pub(crate) type Buffer<'a> = &'a mut Vec<u8>;
 
 /// This trait allows for concrete instances to be serialized into
 /// binary data as specified by the [Binary Data Serialization].
@@ -13,15 +17,14 @@ use std::io::{Result, Write};
 /// [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
 pub trait Serializable {
     /// Serializes the instance into the given buffer.
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()>;
+    fn serialize(&self, buf: Buffer);
 
     /// Convenience function to serialize the object into a new buffer
     /// and return its bytes. It is more efficient to reuse a existing
     /// buffer with [`serialize`].
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
-        // Safe to unwrap because `impl Write for Vec<u8>` never fails.
-        self.serialize(&mut buffer).unwrap();
+        self.serialize(&mut buffer);
         buffer
     }
 }
@@ -41,7 +44,7 @@ impl Serializable for bool {
     /// assert_eq!(false.to_bytes(), [0x37, 0x97, 0x79, 0xbc]);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+    fn serialize(&self, buf: Buffer) {
         if *self { 0x997275b5u32 } else { 0xbc799737u32 }.serialize(buf)
     }
 }
@@ -63,8 +66,8 @@ impl Serializable for i32 {
     /// assert_eq!(i32::max_value().to_bytes(), [0xff, 0xff, 0xff, 0x7f]);
     /// assert_eq!(i32::min_value().to_bytes(), [0x00, 0x00, 0x00, 0x80]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(&self.to_le_bytes()).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(&self.to_le_bytes())
     }
 }
 
@@ -84,8 +87,8 @@ impl Serializable for u32 {
     /// assert_eq!(u32::max_value().to_bytes(), [0xff, 0xff, 0xff, 0xff]);
     /// assert_eq!(u32::min_value().to_bytes(), [0x00, 0x00, 0x00, 0x00]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(&self.to_le_bytes()).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(&self.to_le_bytes())
     }
 }
 
@@ -106,8 +109,8 @@ impl Serializable for i64 {
     /// assert_eq!(i64::max_value().to_bytes(), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
     /// assert_eq!(i64::min_value().to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x80]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(&self.to_le_bytes()).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(&self.to_le_bytes())
     }
 }
 
@@ -125,8 +128,8 @@ impl Serializable for [u8; 16] {
     ///
     /// assert_eq!(data.to_bytes(), data);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(self).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(self)
     }
 }
 
@@ -145,8 +148,8 @@ impl Serializable for [u8; 32] {
     ///
     /// assert_eq!(data.to_bytes(), data);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(self).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(self)
     }
 }
 
@@ -168,8 +171,8 @@ impl Serializable for f64 {
     /// assert_eq!(f64::INFINITY.to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0x7f]);
     /// assert_eq!(f64::NEG_INFINITY.to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0xff]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(&self.to_le_bytes()).map(drop)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(&self.to_le_bytes())
     }
 }
 
@@ -189,13 +192,12 @@ impl<T: Serializable> Serializable for Vec<T> {
     ///            [0x15, 0xc4, 0xb5, 0x1c, 0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        0x1cb5c415u32.serialize(buf)?;
-        (self.len() as i32).serialize(buf)?;
+    fn serialize(&self, buf: Buffer) {
+        0x1cb5c415u32.serialize(buf);
+        (self.len() as i32).serialize(buf);
         for x in self {
-            x.serialize(buf)?;
+            x.serialize(buf);
         }
-        Ok(())
     }
 }
 
@@ -213,19 +215,18 @@ impl<T: Serializable> Serializable for crate::RawVec<T> {
     /// assert_eq!(RawVec(Vec::<i32>::new()).to_bytes(), [0x0, 0x0, 0x0, 0x0]);
     /// assert_eq!(RawVec(vec![0x7f_i32]).to_bytes(), [0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        (self.0.len() as i32).serialize(buf)?;
+    fn serialize(&self, buf: Buffer) {
+        (self.0.len() as i32).serialize(buf);
         for x in self.0.iter() {
-            x.serialize(buf)?;
+            x.serialize(buf);
         }
-        Ok(())
     }
 }
 
 impl Serializable for crate::Blob {
     /// Serializes a blob by doing no parsing or interpretation.
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
-        buf.write_all(&self.0)
+    fn serialize(&self, buf: Buffer) {
+        buf.extend(&self.0)
     }
 }
 
@@ -266,7 +267,7 @@ impl Serializable for String {
     ///      &[0x00, 0x00, 0x00]
     /// );
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+    fn serialize(&self, buf: Buffer) {
         self.as_bytes().serialize(buf)
     }
 }
@@ -285,7 +286,7 @@ impl Serializable for Vec<u8> {
     /// assert_eq!(Vec::<u8>::new().to_bytes(), &[0x00, 0x00, 0x00, 0x00]);
     /// assert_eq!(vec![0x7f_u8].to_bytes(), &[0x01, 0x7f, 0x00, 0x00]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+    fn serialize(&self, buf: Buffer) {
         (&self[..]).serialize(buf)
     }
 }
@@ -302,25 +303,24 @@ impl Serializable for &[u8] {
     ///
     /// assert_eq!((&[0x7f_u8][..]).to_bytes(), &[0x01, 0x7f, 0x00, 0x00]);
     /// ```
-    fn serialize<B: Write>(&self, buf: &mut B) -> Result<()> {
+    fn serialize(&self, buf: Buffer) {
         let len = if self.len() <= 253 {
-            buf.write_all(&[self.len() as u8])?;
+            buf.extend(&[self.len() as u8]);
             self.len() + 1
         } else {
-            buf.write_all(&[
+            buf.extend(&[
                 254,
                 (self.len() & 0xff) as u8,
                 ((self.len() >> 8) & 0xff) as u8,
                 ((self.len() >> 16) & 0xff) as u8,
-            ])?;
+            ]);
             self.len()
         };
         let padding = (4 - (len % 4)) % 4;
 
-        buf.write_all(self)?;
+        buf.extend(*self);
         for _ in 0..padding {
-            buf.write_all(&[0])?;
+            buf.push(0);
         }
-        Ok(())
     }
 }

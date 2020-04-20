@@ -66,11 +66,11 @@ fn write_enum<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
+///     fn serialize(&self, buf: crate::Buffer) {
 ///         use crate::Identifiable;
 ///         match self {
 ///             Self::Variant(x) => {
-///                 crate::types::Name::CONSTRUCTOR_ID.serialize(buf)?;
+///                 crate::types::Name::CONSTRUCTOR_ID.serialize(buf);
 ///                 x.serialize(buf)
 ///             },
 ///         }
@@ -91,7 +91,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {{",
+        "{}    fn serialize(&self, buf: crate::Buffer) {{",
         indent
     )?;
 
@@ -106,7 +106,7 @@ fn write_serializable<W: Write>(
         )?;
         writeln!(
             file,
-            "{}                {}::CONSTRUCTOR_ID.serialize(buf)?;",
+            "{}                {}::CONSTRUCTOR_ID.serialize(buf);",
             indent,
             rustifier::definitions::qual_name(d)
         )?;

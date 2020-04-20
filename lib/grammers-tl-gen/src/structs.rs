@@ -93,9 +93,8 @@ fn write_identifiable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize<B: std::io::Write>(&self, buf: &mut B) -> std::io::Result<()> {
-///         self.field.serialize(buf)?;
-///         Ok(())
+///     fn serialize(&self, buf: crate::Buffer) {
+///         self.field.serialize(buf);
 ///     }
 /// }
 /// ```
@@ -113,7 +112,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize<B: std::io::Write>(&self, {}buf: &mut B) -> std::io::Result<()> {{",
+        "{}    fn serialize(&self, {}buf: crate::Buffer) {{",
         indent,
         if def.category == Category::Types && def.params.is_empty() {
             "_"
@@ -131,7 +130,7 @@ fn write_serializable<W: Write>(
             writeln!(file, "{}        use crate::Identifiable;", indent)?;
             writeln!(
                 file,
-                "{}        Self::CONSTRUCTOR_ID.serialize(buf)?;",
+                "{}        Self::CONSTRUCTOR_ID.serialize(buf);",
                 indent
             )?;
         }
@@ -167,7 +166,7 @@ fn write_serializable<W: Write>(
                     }
                 }
 
-                writeln!(file, ").serialize(buf)?;")?;
+                writeln!(file, ").serialize(buf);")?;
             }
             ParameterType::Normal { ty, flag } => {
                 // The `true` bare type is a bit special: it's empty so there
@@ -180,12 +179,12 @@ fn write_serializable<W: Write>(
                             "if let Some(ref x) = self.{} {{ ",
                             rustifier::parameters::attr_name(param)
                         )?;
-                        writeln!(file, "{}            x.serialize(buf)?;", indent)?;
+                        writeln!(file, "{}            x.serialize(buf);", indent)?;
                         writeln!(file, "{}        }}", indent)?;
                     } else {
                         writeln!(
                             file,
-                            "self.{}.serialize(buf)?;",
+                            "self.{}.serialize(buf);",
                             rustifier::parameters::attr_name(param)
                         )?;
                     }
@@ -194,7 +193,6 @@ fn write_serializable<W: Write>(
         }
     }
 
-    writeln!(file, "{}        Ok(())", indent)?;
     writeln!(file, "{}    }}", indent)?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
