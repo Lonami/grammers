@@ -90,8 +90,6 @@ impl Encoder for FullEncoder {
 
 impl Decoder for FullDecoder {
     fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
-        // TODO the input and output len can probably be abstracted away
-        //      ("minimal input" and "calculate output len")
         // Need 4 bytes for the initial length
         if input.len() < 4 {
             return Err(TransportError::MissingBytes(4));
