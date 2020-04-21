@@ -59,9 +59,12 @@ impl Deserializable for Message {
     fn deserialize(buf: &mut Cursor) -> Result<Self, DeserializeError> {
         let msg_id = i64::deserialize(buf)?;
         let seq_no = i32::deserialize(buf)?;
+
         let len = i32::deserialize(buf)?;
-        // TODO check that this len is not ridiculously long
-        let mut body = vec![0; len as usize];
+        assert!(len >= 0);
+        let len = len as usize;
+        assert!(len < MessageContainer::MAXIMUM_SIZE);
+        let mut body = vec![0; len];
         buf.read_exact(&mut body)?;
 
         Ok(Message {
@@ -151,8 +154,9 @@ impl Deserializable for MessageContainer {
         }
 
         let len = i32::deserialize(buf)?;
-        // TODO check that this len is not ridiculously long
-        let mut messages = Vec::with_capacity(len as usize);
+        assert!(len >= 0);
+        let len = len as usize;
+        let mut messages = Vec::with_capacity(len.min(Self::MAXIMUM_LENGTH));
         for _ in 0..len {
             messages.push(Message::deserialize(buf)?);
         }
