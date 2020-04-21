@@ -18,7 +18,7 @@ use grammers_crypto::AuthKey;
 use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::transports::{Decoder, Encoder, Transport};
 use grammers_mtproto::{authentication, MsgId, Mtp, PlainMtp};
-use grammers_tl_types::{Deserializable, RemoteCall};
+use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{error, warn};
 use std::collections::BTreeMap;
 use std::io;
@@ -42,6 +42,8 @@ struct Request {
 
 type Response = Result<Vec<u8>, RequestError>;
 
+// TODO perhaps this should be a Sink of Request?
+//      and we would also have a Stream of Updates
 pub struct MtpSender {
     request_channel: mpsc::Sender<Request>,
 }
@@ -108,6 +110,7 @@ struct PlainReceiver<D: Decoder, R: AsyncRead + Unpin> {
 struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
     plain: PlainReceiver<D, R>,
     protocol: Arc<Mutex<Mtp>>,
+    update_channel: mpsc::Sender<tl::enums::Updates>,
     response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
 }
 
@@ -152,9 +155,16 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
                 break;
             }
 
-            // TODO dispatch this somehow
             while let Some(update) = protocol_guard.poll_update() {
-                eprintln!("Received update data: {:?}", update);
+                match tl::enums::Updates::from_bytes(&update) {
+                    Ok(update) => {
+                        if let Err(err) = self.update_channel.send(update).await {
+                            assert!(err.is_disconnected());
+                            // If the user doesn't want more updates that's fine
+                        }
+                    }
+                    Err(err) => error!("polled an update that was not one: {}", err),
+                }
             }
 
             // See if there are responses to prior requests
@@ -236,7 +246,14 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
     (in_stream, out_stream): (R, W),
     auth_key: Option<AuthKey>,
-) -> Result<(MtpSender, MtpHandler<T, R, W>), AuthorizationError> {
+) -> Result<
+    (
+        MtpSender,
+        mpsc::Receiver<tl::enums::Updates>,
+        MtpHandler<T, R, W>,
+    ),
+    AuthorizationError,
+> {
     let (encoder, decoder) = T::instance();
 
     let mut sender = PlainSender {
@@ -282,6 +299,7 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
 
     let protocol = Arc::new(Mutex::new(Mtp::new(auth_key)));
     let (request_sender, request_receiver) = mpsc::channel(100);
+    let (update_sender, update_receiver) = mpsc::channel(100);
     let response_map = Arc::new(Mutex::new(BTreeMap::new()));
 
     let sender = Sender {
@@ -293,6 +311,7 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
 
     let receiver = Receiver {
         plain: receiver,
+        update_channel: update_sender,
         protocol: Arc::clone(&protocol),
         response_map,
     };
@@ -301,6 +320,7 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
         MtpSender {
             request_channel: request_sender,
         },
+        update_receiver,
         MtpHandler { sender, receiver },
     ))
 }
@@ -311,6 +331,7 @@ pub async fn connect_mtp<A: std::net::ToSocketAddrs>(
 ) -> Result<
     (
         MtpSender,
+        mpsc::Receiver<tl::enums::Updates>,
         MtpHandler<impl Transport, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
     ),
     AuthorizationError,

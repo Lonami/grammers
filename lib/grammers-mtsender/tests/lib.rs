@@ -27,7 +27,7 @@ fn test_invoke_encrypted_method() {
         // Creating a sender without explicitly providing an input auth_key
         // will cause it to generate a new one, because they are otherwise
         // not usable. We're also making sure that works here.
-        let (mut sender, handler) =
+        let (mut sender, _updates, handler) =
             create_mtp::<TransportFull, _, _>((in_stream, out_stream), None)
                 .await
                 .unwrap();
