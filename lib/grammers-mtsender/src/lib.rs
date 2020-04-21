@@ -270,9 +270,9 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
 
     let mut mtp = PlainMtp::new();
 
-    let auth_key = if let Some(auth_key) = auth_key {
+    let protocol = if let Some(auth_key) = auth_key {
         eprintln!("Using input auth_key");
-        auth_key
+        Mtp::new(auth_key)
     } else {
         eprintln!("No input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
@@ -291,13 +291,12 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
         let response = receiver.receive().await?;
         let response = mtp.deserialize_plain_message(&response)?;
 
-        // TODO use time_offset
-        let (auth_key, _time_offset) = authentication::create_key(data, response)?;
+        let (auth_key, time_offset) = authentication::create_key(data, response)?;
         eprintln!("New auth_key generation success");
-        auth_key
+        Mtp::build().time_offset(time_offset).finish(auth_key)
     };
 
-    let protocol = Arc::new(Mutex::new(Mtp::new(auth_key)));
+    let protocol = Arc::new(Mutex::new(protocol));
     let (request_sender, request_receiver) = mpsc::channel(100);
     let (update_sender, update_receiver) = mpsc::channel(100);
     let response_map = Arc::new(Mutex::new(BTreeMap::new()));

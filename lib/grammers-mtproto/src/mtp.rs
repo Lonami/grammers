@@ -20,6 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// [`Mtp`]: struct.mtp.html
 /// [`Mtp::build`]: fn.mtp.build.html
 pub struct MtpBuilder {
+    time_offset: i32,
     compression_threshold: Option<usize>,
 }
 
@@ -99,8 +100,15 @@ pub struct Mtp {
 impl MtpBuilder {
     fn new() -> Self {
         MtpBuilder {
+            time_offset: 0,
             compression_threshold: crate::DEFAULT_COMPRESSION_THRESHOLD,
         }
+    }
+
+    /// Configures the time offset to Telegram servers.
+    pub fn time_offset(mut self, offset: i32) -> Self {
+        self.time_offset = offset;
+        self
     }
 
     /// Configures the compression threshold for outgoing messages.
