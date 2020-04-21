@@ -19,7 +19,7 @@ use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::transports::{Decoder, Encoder, Transport};
 use grammers_mtproto::{authentication, MsgId, Mtp, PlainMtp};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{error, warn};
+use log::{error, info, warn};
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;
@@ -175,7 +175,7 @@ impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
                     // they no longer need this result so it's okay to fail to send it.
                     drop(channel.send(response));
                 } else {
-                    eprintln!(
+                    info!(
                         "Got encrypted response for unknown message: {:?}",
                         response_id
                     );
@@ -271,10 +271,10 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
     let mut mtp = PlainMtp::new();
 
     let protocol = if let Some(auth_key) = auth_key {
-        eprintln!("Using input auth_key");
+        info!("using input auth_key");
         Mtp::new(auth_key)
     } else {
-        eprintln!("No input auth_key; generating new one");
+        info!("no input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
         let (request, data) = authentication::step1()?;
         sender.send(&mtp.serialize_plain_message(&request)).await?;
@@ -292,7 +292,7 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
         let response = mtp.deserialize_plain_message(&response)?;
 
         let (auth_key, time_offset) = authentication::create_key(data, response)?;
-        eprintln!("New auth_key generation success");
+        info!("new auth_key generation success");
         Mtp::build().time_offset(time_offset).finish(auth_key)
     };
 
