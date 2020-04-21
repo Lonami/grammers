@@ -11,24 +11,23 @@
 //! # Examples
 //!
 //! ```no_run
-//! use grammers_crypto::auth_key;
-//! use grammers_crypto::auth_key::generation::AuthKeyGenError;
+//! use grammers_mtproto::{authentication, errors::AuthKeyGenError};
 //!
 //! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>, AuthKeyGenError> {
 //!     unimplemented!()
 //! }
 //!
 //! fn main() -> Result<(), AuthKeyGenError> {
-//!     let (request, data) = auth_key::generation::step1()?;
+//!     let (request, data) = authentication::step1()?;
 //!     let response = send_data_to_server(&request)?;
 //!
-//!     let (request, data) = auth_key::generation::step2(data, response)?;
+//!     let (request, data) = authentication::step2(data, &response)?;
 //!     let response = send_data_to_server(&request)?;
 //!
-//!     let (request, data) = auth_key::generation::step3(data, response)?;
+//!     let (request, data) = authentication::step3(data, &response)?;
 //!     let response = send_data_to_server(&request)?;
 //!
-//!     let (auth_key, time_offset) = auth_key::generation::create_key(data, response)?;
+//!     let (auth_key, time_offset) = authentication::create_key(data, &response)?;
 //!     // Now you have a secure `auth_key` to send encrypted messages to server.
 //!     Ok(())
 //! }
@@ -665,18 +664,18 @@ mod tests {
 
         let (request, data) = do_step1(&step1_random)?;
         assert_eq!(request, step1_request.to_vec());
-        let response = step1_response.to_vec();
+        let response = step1_response;
 
-        let (request, data) = do_step2(data, response, &step2_random)?;
+        let (request, data) = do_step2(data, &response, &step2_random)?;
         assert_eq!(request, step2_request.to_vec());
-        let response = step2_response.to_vec();
+        let response = step2_response;
 
         let step3_now = 1580236449;
-        let (request, data) = do_step3(data, response, &step3_random, step3_now)?;
+        let (request, data) = do_step3(data, &response, &step3_random, step3_now)?;
         assert_eq!(request, step3_request.to_vec());
-        let response = step3_response.to_vec();
+        let response = step3_response;
 
-        let (auth_key, time_offset) = create_key(data, response)?;
+        let (auth_key, time_offset) = create_key(data, &response)?;
         assert_eq!(auth_key, AuthKey::from_bytes(expected_auth_key));
         assert_eq!(time_offset, 0);
 
