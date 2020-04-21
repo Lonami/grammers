@@ -326,16 +326,22 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
 }
 
 #[cfg(feature = "async-std")]
-pub async fn connect_mtp<A: std::net::ToSocketAddrs>(
+pub async fn connect_mtp<T: Transport, A: async_std::net::ToSocketAddrs>(
     addr: A,
 ) -> Result<
     (
         MtpSender,
         mpsc::Receiver<tl::enums::Updates>,
-        MtpHandler<impl Transport, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
+        MtpHandler<T, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
     ),
     AuthorizationError,
 > {
     let stream = async_std::net::TcpStream::connect(addr).await?;
-    create_mtp(stream, None).await
+    let in_stream = stream.clone();
+    let out_stream = stream;
+
+    // Creating a sender without explicitly providing an input auth_key
+    // will cause it to generate a new one, because they are otherwise
+    // not usable. We're also making sure that works here.
+    create_mtp((in_stream, out_stream), None).await
 }
