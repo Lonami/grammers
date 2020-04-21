@@ -159,8 +159,13 @@ impl Error for DecryptionError {}
 
 impl fmt::Display for DecryptionError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO better display
-        write!(f, "{:?}", self)
+        use DecryptionError::*;
+
+        match *self {
+            InvalidBuffer => write!(f, "invalid ciphertext buffer length"),
+            AuthKeyMismatch => write!(f, "server authkey mismatches with ours"),
+            MessageKeyMismatch => write!(f, "server msgkey mismatches with ours"),
+        }
     }
 }
 
