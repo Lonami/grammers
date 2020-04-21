@@ -68,26 +68,21 @@ impl Encoder for AbridgedEncoder {
     fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
         assert_eq!(input.len() % 4, 0);
 
-        let output_len;
         let len = input.len() / 4;
-        if len < 127 {
-            output_len = input.len() + 1;
-            if output.len() < output_len {
-                return Err(output_len);
-            }
-
-            output[0] = len as u8;
-        } else {
-            output_len = input.len() + 4;
-            if output.len() < output_len {
-                return Err(output_len);
-            }
-
-            output[0] = 0x7f;
-            output[1..4].copy_from_slice(&len.to_le_bytes()[..3]);
+        let output_len = input.len() + (if len < 127 { 1 } else { 4 });
+        if output.len() < output_len {
+            return Err(output_len);
         }
 
-        output[output_len - input.len()..output_len].copy_from_slice(input);
+        if len < 127 {
+            output[0] = len as u8;
+            output[1..output_len].copy_from_slice(input);
+        } else {
+            output[0] = 0x7f;
+            output[1..4].copy_from_slice(&len.to_le_bytes()[..3]);
+            output[4..output_len].copy_from_slice(input);
+        }
+
         Ok(output_len)
     }
 }
