@@ -16,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 use async_std::net::TcpStream;
 use async_std::task::{self, JoinHandle};
 use grammers_mtproto::errors::RpcError;
+use grammers_mtproto::transports::{Transport, TransportFull};
 use grammers_mtsender::{create_mtp, MtpSender};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{MemorySession, Session};
@@ -128,8 +129,11 @@ impl Client {
     // TODO we should be created with some session as input
     pub async fn connect() -> Result<Self, AuthorizationError> {
         let stream = TcpStream::connect(DC_ADDRESSES[DEFAULT_DC_ID]).await?;
+        let in_stream = stream.clone();
+        let out_stream = stream;
 
-        let (mut sender, handler) = create_mtp(stream, None).await?;
+        let (sender, _updates, handler) =
+            create_mtp::<TransportFull, _, _>((in_stream, out_stream), None).await?;
         let handler = task::spawn(handler.run());
 
         // TODO user-provided api key
