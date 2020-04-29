@@ -246,9 +246,10 @@ impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
 }
 
 // TODO this needs a better name ("create mtp" is just "Mtp::new()")
+// TODO not a fan this replaces the auth_key in the option which will always be Some after
 pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
     (in_stream, out_stream): (R, W),
-    auth_key: Option<AuthKey>,
+    auth_key: &mut Option<AuthKey>,
 ) -> Result<
     (
         MtpSender,
@@ -275,7 +276,7 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
 
     let protocol = if let Some(auth_key) = auth_key {
         info!("using input auth_key");
-        Mtp::new(auth_key)
+        Mtp::new(auth_key.clone())
     } else {
         info!("no input auth_key; generating new one");
         // A sender is not usable without an authorization key; generate one
@@ -294,9 +295,11 @@ pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpi
         let response = receiver.receive().await?;
         let response = mtp.deserialize_plain_message(&response)?;
 
-        let (auth_key, time_offset) = authentication::create_key(data, response)?;
+        let (new_key, time_offset) = authentication::create_key(data, response)?;
+        *auth_key = Some(new_key.clone());
+
         info!("new auth_key generation success");
-        Mtp::build().time_offset(time_offset).finish(auth_key)
+        Mtp::build().time_offset(time_offset).finish(new_key)
     };
 
     let protocol = Arc::new(Mutex::new(protocol));

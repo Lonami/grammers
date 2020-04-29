@@ -12,3 +12,6 @@ repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = []
 edition = "2018"
+
+[dependencies]
+grammers-crypto = "0.1.0"

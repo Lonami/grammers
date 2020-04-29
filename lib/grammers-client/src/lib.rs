@@ -167,7 +167,7 @@ impl Client {
     ///
     /// If the session in the configuration did not have an authorization key, a new one
     /// will be created and the session will be saved with it.
-    pub async fn connect(config: Config) -> Result<Self, AuthorizationError> {
+    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         let addr = if let Some((_dc_id, addr)) = config.session.user_dc {
             addr
         } else {
@@ -179,8 +179,13 @@ impl Client {
         let in_stream = stream.clone();
         let out_stream = stream;
 
-        let (sender, _updates, handler) =
-            create_mtp::<TransportFull, _, _>((in_stream, out_stream), None).await?;
+        let (sender, _updates, handler) = create_mtp::<TransportFull, _, _>(
+            (in_stream, out_stream),
+            &mut config.session.auth_key,
+        )
+        .await?;
+
+        config.session.save()?;
         let handler = task::spawn(handler.run());
 
         let mut client = Client {

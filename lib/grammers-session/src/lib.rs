@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_crypto::auth_key::AuthKey;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Seek, Write};
 use std::net::SocketAddr;
@@ -49,7 +50,7 @@ fn hex_from_key(key: &[u8; 256]) -> String {
 pub struct Session {
     file: File,
     pub user_dc: Option<(i32, SocketAddr)>,
-    pub auth_key_data: Option<[u8; 256]>,
+    pub auth_key: Option<AuthKey>,
 }
 
 impl Session {
@@ -67,7 +68,7 @@ impl Session {
         Ok(Self {
             file: File::create(path)?,
             user_dc: None,
-            auth_key_data: None,
+            auth_key: None,
         })
     }
 
@@ -123,8 +124,8 @@ impl Session {
             None
         };
 
-        // auth_key_data
-        let auth_key_data = if let Some(Ok(line)) = lines.next() {
+        // auth_key
+        let auth_key = if let Some(Ok(line)) = lines.next() {
             key_from_hex(&line)
         } else {
             None
@@ -134,7 +135,7 @@ impl Session {
         Ok(Self {
             file: OpenOptions::new().write(true).open(path.as_ref())?,
             user_dc,
-            auth_key_data,
+            auth_key: auth_key.map(AuthKey::from_bytes),
         })
     }
 
@@ -151,8 +152,8 @@ impl Session {
             writeln!(self.file)?;
         }
 
-        if let Some(data) = self.auth_key_data {
-            writeln!(self.file, "{}", hex_from_key(&data))?;
+        if let Some(data) = &self.auth_key {
+            writeln!(self.file, "{}", hex_from_key(&data.to_bytes()))?;
         } else {
             writeln!(self.file)?;
         }
