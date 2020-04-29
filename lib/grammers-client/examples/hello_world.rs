@@ -10,11 +10,12 @@
 //! cargo run --example hello_world -- 123 1234abc 123:abc username 'Hello, world!'
 //! ```
 
-use grammers_client::{AuthorizationError, Client};
-use grammers_session::TextSession;
+use async_std::task;
+use grammers_client::{AuthorizationError, Client, Config};
+use grammers_session::Session;
 use std::env;
 
-fn main() -> Result<(), AuthorizationError> {
+async fn async_main() -> Result<(), AuthorizationError> {
     let mut args = env::args();
 
     let _path = args.next();
@@ -28,26 +29,30 @@ fn main() -> Result<(), AuthorizationError> {
     let username = args.next().expect("username missing");
     let message = args.next().expect("message missing");
 
-    // Try loading a previous session, or create a new one otherwise.
-    let session = Box::new(if let Ok(session) = TextSession::load(&"hello.session") {
-        session
-    } else {
-        TextSession::create("hello.session")?
-    });
-
     println!("Connecting to Telegram...");
-    let mut client = Client::with_session(session)?;
+    let mut client = Client::connect(Config {
+        session: Session::load_or_create("hello.session")?,
+        api_id,
+        api_hash: api_hash.clone(),
+        params: Default::default(),
+    })
+    .await?;
     println!("Connected!");
 
-    if !client.is_authorized()? {
+    if !client.is_authorized().await? {
         println!("Signing in...");
-        client.bot_sign_in(&token, api_id, &api_hash)?;
+        client.bot_sign_in(&token, api_id, &api_hash).await?;
         println!("Signed in!");
     }
 
     println!("Sending message...");
-    client.send_message(&username[..], message.into())?;
+    let user = client.input_peer_for_username(&username).await?;
+    client.send_message(user, message.into()).await?;
     println!("Message sent!");
 
     Ok(())
+}
+
+fn main() -> Result<(), AuthorizationError> {
+    task::block_on(async_main())
 }

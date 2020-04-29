@@ -401,6 +401,14 @@ impl Client {
         Ok(())
     }
 
+    // TODO don't keep this, it should be implicit
+    pub async fn input_peer_for_username(
+        &mut self,
+        _username: &str,
+    ) -> Result<tl::enums::InputPeer, InvocationError> {
+        todo!()
+    }
+
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
     /// very old one will be used (which we will fail to understand).
