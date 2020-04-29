@@ -29,3 +29,7 @@ locate-locale = "0.1.0"
 
 pulldown-cmark = { version = "0.7.0", default-features = false, optional = true }
 html5ever = { version = "0.25.1", optional = true }
+
+[dev-dependencies]
+log = "0.4.8"
+simple_logger = "1.6.0"

@@ -13,9 +13,13 @@
 use async_std::task;
 use grammers_client::{AuthorizationError, Client, Config};
 use grammers_session::Session;
+use log;
+use simple_logger;
 use std::env;
 
 async fn async_main() -> Result<(), AuthorizationError> {
+    simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
+
     let mut args = env::args();
 
     let _path = args.next();
