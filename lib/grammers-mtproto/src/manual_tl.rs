@@ -44,6 +44,18 @@ impl Message {
         // msg_id (8 bytes), seq_no (4 bytes), bytes (4 len), data
         Self::SIZE_OVERHEAD + self.body.len()
     }
+
+    /// Determines whether this server message needs acknowledgement.
+    pub fn requires_ack(&self) -> bool {
+        // > Content-related Message
+        // >   A message requiring an explicit acknowledgment.
+        // > [...]
+        // > (msg_seqno) [...] twice the number of "content-related" messages
+        // > [...] and subsequently incremented by one if the current message
+        // > is a content-related message.
+        // https://core.telegram.org/mtproto/description#content-related-message
+        self.seq_no % 2 == 1
+    }
 }
 
 impl Serializable for Message {
