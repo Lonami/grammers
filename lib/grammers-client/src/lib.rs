@@ -404,9 +404,23 @@ impl Client {
     // TODO don't keep this, it should be implicit
     pub async fn input_peer_for_username(
         &mut self,
-        _username: &str,
+        username: &str,
     ) -> Result<tl::enums::InputPeer, InvocationError> {
-        todo!()
+        if username.eq_ignore_ascii_case("me") {
+            Ok(tl::enums::InputPeer::PeerSelf(tl::types::InputPeerSelf {}))
+        } else if let Some(user) = self.resolve_username(username).await? {
+            Ok(tl::types::InputPeerUser {
+                user_id: user.id,
+                access_hash: user.access_hash.unwrap(), // TODO don't unwrap
+            }
+            .into())
+        } else {
+            // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
+            Err(InvocationError::IO(io::Error::new(
+                io::ErrorKind::NotFound,
+                "no user has that username",
+            )))
+        }
     }
 
     /// Initializes the connection with Telegram. If this is never done on
