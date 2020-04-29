@@ -575,7 +575,6 @@ impl Mtp {
             tl::types::RpcAnswerDroppedRunning::CONSTRUCTOR_ID => {
                 // We will receive two `rpc_result`, one with the `msg_id` of
                 // `rpc_drop_answer` request and other for the original RPC.
-                // TODO ack to the server
             }
             tl::types::RpcAnswerDropped::CONSTRUCTOR_ID => {
                 // "the RPC response was removed from the server's outgoing
