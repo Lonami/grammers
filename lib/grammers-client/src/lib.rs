@@ -11,6 +11,7 @@
 
 use std::convert::TryInto;
 use std::io;
+use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::net::TcpStream;
@@ -29,24 +30,21 @@ use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
 ///
 /// The addresses were obtained from the `static` addresses through a call to
 /// `functions::help::GetConfig`.
-const DC_ADDRESSES: [&str; 6] = [
-    "",
-    "149.154.175.53:443",
-    "149.154.167.51:443",
-    "149.154.175.100:443",
-    "149.154.167.92:443",
-    "91.108.56.190:443",
+const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
+    (Ipv4Addr::new(149, 154, 167, 51), 443), // default (2)
+    (Ipv4Addr::new(149, 154, 175, 53), 443),
+    (Ipv4Addr::new(149, 154, 167, 51), 443),
+    (Ipv4Addr::new(149, 154, 175, 100), 443),
+    (Ipv4Addr::new(149, 154, 167, 92), 443),
+    (Ipv4Addr::new(91, 108, 56, 190), 443),
 ];
-
-/// The DC ID to originally connect to.
-const DEFAULT_DC_ID: usize = 2;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
 
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
-    api_id: i32,
+    config: Config,
     sender: MtpSender,
     handler: JoinHandle<()>,
 
@@ -125,10 +123,55 @@ impl From<io::Error> for SignInError {
 }
 */
 
+pub struct Config {
+    pub session: Session,
+    pub api_id: i32,
+    pub api_hash: String,
+    pub params: InitParams,
+}
+
+pub struct InitParams {
+    pub device_model: String,
+    pub system_version: String,
+    pub app_version: String,
+    pub system_lang_code: String,
+    pub lang_code: String,
+}
+
+impl Default for InitParams {
+    fn default() -> Self {
+        let info = os_info::get();
+
+        let mut system_lang_code = locate_locale::system();
+        if system_lang_code.is_empty() {
+            system_lang_code.push_str(DEFAULT_LOCALE);
+        }
+
+        let mut lang_code = locate_locale::user();
+        if lang_code.is_empty() {
+            lang_code.push_str(DEFAULT_LOCALE);
+        }
+
+        Self {
+            device_model: format!("{} {}", info.os_type(), info.bitness()),
+            system_version: info.version().to_string(),
+            app_version: env!("CARGO_PKG_VERSION").to_string(),
+            system_lang_code,
+            lang_code,
+        }
+    }
+}
+
 impl Client {
-    // TODO we should be created with some session as input
-    pub async fn connect() -> Result<Self, AuthorizationError> {
-        let stream = TcpStream::connect(DC_ADDRESSES[DEFAULT_DC_ID]).await?;
+    pub async fn connect(config: Config) -> Result<Self, AuthorizationError> {
+        let addr = if let Some((_dc_id, addr)) = config.session.user_dc {
+            addr
+        } else {
+            let (addr, port) = DC_ADDRESSES[0];
+            SocketAddr::new(IpAddr::V4(addr), port)
+        };
+
+        let stream = TcpStream::connect(addr).await?;
         let in_stream = stream.clone();
         let out_stream = stream;
 
@@ -136,9 +179,8 @@ impl Client {
             create_mtp::<TransportFull, _, _>((in_stream, out_stream), None).await?;
         let handler = task::spawn(handler.run());
 
-        // TODO user-provided api key
         let mut client = Client {
-            api_id: 6,
+            config,
             sender,
             handler,
             last_phone_hash: None,
@@ -422,18 +464,6 @@ impl Client {
         &mut self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let info = os_info::get();
-
-        let mut system_lang_code = locate_locale::system();
-        if system_lang_code.is_empty() {
-            system_lang_code.push_str(DEFAULT_LOCALE);
-        }
-
-        let mut lang_code = locate_locale::user();
-        if lang_code.is_empty() {
-            lang_code.push_str(DEFAULT_LOCALE);
-        }
-
         // TODO figure out what we're doing wrong because Telegram seems to
         //      reply some constructor we are unaware of, even though we
         //      explicitly did invokeWithLayer. this will fail, because
@@ -446,13 +476,13 @@ impl Client {
             .invoke(&tl::functions::InvokeWithLayer {
                 layer: tl::LAYER,
                 query: tl::functions::InitConnection {
-                    api_id: self.api_id,
-                    device_model: format!("{} {}", info.os_type(), info.bitness()),
-                    system_version: info.version().to_string(),
-                    app_version: env!("CARGO_PKG_VERSION").into(),
-                    system_lang_code,
+                    api_id: self.config.api_id,
+                    device_model: self.config.params.device_model.clone(),
+                    system_version: self.config.params.system_version.clone(),
+                    app_version: self.config.params.app_version.clone(),
+                    system_lang_code: self.config.params.system_lang_code.clone(),
                     lang_pack: "".into(),
-                    lang_code,
+                    lang_code: self.config.params.lang_code.clone(),
                     proxy: None,
                     query: request.to_bytes().into(),
                 }
