@@ -15,7 +15,7 @@ use std::error::Error;
 use std::fmt;
 
 /// The error type for the deserialization of server messages.
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DeserializeError {
     /// The server's authorization key did not match our expectations.
     BadAuthKey { got: i64, expected: i64 },
@@ -129,6 +129,11 @@ pub enum RequestError {
         /// The code of the bad message error.
         code: i32,
     },
+
+    /// The deserialization of the response that was meant to confirm this
+    /// request failed, so while the server technically responded to the
+    /// request its answer is useless as it could not be understood properly.
+    Deserialize(DeserializeError),
 }
 
 impl RequestError {
@@ -189,6 +194,18 @@ impl From<tl::types::RpcError> for RpcError {
                 value: None,
             }
         }
+    }
+}
+
+impl From<DeserializeError> for RequestError {
+    fn from(error: DeserializeError) -> Self {
+        Self::Deserialize(error)
+    }
+}
+
+impl From<tl::errors::DeserializeError> for RequestError {
+    fn from(error: tl::errors::DeserializeError) -> Self {
+        RequestError::from(DeserializeError::from(error))
     }
 }
 

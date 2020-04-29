@@ -542,21 +542,31 @@ impl Mtp {
     /// [RPC Error]: https://core.telegram.org/mtproto/service_messages#rpc-error
     /// [Cancellation of an RPC Query]: https://core.telegram.org/mtproto/service_messages#cancellation-of-an-rpc-query
     fn handle_rpc_result(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
-        // TODO make sure we notify about errors if any step fails in any handler
         let rpc_result = manual_tl::RpcResult::from_bytes(&message.body)?;
-        let inner_constructor = rpc_result.inner_constructor()?;
+        let inner_constructor = rpc_result.inner_constructor();
         let manual_tl::RpcResult { req_msg_id, result } = rpc_result;
         let msg_id = MsgId(req_msg_id);
 
+        // Can't use `?` because we need to make sure to push a response
+        let inner_constructor = match inner_constructor {
+            Ok(x) => x,
+            Err(e) => {
+                self.response_queue.push_back((msg_id, Err(e.into())));
+                return Err(e.into());
+            }
+        };
+
         match inner_constructor {
             // RPC Error
-            tl::types::RpcError::CONSTRUCTOR_ID => {
-                match tl::enums::RpcError::from_bytes(&result)? {
-                    tl::enums::RpcError::Error(error) => self
-                        .response_queue
-                        .push_back((msg_id, Err(RequestError::RPCError(error.into())))),
+            tl::types::RpcError::CONSTRUCTOR_ID => match tl::enums::RpcError::from_bytes(&result) {
+                Ok(tl::enums::RpcError::Error(error)) => self
+                    .response_queue
+                    .push_back((msg_id, Err(RequestError::RPCError(error.into())))),
+                Err(error) => {
+                    self.response_queue.push_back((msg_id, Err(error.into())));
+                    return Err(error.into());
                 }
-            }
+            },
 
             // Cancellation of an RPC Query
             tl::types::RpcAnswerUnknown::CONSTRUCTOR_ID => {
@@ -578,10 +588,20 @@ impl Mtp {
                 // Telegram shouldn't send compressed errors (the overhead
                 // would probably outweight the benefits) so we don't check
                 // that the decompressed payload is an error or answer drop.
-                self.response_queue.push_back((
-                    msg_id,
-                    Ok(manual_tl::GzipPacked::from_bytes(&result)?.decompress()?),
-                ))
+                let gzip = match manual_tl::GzipPacked::from_bytes(&result) {
+                    Ok(x) => x,
+                    Err(e) => {
+                        self.response_queue.push_back((msg_id, Err(e.into())));
+                        return Err(e.into());
+                    }
+                };
+                let data = match gzip.decompress() {
+                    Ok(x) => self.response_queue.push_back((msg_id, Ok(x))),
+                    Err(e) => {
+                        self.response_queue.push_back((msg_id, Err(e.into())));
+                        return Err(e);
+                    }
+                };
             }
             _ => {
                 self.response_queue.push_back((msg_id, Ok(result)));

@@ -143,7 +143,7 @@ pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     do_encrypt_data_v2(plaintext, auth_key, &random_padding)
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DecryptionError {
     /// The ciphertext is either too small or not padded correctly.
     InvalidBuffer,

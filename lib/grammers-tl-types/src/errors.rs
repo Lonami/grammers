@@ -16,7 +16,7 @@
 use std::error::Error;
 use std::fmt;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
 pub enum DeserializeError {
     /// The end of the buffer was reached earlier than anticipated, which
     /// implies there is not enough data to complete the deserialization.
