@@ -8,7 +8,6 @@
 use grammers_crypto::auth_key::AuthKey;
 use std::fs::{File, OpenOptions};
 use std::io::{self, BufRead, BufReader, Seek, Write};
-use std::net::SocketAddr;
 use std::path::Path;
 
 const CURRENT_VERSION: u32 = 1;
@@ -49,7 +48,7 @@ fn hex_from_key(key: &[u8; 256]) -> String {
 
 pub struct Session {
     file: File,
-    pub user_dc: Option<(i32, SocketAddr)>,
+    pub user_dc: Option<i32>,
     pub auth_key: Option<AuthKey>,
 }
 
@@ -93,32 +92,11 @@ impl Session {
             ));
         }
 
-        // user_dc.0
-        let user_dc_id = if let Some(Ok(line)) = lines.next() {
-            match line.parse() {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-
-        // user_dc.1
-        let user_dc_addr = if let Some(Ok(line)) = lines.next() {
-            match line.parse() {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-
         // user_dc
-        let user_dc = if let Some(id) = user_dc_id {
-            if let Some(addr) = user_dc_addr {
-                Some((id, addr))
-            } else {
-                None
+        let user_dc = if let Some(Ok(line)) = lines.next() {
+            match line.parse() {
+                Ok(x) => Some(x),
+                Err(_) => None,
             }
         } else {
             None
@@ -144,11 +122,9 @@ impl Session {
         self.file.seek(io::SeekFrom::Start(0))?;
         writeln!(self.file, "{}", CURRENT_VERSION)?;
 
-        if let Some((dc_id, dc_addr)) = self.user_dc {
+        if let Some(dc_id) = self.user_dc {
             writeln!(self.file, "{}", dc_id)?;
-            writeln!(self.file, "{}", dc_addr)?;
         } else {
-            writeln!(self.file)?;
             writeln!(self.file)?;
         }
 

@@ -16,6 +16,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::net::TcpStream;
 use async_std::task::{self, JoinHandle};
+use grammers_crypto::auth_key::AuthKey;
 use grammers_mtproto::errors::RpcError;
 use grammers_mtproto::transports::TransportFull;
 use grammers_mtsender::{create_mtp, MtpSender};
@@ -162,31 +163,37 @@ impl Default for InitParams {
     }
 }
 
+// TODO narrow the error
+// TODO not entirely happy with the fact we need crypto just for AuthKey, should re-export (same in sessions)
+async fn create_sender(
+    dc_id: i32,
+    auth_key: &mut Option<AuthKey>,
+) -> Result<(MtpSender, JoinHandle<()>), AuthorizationError> {
+    let server_address = {
+        let (addr, port) = DC_ADDRESSES[dc_id as usize];
+        SocketAddr::new(IpAddr::V4(addr), port)
+    };
+
+    let stream = TcpStream::connect(server_address).await?;
+    let in_stream = stream.clone();
+    let out_stream = stream;
+
+    let (sender, _updates, handler) =
+        create_mtp::<TransportFull, _, _>((in_stream, out_stream), auth_key).await?;
+
+    let handler = task::spawn(handler.run());
+    Ok((sender, handler))
+}
+
 impl Client {
     /// Creates and returns a new client instance upon successful connection to Telegram.
     ///
     /// If the session in the configuration did not have an authorization key, a new one
     /// will be created and the session will be saved with it.
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let addr = if let Some((_dc_id, addr)) = config.session.user_dc {
-            addr
-        } else {
-            let (addr, port) = DC_ADDRESSES[0];
-            SocketAddr::new(IpAddr::V4(addr), port)
-        };
-
-        let stream = TcpStream::connect(addr).await?;
-        let in_stream = stream.clone();
-        let out_stream = stream;
-
-        let (sender, _updates, handler) = create_mtp::<TransportFull, _, _>(
-            (in_stream, out_stream),
-            &mut config.session.auth_key,
-        )
-        .await?;
-
+        let dc_id = config.session.user_dc.unwrap_or(0);
+        let (sender, handler) = create_sender(dc_id, &mut config.session.auth_key).await?;
         config.session.save()?;
-        let handler = task::spawn(handler.run());
 
         let mut client = Client {
             config,
@@ -238,7 +245,7 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again. Don't want to replace `self.sender`
                 // unless the entire process succeeds.
-                self.replace_mtsender(value.unwrap() as i32)?;
+                self.replace_mtsender(value.unwrap() as i32).await?;
                 self.init_invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
@@ -300,7 +307,7 @@ impl Client {
         let _result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.replace_mtsender(value.unwrap() as i32)?;
+                self.replace_mtsender(value.unwrap() as i32).await?;
                 self.init_invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -321,23 +328,16 @@ impl Client {
     /// # Panics
     ///
     /// If the server ID is not within the known identifiers.
-    fn replace_mtsender(&mut self, _server_id: i32) -> Result<(), AuthorizationError> {
-        todo!() /*
-                let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
-                self.session.set_user_datacenter(server_id, &server_address);
-                self.session.save()?;
+    async fn replace_mtsender(&mut self, dc_id: i32) -> Result<(), AuthorizationError> {
+        // TODO seems to get stuck?
+        let (sender, handler) = create_sender(dc_id, &mut self.config.session.auth_key).await?;
+        self.config.session.user_dc = Some(dc_id);
+        self.config.session.save()?;
 
-                // Don't replace `self.sender` unless the entire process succeeds.
-                self.sender = {
-                    let mut sender = MTSender::connect(server_address)?;
-                    let auth_key = sender.generate_auth_key()?;
-                    self.session
-                        .set_auth_key_data(server_id, &auth_key.to_bytes());
-                    self.session.save()?;
-                    sender
-                };
+        self.sender = sender;
+        self._handler = handler;
 
-                Ok(())*/
+        Ok(())
     }
 
     /// Resolves a username into the user that owns it, if any.

@@ -19,6 +19,7 @@ html = ["html5ever"]
 
 [dependencies]
 async-std = { version = "1.5" }
+grammers-crypto = "0.1.0"
 grammers-mtproto = "0.1.0"
 grammers-mtsender = "0.1.0"
 grammers-session = "0.1.0"
