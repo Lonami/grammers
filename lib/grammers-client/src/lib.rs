@@ -191,6 +191,7 @@ impl Client {
     /// If the session in the configuration did not have an authorization key, a new one
     /// will be created and the session will be saved with it.
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
+        // TODO we don't handle -404 (unknown good authkey) here, need recreate
         let dc_id = config.session.user_dc.unwrap_or(0);
         let (sender, handler) = create_sender(dc_id, &mut config.session.auth_key).await?;
         config.session.save()?;
@@ -329,7 +330,7 @@ impl Client {
     ///
     /// If the server ID is not within the known identifiers.
     async fn replace_mtsender(&mut self, dc_id: i32) -> Result<(), AuthorizationError> {
-        // TODO seems to get stuck?
+        self.config.session.auth_key = None;
         let (sender, handler) = create_sender(dc_id, &mut self.config.session.auth_key).await?;
         self.config.session.user_dc = Some(dc_id);
         self.config.session.save()?;
