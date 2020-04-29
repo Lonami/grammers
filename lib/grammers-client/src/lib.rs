@@ -19,7 +19,7 @@ use grammers_mtproto::errors::RpcError;
 use grammers_mtproto::transports::{Transport, TransportFull};
 use grammers_mtsender::{create_mtp, MtpSender};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{MemorySession, Session};
+use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
 
 //pub use iterators::Dialogs;

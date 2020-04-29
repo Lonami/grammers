@@ -78,6 +78,9 @@ impl MtpSender {
                 Err(RequestError::Dropped) => {
                     break Err(InvocationError::Dropped);
                 }
+                Err(RequestError::Deserialize(err)) => {
+                    break Err(InvocationError::Deserialize(err));
+                }
                 Err(RequestError::BadMessage { .. }) => {
                     // Need to retransmit (another loop iteration)
                     continue;
