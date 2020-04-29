@@ -595,7 +595,7 @@ impl Mtp {
                         return Err(e.into());
                     }
                 };
-                let data = match gzip.decompress() {
+                match gzip.decompress() {
                     Ok(x) => self.response_queue.push_back((msg_id, Ok(x))),
                     Err(e) => {
                         self.response_queue.push_back((msg_id, Err(e.into())));
@@ -813,7 +813,7 @@ impl Mtp {
     /// valid, the message is to be wrapped in `msg_copy`).
     ///
     /// [Informational Message regarding Status of Messages]: https://core.telegram.org/mtproto/service_messages_about_messages#informational-message-regarding-status-of-messages
-    fn handle_state_info(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_state_info(&mut self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
@@ -835,7 +835,7 @@ impl Mtp {
     /// This message does not require an acknowledgment.
     ///
     /// [Voluntary Communication of Status of Messages]: https://core.telegram.org/mtproto/service_messages_about_messages#voluntary-communication-of-status-of-messages
-    fn handle_msg_all(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_msg_all(&mut self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
@@ -1194,7 +1194,7 @@ impl Mtp {
     /// to ping time.
     ///
     /// [HTTP Wait/Long Poll]: https://core.telegram.org/mtproto/service_messages#http-wait-long-poll
-    fn handle_http_wait(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+    fn handle_http_wait(&mut self, _message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO implement
         Ok(())
     }
