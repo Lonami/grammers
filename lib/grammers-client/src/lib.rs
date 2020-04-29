@@ -7,17 +7,17 @@
 // except according to those terms.
 //pub mod iterators;
 //mod parsers;
-//pub mod types;
+pub mod types;
 
 use std::convert::TryInto;
 use std::io;
-use std::net::{IpAddr, Ipv4Addr, SocketAddr, SocketAddrV4};
+use std::net::{IpAddr, Ipv4Addr, SocketAddr};
 use std::time::{SystemTime, UNIX_EPOCH};
 
 use async_std::net::TcpStream;
 use async_std::task::{self, JoinHandle};
 use grammers_mtproto::errors::RpcError;
-use grammers_mtproto::transports::{Transport, TransportFull};
+use grammers_mtproto::transports::TransportFull;
 use grammers_mtsender::{create_mtp, MtpSender};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::Session;
@@ -46,7 +46,7 @@ const DEFAULT_LOCALE: &str = "en";
 pub struct Client {
     config: Config,
     sender: MtpSender,
-    handler: JoinHandle<()>,
+    _handler: JoinHandle<()>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
     last_phone_hash: Option<(String, String)>,
@@ -97,6 +97,7 @@ impl IntoInput<tl::enums::InputPeer> for &str {
         }
     }
 }
+*/
 
 /// Generate a random message ID suitable for `send_message`.
 fn generate_random_message_id() -> i64 {
@@ -121,7 +122,6 @@ impl From<io::Error> for SignInError {
         Self::Other(error.into())
     }
 }
-*/
 
 pub struct Config {
     pub session: Session,
@@ -163,6 +163,10 @@ impl Default for InitParams {
 }
 
 impl Client {
+    /// Creates and returns a new client instance upon successful connection to Telegram.
+    ///
+    /// If the session in the configuration did not have an authorization key, a new one
+    /// will be created and the session will be saved with it.
     pub async fn connect(config: Config) -> Result<Self, AuthorizationError> {
         let addr = if let Some((_dc_id, addr)) = config.session.user_dc {
             addr
@@ -182,75 +186,17 @@ impl Client {
         let mut client = Client {
             config,
             sender,
-            handler,
+            _handler: handler,
             last_phone_hash: None,
         };
         client.init_connection().await?;
         Ok(client)
     }
 
-    /*
-    /// Returns a new client instance connected to Telegram and returns it.
-    ///
-    /// This method will generate a new authorization key and connect to a
-    /// default datacenter. To prevent logging in every single time, use
-    /// [`with_session`] instead, which will reuse a previous session.
-    pub fn new() -> Result<Self, AuthorizationError> {
-        // TODO we probably should just require a session storage as input
-        let mut sender = MTSender::connect(DC_ADDRESSES[DEFAULT_DC_ID])?;
-        sender.generate_auth_key()?;
-        Ok(Self::with_sender(sender, Box::new(MemorySession::new()))?)
-    }
-
-    /// Configures a new client instance from an existing session and returns
-    /// it.
-    pub fn with_session(mut session: Box<dyn Session>) -> Result<Self, AuthorizationError> {
-        // TODO this doesn't look clean, and configuring the authkey
-        //      on the sender this way also seems a bit weird.
-        let auth_key;
-        let server_id;
-        let server_address;
-        if let Some((dc_id, dc_addr)) = session.get_user_datacenter() {
-            server_id = dc_id;
-            server_address = dc_addr;
-            auth_key = session.get_auth_key_data(dc_id);
-        } else {
-            server_id = DEFAULT_DC_ID as i32;
-            server_address = DC_ADDRESSES[DEFAULT_DC_ID].parse().unwrap();
-            auth_key = None;
-            session.set_user_datacenter(server_id, &server_address);
-            session.save()?;
-        }
-
-        let mut sender = MTSender::connect(server_address)?;
-        if let Some(auth_key) = auth_key {
-            sender.set_auth_key(auth_key);
-        } else {
-            let auth_key = sender.generate_auth_key()?;
-            session.set_auth_key_data(server_id, &auth_key.to_bytes());
-            session.save()?;
-        }
-
-        Ok(Self::with_sender(sender, session)?)
-    }
-
-    /// Creates a client instance with a sender
-    fn with_sender(sender: MTSender, session: Box<dyn Session>) -> Result<Self, InvocationError> {
-        // TODO user-provided api key
-        let mut client = Client {
-            api_id: 6,
-            sender,
-            session,
-            last_phone_hash: None,
-        };
-        client.init_connection()?;
-        Ok(client)
-    }
-
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
-    pub fn is_authorized(&mut self) -> Result<bool, InvocationError> {
-        match self.invoke(&tl::functions::updates::GetState {}) {
+    pub async fn is_authorized(&mut self) -> Result<bool, InvocationError> {
+        match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(_) => Ok(true),
             Err(InvocationError::RPC(_)) => Ok(false),
             Err(err) => Err(err),
@@ -259,7 +205,7 @@ impl Client {
 
     /// Requests the login code for the account associated to the given phone
     /// number via another Telegram application or SMS.
-    pub fn request_login_code(
+    pub async fn request_login_code(
         &mut self,
         phone: &str,
         api_id: i32,
@@ -277,7 +223,7 @@ impl Client {
             .into(),
         };
 
-        let sent_code: tl::types::auth::SentCode = match self.invoke(&request) {
+        let sent_code: tl::types::auth::SentCode = match self.invoke(&request).await {
             Ok(x) => x.into(),
             Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "PHONE_MIGRATE" => {
                 // Since we are not logged in (we're literally requesting for
@@ -288,7 +234,7 @@ impl Client {
                 // before trying again. Don't want to replace `self.sender`
                 // unless the entire process succeeds.
                 self.replace_mtsender(value.unwrap() as i32)?;
-                self.init_invoke(&request)?.into()
+                self.init_invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
         };
@@ -301,18 +247,21 @@ impl Client {
     /// [`request_login_code`] first.
     ///
     /// [`request_login_code`]: #method.request_login_code
-    pub fn sign_in(&mut self, code: &str) -> Result<tl::types::User, SignInError> {
+    pub async fn sign_in(&mut self, code: &str) -> Result<tl::types::User, SignInError> {
         let (phone_number, phone_code_hash) = if let Some(t) = self.last_phone_hash.take() {
             t
         } else {
             return Err(SignInError::NoCodeSent);
         };
 
-        match self.invoke(&tl::functions::auth::SignIn {
-            phone_number,
-            phone_code_hash,
-            phone_code: code.to_string(),
-        }) {
+        match self
+            .invoke(&tl::functions::auth::SignIn {
+                phone_number,
+                phone_code_hash,
+                phone_code: code.to_string(),
+            })
+            .await
+        {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
                 Ok(x.user.try_into().unwrap())
@@ -330,7 +279,7 @@ impl Client {
     }
 
     /// Signs in to the bot account associated with this token.
-    pub fn bot_sign_in(
+    pub async fn bot_sign_in(
         &mut self,
         token: &str,
         api_id: i32,
@@ -343,11 +292,11 @@ impl Client {
             bot_auth_token: token.to_string(),
         };
 
-        let _result = match self.invoke(&request) {
+        let _result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 self.replace_mtsender(value.unwrap() as i32)?;
-                self.init_invoke(&request)?
+                self.init_invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
         };
@@ -367,36 +316,39 @@ impl Client {
     /// # Panics
     ///
     /// If the server ID is not within the known identifiers.
-    fn replace_mtsender(&mut self, server_id: i32) -> Result<(), AuthorizationError> {
-        let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
-        self.session.set_user_datacenter(server_id, &server_address);
-        self.session.save()?;
+    fn replace_mtsender(&mut self, _server_id: i32) -> Result<(), AuthorizationError> {
+        todo!() /*
+                let server_address = DC_ADDRESSES[server_id as usize].parse().unwrap();
+                self.session.set_user_datacenter(server_id, &server_address);
+                self.session.save()?;
 
-        // Don't replace `self.sender` unless the entire process succeeds.
-        self.sender = {
-            let mut sender = MTSender::connect(server_address)?;
-            let auth_key = sender.generate_auth_key()?;
-            self.session
-                .set_auth_key_data(server_id, &auth_key.to_bytes());
-            self.session.save()?;
-            sender
-        };
+                // Don't replace `self.sender` unless the entire process succeeds.
+                self.sender = {
+                    let mut sender = MTSender::connect(server_address)?;
+                    let auth_key = sender.generate_auth_key()?;
+                    self.session
+                        .set_auth_key_data(server_id, &auth_key.to_bytes());
+                    self.session.save()?;
+                    sender
+                };
 
-        Ok(())
+                Ok(())*/
     }
 
     /// Resolves a username into the user that owns it, if any.
-    pub fn resolve_username(
+    pub async fn resolve_username(
         &mut self,
         username: &str,
     ) -> Result<Option<tl::types::User>, InvocationError> {
-        let tl::enums::contacts::ResolvedPeer::ResolvedPeer(tl::types::contacts::ResolvedPeer {
+        let tl::enums::contacts::ResolvedPeer::Peer(tl::types::contacts::ResolvedPeer {
             peer,
             users,
             ..
-        }) = self.invoke(&tl::functions::contacts::ResolveUsername {
-            username: username.into(),
-        })?;
+        }) = self
+            .invoke(&tl::functions::contacts::ResolveUsername {
+                username: username.into(),
+            })
+            .await?;
 
         match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
@@ -422,12 +374,12 @@ impl Client {
     }
 
     /// Sends a text message to the desired chat.
-    pub fn send_message<C: IntoInput<tl::enums::InputPeer>>(
+    // TODO don't require nasty InputPeer
+    pub async fn send_message(
         &mut self,
-        chat: C,
+        chat: tl::enums::InputPeer,
         message: types::Message,
     ) -> Result<(), InvocationError> {
-        let chat = chat.convert(self)?;
         self.invoke(&tl::functions::messages::SendMessage {
             no_webpage: !message.link_preview,
             silent: message.silent,
@@ -444,10 +396,10 @@ impl Client {
                 Some(message.entities)
             },
             schedule_date: message.schedule_date,
-        })?;
+        })
+        .await?;
         Ok(())
     }
-    */
 
     /// Initializes the connection with Telegram. If this is never done on
     /// a fresh session, then Telegram won't know which layer to use and a
