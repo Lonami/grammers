@@ -10,6 +10,7 @@
 mod auth;
 mod chats;
 mod messages;
+mod updates;
 
 use async_std::net::TcpStream;
 use async_std::task::{self, JoinHandle};
@@ -45,6 +46,7 @@ const DEFAULT_LOCALE: &str = "en";
 pub struct Client {
     config: Config,
     sender: MtpSender,
+    updates: crate::UpdateStream,
     _handler: JoinHandle<()>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
@@ -142,7 +144,7 @@ impl Default for InitParams {
 async fn create_sender(
     dc_id: i32,
     auth_key: &mut Option<AuthKey>,
-) -> Result<(MtpSender, JoinHandle<()>), AuthorizationError> {
+) -> Result<(MtpSender, crate::UpdateStream, JoinHandle<()>), AuthorizationError> {
     let server_address = {
         let (addr, port) = DC_ADDRESSES[dc_id as usize];
         SocketAddr::new(IpAddr::V4(addr), port)
@@ -152,11 +154,11 @@ async fn create_sender(
     let in_stream = stream.clone();
     let out_stream = stream;
 
-    let (sender, _updates, handler) =
+    let (sender, updates, handler) =
         create_mtp::<TransportFull, _, _>((in_stream, out_stream), auth_key).await?;
 
     let handler = task::spawn(handler.run());
-    Ok((sender, handler))
+    Ok((sender, updates, handler))
 }
 
 impl Client {
@@ -167,12 +169,13 @@ impl Client {
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         // TODO we don't handle -404 (unknown good authkey) here, need recreate
         let dc_id = config.session.user_dc.unwrap_or(0);
-        let (sender, handler) = create_sender(dc_id, &mut config.session.auth_key).await?;
+        let (sender, updates, handler) = create_sender(dc_id, &mut config.session.auth_key).await?;
         config.session.save()?;
 
         let mut client = Client {
             config,
             sender,
+            updates,
             _handler: handler,
             last_phone_hash: None,
         };
@@ -194,11 +197,13 @@ impl Client {
     /// If the server ID is not within the known identifiers.
     async fn replace_mtsender(&mut self, dc_id: i32) -> Result<(), AuthorizationError> {
         self.config.session.auth_key = None;
-        let (sender, handler) = create_sender(dc_id, &mut self.config.session.auth_key).await?;
+        let (sender, updates, handler) =
+            create_sender(dc_id, &mut self.config.session.auth_key).await?;
         self.config.session.user_dc = Some(dc_id);
         self.config.session.save()?;
 
         self.sender = sender;
+        self.updates = updates;
         self._handler = handler;
 
         Ok(())
