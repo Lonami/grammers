@@ -106,7 +106,7 @@ impl<'a> EntitySet<'a> {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => (Peer::User(*user_id)),
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => (Peer::Chat(*chat_id)),
             tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => {
-                (Peer::Channel(*channel_id))
+                Peer::Channel(*channel_id)
             }
         };
 

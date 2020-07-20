@@ -53,53 +53,6 @@ pub struct Client {
     last_phone_hash: Option<(String, String)>,
 }
 
-/*
-/// Implementors of this trait have a way to turn themselves into the
-/// desired input parameter.
-pub trait IntoInput<T> {
-    fn convert(&self, client: &mut Client) -> Result<T, InvocationError>;
-}
-
-impl IntoInput<tl::enums::InputPeer> for tl::types::User {
-    fn convert(&self, _client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
-        if let Some(access_hash) = self.access_hash {
-            Ok(tl::enums::InputPeer::User(
-                tl::types::InputPeerUser {
-                    user_id: self.id,
-                    access_hash,
-                },
-            ))
-        } else {
-            // TODO how should custom "into input" errors be handled?
-            // this is pretty much the only case where we need a custom one,
-            // maybe a "conversion failure" which is either invocation or custom
-            Err(InvocationError::IO(io::Error::new(
-                io::ErrorKind::NotFound,
-                "user is missing access_hash",
-            )))
-        }
-    }
-}
-
-impl IntoInput<tl::enums::InputPeer> for &str {
-    fn convert(&self, client: &mut Client) -> Result<tl::enums::InputPeer, InvocationError> {
-        if self.eq_ignore_ascii_case("me") {
-            Ok(tl::enums::InputPeer::PeerSelf(
-                tl::types::InputPeerSelf {},
-            ))
-        } else if let Some(user) = client.resolve_username(self)? {
-            user.convert(client)
-        } else {
-            // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
-            Err(InvocationError::IO(io::Error::new(
-                io::ErrorKind::NotFound,
-                "no user has that username",
-            )))
-        }
-    }
-}
-*/
-
 pub struct Config {
     pub session: Session,
     pub api_id: i32,
