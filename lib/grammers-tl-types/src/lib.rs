@@ -89,13 +89,13 @@ pub use serializable::Serializable;
 /// common, so instead of creating a enum for `Vector` wrapping `vector`
 /// as Rust's `Vec` (as we would do with auto-generated code),
 /// a new-type for `vector` is used instead.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct RawVec<T>(pub Vec<T>);
 
 /// This struct represents an unparsed blob, which should not be deserialized
 /// as a bytes string. Used by functions returning generic objects which pass
 /// the underlying result without any modification or interpretation.
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Blob(pub Vec<u8>);
 
 impl From<Vec<u8>> for Blob {
