@@ -7,8 +7,10 @@
 // except according to those terms.
 mod dialog;
 mod entity;
+mod entity_set;
 mod message;
 
 pub use dialog::Dialog;
 pub use entity::Entity;
+pub use entity_set::EntitySet;
 pub use message::Message;

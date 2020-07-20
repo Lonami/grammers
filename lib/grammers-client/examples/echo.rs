@@ -5,6 +5,7 @@
 //! ```
 
 use async_std::task;
+use grammers_client::types::EntitySet;
 use grammers_client::{AuthorizationError, Client, Config, InvocationError};
 use grammers_session::Session;
 use grammers_tl_types as tl;
@@ -12,56 +13,20 @@ use log;
 use simple_logger;
 use std::env;
 
-fn find_input_peer(peer: &tl::enums::Peer, updates: &tl::types::Updates) -> tl::enums::InputPeer {
-    match peer {
-        tl::enums::Peer::User(tl::types::PeerUser { user_id }) => updates
-            .users
-            .iter()
-            .find_map(|u| match u {
-                tl::enums::User::User(user) => {
-                    if user.id == *user_id {
-                        Some(tl::enums::InputPeer::User(tl::types::InputPeerUser {
-                            user_id: user.id,
-                            access_hash: user.access_hash.unwrap_or(0),
-                        }))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .expect("updates without information about user"),
-        tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => {
-            // Trivial as there is no `access_hash` to find.
-            tl::enums::InputPeer::Chat(tl::types::InputPeerChat { chat_id: *chat_id })
-        }
-        tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => updates
-            .chats
-            .iter()
-            .find_map(|c| match c {
-                tl::enums::Chat::Channel(channel) => {
-                    if channel.id == *channel_id {
-                        Some(tl::enums::InputPeer::Channel(tl::types::InputPeerChannel {
-                            channel_id: channel.id,
-                            access_hash: channel.access_hash.unwrap_or(0),
-                        }))
-                    } else {
-                        None
-                    }
-                }
-                _ => None,
-            })
-            .expect("updates without information about channel"),
-    }
-}
-
 async fn handle_updates(
     client: &mut Client,
     updates: tl::enums::Updates,
 ) -> Result<(), InvocationError> {
     match updates {
-        tl::enums::Updates::Updates(updates) => {
-            for update in updates.updates.iter() {
+        tl::enums::Updates::Updates(tl::types::Updates {
+            updates,
+            users,
+            chats,
+            ..
+        }) => {
+            let entity_set = EntitySet::new_owned(users, chats);
+
+            for update in updates {
                 match update {
                     tl::enums::Update::NewMessage(tl::types::UpdateNewMessage {
                         message: tl::enums::Message::Message(message),
@@ -69,27 +34,30 @@ async fn handle_updates(
                     }) => {
                         let peer = if matches!(message.to_id, tl::enums::Peer::User(_)) {
                             // Sent in private, `to_id` is us, build peer from `from_id` instead
-                            tl::enums::InputPeer::User(tl::types::InputPeerUser {
+                            entity_set.get(&tl::enums::Peer::User(tl::types::PeerUser {
                                 user_id: message.from_id.unwrap(),
-                                access_hash: 0, // for some reason we don't need to bother finding it
-                            })
+                            }))
                         } else {
-                            find_input_peer(&message.to_id, &updates)
-                        };
+                            entity_set.get(&message.to_id)
+                        }
+                        .expect("failed to find entity");
 
                         println!("Responding to {:?}", peer);
                         client
-                            .send_message(peer, message.message.as_str().into())
+                            .send_message(peer.to_input_peer(), message.message.as_str().into())
                             .await?;
                     }
                     tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
                         message: tl::enums::Message::Message(message),
                         ..
                     }) => {
-                        let peer = find_input_peer(&message.to_id, &updates);
+                        let peer = entity_set
+                            .get(&message.to_id)
+                            .expect("failed to find entity");
+
                         println!("Responding to {:?}", peer);
                         client
-                            .send_message(peer, message.message.as_str().into())
+                            .send_message(peer.to_input_peer(), message.message.as_str().into())
                             .await?;
                     }
                     _ => {}

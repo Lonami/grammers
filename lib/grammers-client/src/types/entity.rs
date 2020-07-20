@@ -7,13 +7,16 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
-pub enum Entity {
-    User(tl::types::User),
-    Chat(tl::types::Chat),
-    Channel(tl::types::Channel),
+// TODO this "maybe borrowed" thing is a bit annoying
+// ideally there would be a concrete borrowed type and a concrete owned type?
+#[derive(Debug)]
+pub enum Entity<'a> {
+    User(&'a tl::types::User),
+    Chat(&'a tl::types::Chat),
+    Channel(&'a tl::types::Channel),
 }
 
-impl Entity {
+impl<'a> Entity<'a> {
     pub fn id(&self) -> i32 {
         match self {
             Self::User(user) => user.id,
