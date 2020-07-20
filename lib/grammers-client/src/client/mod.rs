@@ -218,6 +218,7 @@ impl Client {
                     lang_pack: "".into(),
                     lang_code: self.config.params.lang_code.clone(),
                     proxy: None,
+                    params: None,
                     query: request.to_bytes().into(),
                 }
                 .to_bytes()

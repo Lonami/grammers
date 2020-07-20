@@ -1,6 +1,6 @@
 [package]
 name = "grammers-tl-types"
-version = "0.1.0"
+version = "0.2.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -19,7 +19,7 @@ include = [
 ]
 
 [build-dependencies]
-grammers-tl-gen = "0.1.0"
+grammers-tl-gen = "0.2.0"
 grammers-tl-parser = "1.0.0"
 
 [features]

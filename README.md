@@ -3,6 +3,15 @@
 A set of Rust libraries to interact with Telegram's API,
 hence the name *(tele)gramme.rs*.
 
+## Current status
+
+It works! You can access Telegram's API and handle updates, but the internals are a bit rough
+and need a lot of work. We're still looking for a nice solid interface on all the public methods.
+
+For an up-to-date taste on how the library looks like, refer to the [client examples] folder.
+
+For more documentation, please refer to <https://docs.rs/grammers-client/>.
+
 ## Libraries
 
 The following libraries can be used to work with Telegram in some way:
@@ -33,6 +42,7 @@ Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
 
+[client examples]: lib/grammers-client/examples
 [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 [Type Language]: https://core.telegram.org/mtproto/TL
 [grammers-client]: lib/grammers-client/
