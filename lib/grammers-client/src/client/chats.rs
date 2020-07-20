@@ -1,3 +1,4 @@
+//! Methods related to chats and entities.
 use crate::Client;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -39,5 +40,23 @@ impl Client {
         }
 
         Ok(None)
+    }
+
+    /// Fetch full information about the currently logged-in user.
+    pub async fn get_me(&mut self) -> Result<tl::types::User, InvocationError> {
+        let mut res = self
+            .invoke(&tl::functions::users::GetUsers {
+                id: vec![tl::enums::InputUser::UserSelf(tl::types::InputUserSelf {})],
+            })
+            .await?;
+
+        if res.len() != 1 {
+            panic!("fetching only one user should exactly return one user");
+        }
+
+        match res.pop().unwrap() {
+            tl::enums::User::User(user) => Ok(user),
+            tl::enums::User::Empty(_) => panic!("should not get empty user when fetching self"),
+        }
     }
 }
