@@ -42,7 +42,7 @@ async fn handle_updates(
                         }
                         .expect("failed to find entity");
 
-                        println!("Responding to {:?}", peer);
+                        println!("Responding to {}", peer.name());
                         client
                             .send_message(peer.to_input_peer(), message.message.as_str().into())
                             .await?;
@@ -55,7 +55,7 @@ async fn handle_updates(
                             .get(&message.to_id)
                             .expect("failed to find entity");
 
-                        println!("Responding to {:?}", peer);
+                        println!("Responding to {}", peer.name());
                         client
                             .send_message(peer.to_input_peer(), message.message.as_str().into())
                             .await?;

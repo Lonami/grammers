@@ -41,17 +41,17 @@ impl<'a> Entity<'a> {
         }
     }
 
-    pub fn display(&self) -> String {
+    pub fn name(&self) -> &str {
         match self {
             Self::User(user) => {
                 if let Some(name) = &user.first_name {
-                    name.clone()
+                    name
                 } else {
-                    "Deleted Account".to_string()
+                    "Deleted Account"
                 }
             }
-            Self::Chat(chat) => chat.title.clone(),
-            Self::Channel(channel) => channel.title.clone(),
+            Self::Chat(chat) => &chat.title,
+            Self::Channel(channel) => &channel.title,
         }
     }
 }
