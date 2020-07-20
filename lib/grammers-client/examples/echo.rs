@@ -5,6 +5,7 @@
 //! ```
 
 use async_std::task;
+use grammers_client::ext::MessageExt;
 use grammers_client::types::EntitySet;
 use grammers_client::{AuthorizationError, Client, Config, InvocationError};
 use grammers_session::Session;
@@ -32,15 +33,9 @@ async fn handle_updates(
                         message: tl::enums::Message::Message(message),
                         ..
                     }) => {
-                        let peer = if matches!(message.to_id, tl::enums::Peer::User(_)) {
-                            // Sent in private, `to_id` is us, build peer from `from_id` instead
-                            entity_set.get(&tl::enums::Peer::User(tl::types::PeerUser {
-                                user_id: message.from_id.unwrap(),
-                            }))
-                        } else {
-                            entity_set.get(&message.to_id)
-                        }
-                        .expect("failed to find entity");
+                        let peer = entity_set
+                            .get(&message.chat())
+                            .expect("failed to find entity");
 
                         println!("Responding to {}", peer.name());
                         client
@@ -52,7 +47,7 @@ async fn handle_updates(
                         ..
                     }) => {
                         let peer = entity_set
-                            .get(&message.to_id)
+                            .get(&message.chat())
                             .expect("failed to find entity");
 
                         println!("Responding to {}", peer.name());
