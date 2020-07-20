@@ -56,13 +56,30 @@ pub struct Client {
     user_id: Option<i32>,
 }
 
+/// Configuration required to create a [`Client`] instance.
+///
+/// [`Client`]: struct.Client.html
 pub struct Config {
+    /// Session storage where data should persist, such as authorization key, server address,
+    /// and other required information by the client.
     pub session: Session,
+
+    /// Developer's API ID, required to interact with the Telegram's API.
+    ///
+    /// You may obtain your own in <https://my.telegram.org/auth>.
     pub api_id: i32,
+
+    /// Developer's API hash, required to interact with Telegram's API.
+    ///
+    /// You may obtain your own in <https://my.telegram.org/auth>.
     pub api_hash: String,
+
+    /// Additional initialization parameters that can have sane defaults.
     pub params: InitParams,
 }
 
+/// Optional initialization parameters, required when initializing a connection to Telegram's
+/// API.
 pub struct InitParams {
     pub device_model: String,
     pub system_version: String,

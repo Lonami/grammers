@@ -5,6 +5,7 @@ use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::io;
 
+/// The error type which is returned when signing in fails.
 #[derive(Debug)]
 pub enum SignInError {
     NoCodeSent,

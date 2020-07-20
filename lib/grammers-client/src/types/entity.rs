@@ -9,6 +9,7 @@ use grammers_tl_types as tl;
 
 // TODO this "maybe borrowed" thing is a bit annoying
 // ideally there would be a concrete borrowed type and a concrete owned type?
+/// Holds the various different "entities" Telegram knows about in a single place.
 #[derive(Debug)]
 pub enum Entity<'a> {
     User(&'a tl::types::User),

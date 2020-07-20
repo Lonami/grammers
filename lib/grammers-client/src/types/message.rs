@@ -12,6 +12,7 @@ use grammers_tl_types as tl;
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7FFFFFFE;
 
+/// Construct and send rich text messages with various options.
 #[derive(Default)]
 pub struct Message {
     pub(crate) background: bool,

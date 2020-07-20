@@ -1,3 +1,4 @@
+//! Extension traits to make dealing with Telegram types more pleasant.
 mod messages;
 mod updates;
 

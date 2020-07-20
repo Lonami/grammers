@@ -16,6 +16,11 @@ pub enum MaybeBorrowedVec<'a, T> {
     Owned(Vec<T>),
 }
 
+/// Helper structure to efficiently retrieve entities via their peer.
+///
+/// A lot of responses include the entities related to them in the form of a list of users
+/// and chats, making it annoying to extract a specific entity. This structure lets you
+/// save those separate vectors in a single place and query them by using a `Peer`.
 pub struct EntitySet<'a> {
     users: MaybeBorrowedVec<'a, tl::enums::User>,
     chats: MaybeBorrowedVec<'a, tl::enums::Chat>,
@@ -80,6 +85,9 @@ impl<T> Index<usize> for MaybeBorrowedVec<'_, T> {
 }
 
 impl<'a> EntitySet<'a> {
+    /// Create a borrowed entity set.
+    ///
+    /// Useful when you can't or don't want to take ownership of the lists.
     pub fn new_borrowed(users: &'a [tl::enums::User], chats: &'a [tl::enums::Chat]) -> Self {
         let map = build_map(users, chats);
         Self {
@@ -89,6 +97,9 @@ impl<'a> EntitySet<'a> {
         }
     }
 
+    /// Create a new owned entity set.
+    ///
+    /// Useful when you need to pass or hold on to the instance.
     pub fn new_owned(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Self {
         let map = build_map(&users, &chats);
         Self {
@@ -98,6 +109,9 @@ impl<'a> EntitySet<'a> {
         }
     }
 
+    /// Create a new empty entity set.
+    ///
+    /// Useful when there is no information known about any entities.
     pub fn empty() -> Self {
         Self {
             users: MaybeBorrowedVec::Owned(Vec::new()),
@@ -106,6 +120,7 @@ impl<'a> EntitySet<'a> {
         }
     }
 
+    /// Retrieve the full `Entity` object given its `Peer`.
     pub fn get(&self, peer: &tl::enums::Peer) -> Option<Entity> {
         let key = match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => (Peer::User(*user_id)),

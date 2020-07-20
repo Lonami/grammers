@@ -5,12 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod dialog;
+
+//! Custom types extending those provided by Telegram.
+//mod dialog;
 mod entity;
 mod entity_set;
 mod message;
 
-pub use dialog::Dialog;
+//pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;
 pub use message::Message;
