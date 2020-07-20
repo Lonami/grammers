@@ -5,7 +5,7 @@
 //! ```
 
 use async_std::task;
-use grammers_client::ext::MessageExt;
+use grammers_client::ext::{MessageExt, UpdateExt};
 use grammers_client::types::EntitySet;
 use grammers_client::{AuthorizationError, Client, Config, InvocationError};
 use grammers_session::Session;
@@ -28,34 +28,15 @@ async fn handle_updates(
             let entity_set = EntitySet::new_owned(users, chats);
 
             for update in updates {
-                match update {
-                    tl::enums::Update::NewMessage(tl::types::UpdateNewMessage {
-                        message: tl::enums::Message::Message(message),
-                        ..
-                    }) => {
-                        let peer = entity_set
-                            .get(&message.chat())
-                            .expect("failed to find entity");
+                if let Some(message) = update.message() {
+                    let peer = entity_set
+                        .get(&message.chat())
+                        .expect("failed to find entity");
 
-                        println!("Responding to {}", peer.name());
-                        client
-                            .send_message(peer.to_input_peer(), message.message.as_str().into())
-                            .await?;
-                    }
-                    tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
-                        message: tl::enums::Message::Message(message),
-                        ..
-                    }) => {
-                        let peer = entity_set
-                            .get(&message.chat())
-                            .expect("failed to find entity");
-
-                        println!("Responding to {}", peer.name());
-                        client
-                            .send_message(peer.to_input_peer(), message.message.as_str().into())
-                            .await?;
-                    }
-                    _ => {}
+                    println!("Responding to {}", peer.name());
+                    client
+                        .send_message(peer.to_input_peer(), message.message.as_str().into())
+                        .await?;
                 }
             }
         }
