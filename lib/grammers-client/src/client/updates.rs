@@ -38,6 +38,16 @@ impl Client {
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
     pub async fn next_updates<'a, 'b>(&'a mut self) -> Option<(UpdateIter, EntitySet<'b>)> {
+        // FIXME when creating a client and logging in we get our own id which we should
+        // persist, that means we shouldn't need to fetch it anywhere ever but we don't
+        // do that yet. this also means receiving an update before sign in fails
+        if self.user_id.is_none() {
+            self.user_id = Some(match self.get_me().await {
+                Ok(me) => me.id,
+                Err(_) => return None,
+            });
+        }
+
         use tl::enums::Updates::*;
 
         loop {
@@ -53,7 +63,8 @@ impl Client {
                     UpdateIter::multiple(update.updates),
                     EntitySet::new_owned(update.users, update.chats),
                 )),
-                // We need to know our self identifier by now or this will fail
+                // We need to know our self identifier by now or this will fail.
+                // These updates will only happen after we logged in so that's fine.
                 UpdateShortMessage(update) => Some((
                     (UpdateIter::single(tl::enums::Update::NewMessage(
                         tl::types::UpdateNewMessage {
