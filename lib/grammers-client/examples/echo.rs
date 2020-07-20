@@ -6,49 +6,11 @@
 
 use async_std::task;
 use grammers_client::ext::{MessageExt, UpdateExt};
-use grammers_client::types::EntitySet;
-use grammers_client::{AuthorizationError, Client, Config, InvocationError};
+use grammers_client::{AuthorizationError, Client, Config};
 use grammers_session::Session;
-use grammers_tl_types as tl;
 use log;
 use simple_logger;
 use std::env;
-
-async fn handle_updates(
-    client: &mut Client,
-    updates: tl::enums::Updates,
-) -> Result<(), InvocationError> {
-    match updates {
-        tl::enums::Updates::Updates(tl::types::Updates {
-            updates,
-            users,
-            chats,
-            ..
-        }) => {
-            let entity_set = EntitySet::new_owned(users, chats);
-
-            for update in updates {
-                if let Some(message) = update.message() {
-                    let peer = entity_set
-                        .get(&message.chat())
-                        .expect("failed to find entity");
-
-                    println!("Responding to {}", peer.name());
-                    client
-                        .send_message(peer.to_input_peer(), message.message.as_str().into())
-                        .await?;
-                }
-            }
-        }
-        // For simplicity, we're not handling:
-        // * UpdateShortMessage
-        // * UpdateShortChatMessage
-        // * UpdateShort
-        _ => {}
-    }
-
-    Ok(())
-}
 
 async fn async_main() -> Result<(), AuthorizationError> {
     simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
@@ -81,8 +43,19 @@ async fn async_main() -> Result<(), AuthorizationError> {
     }
 
     println!("Waiting for messages...");
-    while let Some(updates) = client.next_updates().await {
-        handle_updates(&mut client, updates).await?;
+    while let Some((updates, entity_set)) = client.next_updates().await {
+        for update in updates {
+            if let Some(message) = update.message() {
+                let peer = entity_set
+                    .get(&message.chat())
+                    .expect("failed to find entity");
+
+                println!("Responding to {}", peer.name());
+                client
+                    .send_message(peer.to_input_peer(), message.message.as_str().into())
+                    .await?;
+            }
+        }
     }
 
     Ok(())

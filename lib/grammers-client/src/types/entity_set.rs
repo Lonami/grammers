@@ -80,24 +80,29 @@ impl<T> Index<usize> for MaybeBorrowedVec<'_, T> {
 }
 
 impl<'a> EntitySet<'a> {
-    pub fn new_borrowed(
-        users: &'a [tl::enums::User],
-        chats: &'a [tl::enums::Chat],
-    ) -> EntitySet<'a> {
+    pub fn new_borrowed(users: &'a [tl::enums::User], chats: &'a [tl::enums::Chat]) -> Self {
         let map = build_map(users, chats);
-        EntitySet {
+        Self {
             users: MaybeBorrowedVec::Borrowed(users),
             chats: MaybeBorrowedVec::Borrowed(chats),
             map,
         }
     }
 
-    pub fn new_owned(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> EntitySet<'a> {
+    pub fn new_owned(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Self {
         let map = build_map(&users, &chats);
-        EntitySet {
+        Self {
             users: MaybeBorrowedVec::Owned(users),
             chats: MaybeBorrowedVec::Owned(chats),
             map,
+        }
+    }
+
+    pub fn empty() -> Self {
+        Self {
+            users: MaybeBorrowedVec::Owned(Vec::new()),
+            chats: MaybeBorrowedVec::Owned(Vec::new()),
+            map: HashMap::new(),
         }
     }
 

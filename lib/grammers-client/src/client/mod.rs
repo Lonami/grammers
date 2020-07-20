@@ -51,6 +51,9 @@ pub struct Client {
 
     /// The stored phone and its hash from the last `request_login_code` call.
     last_phone_hash: Option<(String, String)>,
+
+    /// The user identifier of the currently logged-in user.
+    user_id: Option<i32>,
 }
 
 pub struct Config {
@@ -131,6 +134,7 @@ impl Client {
             updates,
             _handler: handler,
             last_phone_hash: None,
+            user_id: None,
         };
         client.init_connection().await?;
         Ok(client)
