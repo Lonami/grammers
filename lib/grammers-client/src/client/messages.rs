@@ -47,7 +47,7 @@ impl Client {
         username: &str,
     ) -> Result<tl::enums::InputPeer, InvocationError> {
         if username.eq_ignore_ascii_case("me") {
-            Ok(tl::enums::InputPeer::PeerSelf(tl::types::InputPeerSelf {}))
+            Ok(tl::enums::InputPeer::PeerSelf)
         } else if let Some(user) = self.resolve_username(username).await? {
             Ok(tl::types::InputPeerUser {
                 user_id: user.id,

@@ -148,7 +148,7 @@ impl Client {
                     EntitySet::empty(),
                 )),
                 // These shouldn't really occur unless triggered via a request
-                TooLong(_) => panic!("should not receive updatesTooLong via passive updates"),
+                TooLong => panic!("should not receive updatesTooLong via passive updates"),
                 UpdateShortSentMessage(_) => {
                     panic!("should not receive updateShortSentMessage via passive updates")
                 }

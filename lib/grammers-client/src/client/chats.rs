@@ -46,7 +46,7 @@ impl Client {
     pub async fn get_me(&mut self) -> Result<tl::types::User, InvocationError> {
         let mut res = self
             .invoke(&tl::functions::users::GetUsers {
-                id: vec![tl::enums::InputUser::UserSelf(tl::types::InputUserSelf {})],
+                id: vec![tl::enums::InputUser::UserSelf],
             })
             .await?;
 
