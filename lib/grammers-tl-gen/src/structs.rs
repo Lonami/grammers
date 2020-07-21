@@ -362,6 +362,7 @@ fn write_impl_from<W: Write>(
     metadata: &Metadata,
 ) -> io::Result<()> {
     let infallible = metadata.defs_with_type(&def.ty).len() == 1;
+    let type_name = rustifier::definitions::type_name(&def);
 
     writeln!(
         file,
@@ -369,7 +370,7 @@ fn write_impl_from<W: Write>(
         indent,
         if infallible { "" } else { "Try" },
         rustifier::types::qual_name(&def.ty),
-        rustifier::definitions::type_name(&def),
+        type_name,
     )?;
     if !infallible {
         writeln!(
@@ -390,16 +391,23 @@ fn write_impl_from<W: Write>(
     writeln!(file, "{}        match x {{", indent)?;
     writeln!(
         file,
-        "{}            {cls}::{name}(x) => {ok}{deref}x{paren},",
+        "{}            {cls}::{name}{data} => {ok}{deref}{value}{body}{paren},",
         indent,
         cls = rustifier::types::qual_name(&def.ty),
         name = rustifier::definitions::variant_name(def),
+        data = if def.params.is_empty() { "" } else { "(x)" },
         ok = if infallible { "" } else { "Ok(" },
         deref = if metadata.is_recursive_def(def) {
             "*"
         } else {
             ""
         },
+        value = if def.params.is_empty() {
+            type_name.as_ref()
+        } else {
+            "x"
+        },
+        body = if def.params.is_empty() { " {}" } else { "" },
         paren = if infallible { "" } else { ")" },
     )?;
     if !infallible {

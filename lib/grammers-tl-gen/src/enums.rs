@@ -43,10 +43,18 @@ fn write_enum<W: Write>(
     for d in metadata.defs_with_type(ty) {
         write!(
             file,
-            "{}    {}(",
+            "{}    {}",
             indent,
             rustifier::definitions::variant_name(d)
         )?;
+
+        // Variant with no struct since it has no data and it only adds noise
+        if d.params.is_empty() {
+            writeln!(file, ",")?;
+            continue;
+        } else {
+            write!(file, "(")?;
+        }
 
         if metadata.is_recursive_def(d) {
             write!(file, "Box<")?;
@@ -100,9 +108,10 @@ fn write_serializable<W: Write>(
     for d in metadata.defs_with_type(ty) {
         writeln!(
             file,
-            "{}            Self::{}(x) => {{",
+            "{}            Self::{}{} => {{",
             indent,
-            rustifier::definitions::variant_name(d)
+            rustifier::definitions::variant_name(d),
+            if d.params.is_empty() { "" } else { "(x)" },
         )?;
         writeln!(
             file,
@@ -110,7 +119,9 @@ fn write_serializable<W: Write>(
             indent,
             rustifier::definitions::qual_name(d)
         )?;
-        writeln!(file, "{}                x.serialize(buf)", indent)?;
+        if !d.params.is_empty() {
+            writeln!(file, "{}                x.serialize(buf)", indent)?;
+        }
         writeln!(file, "{}            }},", indent)?;
     }
     writeln!(file, "{}        }}", indent)?;
@@ -155,11 +166,18 @@ fn write_deserializable<W: Write>(
     for d in metadata.defs_with_type(ty) {
         write!(
             file,
-            "{}            {}::CONSTRUCTOR_ID => Self::{}(",
+            "{}            {}::CONSTRUCTOR_ID => Self::{}",
             indent,
             rustifier::definitions::qual_name(d),
             rustifier::definitions::variant_name(d),
         )?;
+
+        if d.params.is_empty() {
+            writeln!(file, ",")?;
+            continue;
+        } else {
+            write!(file, "(")?;
+        }
 
         if metadata.is_recursive_def(d) {
             write!(file, "Box::new(")?;
@@ -208,27 +226,27 @@ fn write_impl_from<W: Write>(
         )?;
         writeln!(
             file,
-            "{}    fn from(x: {}) -> Self {{",
+            "{}    fn from({}x: {}) -> Self {{",
             indent,
+            if def.params.is_empty() { "_" } else { "" },
             rustifier::definitions::qual_name(def),
         )?;
-        writeln!(
+        write!(
             file,
-            "{}        {cls}::{variant}({box_}x{paren})",
+            "{}        {}::{}",
             indent,
-            cls = rustifier::types::type_name(ty),
-            box_ = if metadata.is_recursive_def(def) {
-                "Box::new("
-            } else {
-                ""
-            },
-            variant = rustifier::definitions::variant_name(def),
-            paren = if metadata.is_recursive_def(def) {
-                ")"
-            } else {
-                ""
-            },
+            rustifier::types::type_name(ty),
+            rustifier::definitions::variant_name(def),
         )?;
+
+        if def.params.is_empty() {
+            writeln!(file, "")?;
+        } else if metadata.is_recursive_def(def) {
+            writeln!(file, "(Box::new(x))")?;
+        } else {
+            writeln!(file, "(x)")?;
+        }
+
         writeln!(file, "{}    }}", indent)?;
         writeln!(file, "{}}}", indent)?;
     }
