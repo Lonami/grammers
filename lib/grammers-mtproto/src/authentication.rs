@@ -421,7 +421,9 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<(AuthKey, i32), AuthKe
 
     let auth_key = {
         let mut buffer = [0; 256];
-        buffer.copy_from_slice(&gab.to_bytes_be());
+        let gab_bytes = gab.to_bytes_be();
+        let skip = buffer.len() - gab_bytes.len(); // gab might need less than 256 bytes
+        buffer[skip..].copy_from_slice(&gab_bytes);
         AuthKey::from_bytes(buffer)
     };
 
