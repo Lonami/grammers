@@ -1,13 +1,19 @@
-//! A hello world example. Runnable as:
+//! A hello world example.
+//!
+//! The `TG_ID` and `TG_HASH` environment variables must be set (learn how to do it for
+//! [Windows](https://ss64.com/nt/set.html) or [Linux](https://ss64.com/bash/export.html))
+//! to Telegram's API ID and API hash respectively.
+//!
+//! Then, run it as:
 //!
 //! ```sh
-//! cargo run --example hello_world -- API_ID API_HASH BOT_TOKEN USERNAME MESSAGE
+//! cargo run --example hello_world -- BOT_TOKEN USERNAME MESSAGE
 //! ```
 //!
 //! For example, to send 'Hello, world!' to the person '@username':
 //!
 //! ```sh
-//! cargo run --example hello_world -- 123 1234abc 123:abc username 'Hello, world!'
+//! cargo run --example hello_world -- 123:abc username 'Hello, world!'
 //! ```
 
 use async_std::task;
@@ -20,15 +26,10 @@ use std::env;
 async fn async_main() -> Result<(), AuthorizationError> {
     simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
 
-    let mut args = env::args();
+    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
+    let api_hash = env!("TG_HASH").to_string();
 
-    let _path = args.next();
-    let api_id = args
-        .next()
-        .expect("api_id missing")
-        .parse()
-        .expect("api_id invalid");
-    let api_hash = args.next().expect("api_hash missing");
+    let mut args = env::args().skip(1);
     let token = args.next().expect("token missing");
     let username = args.next().expect("username missing");
     let message = args.next().expect("message missing");

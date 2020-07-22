@@ -1,7 +1,13 @@
-//! Example to echo user text messages. Runnable as:
+//! Example to echo user text messages.
+//!
+//! The `TG_ID` and `TG_HASH` environment variables must be set (learn how to do it for
+//! [Windows](https://ss64.com/nt/set.html) or [Linux](https://ss64.com/bash/export.html))
+//! to Telegram's API ID and API hash respectively.
+//!
+//! Then, run it as:
 //!
 //! ```sh
-//! cargo run --example echo -- API_ID API_HASH BOT_TOKEN
+//! cargo run --example echo -- BOT_TOKEN
 //! ```
 
 use async_std::task;
@@ -15,16 +21,9 @@ use std::env;
 async fn async_main() -> Result<(), AuthorizationError> {
     simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
 
-    let mut args = env::args();
-
-    let _path = args.next();
-    let api_id = args
-        .next()
-        .expect("api_id missing")
-        .parse()
-        .expect("api_id invalid");
-    let api_hash = args.next().expect("api_hash missing");
-    let token = args.next().expect("token missing");
+    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
+    let api_hash = env!("TG_HASH").to_string();
+    let token = env::args().skip(1).next().expect("token missing");
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
