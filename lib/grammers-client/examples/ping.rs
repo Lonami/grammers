@@ -5,12 +5,19 @@
 //! ```
 
 use async_std::task;
-use grammers_client::{AuthorizationError, Client};
+use grammers_client::{AuthorizationError, Client, Config};
+use grammers_session::Session;
 use grammers_tl_types as tl;
 
 async fn async_main() -> Result<(), AuthorizationError> {
     println!("Connecting to Telegram...");
-    let mut client = Client::connect().await?;
+    let mut client = Client::connect(Config {
+        session: Session::load_or_create("ping.session")?,
+        api_id: 1, // not actually logging in, but has to look real
+        api_hash: "".to_string(),
+        params: Default::default(),
+    })
+    .await?;
     println!("Connected!");
 
     println!("Sending ping...");
