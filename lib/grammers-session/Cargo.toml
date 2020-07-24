@@ -14,4 +14,4 @@ categories = []
 edition = "2018"
 
 [dependencies]
-grammers-crypto = "0.2.0"
+grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }

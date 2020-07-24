@@ -19,8 +19,8 @@ include = [
 ]
 
 [build-dependencies]
-grammers-tl-gen = "0.2.0"
-grammers-tl-parser = "1.0.0"
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.2.0" }
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.0.0" }
 
 [features]
 default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]

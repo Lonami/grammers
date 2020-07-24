@@ -14,4 +14,4 @@ categories = []
 edition = "2018"
 
 [dependencies]
-grammers-tl-parser = "1.0.0"
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.0.0" }
