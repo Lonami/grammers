@@ -27,7 +27,7 @@ mod client;
 pub mod ext;
 pub mod types;
 
-pub use client::{Client, Config, SignInError};
+pub use client::{Client, Config, SignInError, InitParams};
 use futures::channel::mpsc;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 
