@@ -55,3 +55,4 @@ dual licensed as above, without any additional terms or conditions.
 [grammers-tl-types]: lib/grammers-tl-types/
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT
+<hr>
