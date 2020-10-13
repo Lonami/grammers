@@ -19,27 +19,15 @@ impl Client {
             })
             .await?;
 
-        match peer {
+        Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
-                return Ok(users
-                    .into_iter()
-                    .filter_map(|user| match user {
-                        tl::enums::User::User(user) => {
-                            if user.id == user_id {
-                                Some(user)
-                            } else {
-                                None
-                            }
-                        }
-                        tl::enums::User::Empty(_) => None,
-                    })
-                    .next());
+                users.into_iter().find_map(|user| match user {
+                    tl::enums::User::User(user) if user.id == user_id => Some(user),
+                    tl::enums::User::User(_) | tl::enums::User::Empty(_) => None,
+                })
             }
-            tl::enums::Peer::Chat(_) => {}
-            tl::enums::Peer::Channel(_) => {}
-        }
-
-        Ok(None)
+            tl::enums::Peer::Chat(_) | tl::enums::Peer::Channel(_) => None,
+        })
     }
 
     /// Fetch full information about the currently logged-in user.
