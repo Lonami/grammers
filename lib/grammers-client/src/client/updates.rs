@@ -78,12 +78,14 @@ impl Client {
                                 legacy: false,
                                 edit_hide: false,
                                 id: update.id,
-                                from_id: Some(if update.out {
-                                    self.user_id.unwrap()
-                                } else {
-                                    update.user_id
-                                }),
-                                to_id: tl::enums::Peer::User(tl::types::PeerUser {
+                                from_id: Some(tl::enums::Peer::User(tl::types::PeerUser {
+                                    user_id: if update.out {
+                                        self.user_id.unwrap()
+                                    } else {
+                                        update.user_id
+                                    },
+                                })),
+                                peer_id: tl::enums::Peer::User(tl::types::PeerUser {
                                     user_id: if update.out {
                                         update.user_id
                                     } else {
@@ -92,13 +94,15 @@ impl Client {
                                 }),
                                 fwd_from: update.fwd_from,
                                 via_bot_id: update.via_bot_id,
-                                reply_to_msg_id: update.reply_to_msg_id,
+                                reply_to: update.reply_to,
                                 date: update.date,
                                 message: update.message,
                                 media: None,
                                 reply_markup: None,
                                 entities: update.entities,
                                 views: None,
+                                forwards: None,
+                                replies: None,
                                 edit_date: None,
                                 post_author: None,
                                 grouped_id: None,
@@ -123,19 +127,23 @@ impl Client {
                                 legacy: false,
                                 edit_hide: false,
                                 id: update.id,
-                                from_id: Some(update.from_id),
-                                to_id: tl::enums::Peer::Chat(tl::types::PeerChat {
+                                from_id: Some(tl::enums::Peer::User(tl::types::PeerUser {
+                                    user_id: update.from_id,
+                                })),
+                                peer_id: tl::enums::Peer::Chat(tl::types::PeerChat {
                                     chat_id: update.chat_id,
                                 }),
                                 fwd_from: update.fwd_from,
                                 via_bot_id: update.via_bot_id,
-                                reply_to_msg_id: update.reply_to_msg_id,
+                                reply_to: update.reply_to,
                                 date: update.date,
                                 message: update.message,
                                 media: None,
                                 reply_markup: None,
                                 entities: update.entities,
                                 views: None,
+                                forwards: None,
+                                replies: None,
                                 edit_date: None,
                                 post_author: None,
                                 grouped_id: None,

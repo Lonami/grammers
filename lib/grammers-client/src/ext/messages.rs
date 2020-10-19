@@ -8,13 +8,11 @@ pub trait MessageExt {
 
 impl MessageExt for tl::types::Message {
     fn chat(&self) -> tl::enums::Peer {
-        if !self.out && matches!(self.to_id, tl::enums::Peer::User(_)) {
+        if !self.out && matches!(self.peer_id, tl::enums::Peer::User(_)) {
             // Sent in private, `to_id` is us, build peer from `from_id` instead
-            tl::enums::Peer::User(tl::types::PeerUser {
-                user_id: self.from_id.unwrap(),
-            })
+            self.from_id.clone().unwrap()
         } else {
-            self.to_id.clone()
+            self.peer_id.clone()
         }
     }
 }
