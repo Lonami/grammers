@@ -210,14 +210,20 @@ impl From<tl::errors::DeserializeError> for RequestError {
 }
 
 /// The error type reported by the different transports when something is wrong.
+///
+/// Certain transports will only produce certain variants of this error.
+///
+/// In any case, the connection should not continue when an error occurs.
 #[derive(Debug, PartialEq)]
 pub enum TransportError {
-    /// Not enough bytes are provided, and the amount here is required.
+    /// Not enough bytes are provided, and the amount indicated is required to advance.
     MissingBytes(usize),
 
-    /// The input data does not conform to our expectancies
-    /// and the connection should not be continued.
-    UnexpectedData(&'static str),
+    /// The sequence number received does not match the expected value.
+    BadSeq { expected: u32, got: u32 },
+
+    /// The checksum of the packet does not match its expected value.
+    BadCrc { expected: u32, got: u32 },
 }
 
 impl Error for TransportError {}
@@ -227,7 +233,12 @@ impl fmt::Display for TransportError {
         write!(f, "transport error: ")?;
         match self {
             TransportError::MissingBytes(n) => write!(f, "need {} bytes", n),
-            TransportError::UnexpectedData(what) => write!(f, "unexpected data: {}", what),
+            TransportError::BadSeq { expected, got } => {
+                write!(f, "bad seq (expected {}, got {})", expected, got)
+            }
+            TransportError::BadCrc { expected, got } => {
+                write!(f, "bad crc (expected {}, got {})", expected, got)
+            }
         }
     }
 }

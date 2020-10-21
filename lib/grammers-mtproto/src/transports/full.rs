@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder, Transport};
+use crate::transports::Transport;
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -26,93 +26,74 @@ use crc::crc32::{self, Hasher32};
 /// ```
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
-pub struct TransportFull;
+pub struct Full {
+    send_seq: u32,
+    recv_seq: u32,
+}
 
-impl Transport for TransportFull {
-    type Encoder = FullEncoder;
-    type Decoder = FullDecoder;
-
-    fn instance() -> (Self::Encoder, Self::Decoder) {
-        (Self::Encoder { counter: 0 }, Self::Decoder { counter: 0 })
+impl Full {
+    pub fn new() -> Self {
+        Self {
+            send_seq: 0,
+            recv_seq: 0,
+        }
     }
 }
 
-pub struct FullEncoder {
-    counter: u32,
-}
-
-pub struct FullDecoder {
-    counter: u32,
-}
-
-impl Encoder for FullEncoder {
-    fn max_overhead(&self) -> usize {
-        12
-    }
-
-    fn write_magic(&mut self, _output: &mut [u8]) -> Result<usize, usize> {
-        Ok(0)
-    }
-
-    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+impl Transport for Full {
+    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
         assert_eq!(input.len() % 4, 0);
 
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
-        if output.len() < len {
-            return Err(len);
-        }
+        output.reserve(len);
 
         let len_bytes = (len as u32).to_le_bytes();
-        let counter = self.counter.to_le_bytes();
+        let seq = self.send_seq.to_le_bytes();
 
         let crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
             digest.write(&len_bytes);
-            digest.write(&counter);
+            digest.write(&seq);
             digest.write(input);
             digest.sum32().to_le_bytes()
         };
 
-        // We could use `io::Cursor`, and even though we know `write_all`
-        // would never fail (we checked `output.len()` above), we would
-        // still need to add several `unwrap()`. The only benefit would
-        // be not keeping track of the offsets manually. Not worth it.
-        output[0..4].copy_from_slice(&len_bytes);
-        output[4..8].copy_from_slice(&counter);
-        output[8..len - 4].copy_from_slice(input);
-        output[len - 4..len].copy_from_slice(&crc);
+        output.extend_from_slice(&len_bytes);
+        output.extend_from_slice(&seq);
+        output.extend_from_slice(input);
+        output.extend_from_slice(&crc);
 
-        self.counter += 1;
-        Ok(len)
+        self.send_seq += 1;
     }
-}
 
-impl Decoder for FullDecoder {
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
         // Need 4 bytes for the initial length
         if input.len() < 4 {
             return Err(TransportError::MissingBytes(4));
         }
 
         // payload len
-        let mut len_data = [0; 4];
-        len_data.copy_from_slice(&input[0..4]);
-        let len = u32::from_le_bytes(len_data) as usize;
+        let mut len_bytes = [0; 4];
+        len_bytes.copy_from_slice(&input[0..4]);
+        let len = u32::from_le_bytes(len_bytes) as usize;
         if input.len() < len {
             return Err(TransportError::MissingBytes(len));
         }
 
         // receive counter
-        let mut counter_data = [0; 4];
-        counter_data.copy_from_slice(&input[4..8]);
-        let counter = u32::from_le_bytes(counter_data);
-        if counter != self.counter {
-            return Err(TransportError::UnexpectedData("seq"));
+        let mut seq_bytes = [0; 4];
+        seq_bytes.copy_from_slice(&input[4..8]);
+        let seq = u32::from_le_bytes(seq_bytes);
+        if seq != self.recv_seq {
+            return Err(TransportError::BadSeq {
+                expected: self.recv_seq,
+                got: seq,
+            });
         }
 
         // payload
-        let output = &input[8..len - 4];
+        let body = &input[8..len - 4];
 
         // crc32
         let crc = {
@@ -123,17 +104,21 @@ impl Decoder for FullDecoder {
 
         let valid_crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&len_data);
-            digest.write(&counter_data);
-            digest.write(output);
+            digest.write(&len_bytes);
+            digest.write(&seq_bytes);
+            digest.write(body);
             digest.sum32()
         };
         if crc != valid_crc {
-            return Err(TransportError::UnexpectedData("crc"));
+            return Err(TransportError::BadCrc {
+                expected: valid_crc,
+                got: crc,
+            });
         }
 
-        self.counter += 1;
-        Ok(output)
+        self.recv_seq += 1;
+        output.extend_from_slice(body);
+        Ok(())
     }
 }
 
@@ -141,36 +126,39 @@ impl Decoder for FullDecoder {
 mod tests {
     use super::*;
 
-    fn get_data(n: usize) -> Vec<u8> {
-        let mut result = Vec::with_capacity(n);
-        for i in 0..n {
-            result.push((i & 0xff) as u8);
-        }
-        result
+    /// Returns a new full transport, `n` bytes of input data for it, and an empty output buffer.
+    fn setup_pack(n: u32) -> (Full, Vec<u8>, Vec<u8>) {
+        let input = (0..n).map(|x| (x & 0xff) as u8).collect();
+        (Full::new(), input, Vec::new())
+    }
+
+    /// Returns the expected data after unpacking, a new full transport, input data and an empty output buffer.
+    fn setup_unpack(n: u32) -> (Vec<u8>, Full, Vec<u8>, Vec<u8>) {
+        let (mut transport, expected_output, mut input) = setup_pack(n);
+        transport.pack(&expected_output, &mut input);
+
+        (expected_output, Full::new(), input, Vec::new())
     }
 
     #[test]
-    fn check_magic() {
-        let (mut encoder, _) = TransportFull::instance();
-        let mut output = [];
-        assert_eq!(encoder.write_magic(&mut output), Ok(0));
+    fn pack_empty() {
+        let (mut transport, input, mut output) = setup_pack(0);
+        transport.pack(&input, &mut output);
+
+        assert_eq!(&output, &[12, 0, 0, 0, 0, 0, 0, 0, 38, 202, 141, 50]);
     }
 
     #[test]
     #[should_panic]
-    fn check_non_padded_encoding() {
-        let (mut encoder, _) = TransportFull::instance();
-        let input = get_data(7);
-        let mut output = vec![0; 7 + encoder.max_overhead()];
-        drop(encoder.write_into(&input, &mut output));
+    fn pack_non_padded() {
+        let (mut transport, input, mut output) = setup_pack(7);
+        transport.pack(&input, &mut output);
     }
 
     #[test]
-    fn check_encoding() {
-        let (mut encoder, _) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        assert_eq!(encoder.write_into(&input, &mut output), Ok(140));
+    fn pack_normal() {
+        let (mut transport, input, mut output) = setup_pack(128);
+        transport.pack(&input, &mut output);
 
         assert_eq!(&output[..4], &[140, 0, 0, 0]);
         assert_eq!(&output[4..8], &[0, 0, 0, 0]);
@@ -179,12 +167,11 @@ mod tests {
     }
 
     #[test]
-    fn check_repeated_encoding() {
-        let (mut encoder, _) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        assert!(encoder.write_into(&input, &mut output).is_ok());
-        assert!(encoder.write_into(&input, &mut output).is_ok());
+    fn pack_twice() {
+        let (mut transport, input, mut output) = setup_pack(128);
+        transport.pack(&input, &mut output);
+        output.clear();
+        transport.pack(&input, &mut output);
 
         assert_eq!(&output[..4], &[140, 0, 0, 0]);
         assert_eq!(&output[4..8], &[1, 0, 0, 0]);
@@ -193,67 +180,65 @@ mod tests {
     }
 
     #[test]
-    fn check_encoding_small_buffer() {
-        let (mut encoder, _) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 8];
-        assert_eq!(encoder.write_into(&input, &mut output), Err(140));
-    }
-
-    #[test]
-    fn check_decoding() {
-        let (mut encoder, mut decoder) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-    }
-
-    #[test]
-    fn check_repeating_decoding() {
-        let (mut encoder, mut decoder) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-    }
-
-    #[test]
-    fn check_bad_crc_decoding() {
-        let (mut encoder, mut decoder) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-
-        encoder.write_into(&input, &mut output).unwrap();
-        let out_len = output.len() - 1;
-        output[out_len] ^= 0xff;
+    fn unpack_small() {
+        let mut transport = Full::new();
+        let input = [0, 1, 2];
+        let mut output = Vec::new();
         assert_eq!(
-            decoder.read(&output),
-            Err(TransportError::UnexpectedData("crc"))
+            transport.unpack(&input, &mut output),
+            Err(TransportError::MissingBytes(4))
         );
     }
 
     #[test]
-    fn check_bad_repeating_decoding() {
-        let (mut encoder, mut decoder) = TransportFull::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
+    fn unpack_normal() {
+        let (expected_output, mut transport, input, mut output) = setup_unpack(128);
+        transport.unpack(&input, &mut output).unwrap();
+        assert_eq!(output, expected_output);
+    }
 
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
+    #[test]
+    fn unpack_twice() {
+        let (mut transport, input, mut packed) = setup_pack(128);
+        let mut unpacked = Vec::new();
+        transport.pack(&input, &mut packed);
+        transport.unpack(&packed, &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
+
+        packed.clear();
+        unpacked.clear();
+        transport.pack(&input, &mut packed);
+        transport.unpack(&packed, &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
+    }
+
+    #[test]
+    fn unpack_bad_crc() {
+        let (_expected_output, mut transport, mut input, mut output) = setup_unpack(128);
+        let last = input.len() - 1;
+        input[last] ^= 0xff;
         assert_eq!(
-            decoder.read(&output),
-            Err(TransportError::UnexpectedData("seq"))
+            transport.unpack(&input, &mut output),
+            Err(TransportError::BadCrc {
+                expected: 932541318,
+                got: 3365237638,
+            })
         );
     }
 
     #[test]
-    fn check_decoding_small_buffer() {
-        let (_, mut decoder) = TransportFull::instance();
-        let input = get_data(3);
-        assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(4)));
+    fn unpack_bad_seq() {
+        let (mut transport, input, mut packed) = setup_pack(128);
+        let mut unpacked = Vec::new();
+        transport.pack(&input, &mut packed);
+        packed.clear();
+        transport.pack(&input, &mut packed);
+        assert_eq!(
+            transport.unpack(&packed, &mut unpacked),
+            Err(TransportError::BadSeq {
+                expected: 0,
+                got: 1,
+            })
+        );
     }
 }

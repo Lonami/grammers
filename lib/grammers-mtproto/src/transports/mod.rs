@@ -6,57 +6,31 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implementation of the several [MTProto transports].
+//! Implementation of the several [MTProto transports]. This layer is
+//! responsible for taking serialized messages from the MTP and packing them
+//! in a format that can be sent over a protocol, such as TCP, HTTP or UDP.
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
-mod abridged;
+//mod abridged;
 mod full;
-mod intermediate;
+//mod intermediate;
 
 use crate::errors::TransportError;
-pub use abridged::TransportAbridged;
-pub use full::TransportFull;
-pub use intermediate::TransportIntermediate;
+//pub use abridged::Abridged;
+pub use full::Full;
+//pub use intermediate::Intermediate;
 
 /// The trait used by the transports to create instances of themselves.
 pub trait Transport {
-    type Encoder: Encoder;
-    type Decoder: Decoder;
+    /// Packs and writes `input` into `output`.
+    ///
+    /// Previous contents in `output` are not cleared before this operation.
+    ///
+    /// Panics if `input.len()` is not divisible by 4.
+    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>);
 
-    fn instance() -> (Self::Encoder, Self::Decoder);
-}
-
-/// The trait used by the encoder part of a concrete transport.
-pub trait Encoder {
-    /// How much overhead does the transport incur, at a maximum.
-    fn max_overhead(&self) -> usize;
-
-    /// Write the protocol's magic into `output`.
+    /// Unpacks the content from `input` into `output`.
     ///
-    /// On success, return how many bytes were written.
-    ///
-    /// On failure, return how many bytes long the output buffer should have been.
-    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize>;
-
-    /// Write the packet from `input` into `output`.
-    ///
-    /// On success, return how many bytes were written.
-    ///
-    /// On failure, return how many bytes long the output buffer should have been.
-    ///
-    /// # Panics
-    ///
-    /// The input length must be a multiple of 4, or else a panic will occur.
-    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize>;
-}
-
-/// The trait used by the decoder part of a concrete transport.
-pub trait Decoder {
-    /// Read a packet from `input` and return the body subslice.
-    ///
-    /// On success, return how many bytes were written.
-    ///
-    /// On failure, return either how many bytes long the input buffer should
-    /// have been or decoding failure in which case the connection should end.
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError>;
+    /// Previous contents in `output` are not cleared before this operation.
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError>;
 }
