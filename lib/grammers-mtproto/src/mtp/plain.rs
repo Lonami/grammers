@@ -46,11 +46,7 @@ impl Mtp for Plain {
     /// Panics unless exactly one request is given.
     ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    fn serialize(
-        &mut self,
-        requests: &Vec<Vec<u8>>,
-        output: &mut Vec<u8>,
-    ) -> Result<Vec<MsgId>, ()> {
+    fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Vec<MsgId> {
         assert_eq!(requests.len(), 1);
         let body = &requests[0];
 
@@ -64,7 +60,7 @@ impl Mtp for Plain {
         (body.len() as i32).serialize(output); // message_data_length
         output.extend_from_slice(&body); // message_data
 
-        Ok(vec![MsgId(0)])
+        vec![MsgId(0)]
     }
 
     /// Validates that the returned data is a correct plain message, and

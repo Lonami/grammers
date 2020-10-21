@@ -61,11 +61,7 @@ pub trait Mtp {
     ///
     /// The definition of "too large" is roughly 1MB, so as long as the
     /// payload is below that mark, it's safe to call.
-    fn serialize(
-        &mut self,
-        requests: &Vec<Vec<u8>>,
-        output: &mut Vec<u8>,
-    ) -> Result<Vec<MsgId>, ()>;
+    fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Vec<MsgId>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;
