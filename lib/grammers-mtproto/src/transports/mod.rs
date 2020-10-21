@@ -13,12 +13,12 @@
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
 mod abridged;
 mod full;
-//mod intermediate;
+mod intermediate;
 
 use crate::errors::TransportError;
 pub use abridged::Abridged;
 pub use full::Full;
-//pub use intermediate::Intermediate;
+pub use intermediate::Intermediate;
 
 /// The trait used by the transports to create instances of themselves.
 pub trait Transport {

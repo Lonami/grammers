@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder, Transport};
+use crate::transports::Transport;
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -25,53 +25,31 @@ use crate::transports::{Decoder, Encoder, Transport};
 /// ```
 ///
 /// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
-pub struct TransportIntermediate;
+pub struct Intermediate {
+    init: bool,
+}
 
-impl Transport for TransportIntermediate {
-    type Encoder = IntermediateEncoder;
-    type Decoder = IntermediateDecoder;
-
-    fn instance() -> (Self::Encoder, Self::Decoder) {
-        (Self::Encoder {}, Self::Decoder {})
+impl Intermediate {
+    pub fn new() -> Self {
+        Self { init: false }
     }
 }
 
-#[non_exhaustive]
-pub struct IntermediateEncoder;
-
-#[non_exhaustive]
-pub struct IntermediateDecoder;
-
-impl Encoder for IntermediateEncoder {
-    fn max_overhead(&self) -> usize {
-        4
-    }
-
-    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
-        if output.len() < 4 {
-            Err(4)
-        } else {
-            output[..4].copy_from_slice(&[0xee, 0xee, 0xee, 0xee]);
-            Ok(4)
-        }
-    }
-
-    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+impl Transport for Intermediate {
+    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
         assert_eq!(input.len() % 4, 0);
 
-        let len = input.len() + 4;
-        if output.len() < len {
-            return Err(len);
+        if !self.init {
+            output.extend_from_slice(&[0xee, 0xee, 0xee, 0xee]);
+            self.init = true;
         }
 
-        output[0..4].copy_from_slice(&(input.len() as u32).to_le_bytes());
-        output[4..len].copy_from_slice(input);
-        Ok(len)
+        let len = input.len() + 4;
+        output.extend_from_slice(&(input.len() as u32).to_le_bytes());
+        output.extend_from_slice(input);
     }
-}
 
-impl Decoder for IntermediateDecoder {
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
         if input.len() < 4 {
             return Err(TransportError::MissingBytes(4));
         }
@@ -87,8 +65,8 @@ impl Decoder for IntermediateDecoder {
             return Err(TransportError::MissingBytes(len));
         }
 
-        let output = &input[4..len];
-        Ok(output)
+        output.extend_from_slice(&input[4..len]);
+        Ok(())
     }
 }
 
@@ -96,63 +74,51 @@ impl Decoder for IntermediateDecoder {
 mod tests {
     use super::*;
 
-    fn get_data(n: usize) -> Vec<u8> {
-        let mut result = Vec::with_capacity(n);
-        for i in 0..n {
-            result.push((i & 0xff) as u8);
-        }
-        result
+    /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
+    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, Vec<u8>) {
+        let input = (0..n).map(|x| (x & 0xff) as u8).collect();
+        (Intermediate::new(), input, Vec::new())
     }
 
     #[test]
-    fn check_magic() {
-        let (mut encoder, _) = TransportIntermediate::instance();
-        let mut output = [0, 0, 0, 0];
-        assert_eq!(encoder.write_magic(&mut output), Ok(4));
-        assert_eq!(output, [0xee, 0xee, 0xee, 0xee]);
+    fn pack_empty() {
+        let (mut transport, input, mut output) = setup_pack(0);
+        transport.pack(&input, &mut output);
+        assert_eq!(&output, &[0xee, 0xee, 0xee, 0xee, 0, 0, 0, 0]);
     }
 
     #[test]
     #[should_panic]
-    fn check_non_padded_encoding() {
-        let (mut encoder, _) = TransportIntermediate::instance();
-        let input = get_data(7);
-        let mut output = vec![0; 7 + encoder.max_overhead()];
-        drop(encoder.write_into(&input, &mut output));
+    fn pack_non_padded() {
+        let (mut transport, input, mut output) = setup_pack(7);
+        transport.pack(&input, &mut output);
     }
 
     #[test]
-    fn check_encoding() {
-        let (mut encoder, _) = TransportIntermediate::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        assert_eq!(encoder.write_into(&input, &mut output), Ok(132));
-
-        assert_eq!(&output[..4], &[128, 0, 0, 0]);
-        assert_eq!(&output[4..], &input[..]);
+    fn pack_normal() {
+        let (mut transport, input, mut output) = setup_pack(128);
+        transport.pack(&input, &mut output);
+        assert_eq!(&output[..8], &[0xee, 0xee, 0xee, 0xee, 128, 0, 0, 0]);
+        assert_eq!(&output[8..output.len()], &input[..]);
     }
 
     #[test]
-    fn check_encoding_small_buffer() {
-        let (mut encoder, _) = TransportIntermediate::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 8];
-        assert_eq!(encoder.write_into(&input, &mut output), Err(132));
+    fn unpack_small() {
+        let mut transport = Intermediate::new();
+        let input = [1];
+        let mut output = Vec::new();
+        assert_eq!(
+            transport.unpack(&input, &mut output),
+            Err(TransportError::MissingBytes(4))
+        );
     }
 
     #[test]
-    fn check_decoding() {
-        let (mut encoder, mut decoder) = TransportIntermediate::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-    }
-
-    #[test]
-    fn check_decoding_small_buffer() {
-        let (_, mut decoder) = TransportIntermediate::instance();
-        let input = get_data(3);
-        assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(4)));
+    fn unpack_normal() {
+        let (mut transport, input, mut packed) = setup_pack(128);
+        let mut unpacked = Vec::new();
+        transport.pack(&input, &mut packed);
+        transport.unpack(&packed[4..], &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
     }
 }
