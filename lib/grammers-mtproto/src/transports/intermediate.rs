@@ -44,7 +44,6 @@ impl Transport for Intermediate {
             self.init = true;
         }
 
-        let len = input.len() + 4;
         output.extend_from_slice(&(input.len() as u32).to_le_bytes());
         output.extend_from_slice(input);
     }
