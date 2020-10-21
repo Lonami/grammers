@@ -278,9 +278,9 @@ impl Encrypted {
     }
 
     fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
-        // Most messages require acknowledgement, only a few don't.
-        // Those which don't will remove the acknowledgement from the list.
-        self.pending_ack.push(message.msg_id);
+        if message.requires_ack() {
+            self.pending_ack.push(message.msg_id);
+        }
 
         // Handle all the possible Service Messages:
         // * https://core.telegram.org/mtproto/service_messages
@@ -1107,7 +1107,7 @@ impl Mtp for Encrypted {
             panic!("wrong session id");
         }
 
-        self.process_message(manual_tl::Message::deserialize(&mut buffer)?);
+        self.process_message(manual_tl::Message::deserialize(&mut buffer)?)?;
 
         // For simplicity, and to avoid passing too much stuff around (RPC results, updates),
         // the processing result is stored in self. After processing is done, that temporary

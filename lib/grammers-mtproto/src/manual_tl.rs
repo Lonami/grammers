@@ -39,12 +39,6 @@ impl Message {
         u32::from_bytes(&self.body)
     }
 
-    /// Determine the size this serialized message will occupy.
-    pub fn size(&self) -> usize {
-        // msg_id (8 bytes), seq_no (4 bytes), bytes (4 len), data
-        Self::SIZE_OVERHEAD + self.body.len()
-    }
-
     /// Determines whether this server message needs acknowledgement.
     pub fn requires_ack(&self) -> bool {
         // > Content-related Message
