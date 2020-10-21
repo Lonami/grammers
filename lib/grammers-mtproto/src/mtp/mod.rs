@@ -16,18 +16,18 @@
 //! key).
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto/description
+mod encrypted;
 mod plain;
-//mod encrypted;
 
-use crate::errors::DeserializeError;
+use crate::errors::{DeserializeError, RequestError};
 use crate::MsgId;
+pub use encrypted::Encrypted;
 pub use plain::Plain;
-//pub use encrypted::Encrypted;
 
 /// Results from the deserialization of a response.
 pub struct Deserialization {
     /// Result bodies to Remote Procedure Calls.
-    pub rpc_results: Vec<(MsgId, Vec<u8>)>,
+    pub rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
     /// Updates that came in the response.
     pub updates: Vec<Vec<u8>>,
 }

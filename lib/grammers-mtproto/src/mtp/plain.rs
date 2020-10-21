@@ -107,7 +107,7 @@ impl Mtp for Plain {
         }
 
         Ok(Deserialization {
-            rpc_results: vec![(MsgId(0), payload[20..20 + len as usize].into())],
+            rpc_results: vec![(MsgId(0), Ok(payload[20..20 + len as usize].into()))],
             updates: Vec::new(),
         })
     }
