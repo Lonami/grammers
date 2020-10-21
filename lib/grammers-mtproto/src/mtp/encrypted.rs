@@ -12,6 +12,7 @@ use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
 use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
+use crate::mtp::{Mtp, Serialization, Deserialization};
 
 /// A builder to configure [`Mtp`] instances.
 ///
@@ -19,7 +20,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 ///
 /// [`Mtp`]: struct.mtp.html
 /// [`Mtp::build`]: fn.mtp.build.html
-pub struct MtpBuilder {
+pub struct Builder {
     time_offset: i32,
     compression_threshold: Option<usize>,
 }
@@ -54,7 +55,7 @@ pub struct MtpBuilder {
 /// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
 /// [`process_encrypted_response`]: #method.process_encrypted_response
 /// [`poll_response`]: #method.poll_response
-pub struct Mtp {
+pub struct Encrypted {
     /// The authorization key to use to encrypt payload.
     auth_key: AuthKey,
 
@@ -97,7 +98,7 @@ pub struct Mtp {
     update_queue: VecDeque<Vec<u8>>,
 }
 
-impl MtpBuilder {
+impl Builder {
     fn new() -> Self {
         MtpBuilder {
             time_offset: 0,
@@ -119,47 +120,32 @@ impl MtpBuilder {
 
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn finish(self, auth_key: AuthKey) -> Mtp {
-        let mut result = Mtp::new(auth_key);
-        result.compression_threshold = self.compression_threshold;
-        result
-    }
-}
-
-impl Mtp {
-    // Constructors
-    // ========================================
-
-    /// Creates a new instance with default settings.
-    pub fn new(auth_key: AuthKey) -> Self {
-        let client_id = {
-            let mut buffer = [0u8; 8];
-            getrandom(&mut buffer).expect("failed to generate a secure client_id");
-            i64::from_le_bytes(buffer)
-        };
-
-        Mtp {
+    pub fn finish(self, auth_key: AuthKey) -> Encrypted {
+        Encrypted {
             auth_key,
-            time_offset: 0,
+            time_offset: self.time_offset,
             salt: 0,
-            client_id,
+            client_id: {
+                let mut buffer = [0u8; 8];
+                getrandom(&mut buffer).expect("failed to generate a secure client_id");
+                i64::from_le_bytes(buffer)
+            },
             sequence: 0,
             last_msg_id: 0,
             message_queue: VecDeque::new(),
             pending_ack: vec![],
-            compression_threshold: crate::DEFAULT_COMPRESSION_THRESHOLD,
+            compression_threshold: self.compression_threshold,
             response_queue: VecDeque::new(),
             update_queue: VecDeque::new(),
         }
     }
+}
 
-    /// Returns a builder to configure certain parameters.
+impl Encrypted {
+    /// Start building a new encrypted MTP.
     pub fn build() -> MtpBuilder {
         MtpBuilder::new()
     }
-
-    // State management
-    // ========================================
 
     /// Correct our time offset based on a known valid message ID.
     fn correct_time_offset(&mut self, msg_id: i64) {
@@ -200,262 +186,6 @@ impl Mtp {
             result
         } else {
             self.sequence * 2
-        }
-    }
-
-    // Encrypted requests
-    // ========================================
-
-    /// Enqueues a request and returns its associated `msg_id`.
-    ///
-    /// Once a response arrives and it is decrypted, the caller is expected
-    /// to compare the `msg_id` against the `msg_id` of previously enqueued
-    /// requests to determine to which of these the response belongs.
-    ///
-    /// If a certain amount of time passes and the enqueued request has not
-    /// been sent yet, the message ID will become stale and Telegram will
-    /// reject it. The caller is then expected to re-enqueue their request
-    /// and send a new encrypted message.
-    ///
-    /// # Panics
-    ///
-    /// The method panics if the body length is not padded to 4 bytes. The
-    /// serialization of requests will always be correctly padded, so adding
-    /// an error case for this rare case (impossible with the expected inputs)
-    /// would simply be unnecessary.
-    ///
-    /// The method also panics if the body length is too large for similar
-    /// reasons. It is not reasonable to construct huge requests (although
-    /// possible) because they would likely fail with a RPC error anyway,
-    /// so we avoid another error case by simply panicking.
-    ///
-    /// The definition of "too large" is roughly 1MB, so as long as the
-    /// payload is below that mark, it's safe to call.
-    pub fn enqueue_request(&mut self, mut body: Vec<u8>) -> MsgId {
-        // Requests that are too large would cause Telegram to close the
-        // connection but are so uncommon it's not worth returning `Err`.
-        assert!(
-            body.len() + manual_tl::Message::SIZE_OVERHEAD
-                <= manual_tl::MessageContainer::MAXIMUM_SIZE
-        );
-
-        // Serialized requests will always be well-formed
-        assert!(body.len() % 4 == 0);
-
-        // Payload from the outside is always considered to be
-        // content-related, which means we can apply compression.
-        if let Some(threshold) = self.compression_threshold {
-            if body.len() >= threshold {
-                let compressed = manual_tl::GzipPacked::new(&body).to_bytes();
-                if compressed.len() < body.len() {
-                    body = compressed;
-                }
-            }
-        }
-
-        self.enqueue_body(body, true)
-    }
-
-    fn enqueue_body(&mut self, body: Vec<u8>, content_related: bool) -> MsgId {
-        let msg_id = self.get_new_msg_id();
-        let seq_no = self.get_seq_no(content_related);
-        self.message_queue.push_back(manual_tl::Message {
-            msg_id,
-            seq_no,
-            body,
-        });
-
-        MsgId(msg_id)
-    }
-
-    fn pop_queued_messages(&mut self) -> Option<Vec<u8>> {
-        // If we need to acknowledge messages, this notification goes
-        // in with the rest of requests so that we can also include it.
-        if !self.pending_ack.is_empty() {
-            let msg_ids = std::mem::take(&mut self.pending_ack);
-            self.enqueue_body(
-                tl::enums::MsgsAck::Ack(tl::types::MsgsAck { msg_ids }).to_bytes(),
-                false,
-            );
-        }
-
-        // If there is nothing in the queue, we don't have to do any work.
-        if self.message_queue.is_empty() {
-            return None;
-        }
-
-        // Try to pop as many messages as we possibly can fit in a container.
-        // This will reduce overhead from encryption and outer network calls.
-        let mut batch_size = 0;
-
-        // Count how many messages we can send in a single batch
-        // and determine the size needed to serialize all of them.
-        //
-        // We can batch `MAXIMUM_LENGTH` requests at most,
-        // and their size cannot exceed `MAXIMUM_SIZE`.
-        let batch_len = self
-            .message_queue
-            .iter()
-            .take(manual_tl::MessageContainer::MAXIMUM_LENGTH)
-            .take_while(|message| {
-                if batch_size + message.size() < manual_tl::MessageContainer::MAXIMUM_SIZE {
-                    batch_size += message.size();
-                    true
-                } else {
-                    false
-                }
-            })
-            .count();
-
-        // If we're sending more than one, add room for the
-        // `MessageContainer` header and its own message too.
-        if batch_len > 1 {
-            batch_size +=
-                manual_tl::Message::SIZE_OVERHEAD + manual_tl::MessageContainer::SIZE_OVERHEAD;
-        }
-
-        // Allocate enough size for the final message:
-        //     8 bytes `salt` + 8 bytes `client_id` + `batch_size` bytes body
-        let mut buf = Vec::with_capacity(8 + 8 + batch_size);
-
-        self.salt.serialize(&mut buf);
-        self.client_id.serialize(&mut buf);
-
-        // If we're sending more than one, write the `MessageContainer` header.
-        // This should be the moral equivalent of `MessageContainer.serialize(...)`.
-        if batch_len > 1 {
-            // This should be the moral equivalent of `enqueue_body`
-            // and `Message::serialize`.
-            let msg_id = self.get_new_msg_id();
-            let seq_no = self.get_seq_no(false);
-
-            msg_id.serialize(&mut buf);
-            seq_no.serialize(&mut buf);
-            ((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32).serialize(&mut buf);
-
-            manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut buf);
-            (batch_len as i32).serialize(&mut buf);
-        }
-
-        // Pop `batch_len` requests and append them to the final message.
-        (0..batch_len).for_each(|_| {
-            // Safe to unwrap because the length cannot exceed the queue's.
-            let message = self.message_queue.pop_front().unwrap();
-            message.serialize(&mut buf);
-        });
-
-        // Our message is ready.
-        Some(buf)
-    }
-
-    /// If there is one or more requests enqueued, this method will pack as
-    /// many as possible into a single message, serialize it, and return it
-    /// encrypted using the current authorization key as indicated by the
-    /// [MTProto 2.0 guidelines].
-    ///
-    /// If there are no enqueued requests, the method returns `None`.
-    ///
-    /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    pub fn serialize_encrypted_messages(&mut self) -> Option<Vec<u8>> {
-        self.pop_queued_messages()
-            .map(|payload| encrypt_data_v2(&payload, &self.auth_key))
-    }
-
-    /// Processes an encrypted response from the server. If the response
-    /// contains replies to previously-sent requests, they will be enqueued,
-    /// and can be polled for later with [`poll_response`].
-    ///
-    /// [`poll_response`]: #method.poll_response
-    pub fn process_encrypted_response(
-        &mut self,
-        ciphertext: &[u8],
-    ) -> Result<(), DeserializeError> {
-        crate::utils::check_message_buffer(ciphertext)?;
-
-        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
-        let mut buffer = Cursor::from_slice(&plaintext[..]);
-
-        let _salt = i64::deserialize(&mut buffer)?;
-        let client_id = i64::deserialize(&mut buffer)?;
-        if client_id != self.client_id {
-            panic!("wrong session id");
-        }
-
-        self.process_message(manual_tl::Message::deserialize(&mut buffer)?)
-    }
-
-    /// Poll for responses to previously-sent Remote Procedure Calls.
-    ///
-    /// If there are no new server responses, the method returns `None`.
-    pub fn poll_response(&mut self) -> Option<(MsgId, Result<Vec<u8>, RequestError>)> {
-        self.response_queue.pop_front()
-    }
-
-    /// Poll for updates that arrived.
-    ///
-    /// If there are no new updates, the method returns `None`.
-    pub fn poll_update(&mut self) -> Option<Vec<u8>> {
-        self.update_queue.pop_front()
-    }
-
-    // Response handlers
-    // ========================================
-
-    fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
-        if message.requires_ack() {
-            self.pending_ack.push(message.msg_id);
-        }
-
-        // Handle all the possible Service Messages:
-        // * https://core.telegram.org/mtproto/service_messages
-        // * https://core.telegram.org/mtproto/service_messages_about_messages
-        //
-        // The order of the `match` here is the same as the order in which the
-        // items appear in the documentation (to make it easier to review).
-        match message.constructor_id()? {
-            // Response to an RPC query
-            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(message),
-
-            // Service Messages about Messages
-            // Acknowledgment of Receipt
-            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(message),
-            // Notice of Ignored Error Message
-            tl::types::BadMsgNotification::CONSTRUCTOR_ID
-            | tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_notification(message),
-            // Request for Message Status Information
-            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_req(message),
-            // Informational Message regarding Status of Messages
-            tl::types::MsgsStateInfo::CONSTRUCTOR_ID => self.handle_state_info(message),
-            // Voluntary Communication of Status of Messages
-            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(message),
-            // Extended Voluntary Communication of Status of One Message
-            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID
-            | tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(message),
-            // Explicit Request to Re-Send Messages & Explicit Request to Re-Send Answers
-            tl::types::MsgResendReq::CONSTRUCTOR_ID
-            | tl::types::MsgResendAnsReq::CONSTRUCTOR_ID => self.handle_msg_resend(message),
-
-            // Request for several future salts
-            tl::types::FutureSalt::CONSTRUCTOR_ID => self.handle_future_salt(message),
-            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(message),
-            // Ping Messages (PING/PONG)
-            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(message),
-            // Request to Destroy Session
-            tl::types::DestroySessionOk::CONSTRUCTOR_ID
-            | tl::types::DestroySessionNone::CONSTRUCTOR_ID => self.handle_destroy_session(message),
-            // New Session Creation Notification
-            tl::types::NewSessionCreated::CONSTRUCTOR_ID => {
-                self.handle_new_session_created(message)
-            }
-            // Containers (Simple Container)
-            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(message),
-            // Message Copies
-            manual_tl::MessageCopy::CONSTRUCTOR_ID => self.handle_msg_copy(message),
-            // Packed Object
-            manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(message),
-            // HTTP Wait/Long Poll
-            tl::types::HttpWait::CONSTRUCTOR_ID => self.handle_http_wait(message),
-            _ => self.handle_update(message),
         }
     }
 
@@ -1205,6 +935,190 @@ impl Mtp {
     fn handle_update(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         self.update_queue.push_back(message.body);
         Ok(())
+    }
+}
+
+impl Mtp for Encrypted {
+    /// Pack as many requests as possible into a single message, serialize it,
+    /// and return it encrypted using the current authorization key as
+    /// indicated by the [MTProto 2.0 guidelines].
+    ///
+    /// This method manually serializes the messages for maximum efficiency.
+    ///
+    /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
+    pub fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Result<Vec<MsgId>, ()> {
+        let req_count = requests.len() + (!self.pending_ack.is_empty()) as usize;
+
+        // Nothing to send, don't bother running any other checks.
+        if req_count == 0 {
+            return;
+        }
+
+        // Rely on the fact we start at 0.
+        output.clear();
+
+        self.salt.serialize(output); // 8 bytes
+        self.client_id.serialize(output); // 8 bytes
+
+        // Speculate that the potential acknowledgement and multiple user requests will fit in
+        // a single container (might not be the case, but it would just be a few bytes of overhead).
+        let using_container = req_count > 1;
+
+        if using_container {
+            // Make space for the container header `msg_id + seq_no + constructor + len`).
+            (0..8 + 4 + 4 + 4).for_each(|_| output.append(0));
+        }
+
+        let mut batch_len = 0;
+        let mut batch_size = 0;
+        let mut msg_ids = Vec::new();
+
+        // If we need to acknowledge messages, this notification goes
+        // in with the rest of requests so that we can also include it.
+        if !self.pending_ack.is_empty() {
+            self.get_new_msg_id().serialize(output);
+            self.get_seq_no(false).serialize(output);
+            tl::enums::MsgsAck::Ack(tl::types::MsgsAck { msg_ids }).serialize(output);
+
+            batch_len += 1;
+            batch_size += body.len() + manual_tl::Message::SIZE_OVERHEAD;
+        }
+
+        // TODO rather than taking in bytes, take requests, serialize them in place, and if too large drop the last part of the buffer
+        for mut body in requests.iter() {
+            // Requests that are too large would cause Telegram to close the
+            // connection but are so uncommon it's not worth returning `Err`.
+            assert!(
+                body.len() + manual_tl::Message::SIZE_OVERHEAD
+                    <= manual_tl::MessageContainer::MAXIMUM_SIZE
+            );
+
+            // Serialized requests will always be correctly padded.
+            assert!(body.len() % 4 == 0);
+
+            // Serialize `MAXIMUM_LENGTH` requests at most.
+            if batch_len == manual_tl::MessageContainer::MAXIMUM_LENGTH {
+                break;
+            }
+
+            // Payload provided by the user is always considered to be
+            // content-related, which means we can apply compression.
+            let compressed;
+            if let Some(threshold) = self.compression_threshold {
+                if body.len() >= threshold {
+                    compressed = manual_tl::GzipPacked::new(&body).to_bytes();
+                    if compressed.len() < body.len() {
+                        body = &compressed;
+                    }
+                }
+            }
+
+            let new_size = batch_size + body.len() + manual_tl::Message::SIZE_OVERHEAD;
+            if new_size < manual_tl::MessageContainer::MAXIMUM_SIZE {
+                // This body still fits in the container, so give it a message ID.
+                let msg_id = self.get_new_msg_id();
+                msg_ids.push(msg_id);
+
+                msg_id.serialize(output);
+                self.get_seq_no(true).serialize(output);
+                output.extend_from_slice(body);
+    
+                req_count += 1;
+                batch_size += body.len() + manual_tl::Message::SIZE_OVERHEAD;
+            } else {
+                // No more messages fit in this container.
+                break;
+            }
+        }
+
+        if using_container {
+            // Give the container its message ID and sequence number.
+            self.get_new_msg_id().serialize(&mut output[8..16]);
+            self.get_seq_no(false).serialize(&mut output[16..20]);
+            //((batch_size - manual_tl::Message::SIZE_OVERHEAD) as i32).serialize(&mut buf);
+
+            manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut output[20..24]);
+            (batch_len as i32).serialize(&mut output[24..28]);
+        }
+
+        encrypt_data_v2(output, &self.auth_key)?;
+        Ok(msg_ids)
+    }
+
+    /// Processes an encrypted response from the server. If the response
+    /// contains replies to previously-sent requests, they will be enqueued,
+    /// and can be polled for later with [`poll_response`].
+    ///
+    /// [`poll_response`]: #method.poll_response
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, ()> {
+        crate::utils::check_message_buffer(ciphertext)?;
+
+        let plaintext = decrypt_data_v2(ciphertext, &self.auth_key)?;
+        let mut buffer = Cursor::from_slice(&plaintext[..]);
+
+        let _salt = i64::deserialize(&mut buffer)?;
+        let client_id = i64::deserialize(&mut buffer)?;
+        if client_id != self.client_id {
+            panic!("wrong session id");
+        }
+
+        let message = manual_tl::Message::deserialize(&mut buffer)?;
+
+        if message.requires_ack() {
+            self.pending_ack.push(message.msg_id);
+        }
+
+        // Handle all the possible Service Messages:
+        // * https://core.telegram.org/mtproto/service_messages
+        // * https://core.telegram.org/mtproto/service_messages_about_messages
+        //
+        // The order of the `match` here is the same as the order in which the
+        // items appear in the documentation (to make it easier to review).
+        match message.constructor_id()? {
+            // Response to an RPC query
+            manual_tl::RpcResult::CONSTRUCTOR_ID => self.handle_rpc_result(message),
+
+            // Service Messages about Messages
+            // Acknowledgment of Receipt
+            tl::types::MsgsAck::CONSTRUCTOR_ID => self.handle_ack(message),
+            // Notice of Ignored Error Message
+            tl::types::BadMsgNotification::CONSTRUCTOR_ID
+            | tl::types::BadServerSalt::CONSTRUCTOR_ID => self.handle_bad_notification(message),
+            // Request for Message Status Information
+            tl::types::MsgsStateReq::CONSTRUCTOR_ID => self.handle_state_req(message),
+            // Informational Message regarding Status of Messages
+            tl::types::MsgsStateInfo::CONSTRUCTOR_ID => self.handle_state_info(message),
+            // Voluntary Communication of Status of Messages
+            tl::types::MsgsAllInfo::CONSTRUCTOR_ID => self.handle_msg_all(message),
+            // Extended Voluntary Communication of Status of One Message
+            tl::types::MsgDetailedInfo::CONSTRUCTOR_ID
+            | tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(message),
+            // Explicit Request to Re-Send Messages & Explicit Request to Re-Send Answers
+            tl::types::MsgResendReq::CONSTRUCTOR_ID
+            | tl::types::MsgResendAnsReq::CONSTRUCTOR_ID => self.handle_msg_resend(message),
+
+            // Request for several future salts
+            tl::types::FutureSalt::CONSTRUCTOR_ID => self.handle_future_salt(message),
+            tl::types::FutureSalts::CONSTRUCTOR_ID => self.handle_future_salts(message),
+            // Ping Messages (PING/PONG)
+            tl::types::Pong::CONSTRUCTOR_ID => self.handle_pong(message),
+            // Request to Destroy Session
+            tl::types::DestroySessionOk::CONSTRUCTOR_ID
+            | tl::types::DestroySessionNone::CONSTRUCTOR_ID => self.handle_destroy_session(message),
+            // New Session Creation Notification
+            tl::types::NewSessionCreated::CONSTRUCTOR_ID => {
+                self.handle_new_session_created(message)
+            }
+            // Containers (Simple Container)
+            manual_tl::MessageContainer::CONSTRUCTOR_ID => self.handle_container(message),
+            // Message Copies
+            manual_tl::MessageCopy::CONSTRUCTOR_ID => self.handle_msg_copy(message),
+            // Packed Object
+            manual_tl::GzipPacked::CONSTRUCTOR_ID => self.handle_gzip_packed(message),
+            // HTTP Wait/Long Poll
+            tl::types::HttpWait::CONSTRUCTOR_ID => self.handle_http_wait(message),
+            _ => self.handle_update(message),
+        }
     }
 }
 
