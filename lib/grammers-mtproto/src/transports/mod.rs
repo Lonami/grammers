@@ -11,12 +11,12 @@
 //! in a format that can be sent over a protocol, such as TCP, HTTP or UDP.
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
-//mod abridged;
+mod abridged;
 mod full;
 //mod intermediate;
 
 use crate::errors::TransportError;
-//pub use abridged::Abridged;
+pub use abridged::Abridged;
 pub use full::Full;
 //pub use intermediate::Intermediate;
 

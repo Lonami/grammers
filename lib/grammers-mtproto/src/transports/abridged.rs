@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::errors::TransportError;
-use crate::transports::{Decoder, Encoder, Transport};
+use crate::transports::Transport;
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -34,61 +34,37 @@ use crate::transports::{Decoder, Encoder, Transport};
 /// ```
 ///
 /// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
-pub struct TransportAbridged;
+pub struct Abridged {
+    init: bool,
+}
 
-impl Transport for TransportAbridged {
-    type Encoder = AbridgedEncoder;
-    type Decoder = AbridgedDecoder;
-
-    fn instance() -> (Self::Encoder, Self::Decoder) {
-        (Self::Encoder {}, Self::Decoder {})
+impl Abridged {
+    pub fn new() -> Self {
+        Self { init: false }
     }
 }
 
-#[non_exhaustive]
-pub struct AbridgedEncoder;
-
-#[non_exhaustive]
-pub struct AbridgedDecoder;
-
-impl Encoder for AbridgedEncoder {
-    fn max_overhead(&self) -> usize {
-        4
-    }
-
-    fn write_magic(&mut self, output: &mut [u8]) -> Result<usize, usize> {
-        if output.len() < 1 {
-            Err(1)
-        } else {
-            output[0] = 0xef;
-            Ok(1)
-        }
-    }
-
-    fn write_into<'a>(&mut self, input: &[u8], output: &mut [u8]) -> Result<usize, usize> {
+impl Transport for Abridged {
+    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
         assert_eq!(input.len() % 4, 0);
 
+        if !self.init {
+            output.push(0xef);
+            self.init = true;
+        }
+
         let len = input.len() / 4;
-        let output_len = input.len() + (if len < 127 { 1 } else { 4 });
-        if output.len() < output_len {
-            return Err(output_len);
-        }
-
         if len < 127 {
-            output[0] = len as u8;
-            output[1..output_len].copy_from_slice(input);
+            output.push(len as u8);
+            output.extend_from_slice(input);
         } else {
-            output[0] = 0x7f;
-            output[1..4].copy_from_slice(&len.to_le_bytes()[..3]);
-            output[4..output_len].copy_from_slice(input);
+            output.push(0x7f);
+            output.extend_from_slice(&len.to_le_bytes()[..3]);
+            output.extend_from_slice(input);
         }
-
-        Ok(output_len)
     }
-}
 
-impl Decoder for AbridgedDecoder {
-    fn read<'a>(&mut self, input: &'a [u8]) -> Result<&'a [u8], TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
         if input.len() < 1 {
             return Err(TransportError::MissingBytes(1));
         }
@@ -114,7 +90,8 @@ impl Decoder for AbridgedDecoder {
             return Err(TransportError::MissingBytes(header_len + len));
         }
 
-        Ok(&input[header_len..header_len + len])
+        output.extend_from_slice(&input[header_len..header_len + len]);
+        Ok(())
     }
 }
 
@@ -122,83 +99,68 @@ impl Decoder for AbridgedDecoder {
 mod tests {
     use super::*;
 
-    fn get_data(n: usize) -> Vec<u8> {
-        let mut result = Vec::with_capacity(n);
-        for i in 0..n {
-            result.push((i & 0xff) as u8);
-        }
-        result
+    /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
+    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, Vec<u8>) {
+        let input = (0..n).map(|x| (x & 0xff) as u8).collect();
+        (Abridged::new(), input, Vec::new())
     }
 
     #[test]
-    fn check_magic() {
-        let (mut encoder, _) = TransportAbridged::instance();
-        let mut output = [0];
-        assert_eq!(encoder.write_magic(&mut output), Ok(1));
-        assert_eq!(output, [0xef]);
+    fn pack_empty() {
+        let (mut transport, input, mut output) = setup_pack(0);
+        transport.pack(&input, &mut output);
+        assert_eq!(&output, &[0xef, 0]);
     }
 
     #[test]
     #[should_panic]
-    fn check_non_padded_encoding() {
-        let (mut encoder, _) = TransportAbridged::instance();
-        let input = get_data(7);
-        let mut output = vec![0; 7 + encoder.max_overhead()];
-        drop(encoder.write_into(&input, &mut output));
+    fn pack_non_padded() {
+        let (mut transport, input, mut output) = setup_pack(7);
+        transport.pack(&input, &mut output);
     }
 
     #[test]
-    fn check_encoding() {
-        let (mut encoder, _) = TransportAbridged::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        let len = encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(&output[..1], &[32]);
-        assert_eq!(&output[1..len], &input[..]);
+    fn pack_normal() {
+        let (mut transport, input, mut output) = setup_pack(128);
+        transport.pack(&input, &mut output);
+        assert_eq!(&output[..2], &[0xef, 32]);
+        assert_eq!(&output[2..output.len()], &input[..]);
     }
 
     #[test]
-    fn check_large_encoding() {
-        let (mut encoder, _) = TransportAbridged::instance();
-        let input = get_data(1024);
-        let mut output = vec![0; 1024 + encoder.max_overhead()];
-        assert!(encoder.write_into(&input, &mut output).is_ok());
-
-        assert_eq!(&output[..4], &[127, 0, 1, 0]);
-        assert_eq!(&output[4..], &input[..]);
+    fn pack_large() {
+        let (mut transport, input, mut output) = setup_pack(1024);
+        transport.pack(&input, &mut output);
+        assert_eq!(&output[..5], &[0xef, 127, 0, 1, 0]);
+        assert_eq!(&output[5..], &input[..]);
     }
 
     #[test]
-    fn check_encoding_small_buffer() {
-        let (mut encoder, _) = TransportAbridged::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 64];
-        assert_eq!(encoder.write_into(&input, &mut output), Err(129));
-    }
-
-    #[test]
-    fn check_decoding() {
-        let (mut encoder, mut decoder) = TransportAbridged::instance();
-        let input = get_data(128);
-        let mut output = vec![0; 128 + encoder.max_overhead()];
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-    }
-
-    #[test]
-    fn check_large_decoding() {
-        let (mut encoder, mut decoder) = TransportAbridged::instance();
-        let input = get_data(1024);
-        let mut output = vec![0; 1024 + encoder.max_overhead()];
-
-        encoder.write_into(&input, &mut output).unwrap();
-        assert_eq!(decoder.read(&output), Ok(&input[..]));
-    }
-
-    #[test]
-    fn check_decoding_small_buffer() {
-        let (_, mut decoder) = TransportAbridged::instance();
+    fn unpack_small() {
+        let mut transport = Abridged::new();
         let input = [1];
-        assert_eq!(decoder.read(&input), Err(TransportError::MissingBytes(5)));
+        let mut output = Vec::new();
+        assert_eq!(
+            transport.unpack(&input, &mut output),
+            Err(TransportError::MissingBytes(5))
+        );
+    }
+
+    #[test]
+    fn unpack_normal() {
+        let (mut transport, input, mut packed) = setup_pack(128);
+        let mut unpacked = Vec::new();
+        transport.pack(&input, &mut packed);
+        transport.unpack(&packed[1..], &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
+    }
+
+    #[test]
+    fn unpack_large() {
+        let (mut transport, input, mut packed) = setup_pack(1024);
+        let mut unpacked = Vec::new();
+        transport.pack(&input, &mut packed);
+        transport.unpack(&packed[1..], &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
     }
 }
