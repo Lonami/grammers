@@ -77,6 +77,10 @@ impl Transport for Full {
         let mut len_bytes = [0; 4];
         len_bytes.copy_from_slice(&input[0..4]);
         let len = u32::from_le_bytes(len_bytes) as usize;
+        if len < 12 {
+            return Err(TransportError::BadLen { got: len as u32 });
+        }
+
         if input.len() < len {
             return Err(TransportError::MissingBytes(len));
         }

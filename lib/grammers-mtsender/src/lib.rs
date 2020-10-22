@@ -5,21 +5,22 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![allow(unused_imports)]
 mod errors;
 
 pub use errors::{AuthorizationError, InvocationError};
-use futures::channel::{mpsc, oneshot};
-use futures::future;
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use futures::lock::Mutex;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+use std::error::Error;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::prelude::{AsyncRead, AsyncWrite};
+
 use grammers_crypto::AuthKey;
 use grammers_mtproto::errors::{RequestError, TransportError};
-use grammers_mtproto::transports::{Decoder, Encoder, Transport};
-use grammers_mtproto::{authentication, MsgId, Mtp, PlainMtp};
+use grammers_mtproto::mtp::{self, Mtp};
+use grammers_mtproto::transports::Transport;
+use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{error, info, warn};
+use log::{debug, error, info, warn};
 use std::collections::BTreeMap;
 use std::io;
 use std::sync::Arc;
@@ -35,318 +36,110 @@ use std::sync::Arc;
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
-struct Request {
-    data: Vec<u8>,
-    response_channel: oneshot::Sender<Response>,
+pub struct Sender<T: Transport, M: Mtp> {
+    stream: TcpStream,
+    transport: T,
+    mtp: M,
+    mtp_buffer: Vec<u8>,
+    transport_buffer: Vec<u8>,
 }
 
-type Response = Result<Vec<u8>, RequestError>;
+impl<T: Transport, M: Mtp> Sender<T, M> {
+    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self, io::Error> {
+        info!("connecting...");
+        let stream = TcpStream::connect(addr).await?;
 
-// TODO perhaps this should be a Sink of Request?
-//      and we would also have a Stream of Updates
-pub struct MtpSender {
-    request_channel: mpsc::Sender<Request>,
-}
+        Ok(Self {
+            stream,
+            transport,
+            mtp,
+            mtp_buffer: Vec::with_capacity(MAXIMUM_DATA),
+            transport_buffer: Vec::with_capacity(MAXIMUM_DATA),
+        })
+    }
 
-impl MtpSender {
-    /// Invoking a single Remote Procedure Call and `await` its result.
-    pub async fn invoke<R: RemoteCall>(
-        &mut self,
-        request: &R,
-    ) -> Result<R::Return, InvocationError> {
+    async fn send(&mut self, data: &[u8]) -> Result<Vec<u8>, InvocationError> {
+        debug!("serializing {} bytes of data...", data.len());
+        self.mtp.serialize(&vec![data.into()], &mut self.mtp_buffer);
+        self.transport_buffer.clear();
+        self.transport
+            .pack(&self.mtp_buffer, &mut self.transport_buffer);
+
+        debug!("sending buffer of {} bytes...", self.transport_buffer.len());
+        self.stream.write_all(&self.transport_buffer).await?;
+        self.mtp_buffer.clear();
+        self.transport_buffer.clear();
         loop {
-            let (sender, receiver) = oneshot::channel();
-            self.request_channel
-                .send(Request {
-                    data: request.to_bytes(),
-                    response_channel: sender,
-                })
-                .await
-                .map_err(|e| {
-                    assert!(e.is_disconnected());
-                    InvocationError::NotConnected
-                })?;
-
-            match receiver
-                .await
-                .map_err(|_canceled| InvocationError::Dropped)?
+            debug!(
+                "trying to unpack buffer of {} bytes...",
+                self.transport_buffer.len()
+            );
+            match self
+                .transport
+                .unpack(&self.transport_buffer, &mut self.mtp_buffer)
             {
-                Ok(x) => break Ok(R::Return::from_bytes(&x)?),
-                Err(RequestError::RPCError(error)) => {
-                    break Err(InvocationError::RPC(error));
+                Ok(_) => {
+                    debug!("deserializing valid transport packet...");
+                    return Ok(self
+                        .mtp
+                        .deserialize(&self.mtp_buffer)?
+                        .rpc_results
+                        .remove(0)
+                        .1
+                        .unwrap());
                 }
-                Err(RequestError::Dropped) => {
-                    break Err(InvocationError::Dropped);
-                }
-                Err(RequestError::Deserialize(err)) => {
-                    break Err(InvocationError::Deserialize(err));
-                }
-                Err(RequestError::BadMessage { .. }) => {
-                    // Need to retransmit (another loop iteration)
-                    continue;
-                }
-            }
-        }
-    }
-}
-
-pub struct MtpHandler<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
-    sender: Sender<T::Encoder, W>,
-    receiver: Receiver<T::Decoder, R>,
-}
-
-impl<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<T, R, W> {
-    pub async fn run(self) {
-        let Self { sender, receiver } = self;
-        future::join(sender.network_loop(), receiver.network_loop()).await;
-    }
-}
-
-/// Small adapter between network and transport containers.
-// TODO "plain" is probably not the best prefix for this, "plain basic"
-struct PlainReceiver<D: Decoder, R: AsyncRead + Unpin> {
-    buffer: Box<[u8]>,
-    decoder: D,
-    in_stream: R,
-}
-
-struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
-    plain: PlainReceiver<D, R>,
-    protocol: Arc<Mutex<Mtp>>,
-    update_channel: mpsc::Sender<tl::enums::Updates>,
-    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
-}
-
-impl<D: Decoder, R: AsyncRead + Unpin> PlainReceiver<D, R> {
-    async fn receive(&mut self) -> io::Result<Vec<u8>> {
-        let mut len = 0;
-        loop {
-            match self.decoder.read(&self.buffer[..len]) {
-                // TODO try to avoid to_vec
-                Ok(response) => break Ok(response.to_vec()),
-                Err(TransportError::MissingBytes(required_len)) => {
-                    self.in_stream
-                        .read_exact(&mut self.buffer[len..required_len])
+                Err(TransportError::MissingBytes(n)) => {
+                    let start = self.transport_buffer.len();
+                    let missing = n - start;
+                    debug!("receiving {} more bytes...", missing);
+                    (0..missing).for_each(|_| self.transport_buffer.push(0));
+                    self.stream
+                        .read_exact(&mut self.transport_buffer[start..])
                         .await?;
-                    len = required_len;
                 }
-                Err(TransportError::UnexpectedData(what)) => {
-                    break Err(io::Error::new(io::ErrorKind::InvalidData, what))
-                }
-            };
-        }
-    }
-}
-
-impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
-    async fn network_loop(mut self) {
-        loop {
-            let response = match self.plain.receive().await {
-                Ok(response) => response,
-                Err(err) => {
-                    warn!("receiving response failed: {:?}", err);
-                    break;
-                }
-            };
-
-            // Pass the response on to the MTP to handle
-            let mut protocol_guard = self.protocol.lock().await;
-
-            if let Err(err) = protocol_guard.process_encrypted_response(&response) {
-                // TODO some errors here are probably OK; figure out which are resumable
-                error!("processing response failed: {:?}", err);
-                break;
-            }
-
-            while let Some(update) = protocol_guard.poll_update() {
-                match tl::enums::Updates::from_bytes(&update) {
-                    Ok(update) => {
-                        if let Err(err) = self.update_channel.send(update).await {
-                            assert!(err.is_disconnected());
-                            // If the user doesn't want more updates that's fine
-                        }
-                    }
-                    Err(err) => error!("polled an update that was not one: {}", err),
-                }
-            }
-
-            // See if there are responses to prior requests
-            let mut map_guard = self.response_map.lock().await;
-            while let Some((response_id, response)) = protocol_guard.poll_response() {
-                if let Some(channel) = map_guard.remove(&response_id) {
-                    // Drop the result; if the user closed the channel it simply means
-                    // they no longer need this result so it's okay to fail to send it.
-                    drop(channel.send(response));
-                } else {
-                    info!(
-                        "Got encrypted response for unknown message: {:?}",
-                        response_id
-                    );
-                }
+                Err(_err) => todo!(),
             }
         }
     }
 }
 
-/// Small adapter between network and transport containers.
-struct PlainSender<E: Encoder, W: AsyncWrite + Unpin> {
-    buffer: Box<[u8]>,
-    encoder: E,
-    out_stream: W,
-}
-
-struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
-    plain: PlainSender<E, W>,
-    protocol: Arc<Mutex<Mtp>>,
-    request_channel: mpsc::Receiver<Request>,
-    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
-}
-
-impl<E: Encoder, W: AsyncWrite + Unpin> PlainSender<E, W> {
-    async fn send(&mut self, payload: &[u8]) -> io::Result<()> {
-        let size = self
-            .encoder
-            .write_into(payload, self.buffer.as_mut())
-            .expect("tried to send more than MAXIMUM_DATA in a single frame");
-
-        self.out_stream.write_all(&self.buffer[..size]).await
-    }
-}
-
-impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
-    async fn network_loop(mut self) {
-        while let Some(request) = self.request_channel.next().await {
-            let payload = {
-                let mut protocol_guard = self.protocol.lock().await;
-
-                let msg_id = protocol_guard.enqueue_request(request.data);
-
-                // TODO we don't want to serialize as soon as we enqueued.
-                //      We want to enqueue many and serialize as soon as we can send more.
-                //      Maybe yet another Enqueuer struct?
-                //
-                // Safe, we know it's Some (we just inserted something)
-                let payload = protocol_guard.serialize_encrypted_messages().unwrap();
-
-                // TODO maybe we don't want to do this until we've sent it?
-                let mut map_guard = self.response_map.lock().await;
-                map_guard.insert(msg_id, request.response_channel);
-
-                payload
-            };
-
-            // If sending over IO fails we won't be able to send anything else.
-            // Break out of the loop.
-            if let Err(err) = self.plain.send(&payload).await {
-                warn!("sending payload failed: {:?}", err);
-                break;
-            }
-        }
-    }
-}
-
-// TODO this needs a better name ("create mtp" is just "Mtp::new()")
-// TODO not a fan this replaces the auth_key in the option which will always be Some after
-pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
-    (in_stream, out_stream): (R, W),
-    auth_key: &mut Option<AuthKey>,
-) -> Result<
-    (
-        MtpSender,
-        mpsc::Receiver<tl::enums::Updates>,
-        MtpHandler<T, R, W>,
-    ),
-    AuthorizationError,
-> {
-    let (encoder, decoder) = T::instance();
-
-    let mut sender = PlainSender {
-        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        encoder,
-        out_stream,
-    };
-
-    let mut receiver = PlainReceiver {
-        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        decoder,
-        in_stream,
-    };
-
-    let mut mtp = PlainMtp::new();
-
-    let protocol = if let Some(auth_key) = auth_key {
-        info!("using input auth_key");
-        Mtp::new(auth_key.clone())
-    } else {
-        info!("no input auth_key; generating new one");
-        // A sender is not usable without an authorization key; generate one
-        let (request, data) = authentication::step1()?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (request, data) = authentication::step2(data, response)?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (request, data) = authentication::step3(data, response)?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (new_key, time_offset) = authentication::create_key(data, response)?;
-        *auth_key = Some(new_key.clone());
-
-        info!("new auth_key generation success");
-        Mtp::build().time_offset(time_offset).finish(new_key)
-    };
-
-    let protocol = Arc::new(Mutex::new(protocol));
-    let (request_sender, request_receiver) = mpsc::channel(100);
-    let (update_sender, update_receiver) = mpsc::channel(100);
-    let response_map = Arc::new(Mutex::new(BTreeMap::new()));
-
-    let sender = Sender {
-        plain: sender,
-        request_channel: request_receiver,
-        protocol: Arc::clone(&protocol),
-        response_map: Arc::clone(&response_map),
-    };
-
-    let receiver = Receiver {
-        plain: receiver,
-        update_channel: update_sender,
-        protocol: Arc::clone(&protocol),
-        response_map,
-    };
-
-    Ok((
-        MtpSender {
-            request_channel: request_sender,
-        },
-        update_receiver,
-        MtpHandler { sender, receiver },
-    ))
-}
-
-#[cfg(feature = "async-std")]
-pub async fn connect_mtp<T: Transport, A: async_std::net::ToSocketAddrs>(
+pub async fn connect<T: Transport, A: ToSocketAddrs>(
+    transport: T,
     addr: A,
-) -> Result<
-    (
-        MtpSender,
-        mpsc::Receiver<tl::enums::Updates>,
-        MtpHandler<T, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
-    ),
-    AuthorizationError,
-> {
-    let stream = async_std::net::TcpStream::connect(addr).await?;
-    let in_stream = stream.clone();
-    let out_stream = stream;
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+    let mut sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
 
-    // Creating a sender without explicitly providing an input auth_key
-    // will cause it to generate a new one, because they are otherwise
-    // not usable. We're also making sure that works here.
-    create_mtp((in_stream, out_stream), None).await
+    info!("generating new authorization key...");
+    let (request, data) = authentication::step1()?;
+    debug!("gen auth key: sending step 1");
+    let response = sender.send(&request).await?;
+    debug!("gen auth key: starting step 2");
+    let (request, data) = authentication::step2(data, &response)?;
+    debug!("gen auth key: sending step 2");
+    let response = sender.send(&request).await?;
+    debug!("gen auth key: starting step 3");
+    let (request, data) = authentication::step3(data, &response)?;
+    debug!("gen auth key: sending step 3");
+    let response = sender.send(&request).await?;
+    debug!("gen auth key: completing generation");
+    let (auth_key, time_offset) = authentication::create_key(data, &response)?;
+    info!("authorization key generated successfully");
+
+    Ok(Sender {
+        stream: sender.stream,
+        transport: sender.transport,
+        mtp: mtp::Encrypted::build()
+            .time_offset(time_offset)
+            .finish(auth_key),
+        mtp_buffer: sender.mtp_buffer,
+        transport_buffer: sender.transport_buffer,
+    })
+}
+
+pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
+    transport: T,
+    addr: A,
+    auth_key: AuthKey,
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+    Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
 }

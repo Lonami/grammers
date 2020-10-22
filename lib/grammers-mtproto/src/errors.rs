@@ -213,11 +213,14 @@ impl From<tl::errors::DeserializeError> for RequestError {
 ///
 /// Certain transports will only produce certain variants of this error.
 ///
-/// In any case, the connection should not continue when an error occurs.
+/// Unless the variant is `MissingBytes`, the connection should not continue.
 #[derive(Debug, PartialEq)]
 pub enum TransportError {
     /// Not enough bytes are provided, and the amount indicated is required to advance.
     MissingBytes(usize),
+
+    /// The length is either too short or too long to represent a valid packet.
+    BadLen { got: u32 },
 
     /// The sequence number received does not match the expected value.
     BadSeq { expected: u32, got: u32 },
@@ -233,6 +236,7 @@ impl fmt::Display for TransportError {
         write!(f, "transport error: ")?;
         match self {
             TransportError::MissingBytes(n) => write!(f, "need {} bytes", n),
+            TransportError::BadLen { got } => write!(f, "bad len (got {})", got),
             TransportError::BadSeq { expected, got } => {
                 write!(f, "bad seq (expected {}, got {})", expected, got)
             }
