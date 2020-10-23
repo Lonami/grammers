@@ -50,6 +50,8 @@ impl Mtp for Plain {
         assert_eq!(requests.len(), 1);
         let body = &requests[0];
 
+        output.clear();
+
         0i64.serialize(output); // auth_key_id = 0
 
         // Even though https://core.telegram.org/mtproto/samples-auth_key
@@ -106,5 +108,23 @@ impl Mtp for Plain {
             rpc_results: vec![(MsgId(0), Ok(payload[20..20 + len as usize].into()))],
             updates: Vec::new(),
         })
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn ensure_serialize_clears_buffer() {
+        let mut mtp = Plain::new();
+        let requests = vec![vec![b'H', b'e', b'y', b'!']];
+        let mut output = Vec::new();
+
+        mtp.serialize(&requests, &mut output);
+        assert_eq!(output.len(), 24);
+
+        mtp.serialize(&requests, &mut output);
+        assert_eq!(output.len(), 24);
     }
 }
