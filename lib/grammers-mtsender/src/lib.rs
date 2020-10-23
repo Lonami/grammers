@@ -5,25 +5,19 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![allow(unused_imports)]
 mod errors;
 
 pub use errors::{AuthorizationError, InvocationError};
-use std::error::Error;
-use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::net::{TcpStream, ToSocketAddrs};
-use tokio::prelude::{AsyncRead, AsyncWrite};
-
 use grammers_crypto::AuthKey;
 use grammers_mtproto::errors::{RequestError, TransportError};
-use grammers_mtproto::mtp::{self, Mtp};
+use grammers_mtproto::mtp::{self, Deserialization, Mtp};
 use grammers_mtproto::transports::Transport;
 use grammers_mtproto::{authentication, MsgId};
-use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{debug, error, info, warn};
-use std::collections::BTreeMap;
+use grammers_tl_types::{Deserializable, RemoteCall};
+use log::{debug, info};
 use std::io;
-use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream, ToSocketAddrs};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -44,6 +38,9 @@ pub struct Sender<T: Transport, M: Mtp> {
     transport_buffer: Vec<u8>,
 }
 
+// TODO currently only one thing can be invoked at a time, and updates are
+//      ignored; the sender needs a way to support enqueueing multiple
+//      requests and properly giving access to updates
 impl<T: Transport, M: Mtp> Sender<T, M> {
     async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self, io::Error> {
         info!("connecting...");
@@ -58,15 +55,69 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         })
     }
 
+    /// Invoke a Remote Procedure Call and receive packets from the network until it is answered.
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        let data = request.to_bytes();
+        loop {
+            let sent_id = self.write(&data).await?;
+            debug!("waiting for a response for sent request {:?}", sent_id);
+            'resend: loop {
+                let result = self.read().await?;
+                for (msg_id, ret) in result.rpc_results {
+                    debug!("got result for request {:?}", msg_id);
+                    if msg_id != sent_id {
+                        continue;
+                    }
+
+                    match ret {
+                        Ok(x) => return Ok(R::Return::from_bytes(&x)?),
+                        Err(RequestError::RPCError(error)) => {
+                            return Err(InvocationError::RPC(error));
+                        }
+                        Err(RequestError::Dropped) => {
+                            return Err(InvocationError::Dropped);
+                        }
+                        Err(RequestError::Deserialize(error)) => {
+                            return Err(InvocationError::Deserialize(error));
+                        }
+                        Err(RequestError::BadMessage { .. }) => {
+                            info!("bad msg mtp error, re-sending request");
+                            break 'resend;
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Send the body of a single request, and receive the next message.
     async fn send(&mut self, data: &[u8]) -> Result<Vec<u8>, InvocationError> {
+        self.write(data).await?;
+        let mut result = self.read().await?;
+        Ok(result.rpc_results.remove(0).1.unwrap())
+    }
+
+    /// Write out the body of a single request.
+    async fn write(&mut self, data: &[u8]) -> Result<MsgId, io::Error> {
         debug!("serializing {} bytes of data...", data.len());
-        self.mtp.serialize(&vec![data.into()], &mut self.mtp_buffer);
+        let msg_id = self
+            .mtp
+            .serialize(&vec![data.into()], &mut self.mtp_buffer)
+            .remove(0);
         self.transport_buffer.clear();
         self.transport
             .pack(&self.mtp_buffer, &mut self.transport_buffer);
 
         debug!("sending buffer of {} bytes...", self.transport_buffer.len());
         self.stream.write_all(&self.transport_buffer).await?;
+        Ok(msg_id)
+    }
+
+    /// Read a single transport-level packet and deserialize it.
+    async fn read(&mut self) -> Result<Deserialization, InvocationError> {
         self.mtp_buffer.clear();
         self.transport_buffer.clear();
         loop {
@@ -80,13 +131,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             {
                 Ok(_) => {
                     debug!("deserializing valid transport packet...");
-                    return Ok(self
-                        .mtp
-                        .deserialize(&self.mtp_buffer)?
-                        .rpc_results
-                        .remove(0)
-                        .1
-                        .unwrap());
+                    return Ok(self.mtp.deserialize(&self.mtp_buffer)?);
                 }
                 Err(TransportError::MissingBytes(n)) => {
                     let start = self.transport_buffer.len();

@@ -13,10 +13,10 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transports;
 use grammers_mtsender::connect;
-use tokio::runtime;
-//use grammers_tl_types::{enums, functions};
+use grammers_tl_types::{enums, functions};
 use log;
 use simple_logger;
+use tokio::runtime;
 
 #[test]
 fn test_invoke_encrypted_method() {
@@ -27,15 +27,13 @@ fn test_invoke_encrypted_method() {
         .build()
         .unwrap();
     rt.block_on(async {
-        let _sender = connect(transports::Full::new(), TELEGRAM_TEST_DC_2)
+        let mut sender = connect(transports::Full::new(), TELEGRAM_TEST_DC_2)
             .await
             .unwrap();
 
-        /*
         match sender.invoke(&functions::help::GetNearestDc {}).await {
             Ok(enums::NearestDc::Dc(_)) => {}
             x => panic!(format!("did not get nearest dc, got: {:?}", x)),
         }
-        */
     });
 }
