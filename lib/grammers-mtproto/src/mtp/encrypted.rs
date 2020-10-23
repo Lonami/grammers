@@ -1090,7 +1090,9 @@ impl Mtp for Encrypted {
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
     fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Vec<MsgId> {
         let msg_ids = self.serialize_plain(requests, output);
-        encrypt_data_v2(output, &self.auth_key);
+        let encrypted = encrypt_data_v2(output, &self.auth_key);
+        output.clear();
+        output.extend_from_slice(&encrypted);
         msg_ids
     }
 

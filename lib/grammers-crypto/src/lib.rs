@@ -133,6 +133,7 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
 /// `aes_key` and `aes_iv` from `auth_key` and `msg_key` as specified
 ///
 /// [MTProto 2.0 algorithm]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
+#[must_use]
 pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     let random_padding = {
         let mut buffer = [0; 32];
