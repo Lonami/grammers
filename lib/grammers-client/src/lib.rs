@@ -28,7 +28,4 @@ pub mod ext;
 pub mod types;
 
 pub use client::{Client, Config, InitParams, SignInError};
-use futures::channel::mpsc;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-
-pub(crate) type UpdateStream = mpsc::Receiver<grammers_tl_types::enums::Updates>;

@@ -12,12 +12,10 @@ mod chats;
 mod messages;
 mod updates;
 
-use async_std::net::TcpStream;
-use async_std::task::{self, JoinHandle};
 pub use auth::SignInError;
 use grammers_crypto::auth_key::AuthKey;
-use grammers_mtproto::transports::TransportFull;
-use grammers_mtsender::{create_mtp, MtpSender};
+use grammers_mtproto::{mtp, transports};
+use grammers_mtsender::{connect, connect_with_auth, Sender};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
@@ -45,9 +43,7 @@ const DEFAULT_LOCALE: &str = "en";
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
     config: Config,
-    sender: MtpSender,
-    updates: crate::UpdateStream,
-    _handler: JoinHandle<()>,
+    sender: Sender<transports::Full, mtp::Encrypted>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
     last_phone_hash: Option<(String, String)>,
@@ -117,21 +113,20 @@ impl Default for InitParams {
 async fn create_sender(
     dc_id: i32,
     auth_key: &mut Option<AuthKey>,
-) -> Result<(MtpSender, crate::UpdateStream, JoinHandle<()>), AuthorizationError> {
+) -> Result<Sender<transports::Full, mtp::Encrypted>, AuthorizationError> {
     let server_address = {
         let (addr, port) = DC_ADDRESSES[dc_id as usize];
         SocketAddr::new(IpAddr::V4(addr), port)
     };
 
-    let stream = TcpStream::connect(server_address).await?;
-    let in_stream = stream.clone();
-    let out_stream = stream;
+    let sender = if let Some(auth) = auth_key {
+        connect_with_auth(transports::Full::new(), server_address, auth.clone()).await?
+    } else {
+        // TODO update authkey
+        connect(transports::Full::new(), server_address).await?
+    };
 
-    let (sender, updates, handler) =
-        create_mtp::<TransportFull, _, _>((in_stream, out_stream), auth_key).await?;
-
-    let handler = task::spawn(handler.run());
-    Ok((sender, updates, handler))
+    Ok(sender)
 }
 
 impl Client {
@@ -142,14 +137,12 @@ impl Client {
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         // TODO we don't handle -404 (unknown good authkey) here, need recreate
         let dc_id = config.session.user_dc.unwrap_or(0);
-        let (sender, updates, handler) = create_sender(dc_id, &mut config.session.auth_key).await?;
+        let sender = create_sender(dc_id, &mut config.session.auth_key).await?;
         config.session.save()?;
 
         let mut client = Client {
             config,
             sender,
-            updates,
-            _handler: handler,
             last_phone_hash: None,
             user_id: None,
         };
@@ -171,14 +164,11 @@ impl Client {
     /// If the server ID is not within the known identifiers.
     async fn replace_mtsender(&mut self, dc_id: i32) -> Result<(), AuthorizationError> {
         self.config.session.auth_key = None;
-        let (sender, updates, handler) =
-            create_sender(dc_id, &mut self.config.session.auth_key).await?;
+        let sender = create_sender(dc_id, &mut self.config.session.auth_key).await?;
         self.config.session.user_dc = Some(dc_id);
         self.config.session.save()?;
 
         self.sender = sender;
-        self.updates = updates;
-        self._handler = handler;
 
         Ok(())
     }

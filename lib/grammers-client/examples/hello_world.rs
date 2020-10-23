@@ -16,12 +16,12 @@
 //! cargo run --example hello_world -- 123:abc username 'Hello, world!'
 //! ```
 
-use async_std::task;
 use grammers_client::{AuthorizationError, Client, Config};
 use grammers_session::Session;
 use log;
 use simple_logger;
 use std::env;
+use tokio::runtime;
 
 async fn async_main() -> Result<(), AuthorizationError> {
     simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
@@ -59,5 +59,9 @@ async fn async_main() -> Result<(), AuthorizationError> {
 }
 
 fn main() -> Result<(), AuthorizationError> {
-    task::block_on(async_main())
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }
