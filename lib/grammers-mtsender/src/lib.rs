@@ -88,36 +88,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     /// `enqueue` a Remote Procedure Call and `step` until it is answered.
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return> {
-        let mut rx = self.enqueue(request);
-        let body = loop {
-            self.step().await?;
-            match rx.try_recv() {
-                Ok(r) => break r,
-                Err(TryRecvError::Empty) => continue,
-                Err(e) => return Err(e.into()),
-            };
-        }?;
+        let rx = self.enqueue(request);
+        let body = self.step_until_receive(rx).await?;
         Ok(R::Return::from_bytes(&body)?)
     }
 
     /// Like `invoke` but raw data.
-    async fn send(&mut self, request: Vec<u8>) -> Result<Vec<u8>> {
-        // TODO too much duplication with invoke/enqueue
-        let (tx, mut rx) = oneshot::channel();
-        self.requests.push(Request {
-            body: request,
-            state: RequestState::NotSerialized,
-            result: tx,
-        });
-        let body = loop {
-            self.step().await?;
-            match rx.try_recv() {
-                Ok(r) => break r,
-                Err(TryRecvError::Empty) => continue,
-                Err(e) => return Err(e.into()),
-            };
-        }?;
-        Ok(body)
+    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>> {
+        let rx = self.enqueue_body(body);
+        Ok(self.step_until_receive(rx).await?)
     }
 
     /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
@@ -125,13 +104,34 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         &mut self,
         request: &R,
     ) -> oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>> {
+        self.enqueue_body(request.to_bytes())
+    }
+
+    fn enqueue_body(
+        &mut self,
+        body: Vec<u8>,
+    ) -> oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>> {
         let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
-            body: request.to_bytes(),
+            body,
             state: RequestState::NotSerialized,
             result: tx,
         });
         rx
+    }
+
+    async fn step_until_receive(
+        &mut self,
+        mut rx: oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>>,
+    ) -> Result<Vec<u8>> {
+        loop {
+            self.step().await?;
+            match rx.try_recv() {
+                Ok(x) => break Ok(x?),
+                Err(TryRecvError::Empty) => continue,
+                Err(e) => break Err(e.into()),
+            };
+        }
     }
 
     /// Step network events, writing and reading at the same time.
