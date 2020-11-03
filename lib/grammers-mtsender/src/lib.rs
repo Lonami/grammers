@@ -8,16 +8,19 @@
 mod errors;
 
 pub use errors::{AuthorizationError, InvocationError};
+use futures::future::FutureExt as _;
+use futures::{future, pin_mut};
 use grammers_crypto::AuthKey;
 use grammers_mtproto::errors::{RequestError, TransportError};
-use grammers_mtproto::mtp::{self, Deserialization, Mtp};
+use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transports::Transport;
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use log::{debug, info};
-use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::TryRecvError;
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -30,19 +33,41 @@ use tokio::net::{TcpStream, ToSocketAddrs};
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
+// TODO precise error types
+type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+// TODO add logs for how much data we're sending/reading
+
+// Manages enqueuing requests, matching them to their response, and IO.
 pub struct Sender<T: Transport, M: Mtp> {
     stream: TcpStream,
     transport: T,
     mtp: M,
     mtp_buffer: Vec<u8>,
-    transport_buffer: Vec<u8>,
+
+    requests: Vec<Request>,
+
+    // Transport-level buffers and positions
+    read_buffer: Vec<u8>,
+    read_index: usize,
+    write_buffer: Vec<u8>,
+    write_index: usize,
 }
 
-// TODO currently only one thing can be invoked at a time, and updates are
-//      ignored; the sender needs a way to support enqueueing multiple
-//      requests and properly giving access to updates
+struct Request {
+    body: Vec<u8>,
+    state: RequestState,
+    result: oneshot::Sender<std::result::Result<Vec<u8>, InvocationError>>,
+}
+
+enum RequestState {
+    NotSerialized,
+    Serialized(MsgId),
+    Sent(MsgId),
+}
+
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self, io::Error> {
+    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self> {
         info!("connecting...");
         let stream = TcpStream::connect(addr).await?;
 
@@ -51,121 +76,285 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             transport,
             mtp,
             mtp_buffer: Vec::with_capacity(MAXIMUM_DATA),
-            transport_buffer: Vec::with_capacity(MAXIMUM_DATA),
+
+            requests: vec![],
+
+            read_buffer: vec![],
+            read_index: 0,
+            write_buffer: vec![],
+            write_index: 0,
         })
     }
 
-    /// Invoke a Remote Procedure Call and receive packets from the network until it is answered.
-    pub async fn invoke<R: RemoteCall>(
+    /// `enqueue` a Remote Procedure Call and `step` until it is answered.
+    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return> {
+        let mut rx = self.enqueue(request);
+        let body = loop {
+            self.step().await?;
+            match rx.try_recv() {
+                Ok(r) => break r,
+                Err(TryRecvError::Empty) => continue,
+                Err(e) => return Err(e.into()),
+            };
+        }?;
+        Ok(R::Return::from_bytes(&body)?)
+    }
+
+    /// Like `invoke` but raw data.
+    async fn send(&mut self, request: Vec<u8>) -> Result<Vec<u8>> {
+        // TODO too much duplication with invoke/enqueue
+        let (tx, mut rx) = oneshot::channel();
+        self.requests.push(Request {
+            body: request,
+            state: RequestState::NotSerialized,
+            result: tx,
+        });
+        let body = loop {
+            self.step().await?;
+            match rx.try_recv() {
+                Ok(r) => break r,
+                Err(TryRecvError::Empty) => continue,
+                Err(e) => return Err(e.into()),
+            };
+        }?;
+        Ok(body)
+    }
+
+    /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
+    pub fn enqueue<R: RemoteCall>(
         &mut self,
         request: &R,
-    ) -> Result<R::Return, InvocationError> {
-        let data = request.to_bytes();
-        loop {
-            let sent_id = self.write(&data).await?;
-            debug!("waiting for a response for sent request {:?}", sent_id);
-            'resend: loop {
-                let result = self.read().await?;
-                for (msg_id, ret) in result.rpc_results {
-                    debug!("got result for request {:?}", msg_id);
-                    if msg_id != sent_id {
-                        continue;
-                    }
-
-                    match ret {
-                        Ok(x) => return Ok(R::Return::from_bytes(&x)?),
-                        Err(RequestError::RPCError(error)) => {
-                            return Err(InvocationError::RPC(error));
-                        }
-                        Err(RequestError::Dropped) => {
-                            return Err(InvocationError::Dropped);
-                        }
-                        Err(RequestError::Deserialize(error)) => {
-                            return Err(InvocationError::Deserialize(error));
-                        }
-                        Err(RequestError::BadMessage { .. }) => {
-                            info!("bad msg mtp error, re-sending request");
-                            break 'resend;
-                        }
-                    }
-                }
-            }
-        }
+    ) -> oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>> {
+        let (tx, rx) = oneshot::channel();
+        self.requests.push(Request {
+            body: request.to_bytes(),
+            state: RequestState::NotSerialized,
+            result: tx,
+        });
+        rx
     }
 
-    /// Send the body of a single request, and receive the next message.
-    async fn send(&mut self, data: &[u8]) -> Result<Vec<u8>, InvocationError> {
-        self.write(data).await?;
-        let mut result = self.read().await?;
-        Ok(result.rpc_results.remove(0).1.unwrap())
-    }
+    /// Step network events, writing and reading at the same time.
+    pub async fn step(&mut self) -> Result<()> {
+        self.try_fill_read();
+        self.try_fill_write();
 
-    /// Write out the body of a single request.
-    async fn write(&mut self, data: &[u8]) -> Result<MsgId, io::Error> {
-        debug!("serializing {} bytes of data...", data.len());
-        let msg_id = self
-            .mtp
-            .serialize(&vec![data.into()], &mut self.mtp_buffer)
-            .remove(0);
-        self.transport_buffer.clear();
-        self.transport
-            .pack(&self.mtp_buffer, &mut self.transport_buffer);
+        // TODO probably want to properly set the request state on disconnect (read fail)
 
-        debug!("sending buffer of {} bytes...", self.transport_buffer.len());
-        self.stream.write_all(&self.transport_buffer).await?;
-        Ok(msg_id)
-    }
+        let read_len = self.read_buffer.len() - self.read_index;
+        let write_len = self.write_buffer.len() - self.write_index;
 
-    /// Read a single transport-level packet and deserialize it.
-    async fn read(&mut self) -> Result<Deserialization, InvocationError> {
-        self.mtp_buffer.clear();
-        self.transport_buffer.clear();
-        loop {
+        let (mut reader, mut writer) = self.stream.split();
+        if self.write_buffer.is_empty() {
+            // TODO this always has to read the header of the packet and then the rest (2 or more calls)
+            // it would be better to always perform calls in a circular buffer to have as much data from
+            // the network as possible at all times, not just reading what's needed
+            // (perhaps something similar could be done with the write buffer to write packet after packet)
+            debug!("reading up to {} bytes from the network", read_len);
+            let n = reader
+                .read(&mut self.read_buffer[self.read_index..])
+                .await?;
+
+            self.on_net_read(n)
+        } else {
             debug!(
-                "trying to unpack buffer of {} bytes...",
-                self.transport_buffer.len()
+                "reading up to {} bytes and sending up to {} bytes via network",
+                read_len, write_len
             );
-            match self
-                .transport
-                .unpack(&self.transport_buffer, &mut self.mtp_buffer)
-            {
-                Ok(_) => {
-                    debug!("deserializing valid transport packet...");
-                    return Ok(self.mtp.deserialize(&self.mtp_buffer)?);
+            let read = reader.read(&mut self.read_buffer[self.read_index..]);
+            let write = writer.write(&self.write_buffer[self.write_index..]);
+            pin_mut!(read);
+            pin_mut!(write);
+            match future::select(read, write).await {
+                future::Either::Left((n, write)) => {
+                    let n_write = write.now_or_never();
+
+                    if let Some(n) = n_write {
+                        self.on_net_write(n?);
+                    }
+                    self.on_net_read(n?)
                 }
-                Err(TransportError::MissingBytes(n)) => {
-                    let start = self.transport_buffer.len();
-                    let missing = n - start;
-                    debug!("receiving {} more bytes...", missing);
-                    (0..missing).for_each(|_| self.transport_buffer.push(0));
-                    self.stream
-                        .read_exact(&mut self.transport_buffer[start..])
-                        .await?;
+                future::Either::Right((n, read)) => {
+                    let n_read = read.now_or_never();
+
+                    self.on_net_write(n?);
+                    if let Some(n) = n_read {
+                        self.on_net_read(n?)
+                    } else {
+                        Ok(())
+                    }
                 }
-                Err(_err) => todo!(),
             }
         }
+    }
+
+    /// Setup the read buffer for the transport, unless a read is already pending.
+    fn try_fill_read(&mut self) {
+        if !self.read_buffer.is_empty() {
+            return;
+        }
+
+        let mut empty = Vec::new();
+        match self.transport.unpack(&self.read_buffer, &mut empty) {
+            Ok(_) => panic!("transports should not handle data 0 bytes long"),
+            Err(TransportError::MissingBytes(n)) => {
+                (0..n).for_each(|_| self.read_buffer.push(0));
+            }
+            Err(_) => panic!("transports should not fail with data 0 bytes long"),
+        }
+    }
+
+    /// Setup the write buffer for the transport, unless a write is already pending.
+    fn try_fill_write(&mut self) {
+        if !self.write_buffer.is_empty() {
+            return;
+        }
+
+        // TODO avoid clone
+        // TODO add a test to make sure we only ever send the same request once
+        let requests = self
+            .requests
+            .iter()
+            .filter_map(|r| match r.state {
+                RequestState::NotSerialized => Some(r.body.clone()),
+                RequestState::Serialized(_) | RequestState::Sent(_) => None,
+            })
+            .collect::<Vec<_>>();
+
+        // TODO add a test to make sure we don't send empty data
+        if requests.is_empty() {
+            return;
+        }
+
+        let msg_ids = self.mtp.serialize(&requests, &mut self.mtp_buffer);
+        self.write_buffer.clear();
+        self.transport
+            .pack(&self.mtp_buffer, &mut self.write_buffer);
+
+        self.requests
+            .iter_mut()
+            .zip(msg_ids.into_iter())
+            .for_each(|(req, msg_id)| {
+                req.state = RequestState::Serialized(msg_id);
+            });
+    }
+
+    /// Handle `n` more read bytes being ready to process by the transport.
+    fn on_net_read(&mut self, n: usize) -> Result<()> {
+        debug!("read {} bytes from the network", n);
+        self.read_index += n;
+        if self.read_index != self.read_buffer.len() {
+            return Ok(());
+        }
+
+        debug!(
+            "trying to unpack buffer of {} bytes...",
+            self.read_buffer.len()
+        );
+
+        self.mtp_buffer.clear();
+        match self
+            .transport
+            .unpack(&self.read_buffer, &mut self.mtp_buffer)
+        {
+            Ok(_) => {
+                self.read_buffer.clear();
+                self.read_index = 0;
+                self.process_mtp_buffer()
+            }
+            Err(TransportError::MissingBytes(n)) => {
+                let start = self.read_buffer.len();
+                let missing = n - start;
+                (0..missing).for_each(|_| self.read_buffer.push(0));
+                Ok(())
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    /// Handle `n` more written bytes being ready to process by the transport.
+    fn on_net_write(&mut self, n: usize) {
+        debug!("written {} bytes to the network", n);
+        self.write_index += n;
+        if self.write_index != self.write_buffer.len() {
+            return;
+        }
+
+        self.write_buffer.clear();
+        self.write_index = 0;
+        for req in self.requests.iter_mut() {
+            match req.state {
+                RequestState::NotSerialized | RequestState::Sent(_) => {}
+                RequestState::Serialized(msg_id) => {
+                    req.state = RequestState::Sent(msg_id);
+                }
+            }
+        }
+    }
+
+    /// Process the `mtp_buffer` contents and dispatch the results and errors.
+    fn process_mtp_buffer(&mut self) -> Result<()> {
+        debug!("deserializing valid transport packet...");
+        let result = self.mtp.deserialize(&self.mtp_buffer)?;
+        for (msg_id, ret) in result.rpc_results {
+            debug!("got result for request {:?}", msg_id);
+
+            for i in (0..self.requests.len()).rev() {
+                let req = &mut self.requests[i];
+                match req.state {
+                    RequestState::Serialized(sid) if sid == msg_id => {
+                        panic!(format!(
+                            "got rpc result {:?} for unsent request {:?}",
+                            msg_id, sid
+                        ));
+                    }
+                    RequestState::Sent(sid) if sid == msg_id => {
+                        let result = match ret {
+                            Ok(x) => Ok(x),
+                            Err(RequestError::RPCError(error)) => Err(InvocationError::RPC(error)),
+                            Err(RequestError::Dropped) => Err(InvocationError::Dropped),
+                            Err(RequestError::Deserialize(error)) => {
+                                Err(InvocationError::Deserialize(error))
+                            }
+                            Err(RequestError::BadMessage { .. }) => {
+                                // TODO add a test to make sure we resend the request
+                                info!("bad msg mtp error, re-sending request");
+                                req.state = RequestState::NotSerialized;
+                                break;
+                            }
+                        };
+
+                        drop(req);
+                        let req = self.requests.remove(i);
+                        drop(req.result.send(result));
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
     }
 }
 
 pub async fn connect<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
-) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>> {
     let mut sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
 
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");
-    let response = sender.send(&request).await?;
+    let response = sender.send(request).await?;
     debug!("gen auth key: starting step 2");
     let (request, data) = authentication::step2(data, &response)?;
     debug!("gen auth key: sending step 2");
-    let response = sender.send(&request).await?;
+    let response = sender.send(request).await?;
     debug!("gen auth key: starting step 3");
     let (request, data) = authentication::step3(data, &response)?;
     debug!("gen auth key: sending step 3");
-    let response = sender.send(&request).await?;
+    let response = sender.send(request).await?;
     debug!("gen auth key: completing generation");
     let (auth_key, time_offset) = authentication::create_key(data, &response)?;
     info!("authorization key generated successfully");
@@ -177,7 +366,13 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
             .time_offset(time_offset)
             .finish(auth_key),
         mtp_buffer: sender.mtp_buffer,
-        transport_buffer: sender.transport_buffer,
+
+        requests: vec![],
+
+        read_buffer: vec![],
+        read_index: 0,
+        write_buffer: vec![],
+        write_index: 0,
     })
 }
 
@@ -185,6 +380,6 @@ pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     auth_key: AuthKey,
-) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>> {
     Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
 }
