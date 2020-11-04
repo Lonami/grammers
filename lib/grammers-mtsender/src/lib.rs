@@ -370,13 +370,11 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
             .time_offset(time_offset)
             .finish(auth_key),
         mtp_buffer: sender.mtp_buffer,
-
-        requests: vec![],
-
-        read_buffer: vec![],
-        read_index: 0,
-        write_buffer: vec![],
-        write_index: 0,
+        requests: sender.requests,
+        read_buffer: sender.read_buffer,
+        read_index: sender.read_index,
+        write_buffer: sender.write_buffer,
+        write_index: sender.write_index,
     })
 }
 
