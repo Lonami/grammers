@@ -11,7 +11,7 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 /// The default datacenter to connect to for testing.
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
-use grammers_mtproto::transports;
+use grammers_mtproto::transport;
 use grammers_mtsender::connect;
 use grammers_tl_types::{enums, functions};
 use log;
@@ -27,7 +27,7 @@ fn test_invoke_encrypted_method() {
         .build()
         .unwrap();
     rt.block_on(async {
-        let mut sender = connect(transports::Full::new(), TELEGRAM_TEST_DC_2)
+        let mut sender = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
             .await
             .unwrap();
 

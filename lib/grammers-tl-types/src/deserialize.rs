@@ -5,7 +5,43 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::DeserializeError;
+use std::fmt;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Error {
+    /// The end of the buffer was reached earlier than anticipated, which
+    /// implies there is not enough data to complete the deserialization.
+    UnexpectedEof,
+
+    /// The error type indicating an unexpected constructor was found,
+    /// for example, when reading data that doesn't represent the
+    /// correct type (e.g. reading a `bool` when we expect a `Vec`).
+    /// In particular, it can occur in the following situations:
+    ///
+    /// * When reading a boolean.
+    /// * When reading a boxed vector.
+    /// * When reading an arbitrary boxed type.
+    ///
+    /// It is important to note that unboxed or bare [`types`] lack the
+    /// constructor information, and as such they cannot be validated.
+    ///
+    /// [`types`]: types/index.html
+    UnexpectedConstructor {
+        /// The unexpected constructor identifier.
+        id: u32,
+    },
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Self::UnexpectedEof => write!(f, "unexpected eof"),
+            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {:08x}", id),
+        }
+    }
+}
 
 /// Re-implement `Cursor` to only work over in-memory buffers and greatly
 /// narrow the possible error cases.
@@ -32,13 +68,13 @@ impl<'a> Cursor<'a> {
             self.pos += 1;
             Ok(byte)
         } else {
-            Err(DeserializeError::UnexpectedEof)
+            Err(Error::UnexpectedEof)
         }
     }
 
     pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         if self.pos + buf.len() > self.buf.len() {
-            Err(DeserializeError::UnexpectedEof)
+            Err(Error::UnexpectedEof)
         } else {
             buf.copy_from_slice(&self.buf[self.pos..self.pos + buf.len()]);
             self.pos += buf.len();
@@ -58,7 +94,7 @@ impl<'a> Cursor<'a> {
 /// fallible, but in practice, we're always going to serialize in-memory,
 /// so instead we just use a `[u8]` as our buffer.
 pub(crate) type Buffer<'a, 'b> = &'a mut Cursor<'b>;
-pub(crate) type Result<T> = std::result::Result<T, DeserializeError>;
+pub(crate) type Result<T> = std::result::Result<T, Error>;
 
 /// This trait allows for data serialized according to the
 /// [Binary Data Serialization] to be deserialized into concrete instances.
@@ -107,7 +143,7 @@ impl Deserializable for bool {
         match id {
             0x997275b5u32 => Ok(true),
             0xbc799737u32 => Ok(false),
-            _ => Err(DeserializeError::UnexpectedConstructor { id }),
+            _ => Err(Error::UnexpectedConstructor { id }),
         }
     }
 }
@@ -272,7 +308,7 @@ impl<T: Deserializable> Deserializable for Vec<T> {
     fn deserialize(buf: Buffer) -> Result<Self> {
         let id = u32::deserialize(buf)?;
         if id != 0x1cb5c415u32 {
-            return Err(DeserializeError::UnexpectedConstructor { id });
+            return Err(Error::UnexpectedConstructor { id });
         }
         let len = u32::deserialize(buf)?;
         Ok((0..len)

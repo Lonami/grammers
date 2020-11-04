@@ -73,16 +73,13 @@
 //! [`Serializable`]: trait.Serializable.html
 //! [`Deserializable`]: trait.Deserializable.html
 //! [`LAYER`]: constant.LAYER.html
-mod deserializable;
-pub mod errors;
+pub mod deserialize;
 mod generated;
-mod serializable;
+pub mod serialize;
 
-pub(crate) use deserializable::{Buffer as InBuffer, Result as DeserializeResult};
-pub use deserializable::{Cursor, Deserializable};
+pub use deserialize::{Cursor, Deserializable};
 pub use generated::{enums, functions, types, LAYER};
-pub(crate) use serializable::Buffer as OutBuffer;
-pub use serializable::Serializable;
+pub use serialize::Serializable;
 
 /// This struct represents the concrete type of a vector, that is,
 /// `vector` as opposed to the type `Vector`. This bare type is less

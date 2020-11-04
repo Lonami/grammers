@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::DeserializeError;
-use crate::mtp::{Deserialization, Mtp};
+use super::{Deserialization, DeserializeError, Mtp};
 use crate::MsgId;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
 

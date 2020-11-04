@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::TransportError;
-use crate::transports::Transport;
+use super::{Error, Transport};
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -67,10 +66,10 @@ impl Transport for Full {
         self.send_seq += 1;
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         // Need 4 bytes for the initial length
         if input.len() < 4 {
-            return Err(TransportError::MissingBytes(4));
+            return Err(Error::MissingBytes(4));
         }
 
         // payload len
@@ -78,11 +77,11 @@ impl Transport for Full {
         len_bytes.copy_from_slice(&input[0..4]);
         let len = u32::from_le_bytes(len_bytes) as usize;
         if len < 12 {
-            return Err(TransportError::BadLen { got: len as u32 });
+            return Err(Error::BadLen { got: len as u32 });
         }
 
         if input.len() < len {
-            return Err(TransportError::MissingBytes(len));
+            return Err(Error::MissingBytes(len));
         }
 
         // receive counter
@@ -90,7 +89,7 @@ impl Transport for Full {
         seq_bytes.copy_from_slice(&input[4..8]);
         let seq = u32::from_le_bytes(seq_bytes);
         if seq != self.recv_seq {
-            return Err(TransportError::BadSeq {
+            return Err(Error::BadSeq {
                 expected: self.recv_seq,
                 got: seq,
             });
@@ -114,7 +113,7 @@ impl Transport for Full {
             digest.sum32()
         };
         if crc != valid_crc {
-            return Err(TransportError::BadCrc {
+            return Err(Error::BadCrc {
                 expected: valid_crc,
                 got: crc,
             });

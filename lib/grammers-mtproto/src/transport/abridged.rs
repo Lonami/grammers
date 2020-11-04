@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::TransportError;
-use crate::transports::Transport;
+use super::{Error, Transport};
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -64,9 +63,9 @@ impl Transport for Abridged {
         }
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         if input.len() < 1 {
-            return Err(TransportError::MissingBytes(1));
+            return Err(Error::MissingBytes(1));
         }
 
         let header_len;
@@ -76,7 +75,7 @@ impl Transport for Abridged {
             len as u32
         } else {
             if input.len() < 4 {
-                return Err(TransportError::MissingBytes(4));
+                return Err(Error::MissingBytes(4));
             }
 
             header_len = 4;
@@ -87,7 +86,7 @@ impl Transport for Abridged {
 
         let len = len as usize * 4;
         if input.len() < header_len + len {
-            return Err(TransportError::MissingBytes(header_len + len));
+            return Err(Error::MissingBytes(header_len + len));
         }
 
         output.extend_from_slice(&input[header_len..header_len + len]);

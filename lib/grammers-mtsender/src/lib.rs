@@ -7,16 +7,16 @@
 // except according to those terms.
 mod errors;
 
-pub use errors::{AuthorizationError, InvocationError};
+pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
 use grammers_crypto::AuthKey;
-use grammers_mtproto::errors::{RequestError, TransportError};
 use grammers_mtproto::mtp::{self, Mtp};
-use grammers_mtproto::transports::Transport;
+use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{Deserializable, RemoteCall};
 use log::{debug, info};
+use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::sync::oneshot;
@@ -32,11 +32,6 @@ use tokio::sync::oneshot::error::TryRecvError;
 /// so to account for the transports' own overhead, we add a few extra
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
-
-// TODO precise error types
-type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
-
-// TODO add logs for how much data we're sending/reading
 
 // Manages enqueuing requests, matching them to their response, and IO.
 pub struct Sender<T: Transport, M: Mtp> {
@@ -57,7 +52,7 @@ pub struct Sender<T: Transport, M: Mtp> {
 struct Request {
     body: Vec<u8>,
     state: RequestState,
-    result: oneshot::Sender<std::result::Result<Vec<u8>, InvocationError>>,
+    result: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
 }
 
 enum RequestState {
@@ -67,7 +62,7 @@ enum RequestState {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self> {
+    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self, io::Error> {
         info!("connecting...");
         let stream = TcpStream::connect(addr).await?;
 
@@ -79,22 +74,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
             requests: vec![],
 
-            read_buffer: vec![],
+            read_buffer: Vec::with_capacity(MAXIMUM_DATA),
             read_index: 0,
-            write_buffer: vec![],
+            write_buffer: Vec::with_capacity(MAXIMUM_DATA),
             write_index: 0,
         })
     }
 
     /// `enqueue` a Remote Procedure Call and `step` until it is answered.
-    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<R::Return> {
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
         let rx = self.enqueue(request);
         let body = self.step_until_receive(rx).await?;
         Ok(R::Return::from_bytes(&body)?)
     }
 
     /// Like `invoke` but raw data.
-    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>> {
+    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
         let rx = self.enqueue_body(body);
         Ok(self.step_until_receive(rx).await?)
     }
@@ -103,14 +101,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     pub fn enqueue<R: RemoteCall>(
         &mut self,
         request: &R,
-    ) -> oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>> {
+    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
         self.enqueue_body(request.to_bytes())
     }
 
     fn enqueue_body(
         &mut self,
         body: Vec<u8>,
-    ) -> oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>> {
+    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
         let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
             body,
@@ -122,20 +120,22 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     async fn step_until_receive(
         &mut self,
-        mut rx: oneshot::Receiver<std::result::Result<Vec<u8>, InvocationError>>,
-    ) -> Result<Vec<u8>> {
+        mut rx: oneshot::Receiver<Result<Vec<u8>, InvocationError>>,
+    ) -> Result<Vec<u8>, InvocationError> {
         loop {
             self.step().await?;
             match rx.try_recv() {
-                Ok(x) => break Ok(x?),
+                Ok(x) => break x,
                 Err(TryRecvError::Empty) => continue,
-                Err(e) => break Err(e.into()),
-            };
+                Err(TryRecvError::Closed) => {
+                    panic!("request channel dropped before receiving a result")
+                }
+            }
         }
     }
 
     /// Step network events, writing and reading at the same time.
-    pub async fn step(&mut self) -> Result<()> {
+    pub async fn step(&mut self) -> Result<(), ReadError> {
         self.try_fill_read();
         self.try_fill_write();
 
@@ -197,7 +197,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let mut empty = Vec::new();
         match self.transport.unpack(&self.read_buffer, &mut empty) {
             Ok(_) => panic!("transports should not handle data 0 bytes long"),
-            Err(TransportError::MissingBytes(n)) => {
+            Err(transport::Error::MissingBytes(n)) => {
                 (0..n).for_each(|_| self.read_buffer.push(0));
             }
             Err(_) => panic!("transports should not fail with data 0 bytes long"),
@@ -240,7 +240,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Handle `n` more read bytes being ready to process by the transport.
-    fn on_net_read(&mut self, n: usize) -> Result<()> {
+    ///
+    /// This won't cause `ReadError::Io`, but yet another enum would be overkill.
+    fn on_net_read(&mut self, n: usize) -> Result<(), ReadError> {
         debug!("read {} bytes from the network", n);
         self.read_index += n;
         if self.read_index != self.read_buffer.len() {
@@ -260,9 +262,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             Ok(_) => {
                 self.read_buffer.clear();
                 self.read_index = 0;
-                self.process_mtp_buffer()
+                self.process_mtp_buffer().map_err(|e| e.into())
             }
-            Err(TransportError::MissingBytes(n)) => {
+            Err(transport::Error::MissingBytes(n)) => {
                 let start = self.read_buffer.len();
                 let missing = n - start;
                 (0..missing).for_each(|_| self.read_buffer.push(0));
@@ -293,7 +295,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Process the `mtp_buffer` contents and dispatch the results and errors.
-    fn process_mtp_buffer(&mut self) -> Result<()> {
+    fn process_mtp_buffer(&mut self) -> Result<(), mtp::DeserializeError> {
         debug!("deserializing valid transport packet...");
         let result = self.mtp.deserialize(&self.mtp_buffer)?;
         for (msg_id, ret) in result.rpc_results {
@@ -311,12 +313,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     RequestState::Sent(sid) if sid == msg_id => {
                         let result = match ret {
                             Ok(x) => Ok(x),
-                            Err(RequestError::RPCError(error)) => Err(InvocationError::RPC(error)),
-                            Err(RequestError::Dropped) => Err(InvocationError::Dropped),
-                            Err(RequestError::Deserialize(error)) => {
-                                Err(InvocationError::Deserialize(error))
+                            Err(mtp::RequestError::RpcError(error)) => {
+                                Err(InvocationError::Rpc(error))
                             }
-                            Err(RequestError::BadMessage { .. }) => {
+                            Err(mtp::RequestError::Dropped) => Err(InvocationError::Dropped),
+                            Err(mtp::RequestError::Deserialize(error)) => {
+                                Err(InvocationError::Read(error.into()))
+                            }
+                            Err(mtp::RequestError::BadMessage { .. }) => {
                                 // TODO add a test to make sure we resend the request
                                 info!("bad msg mtp error, re-sending request");
                                 req.state = RequestState::NotSerialized;
@@ -340,7 +344,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 pub async fn connect<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
-) -> Result<Sender<T, mtp::Encrypted>> {
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
     let mut sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
 
     info!("generating new authorization key...");
@@ -380,6 +384,6 @@ pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     auth_key: AuthKey,
-) -> Result<Sender<T, mtp::Encrypted>> {
+) -> Result<Sender<T, mtp::Encrypted>, io::Error> {
     Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
 }

@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::TransportError;
-use crate::transports::Transport;
+use super::{Error, Transport};
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -48,9 +47,9 @@ impl Transport for Intermediate {
         output.extend_from_slice(input);
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), TransportError> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         if input.len() < 4 {
-            return Err(TransportError::MissingBytes(4));
+            return Err(Error::MissingBytes(4));
         }
 
         let len = {
@@ -61,7 +60,7 @@ impl Transport for Intermediate {
             + 4;
 
         if input.len() < len {
-            return Err(TransportError::MissingBytes(len));
+            return Err(Error::MissingBytes(len));
         }
 
         output.extend_from_slice(&input[4..len]);

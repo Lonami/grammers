@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::errors::{DeserializeError, RequestError};
-use crate::mtp::{Deserialization, Mtp};
+use super::{Deserialization, DeserializeError, Mtp, RequestError};
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
@@ -439,7 +438,7 @@ impl Encrypted {
             tl::types::RpcError::CONSTRUCTOR_ID => self.rpc_results.push((
                 msg_id,
                 match tl::enums::RpcError::from_bytes(&result) {
-                    Ok(tl::enums::RpcError::Error(e)) => Err(RequestError::RPCError(e.into())),
+                    Ok(tl::enums::RpcError::Error(e)) => Err(RequestError::RpcError(e.into())),
                     Err(e) => Err(e.into()),
                 },
             )),
