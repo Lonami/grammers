@@ -7,21 +7,17 @@
 // except according to those terms.
 //pub mod iterators;
 //mod parsers;
-mod auth;
-mod chats;
-mod messages;
-mod updates;
+//mod auth;
+//mod chats;
+//mod messages;
+//mod updates;
 
-pub use auth::SignInError;
-use grammers_crypto::auth_key::AuthKey;
-use grammers_mtproto::{mtp, transports};
-use grammers_mtsender::{connect, connect_with_auth, Sender};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::Session;
-use grammers_tl_types::{self as tl, Deserializable, RemoteCall, Serializable};
-use std::net::{IpAddr, Ipv4Addr, SocketAddr};
-
-//pub use iterators::Dialogs;
+use futures::future::FutureExt as _;
+use futures::{future, pin_mut};
+use grammers_mtproto::{mtp, transport};
+use grammers_mtsender::{self as sender, InvocationError, Sender};
+use std::net::Ipv4Addr;
+use tokio::sync::{mpsc, oneshot};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -40,16 +36,28 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
 
+struct Request {
+    request: Vec<u8>,
+    response: oneshot::Sender<oneshot::Receiver<Result<Vec<u8>, InvocationError>>>,
+}
+
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
-    config: Config,
-    sender: Sender<transports::Full, mtp::Encrypted>,
+    //config: Config,
+    sender: Sender<transport::Full, mtp::Encrypted>,
 
     /// The stored phone and its hash from the last `request_login_code` call.
-    last_phone_hash: Option<(String, String)>,
+    //last_phone_hash: Option<(String, String)>,
 
     /// The user identifier of the currently logged-in user.
-    user_id: Option<i32>,
+    //user_id: Option<i32>,
+    handle_tx: mpsc::UnboundedSender<Request>,
+    handle_rx: mpsc::UnboundedReceiver<Request>,
+}
+
+#[derive(Clone)]
+pub struct ClientHandle {
+    tx: mpsc::UnboundedSender<Request>,
 }
 
 /// Configuration required to create a [`Client`] instance.
@@ -58,7 +66,7 @@ pub struct Client {
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: Session,
+    //pub session: Session,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -108,122 +116,63 @@ impl Default for InitParams {
     }
 }
 
-// TODO narrow the error
-// TODO not entirely happy with the fact we need crypto just for AuthKey, should re-export (same in sessions)
-async fn create_sender(
-    dc_id: i32,
-    auth_key: &mut Option<AuthKey>,
-) -> Result<Sender<transports::Full, mtp::Encrypted>, AuthorizationError> {
-    let server_address = {
-        let (addr, port) = DC_ADDRESSES[dc_id as usize];
-        SocketAddr::new(IpAddr::V4(addr), port)
-    };
-
-    let sender = if let Some(auth) = auth_key {
-        connect_with_auth(transports::Full::new(), server_address, auth.clone()).await?
-    } else {
-        // TODO update authkey
-        connect(transports::Full::new(), server_address).await?
-    };
-
-    Ok(sender)
-}
-
 impl Client {
-    /// Creates and returns a new client instance upon successful connection to Telegram.
-    ///
-    /// If the session in the configuration did not have an authorization key, a new one
-    /// will be created and the session will be saved with it.
-    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        // TODO we don't handle -404 (unknown good authkey) here, need recreate
-        let dc_id = config.session.user_dc.unwrap_or(0);
-        let sender = create_sender(dc_id, &mut config.session.auth_key).await?;
-        config.session.save()?;
+    pub async fn connect() -> Self {
+        let sender = sender::connect(transport::Full::new(), DC_ADDRESSES[0usize])
+            .await
+            .unwrap();
 
-        let mut client = Client {
-            config,
+        // TODO Sender doesn't have a way to handle backpressure yet
+        let (handle_tx, handle_rx) = mpsc::unbounded_channel();
+        Self {
             sender,
-            last_phone_hash: None,
-            user_id: None,
-        };
-        client.init_connection().await?;
-        Ok(client)
+            handle_tx,
+            handle_rx,
+        }
     }
 
-    /// Replace the current `MTSender` with one connected to a different datacenter.
-    ///
-    /// This process is not quite a migration, since it will ignore any previous
-    /// authorization key.
-    ///
-    /// The sender will not be replaced unless the entire process succeeds.
-    ///
-    /// After the sender is replaced, the next request should use `init_invoke`.
-    ///
-    /// # Panics
-    ///
-    /// If the server ID is not within the known identifiers.
-    async fn replace_mtsender(&mut self, dc_id: i32) -> Result<(), AuthorizationError> {
-        self.config.session.auth_key = None;
-        let sender = create_sender(dc_id, &mut self.config.session.auth_key).await?;
-        self.config.session.user_dc = Some(dc_id);
-        self.config.session.save()?;
-
-        self.sender = sender;
-
-        Ok(())
+    /// Return a new `ClientHandle` that can be used to invoke remote procedure calls.
+    pub fn handle(&self) -> ClientHandle {
+        ClientHandle {
+            tx: self.handle_tx.clone(),
+        }
     }
 
-    /// Initializes the connection with Telegram. If this is never done on
-    /// a fresh session, then Telegram won't know which layer to use and a
-    /// very old one will be used (which we will fail to understand).
-    async fn init_connection(&mut self) -> Result<(), InvocationError> {
-        // TODO store config
-        let _config = self.init_invoke(&tl::functions::help::GetConfig {}).await?;
-        Ok(())
-    }
-
-    /// Wraps the request in `invokeWithLayer(initConnection(...))` and
-    /// invokes that. Should be used by the first request after connect.
-    async fn init_invoke<R: RemoteCall>(
-        &mut self,
-        request: &R,
-    ) -> Result<R::Return, InvocationError> {
-        // TODO figure out what we're doing wrong because Telegram seems to
-        //      reply some constructor we are unaware of, even though we
-        //      explicitly did invokeWithLayer. this will fail, because
-        //      we want to return the right type (before we ignored it).
-        //
-        // a second call to getConfig will work just fine though.
-        //
-        // this also seems to have triggered RPC_CALL_FAIL
-        let data = self
-            .invoke(&tl::functions::InvokeWithLayer {
-                layer: tl::LAYER,
-                query: tl::functions::InitConnection {
-                    api_id: self.config.api_id,
-                    device_model: self.config.params.device_model.clone(),
-                    system_version: self.config.params.system_version.clone(),
-                    app_version: self.config.params.app_version.clone(),
-                    system_lang_code: self.config.params.system_lang_code.clone(),
-                    lang_pack: "".into(),
-                    lang_code: self.config.params.lang_code.clone(),
-                    proxy: None,
-                    params: None,
-                    query: request.to_bytes().into(),
+    /// Perform a single network step or processing of incoming requests via handles.
+    pub async fn step(&mut self) -> Result<(), sender::ReadError> {
+        let (result, request) = {
+            let network = self.sender.step();
+            let request = self.handle_rx.recv();
+            pin_mut!(network);
+            pin_mut!(request);
+            match future::select(network, request).await {
+                future::Either::Left((network, request)) => {
+                    let request = request.now_or_never();
+                    (Some(network), request)
                 }
-                .to_bytes()
-                .into(),
-            })
-            .await?;
+                future::Either::Right((request, network)) => {
+                    let network = network.now_or_never();
+                    (network, Some(request))
+                }
+            }
+        };
 
-        Ok(R::Return::from_bytes(&data.0)?)
+        if let Some(request) = request {
+            let request = request.expect("mpsc returned None");
+            let response = self.sender.enqueue_body(request.request);
+            drop(request.response.send(response));
+        }
+
+        // TODO request cancellation if this is Err
+        // (perhaps a method on the sender to cancel_all)
+        result.unwrap_or(Ok(()))
     }
 
-    /// Invokes a raw request, and returns its result.
-    pub async fn invoke<R: RemoteCall>(
-        &mut self,
-        request: &R,
-    ) -> Result<R::Return, InvocationError> {
-        self.sender.invoke(request).await
+    /// Run the client by repeatedly `step`ping the client until a graceful disconnection occurs,
+    /// or a network error occurs.
+    pub async fn run_until_disconnected(mut self) -> Result<(), sender::ReadError> {
+        loop {
+            self.step().await?;
+        }
     }
 }

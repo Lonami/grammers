@@ -102,10 +102,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         &mut self,
         request: &R,
     ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        // TODO we probably want a bound here (to not enqueue more than N at once)
         self.enqueue_body(request.to_bytes())
     }
 
-    fn enqueue_body(
+    pub fn enqueue_body(
         &mut self,
         body: Vec<u8>,
     ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
