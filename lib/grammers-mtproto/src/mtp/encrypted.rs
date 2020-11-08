@@ -117,6 +117,11 @@ impl Encrypted {
         }
     }
 
+    /// The authorization key used for encryption and decryption.
+    pub fn auth_key(&self) -> &AuthKey {
+        &self.auth_key
+    }
+
     /// Correct our time offset based on a known valid message ID.
     fn correct_time_offset(&mut self, msg_id: i64) {
         let now = SystemTime::now()

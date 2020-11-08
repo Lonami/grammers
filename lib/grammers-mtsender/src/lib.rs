@@ -342,6 +342,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 }
 
+impl<T: Transport> Sender<T, mtp::Encrypted> {
+    pub fn auth_key(&self) -> &AuthKey {
+        self.mtp.auth_key()
+    }
+}
+
 pub async fn connect<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,

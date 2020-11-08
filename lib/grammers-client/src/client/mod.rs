@@ -15,7 +15,9 @@
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{self as sender, InvocationError, Sender};
+use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
+use grammers_session::Session;
+use grammers_tl_types::{self as tl, Deserializable, Serializable};
 use std::net::Ipv4Addr;
 use tokio::sync::{mpsc, oneshot};
 
@@ -43,14 +45,7 @@ struct Request {
 
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
-    //config: Config,
     sender: Sender<transport::Full, mtp::Encrypted>,
-
-    /// The stored phone and its hash from the last `request_login_code` call.
-    //last_phone_hash: Option<(String, String)>,
-
-    /// The user identifier of the currently logged-in user.
-    //user_id: Option<i32>,
     handle_tx: mpsc::UnboundedSender<Request>,
     handle_rx: mpsc::UnboundedReceiver<Request>,
 }
@@ -66,7 +61,7 @@ pub struct ClientHandle {
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    //pub session: Session,
+    pub session: Session,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -117,18 +112,67 @@ impl Default for InitParams {
 }
 
 impl Client {
-    pub async fn connect() -> Self {
-        let sender = sender::connect(transport::Full::new(), DC_ADDRESSES[0usize])
-            .await
-            .unwrap();
+    /// Creates and returns a new client instance upon successful connection to Telegram.
+    ///
+    /// If the session in the configuration did not have an authorization key, a new one
+    /// will be created and the session will be saved with it.
+    ///
+    /// The connection will be initialized with the data from the input configuration.
+    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
+        let transport = transport::Full::new();
+        let addr = DC_ADDRESSES[config.session.user_dc.unwrap_or(0) as usize];
+
+        let mut sender = if let Some(auth_key) = config.session.auth_key.as_ref() {
+            sender::connect_with_auth(transport, addr, auth_key.clone()).await?
+        } else {
+            let sender = sender::connect(transport, addr).await?;
+
+            config.session.auth_key = Some(sender.auth_key().clone());
+            config.session.save()?;
+            sender
+        };
+
+        // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
+        let remote_config = sender
+            .invoke(&tl::functions::InvokeWithLayer {
+                layer: tl::LAYER,
+                query: tl::functions::InitConnection {
+                    api_id: config.api_id,
+                    device_model: config.params.device_model.clone(),
+                    system_version: config.params.system_version.clone(),
+                    app_version: config.params.app_version.clone(),
+                    system_lang_code: config.params.system_lang_code.clone(),
+                    lang_pack: "".into(),
+                    lang_code: config.params.lang_code.clone(),
+                    proxy: None,
+                    params: None,
+                    query: tl::functions::help::GetConfig {}.to_bytes().into(),
+                }
+                .to_bytes()
+                .into(),
+            })
+            .await?
+            .0;
+
+        // TODO all up-to-date server addresses should be stored in the session for future initial connections
+        let _remote_config =
+            <tl::functions::help::GetConfig as tl::RemoteCall>::Return::from_bytes(&remote_config)
+                .expect("bad config from server");
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
-        Self {
+        Ok(Self {
             sender,
             handle_tx,
             handle_rx,
-        }
+        })
+    }
+
+    pub async fn invoke<R: tl::RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        self.sender.invoke(request).await
     }
 
     /// Return a new `ClientHandle` that can be used to invoke remote procedure calls.
