@@ -11,13 +11,13 @@
 //! # Examples
 //!
 //! ```no_run
-//! use grammers_mtproto::{authentication, errors::AuthKeyGenError};
+//! use grammers_mtproto::authentication;
 //!
-//! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>, AuthKeyGenError> {
+//! fn send_data_to_server(request: &[u8]) -> Result<Vec<u8>, authentication::Error> {
 //!     unimplemented!()
 //! }
 //!
-//! fn main() -> Result<(), AuthKeyGenError> {
+//! fn main() -> Result<(), authentication::Error> {
 //!     let (request, data) = authentication::step1()?;
 //!     let response = send_data_to_server(&request)?;
 //!
@@ -32,13 +32,154 @@
 //!     Ok(())
 //! }
 //! ```
-use crate::errors::AuthKeyGenError;
 use getrandom::getrandom;
 use grammers_crypto::{factorize::factorize, rsa, AuthKey};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::Sha1;
+use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+/// Represents an error that occured during the generation of an
+/// authorization key.
+#[derive(Clone, Debug, PartialEq)]
+pub enum Error {
+    /// The response data was invalid and did not match our expectations.
+    InvalidResponse {
+        /// The inner error that caused the invalid response.
+        error: tl::deserialize::Error,
+    },
+
+    /// The server's nonce did not match ours.
+    InvalidNonce {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+
+    /// The server's PQ number was not of the right size.
+    InvalidPQSize {
+        /// The unexpected size that we got.
+        size: usize,
+    },
+
+    /// None of the server fingerprints are known to us.
+    UnknownFingerprints {
+        /// The list of fingerprint that we got.
+        fingerprints: Vec<i64>,
+    },
+
+    /// The server failed to send the Diffie-Hellman parameters.
+    DHParamsFail,
+
+    /// The server's nonce has changed during the key exchange.
+    InvalidServerNonce {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+
+    /// The server's `encrypted_data` is not correctly padded.
+    EncryptedResponseNotPadded {
+        /// The non-padded length of the response.
+        len: usize,
+    },
+
+    /// An error occured while trying to read the DH inner data.
+    InvalidDhInnerData {
+        /// The inner error that occured when reading the data.
+        error: tl::deserialize::Error,
+    },
+
+    /// Some parameter (`g`, `g_a` or `g_b`) was out of range.
+    GParameterOutOfRange {
+        value: BigUint,
+        low: BigUint,
+        high: BigUint,
+    },
+
+    // The generation of Diffie-Hellman parameters is to be retried.
+    DHGenRetry,
+
+    // The generation of Diffie-Hellman parameters failed.
+    DHGenFail,
+
+    /// The plaintext answer hash did not match.
+    InvalidAnswerHash {
+        /// The unexpected hash that we got.
+        got: [u8; 20],
+
+        /// The expected hash.
+        expected: [u8; 20],
+    },
+
+    // The new nonce hash did not match.
+    InvalidNewNonceHash {
+        /// The unexpected nonce that we got.
+        got: [u8; 16],
+
+        /// The expected nonce.
+        expected: [u8; 16],
+    },
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvalidResponse { error } => write!(f, "invalid server response: {}", error),
+            Self::InvalidNonce { got, expected } => {
+                write!(f, "invalid nonce: got {:?}, expected {:?}", got, expected)
+            }
+            Self::InvalidPQSize { size } => write!(f, "invalid pq size {}", size),
+            Self::UnknownFingerprints { fingerprints } => {
+                write!(f, "all server fingerprints are unknown: {:?}", fingerprints)
+            }
+            Self::DHParamsFail => write!(f, "the generation of DH parameters by the server failed"),
+            Self::InvalidServerNonce { got, expected } => write!(
+                f,
+                "invalid server nonce: got {:?}, expected {:?}",
+                got, expected
+            ),
+            Self::EncryptedResponseNotPadded { len } => write!(
+                f,
+                "the encrypted server response was {} bytes long, which is not correctly padded",
+                len
+            ),
+            Self::InvalidDhInnerData { error } => {
+                write!(f, "could not deserialize DH inner data: {}", error)
+            }
+            Self::GParameterOutOfRange { low, high, value } => write!(
+                f,
+                "the parameter g = {} was not in the range {}..{}",
+                value, low, high
+            ),
+            Self::DHGenRetry => write!(f, "the generation of DH parameters should be retried"),
+            Self::DHGenFail => write!(f, "the generation of DH parameters failed"),
+            Self::InvalidAnswerHash { got, expected } => write!(
+                f,
+                "invalid answer hash: got {:?}, expected {:?}",
+                got, expected
+            ),
+            Self::InvalidNewNonceHash { got, expected } => write!(
+                f,
+                "invalid new nonce hash: got {:?}, expected {:?}",
+                got, expected
+            ),
+        }
+    }
+}
+
+impl From<tl::deserialize::Error> for Error {
+    fn from(error: tl::deserialize::Error) -> Self {
+        Self::InvalidResponse { error }
+    }
+}
 
 /// The data generated by [`step1`], needed for [`step2`].
 ///
@@ -71,7 +212,7 @@ pub struct Step3 {
 }
 
 /// The first step of the process to generate an authorization key.
-pub fn step1() -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
+pub fn step1() -> Result<(Vec<u8>, Step1), Error> {
     let random_bytes = {
         let mut buffer = [0; 16];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
@@ -82,7 +223,7 @@ pub fn step1() -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
 }
 
 // n.b.: the `do_step` functions are pure so that they can be tested.
-fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), AuthKeyGenError> {
+fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), Error> {
     // Step 1. Generates a secure random nonce.
     let nonce = *random_bytes;
     Ok((
@@ -92,7 +233,7 @@ fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), AuthKeyGenError
 }
 
 /// The second step of the process to generate an authorization key.
-pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
+pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), Error> {
     let random_bytes = {
         let mut buffer = [0; 32 + 256];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
@@ -106,7 +247,7 @@ fn do_step2(
     data: Step1,
     response: &[u8],
     random_bytes: &[u8; 32 + 256],
-) -> Result<(Vec<u8>, Step2), AuthKeyGenError> {
+) -> Result<(Vec<u8>, Step2), Error> {
     // Step 2. Validate the PQ response. Return `(p, q)` if it's valid.
     let Step1 { nonce } = data;
     let tl::enums::ResPq::Pq(res_pq) =
@@ -115,7 +256,7 @@ fn do_step2(
     check_nonce(&res_pq.nonce, &nonce)?;
 
     if res_pq.pq.len() != 8 {
-        return Err(AuthKeyGenError::InvalidPQSize {
+        return Err(Error::InvalidPQSize {
             size: res_pq.pq.len(),
         });
     }
@@ -178,7 +319,7 @@ fn do_step2(
     {
         Some(x) => x,
         None => {
-            return Err(AuthKeyGenError::UnknownFingerprints {
+            return Err(Error::UnknownFingerprints {
                 fingerprints: res_pq.server_public_key_fingerprints.clone(),
             })
         }
@@ -207,7 +348,7 @@ fn do_step2(
 }
 
 /// The third step of the process to generate an authorization key.
-pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
+pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), Error> {
     let random_bytes = {
         let mut buffer = [0; 256 + 16];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
@@ -226,7 +367,7 @@ fn do_step3(
     response: &[u8],
     random_bytes: &[u8; 256 + 16],
     now: i32,
-) -> Result<(Vec<u8>, Step3), AuthKeyGenError> {
+) -> Result<(Vec<u8>, Step3), Error> {
     let Step2 {
         nonce,
         server_nonce,
@@ -250,7 +391,7 @@ fn do_step3(
             };
             check_new_nonce_hash(&server_dh_params.new_nonce_hash, &new_nonce_hash)?;
 
-            return Err(AuthKeyGenError::DHParamsFail);
+            return Err(Error::DHParamsFail);
         }
         tl::enums::ServerDhParams::Ok(x) => x,
     };
@@ -259,7 +400,7 @@ fn do_step3(
     check_server_nonce(&server_dh_params.server_nonce, &server_nonce)?;
 
     if server_dh_params.encrypted_answer.len() % 16 != 0 {
-        return Err(AuthKeyGenError::EncryptedResponseNotPadded {
+        return Err(Error::EncryptedResponseNotPadded {
             len: server_dh_params.encrypted_answer.len(),
         });
     }
@@ -282,7 +423,7 @@ fn do_step3(
     let mut plain_text_cursor = Cursor::from_slice(&plain_text_answer[20..]);
     let server_dh_inner = match tl::enums::ServerDhInnerData::deserialize(&mut plain_text_cursor) {
         Ok(tl::enums::ServerDhInnerData::Data(x)) => x,
-        Err(error) => return Err(AuthKeyGenError::InvalidDhInnerData { error }),
+        Err(error) => return Err(Error::InvalidDhInnerData { error }),
     };
 
     let expected_answer_hash = {
@@ -292,7 +433,7 @@ fn do_step3(
     };
 
     if got_answer_hash != expected_answer_hash {
-        return Err(AuthKeyGenError::InvalidAnswerHash {
+        return Err(Error::InvalidAnswerHash {
             got: got_answer_hash,
             expected: expected_answer_hash,
         });
@@ -378,7 +519,7 @@ fn do_step3(
 }
 
 /// The last step of the process to generate an authorization key.
-pub fn create_key(data: Step3, response: &[u8]) -> Result<(AuthKey, i32), AuthKeyGenError> {
+pub fn create_key(data: Step3, response: &[u8]) -> Result<(AuthKey, i32), Error> {
     let Step3 {
         nonce,
         server_nonce,
@@ -434,16 +575,16 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<(AuthKey, i32), AuthKe
     if dh_gen.nonce_number == 1 {
         Ok((auth_key, time_offset))
     } else {
-        Err(AuthKeyGenError::DHGenFail)
+        Err(Error::DHGenFail)
     }
 }
 
 /// Helper function to avoid the boilerplate of checking for invalid nonce.
-fn check_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKeyGenError> {
+fn check_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), Error> {
     if got == expected {
         Ok(())
     } else {
-        Err(AuthKeyGenError::InvalidNonce {
+        Err(Error::InvalidNonce {
             got: *got,
             expected: *expected,
         })
@@ -452,11 +593,11 @@ fn check_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKeyGenErro
 
 /// Helper function to avoid the boilerplate of checking for invalid
 /// server nonce.
-fn check_server_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKeyGenError> {
+fn check_server_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), Error> {
     if got == expected {
         Ok(())
     } else {
-        Err(AuthKeyGenError::InvalidServerNonce {
+        Err(Error::InvalidServerNonce {
             got: *got,
             expected: *expected,
         })
@@ -465,11 +606,11 @@ fn check_server_nonce(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKey
 
 /// Helper function to avoid the boilerplate of checking for invalid
 /// new nonce hash.
-fn check_new_nonce_hash(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthKeyGenError> {
+fn check_new_nonce_hash(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), Error> {
     if got == expected {
         Ok(())
     } else {
-        Err(AuthKeyGenError::InvalidNewNonceHash {
+        Err(Error::InvalidNewNonceHash {
             got: *got,
             expected: *expected,
         })
@@ -478,11 +619,11 @@ fn check_new_nonce_hash(got: &[u8; 16], expected: &[u8; 16]) -> Result<(), AuthK
 
 /// Helper function to avoid the boilerplate of checking for `g` not being
 /// inside a valid range.
-fn check_g_in_range(value: &BigUint, low: &BigUint, high: &BigUint) -> Result<(), AuthKeyGenError> {
+fn check_g_in_range(value: &BigUint, low: &BigUint, high: &BigUint) -> Result<(), Error> {
     if low < value && value < high {
         Ok(())
     } else {
-        Err(AuthKeyGenError::GParameterOutOfRange {
+        Err(Error::GParameterOutOfRange {
             value: value.clone(),
             low: low.clone(),
             high: high.clone(),
@@ -515,7 +656,7 @@ mod tests {
     use super::*;
 
     #[test]
-    fn emulate_successful_auth_key_gen_flow() -> Result<(), AuthKeyGenError> {
+    fn emulate_successful_auth_key_gen_flow() -> Result<(), Error> {
         let step1_random = [
             134, 212, 37, 230, 70, 13, 226, 160, 72, 38, 51, 17, 95, 143, 119, 241,
         ];

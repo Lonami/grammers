@@ -13,9 +13,31 @@ pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use sha1::Sha1;
 use sha2::{Digest, Sha256};
-use std::error::Error;
 use std::fmt;
-use std::io;
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Error {
+    /// The ciphertext is either too small or not padded correctly.
+    InvalidBuffer,
+
+    /// The server replied with the ID of a different authorization key.
+    AuthKeyMismatch,
+
+    /// The key of the message did not match our expectations.
+    MessageKeyMismatch,
+}
+
+impl std::error::Error for Error {}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match *self {
+            Error::InvalidBuffer => write!(f, "invalid ciphertext buffer length"),
+            Error::AuthKeyMismatch => write!(f, "server authkey mismatches with ours"),
+            Error::MessageKeyMismatch => write!(f, "server msgkey mismatches with ours"),
+        }
+    }
+}
 
 enum Side {
     Client,
@@ -133,6 +155,7 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
 /// `aes_key` and `aes_iv` from `auth_key` and `msg_key` as specified
 ///
 /// [MTProto 2.0 algorithm]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
+#[must_use]
 pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     let random_padding = {
         let mut buffer = [0; 32];
@@ -143,52 +166,20 @@ pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
     do_encrypt_data_v2(plaintext, auth_key, &random_padding)
 }
 
-#[derive(Debug, Clone, Copy)]
-pub enum DecryptionError {
-    /// The ciphertext is either too small or not padded correctly.
-    InvalidBuffer,
-
-    /// The server replied with the ID of a different authorization key.
-    AuthKeyMismatch,
-
-    /// The key of the message did not match our expectations.
-    MessageKeyMismatch,
-}
-
-impl Error for DecryptionError {}
-
-impl fmt::Display for DecryptionError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use DecryptionError::*;
-
-        match *self {
-            InvalidBuffer => write!(f, "invalid ciphertext buffer length"),
-            AuthKeyMismatch => write!(f, "server authkey mismatches with ours"),
-            MessageKeyMismatch => write!(f, "server msgkey mismatches with ours"),
-        }
-    }
-}
-
-impl From<DecryptionError> for io::Error {
-    fn from(error: DecryptionError) -> Self {
-        io::Error::new(io::ErrorKind::InvalidData, error)
-    }
-}
-
 /// This method is the inverse of `encrypt_data_v2`.
-pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>, DecryptionError> {
+pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>, Error> {
     // Decryption is done from the server
     let side = Side::Server;
     let x = side.x();
 
     if ciphertext.len() < 24 || (ciphertext.len() - 24) % 16 != 0 {
-        return Err(DecryptionError::InvalidBuffer);
+        return Err(Error::InvalidBuffer);
     }
 
     // TODO Check salt, session_id and sequence_number
     let key_id = &ciphertext[..8];
     if auth_key.key_id != *key_id {
-        return Err(DecryptionError::AuthKeyMismatch);
+        return Err(Error::AuthKeyMismatch);
     }
 
     let msg_key = {
@@ -209,7 +200,7 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
     };
 
     if msg_key != our_key[8..8 + 16] {
-        return Err(DecryptionError::MessageKeyMismatch);
+        return Err(Error::MessageKeyMismatch);
     }
 
     Ok(plaintext)

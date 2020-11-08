@@ -4,12 +4,14 @@
 //! cargo run --example ping
 //! ```
 
-use async_std::task;
-use grammers_client::{AuthorizationError, Client, Config};
+use grammers_client::{Client, Config};
 use grammers_session::Session;
 use grammers_tl_types as tl;
+use tokio::runtime;
 
-async fn async_main() -> Result<(), AuthorizationError> {
+type Result = std::result::Result<(), Box<dyn std::error::Error>>;
+
+async fn async_main() -> Result {
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
         session: Session::load_or_create("ping.session")?,
@@ -27,6 +29,10 @@ async fn async_main() -> Result<(), AuthorizationError> {
     Ok(())
 }
 
-fn main() -> Result<(), AuthorizationError> {
-    task::block_on(async_main())
+fn main() -> Result {
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }

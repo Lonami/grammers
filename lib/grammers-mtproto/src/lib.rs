@@ -14,15 +14,10 @@
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub mod authentication;
-pub mod errors;
 mod manual_tl;
-mod mtp;
-mod plain_mtp;
-pub mod transports;
+pub mod mtp;
+pub mod transport;
 mod utils;
-
-pub use mtp::Mtp;
-pub use plain_mtp::PlainMtp;
 
 /// The default compression threshold to be used.
 pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);

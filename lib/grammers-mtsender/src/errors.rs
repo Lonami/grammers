@@ -5,58 +5,51 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_mtproto::errors::{AuthKeyGenError, DeserializeError, RpcError};
+use grammers_mtproto::{authentication, mtp, transport};
 use grammers_tl_types as tl;
-use std::error::Error;
 use std::fmt;
 use std::io;
 
-/// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
-pub enum AuthorizationError {
-    /// The generation failed due to network problems.
-    IO(io::Error),
-
-    /// The generation failed because the generation process went wrong.
-    Gen(AuthKeyGenError),
-
-    /// The generation failed because invoking a request failed.
-    Invocation(InvocationError),
+pub enum ReadError {
+    Io(io::Error),
+    Transport(transport::Error),
+    Deserialize(mtp::DeserializeError),
 }
 
-impl Error for AuthorizationError {}
+impl std::error::Error for ReadError {}
 
-impl fmt::Display for AuthorizationError {
+impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::IO(err) => write!(f, "auth key gen error, IO failed: {}", err),
-            Self::Gen(err) => write!(f, "auth key gen error, process failed: {}", err),
-            Self::Invocation(err) => write!(f, "auth key gen error, bad invoke: {}", err),
+            Self::Io(err) => write!(f, "read error, IO failed: {}", err),
+            Self::Transport(err) => write!(f, "read error, transport-level: {}", err),
+            Self::Deserialize(err) => write!(f, "read error, bad response: {}", err),
         }
     }
 }
 
-impl From<io::Error> for AuthorizationError {
+impl From<io::Error> for ReadError {
     fn from(error: io::Error) -> Self {
-        Self::IO(error)
+        Self::Io(error)
     }
 }
 
-impl From<AuthKeyGenError> for AuthorizationError {
-    fn from(error: AuthKeyGenError) -> Self {
-        Self::Gen(error)
+impl From<transport::Error> for ReadError {
+    fn from(error: transport::Error) -> Self {
+        Self::Transport(error)
     }
 }
 
-impl From<InvocationError> for AuthorizationError {
-    fn from(error: InvocationError) -> Self {
-        Self::Invocation(error)
+impl From<mtp::DeserializeError> for ReadError {
+    fn from(error: mtp::DeserializeError) -> Self {
+        Self::Deserialize(error)
     }
 }
 
-impl From<DeserializeError> for AuthorizationError {
-    fn from(error: DeserializeError) -> Self {
-        Self::from(InvocationError::from(error))
+impl From<tl::deserialize::Error> for ReadError {
+    fn from(error: tl::deserialize::Error) -> Self {
+        Self::Deserialize(error.into())
     }
 }
 
@@ -66,57 +59,84 @@ impl From<DeserializeError> for AuthorizationError {
 /// variant is `InvalidParameters`.
 #[derive(Debug)]
 pub enum InvocationError {
-    /// The connection was closed or has been dropped, and the sender
-    /// is no longer connected. Nothing can be sent unless connected.
-    NotConnected,
-
-    /// The request invocation failed due to network problems.
-    ///
-    /// This includes being unable to send malformed packets to the server
-    /// (such as a packet being large) because attempting to send those would
-    /// cause the server to disconnect.
-    IO(io::Error),
-
     /// The request invocation failed because it was invalid or the server
     /// could not process it successfully.
-    RPC(RpcError),
+    Rpc(mtp::RpcError),
 
     /// The request was cancelled or dropped, and the results won't arrive.
     Dropped,
 
-    /// The error occured during the deserialization of the response.
-    Deserialize(DeserializeError),
+    /// The error occured while reading the response.
+    Read(ReadError),
 }
 
-impl Error for InvocationError {}
+impl std::error::Error for InvocationError {}
 
 impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::NotConnected => write!(f, "request error, not connected"),
-            Self::IO(err) => write!(f, "request error, IO failed: {}", err),
-            Self::RPC(err) => write!(f, "request error, invoking failed: {}", err),
-            Self::Dropped => write!(f, "request was dropped (cancelled)"),
-            Self::Deserialize(err) => write!(f, "request error, bad response: {}", err),
+            Self::Rpc(err) => write!(f, "request error: {}", err),
+            Self::Dropped => write!(f, "request error: dropped (cancelled)"),
+            Self::Read(err) => write!(f, "request error: {}", err),
         }
     }
 }
 
-impl From<io::Error> for InvocationError {
+impl From<ReadError> for InvocationError {
+    fn from(error: ReadError) -> Self {
+        Self::Read(error)
+    }
+}
+
+impl From<mtp::DeserializeError> for InvocationError {
+    fn from(error: mtp::DeserializeError) -> Self {
+        Self::from(ReadError::from(error))
+    }
+}
+
+impl From<tl::deserialize::Error> for InvocationError {
+    fn from(error: tl::deserialize::Error) -> Self {
+        Self::from(ReadError::from(error))
+    }
+}
+
+/// This error occurs when the process to generate an authorization key fails.
+#[derive(Debug)]
+pub enum AuthorizationError {
+    /// The generation failed because the generation process went wrong.
+    Gen(authentication::Error),
+
+    /// The generation failed because invoking a request failed.
+    Invoke(InvocationError),
+}
+
+impl std::error::Error for AuthorizationError {}
+
+impl fmt::Display for AuthorizationError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Gen(err) => write!(f, "authorization error: {}", err),
+            Self::Invoke(err) => write!(f, "authorization error: {}", err),
+        }
+    }
+}
+
+impl From<authentication::Error> for AuthorizationError {
+    fn from(error: authentication::Error) -> Self {
+        Self::Gen(error)
+    }
+}
+
+impl From<InvocationError> for AuthorizationError {
+    fn from(error: InvocationError) -> Self {
+        Self::Invoke(error)
+    }
+}
+
+impl From<io::Error> for AuthorizationError {
     fn from(error: io::Error) -> Self {
-        Self::IO(error)
-    }
-}
-
-impl From<DeserializeError> for InvocationError {
-    fn from(error: DeserializeError) -> Self {
-        Self::Deserialize(error)
-    }
-}
-
-// TODO clean-up (or at least review) this cast mess
-impl From<tl::errors::DeserializeError> for InvocationError {
-    fn from(error: tl::errors::DeserializeError) -> Self {
-        Self::from(DeserializeError::from(error))
+        // TODO not entirely happy with some of these error chains
+        // might need to "flatten" them to not depend on layers so deep
+        Self::from(InvocationError::from(ReadError::from(error)))
     }
 }

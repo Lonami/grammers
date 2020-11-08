@@ -5,9 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_types::Deserializable;
-
-use crate::errors::DeserializeError;
+use crate::mtp::DeserializeError;
+use grammers_tl_types::Deserializable as _;
 
 /// Checks a message buffer for common errors
 pub(crate) fn check_message_buffer(message: &[u8]) -> Result<(), DeserializeError> {

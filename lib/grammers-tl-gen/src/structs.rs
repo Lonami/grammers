@@ -93,7 +93,7 @@ fn write_identifiable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::OutBuffer) {
+///     fn serialize(&self, buf: crate::serialize::Buffer) {
 ///         self.field.serialize(buf);
 ///     }
 /// }
@@ -112,7 +112,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, {}buf: crate::OutBuffer) {{",
+        "{}    fn serialize(&self, {}buf: crate::serialize::Buffer) {{",
         indent,
         if def.category == Category::Types && def.params.is_empty() {
             "_"
@@ -202,7 +202,7 @@ fn write_serializable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Deserializable for Name {
-///     fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {
+///     fn deserialize(buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {
 ///         let field = FieldType::deserialize(buf)?;
 ///         Ok(Name { field })
 ///     }
@@ -222,7 +222,7 @@ fn write_deserializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize({}buf: crate::InBuffer) -> crate::DeserializeResult<Self> {{",
+        "{}    fn deserialize({}buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {{",
         indent,
         if def.params.is_empty() { "_" } else { "" }
     )?;
@@ -348,11 +348,14 @@ fn write_rpc<W: Write>(
     Ok(())
 }
 
-/// Defines the `impl TryFrom` corresponding to the definition:
+/// Defines the `impl From` or `impl TryFrom` corresponding to the definition:
 ///
 /// ```ignore
-/// impl impl TryFrom<Enum> for Name {
-///     type Error = crate::errors::WrongVariant;
+/// impl From<Enum> for Name {
+/// }
+///
+/// impl TryFrom<Enum> for Name {
+///     type Error = ();
 /// }
 /// ```
 fn write_impl_from<W: Write>(
@@ -373,11 +376,7 @@ fn write_impl_from<W: Write>(
         type_name,
     )?;
     if !infallible {
-        writeln!(
-            file,
-            "{}    type Error = crate::errors::WrongVariant;",
-            indent
-        )?;
+        writeln!(file, "{}    type Error = ();", indent)?;
     }
     writeln!(
         file,
@@ -411,11 +410,7 @@ fn write_impl_from<W: Write>(
         paren = if infallible { "" } else { ")" },
     )?;
     if !infallible {
-        writeln!(
-            file,
-            "{}            _ => Err(crate::errors::WrongVariant)",
-            indent
-        )?;
+        writeln!(file, "{}            _ => Err(())", indent)?;
     }
     writeln!(file, "{}        }}", indent)?;
     writeln!(file, "{}    }}", indent)?;

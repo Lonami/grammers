@@ -74,7 +74,7 @@ fn write_enum<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::OutBuffer) {
+///     fn serialize(&self, buf: crate::serialize::Buffer) {
 ///         use crate::Identifiable;
 ///         match self {
 ///             Self::Variant(x) => {
@@ -99,7 +99,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, buf: crate::OutBuffer) {{",
+        "{}    fn serialize(&self, buf: crate::serialize::Buffer) {{",
         indent
     )?;
 
@@ -134,7 +134,7 @@ fn write_serializable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Deserializable for Name {
-///     fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {
+///     fn deserialize(buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {
 ///         use crate::Identifiable;
 ///         Ok(match u32::deserialize(buf)? {
 ///             crate::types::Name::CONSTRUCTOR_ID => Self::Variant(crate::types::Name::deserialize(buf)?),
@@ -157,7 +157,7 @@ fn write_deserializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize(buf: crate::InBuffer) -> crate::DeserializeResult<Self> {{",
+        "{}    fn deserialize(buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {{",
         indent
     )?;
     writeln!(file, "{}        use crate::Identifiable;", indent)?;
@@ -195,7 +195,7 @@ fn write_deserializable<W: Write>(
     writeln!(
         file,
         "{}            _ => return Err(\
-         crate::errors::DeserializeError::UnexpectedConstructor {{ id }}),",
+         crate::deserialize::Error::UnexpectedConstructor {{ id }}),",
         indent
     )?;
     writeln!(file, "{}        }})", indent)?;
@@ -207,7 +207,7 @@ fn write_deserializable<W: Write>(
 /// Defines the `impl From` corresponding to the definition:
 ///
 /// ```ignore
-/// impl impl From<Name> for Enum {
+/// impl From<Name> for Enum {
 /// }
 /// ```
 fn write_impl_from<W: Write>(

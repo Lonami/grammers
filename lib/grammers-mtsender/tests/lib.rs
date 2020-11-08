@@ -11,31 +11,29 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 /// The default datacenter to connect to for testing.
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
-use async_std::net::TcpStream;
-use async_std::task;
-use grammers_mtproto::transports::TransportFull;
-use grammers_mtsender::create_mtp;
+use grammers_mtproto::transport;
+use grammers_mtsender::connect;
 use grammers_tl_types::{enums, functions};
+use log;
+use simple_logger;
+use tokio::runtime;
 
 #[test]
 fn test_invoke_encrypted_method() {
-    task::block_on(async {
-        let stream = TcpStream::connect(TELEGRAM_DEFAULT_TEST_DC).await.unwrap();
-        let in_stream = stream.clone();
-        let out_stream = stream;
+    simple_logger::init_with_level(log::Level::Debug).unwrap();
 
-        // Creating a sender without explicitly providing an input auth_key
-        // will cause it to generate a new one, because they are otherwise
-        // not usable. We're also making sure that works here.
-        let (mut sender, _updates, handler) =
-            create_mtp::<TransportFull, _, _>((in_stream, out_stream), &mut None)
-                .await
-                .unwrap();
+    let rt = runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap();
+    rt.block_on(async {
+        let mut sender = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
+            .await
+            .unwrap();
 
-        task::spawn(handler.run());
         match sender.invoke(&functions::help::GetNearestDc {}).await {
             Ok(enums::NearestDc::Dc(_)) => {}
             x => panic!(format!("did not get nearest dc, got: {:?}", x)),
         }
-    })
+    });
 }

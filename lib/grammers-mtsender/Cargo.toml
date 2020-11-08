@@ -18,9 +18,10 @@ getrandom = "0.1.14"
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.2.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0", features = [ "tl-mtproto" ]}
-futures = "0.3"
-async-std = { version = "1.5", optional = true }
+tokio = { version = "0.3", features = ["net", "io-util", "sync"] }
 log = "0.4"
+futures = { version = "0.3", default-features = false }
 
 [dev-dependencies]
-async-std = { version = "1.5" }
+simple_logger = "1.6.0"
+tokio = { version = "0.3", features = ["rt"] }

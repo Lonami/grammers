@@ -1,6 +1,5 @@
 use crate::types::EntitySet;
 use crate::Client;
-use futures::stream::StreamExt;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 
@@ -173,6 +172,6 @@ impl Client {
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
     pub async fn next_raw_updates(&mut self) -> Option<tl::enums::Updates> {
-        self.updates.next().await
+        todo!()
     }
 }

@@ -7,22 +7,20 @@
 // except according to those terms.
 mod errors;
 
-pub use errors::{AuthorizationError, InvocationError};
-use futures::channel::{mpsc, oneshot};
-use futures::future;
-use futures::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
-use futures::lock::Mutex;
-use futures::sink::SinkExt;
-use futures::stream::StreamExt;
+pub use errors::{AuthorizationError, InvocationError, ReadError};
+use futures::future::FutureExt as _;
+use futures::{future, pin_mut};
 use grammers_crypto::AuthKey;
-use grammers_mtproto::errors::{RequestError, TransportError};
-use grammers_mtproto::transports::{Decoder, Encoder, Transport};
-use grammers_mtproto::{authentication, MsgId, Mtp, PlainMtp};
-use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{error, info, warn};
-use std::collections::BTreeMap;
+use grammers_mtproto::mtp::{self, Mtp};
+use grammers_mtproto::transport::{self, Transport};
+use grammers_mtproto::{authentication, MsgId};
+use grammers_tl_types::{Deserializable, RemoteCall};
+use log::{debug, info};
 use std::io;
-use std::sync::Arc;
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
+use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::sync::oneshot;
+use tokio::sync::oneshot::error::TryRecvError;
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -35,318 +33,362 @@ use std::sync::Arc;
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
+// Manages enqueuing requests, matching them to their response, and IO.
+pub struct Sender<T: Transport, M: Mtp> {
+    stream: TcpStream,
+    transport: T,
+    mtp: M,
+    mtp_buffer: Vec<u8>,
+
+    requests: Vec<Request>,
+
+    // Transport-level buffers and positions
+    read_buffer: Vec<u8>,
+    read_index: usize,
+    write_buffer: Vec<u8>,
+    write_index: usize,
+}
+
 struct Request {
-    data: Vec<u8>,
-    response_channel: oneshot::Sender<Response>,
+    body: Vec<u8>,
+    state: RequestState,
+    result: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
 }
 
-type Response = Result<Vec<u8>, RequestError>;
-
-// TODO perhaps this should be a Sink of Request?
-//      and we would also have a Stream of Updates
-pub struct MtpSender {
-    request_channel: mpsc::Sender<Request>,
+enum RequestState {
+    NotSerialized,
+    Serialized(MsgId),
+    Sent(MsgId),
 }
 
-impl MtpSender {
-    /// Invoking a single Remote Procedure Call and `await` its result.
+impl<T: Transport, M: Mtp> Sender<T, M> {
+    async fn connect<A: ToSocketAddrs>(transport: T, mtp: M, addr: A) -> Result<Self, io::Error> {
+        info!("connecting...");
+        let stream = TcpStream::connect(addr).await?;
+
+        Ok(Self {
+            stream,
+            transport,
+            mtp,
+            mtp_buffer: Vec::with_capacity(MAXIMUM_DATA),
+
+            requests: vec![],
+
+            read_buffer: Vec::with_capacity(MAXIMUM_DATA),
+            read_index: 0,
+            write_buffer: Vec::with_capacity(MAXIMUM_DATA),
+            write_index: 0,
+        })
+    }
+
+    /// `enqueue` a Remote Procedure Call and `step` until it is answered.
     pub async fn invoke<R: RemoteCall>(
         &mut self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        loop {
-            let (sender, receiver) = oneshot::channel();
-            self.request_channel
-                .send(Request {
-                    data: request.to_bytes(),
-                    response_channel: sender,
-                })
-                .await
-                .map_err(|e| {
-                    assert!(e.is_disconnected());
-                    InvocationError::NotConnected
-                })?;
+        let rx = self.enqueue(request);
+        let body = self.step_until_receive(rx).await?;
+        Ok(R::Return::from_bytes(&body)?)
+    }
 
-            match receiver
-                .await
-                .map_err(|_canceled| InvocationError::Dropped)?
-            {
-                Ok(x) => break Ok(R::Return::from_bytes(&x)?),
-                Err(RequestError::RPCError(error)) => {
-                    break Err(InvocationError::RPC(error));
-                }
-                Err(RequestError::Dropped) => {
-                    break Err(InvocationError::Dropped);
-                }
-                Err(RequestError::Deserialize(err)) => {
-                    break Err(InvocationError::Deserialize(err));
-                }
-                Err(RequestError::BadMessage { .. }) => {
-                    // Need to retransmit (another loop iteration)
-                    continue;
+    /// Like `invoke` but raw data.
+    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
+        let rx = self.enqueue_body(body);
+        Ok(self.step_until_receive(rx).await?)
+    }
+
+    /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
+    pub fn enqueue<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        // TODO we probably want a bound here (to not enqueue more than N at once)
+        self.enqueue_body(request.to_bytes())
+    }
+
+    pub fn enqueue_body(
+        &mut self,
+        body: Vec<u8>,
+    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        let (tx, rx) = oneshot::channel();
+        self.requests.push(Request {
+            body,
+            state: RequestState::NotSerialized,
+            result: tx,
+        });
+        rx
+    }
+
+    async fn step_until_receive(
+        &mut self,
+        mut rx: oneshot::Receiver<Result<Vec<u8>, InvocationError>>,
+    ) -> Result<Vec<u8>, InvocationError> {
+        loop {
+            self.step().await?;
+            match rx.try_recv() {
+                Ok(x) => break x,
+                Err(TryRecvError::Empty) => continue,
+                Err(TryRecvError::Closed) => {
+                    panic!("request channel dropped before receiving a result")
                 }
             }
         }
     }
-}
 
-pub struct MtpHandler<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> {
-    sender: Sender<T::Encoder, W>,
-    receiver: Receiver<T::Decoder, R>,
-}
+    /// Step network events, writing and reading at the same time.
+    pub async fn step(&mut self) -> Result<(), ReadError> {
+        self.try_fill_read();
+        self.try_fill_write();
 
-impl<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin> MtpHandler<T, R, W> {
-    pub async fn run(self) {
-        let Self { sender, receiver } = self;
-        future::join(sender.network_loop(), receiver.network_loop()).await;
-    }
-}
+        // TODO probably want to properly set the request state on disconnect (read fail)
 
-/// Small adapter between network and transport containers.
-// TODO "plain" is probably not the best prefix for this, "plain basic"
-struct PlainReceiver<D: Decoder, R: AsyncRead + Unpin> {
-    buffer: Box<[u8]>,
-    decoder: D,
-    in_stream: R,
-}
+        let read_len = self.read_buffer.len() - self.read_index;
+        let write_len = self.write_buffer.len() - self.write_index;
 
-struct Receiver<D: Decoder, R: AsyncRead + Unpin> {
-    plain: PlainReceiver<D, R>,
-    protocol: Arc<Mutex<Mtp>>,
-    update_channel: mpsc::Sender<tl::enums::Updates>,
-    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
-}
+        let (mut reader, mut writer) = self.stream.split();
+        if self.write_buffer.is_empty() {
+            // TODO this always has to read the header of the packet and then the rest (2 or more calls)
+            // it would be better to always perform calls in a circular buffer to have as much data from
+            // the network as possible at all times, not just reading what's needed
+            // (perhaps something similar could be done with the write buffer to write packet after packet)
+            debug!("reading up to {} bytes from the network", read_len);
+            let n = reader
+                .read(&mut self.read_buffer[self.read_index..])
+                .await?;
 
-impl<D: Decoder, R: AsyncRead + Unpin> PlainReceiver<D, R> {
-    async fn receive(&mut self) -> io::Result<Vec<u8>> {
-        let mut len = 0;
-        loop {
-            match self.decoder.read(&self.buffer[..len]) {
-                // TODO try to avoid to_vec
-                Ok(response) => break Ok(response.to_vec()),
-                Err(TransportError::MissingBytes(required_len)) => {
-                    self.in_stream
-                        .read_exact(&mut self.buffer[len..required_len])
-                        .await?;
-                    len = required_len;
-                }
-                Err(TransportError::UnexpectedData(what)) => {
-                    break Err(io::Error::new(io::ErrorKind::InvalidData, what))
-                }
-            };
-        }
-    }
-}
+            self.on_net_read(n)
+        } else {
+            debug!(
+                "reading up to {} bytes and sending up to {} bytes via network",
+                read_len, write_len
+            );
+            let read = reader.read(&mut self.read_buffer[self.read_index..]);
+            let write = writer.write(&self.write_buffer[self.write_index..]);
+            pin_mut!(read);
+            pin_mut!(write);
+            match future::select(read, write).await {
+                future::Either::Left((n, write)) => {
+                    let n_write = write.now_or_never();
 
-impl<D: Decoder, R: AsyncRead + Unpin> Receiver<D, R> {
-    async fn network_loop(mut self) {
-        loop {
-            let response = match self.plain.receive().await {
-                Ok(response) => response,
-                Err(err) => {
-                    warn!("receiving response failed: {:?}", err);
-                    break;
-                }
-            };
-
-            // Pass the response on to the MTP to handle
-            let mut protocol_guard = self.protocol.lock().await;
-
-            if let Err(err) = protocol_guard.process_encrypted_response(&response) {
-                // TODO some errors here are probably OK; figure out which are resumable
-                error!("processing response failed: {:?}", err);
-                break;
-            }
-
-            while let Some(update) = protocol_guard.poll_update() {
-                match tl::enums::Updates::from_bytes(&update) {
-                    Ok(update) => {
-                        if let Err(err) = self.update_channel.send(update).await {
-                            assert!(err.is_disconnected());
-                            // If the user doesn't want more updates that's fine
-                        }
+                    if let Some(n) = n_write {
+                        self.on_net_write(n?);
                     }
-                    Err(err) => error!("polled an update that was not one: {}", err),
+                    self.on_net_read(n?)
                 }
-            }
+                future::Either::Right((n, read)) => {
+                    let n_read = read.now_or_never();
 
-            // See if there are responses to prior requests
-            let mut map_guard = self.response_map.lock().await;
-            while let Some((response_id, response)) = protocol_guard.poll_response() {
-                if let Some(channel) = map_guard.remove(&response_id) {
-                    // Drop the result; if the user closed the channel it simply means
-                    // they no longer need this result so it's okay to fail to send it.
-                    drop(channel.send(response));
-                } else {
-                    info!(
-                        "Got encrypted response for unknown message: {:?}",
-                        response_id
-                    );
+                    self.on_net_write(n?);
+                    if let Some(n) = n_read {
+                        self.on_net_read(n?)
+                    } else {
+                        Ok(())
+                    }
                 }
             }
         }
     }
-}
 
-/// Small adapter between network and transport containers.
-struct PlainSender<E: Encoder, W: AsyncWrite + Unpin> {
-    buffer: Box<[u8]>,
-    encoder: E,
-    out_stream: W,
-}
+    /// Setup the read buffer for the transport, unless a read is already pending.
+    fn try_fill_read(&mut self) {
+        if !self.read_buffer.is_empty() {
+            return;
+        }
 
-struct Sender<E: Encoder, W: AsyncWrite + Unpin> {
-    plain: PlainSender<E, W>,
-    protocol: Arc<Mutex<Mtp>>,
-    request_channel: mpsc::Receiver<Request>,
-    response_map: Arc<Mutex<BTreeMap<MsgId, oneshot::Sender<Response>>>>,
-}
-
-impl<E: Encoder, W: AsyncWrite + Unpin> PlainSender<E, W> {
-    async fn send(&mut self, payload: &[u8]) -> io::Result<()> {
-        let size = self
-            .encoder
-            .write_into(payload, self.buffer.as_mut())
-            .expect("tried to send more than MAXIMUM_DATA in a single frame");
-
-        self.out_stream.write_all(&self.buffer[..size]).await
+        let mut empty = Vec::new();
+        match self.transport.unpack(&self.read_buffer, &mut empty) {
+            Ok(_) => panic!("transports should not handle data 0 bytes long"),
+            Err(transport::Error::MissingBytes(n)) => {
+                (0..n).for_each(|_| self.read_buffer.push(0));
+            }
+            Err(_) => panic!("transports should not fail with data 0 bytes long"),
+        }
     }
-}
 
-impl<E: Encoder, W: AsyncWrite + Unpin> Sender<E, W> {
-    async fn network_loop(mut self) {
-        while let Some(request) = self.request_channel.next().await {
-            let payload = {
-                let mut protocol_guard = self.protocol.lock().await;
+    /// Setup the write buffer for the transport, unless a write is already pending.
+    fn try_fill_write(&mut self) {
+        if !self.write_buffer.is_empty() {
+            return;
+        }
 
-                let msg_id = protocol_guard.enqueue_request(request.data);
+        // TODO avoid clone
+        // TODO add a test to make sure we only ever send the same request once
+        let requests = self
+            .requests
+            .iter()
+            .filter_map(|r| match r.state {
+                RequestState::NotSerialized => Some(r.body.clone()),
+                RequestState::Serialized(_) | RequestState::Sent(_) => None,
+            })
+            .collect::<Vec<_>>();
 
-                // TODO we don't want to serialize as soon as we enqueued.
-                //      We want to enqueue many and serialize as soon as we can send more.
-                //      Maybe yet another Enqueuer struct?
-                //
-                // Safe, we know it's Some (we just inserted something)
-                let payload = protocol_guard.serialize_encrypted_messages().unwrap();
+        // TODO add a test to make sure we don't send empty data
+        if requests.is_empty() {
+            return;
+        }
 
-                // TODO maybe we don't want to do this until we've sent it?
-                let mut map_guard = self.response_map.lock().await;
-                map_guard.insert(msg_id, request.response_channel);
+        let msg_ids = self.mtp.serialize(&requests, &mut self.mtp_buffer);
+        self.write_buffer.clear();
+        self.transport
+            .pack(&self.mtp_buffer, &mut self.write_buffer);
 
-                payload
-            };
+        self.requests
+            .iter_mut()
+            .zip(msg_ids.into_iter())
+            .for_each(|(req, msg_id)| {
+                req.state = RequestState::Serialized(msg_id);
+            });
+    }
 
-            // If sending over IO fails we won't be able to send anything else.
-            // Break out of the loop.
-            if let Err(err) = self.plain.send(&payload).await {
-                warn!("sending payload failed: {:?}", err);
-                break;
+    /// Handle `n` more read bytes being ready to process by the transport.
+    ///
+    /// This won't cause `ReadError::Io`, but yet another enum would be overkill.
+    fn on_net_read(&mut self, n: usize) -> Result<(), ReadError> {
+        debug!("read {} bytes from the network", n);
+        self.read_index += n;
+        if self.read_index != self.read_buffer.len() {
+            return Ok(());
+        }
+
+        debug!(
+            "trying to unpack buffer of {} bytes...",
+            self.read_buffer.len()
+        );
+
+        self.mtp_buffer.clear();
+        match self
+            .transport
+            .unpack(&self.read_buffer, &mut self.mtp_buffer)
+        {
+            Ok(_) => {
+                self.read_buffer.clear();
+                self.read_index = 0;
+                self.process_mtp_buffer().map_err(|e| e.into())
+            }
+            Err(transport::Error::MissingBytes(n)) => {
+                let start = self.read_buffer.len();
+                let missing = n - start;
+                (0..missing).for_each(|_| self.read_buffer.push(0));
+                Ok(())
+            }
+            Err(err) => return Err(err.into()),
+        }
+    }
+
+    /// Handle `n` more written bytes being ready to process by the transport.
+    fn on_net_write(&mut self, n: usize) {
+        debug!("written {} bytes to the network", n);
+        self.write_index += n;
+        if self.write_index != self.write_buffer.len() {
+            return;
+        }
+
+        self.write_buffer.clear();
+        self.write_index = 0;
+        for req in self.requests.iter_mut() {
+            match req.state {
+                RequestState::NotSerialized | RequestState::Sent(_) => {}
+                RequestState::Serialized(msg_id) => {
+                    req.state = RequestState::Sent(msg_id);
+                }
             }
         }
     }
+
+    /// Process the `mtp_buffer` contents and dispatch the results and errors.
+    fn process_mtp_buffer(&mut self) -> Result<(), mtp::DeserializeError> {
+        debug!("deserializing valid transport packet...");
+        let result = self.mtp.deserialize(&self.mtp_buffer)?;
+        for (msg_id, ret) in result.rpc_results {
+            debug!("got result for request {:?}", msg_id);
+
+            for i in (0..self.requests.len()).rev() {
+                let req = &mut self.requests[i];
+                match req.state {
+                    RequestState::Serialized(sid) if sid == msg_id => {
+                        panic!(format!(
+                            "got rpc result {:?} for unsent request {:?}",
+                            msg_id, sid
+                        ));
+                    }
+                    RequestState::Sent(sid) if sid == msg_id => {
+                        let result = match ret {
+                            Ok(x) => Ok(x),
+                            Err(mtp::RequestError::RpcError(error)) => {
+                                Err(InvocationError::Rpc(error))
+                            }
+                            Err(mtp::RequestError::Dropped) => Err(InvocationError::Dropped),
+                            Err(mtp::RequestError::Deserialize(error)) => {
+                                Err(InvocationError::Read(error.into()))
+                            }
+                            Err(mtp::RequestError::BadMessage { .. }) => {
+                                // TODO add a test to make sure we resend the request
+                                info!("bad msg mtp error, re-sending request");
+                                req.state = RequestState::NotSerialized;
+                                break;
+                            }
+                        };
+
+                        drop(req);
+                        let req = self.requests.remove(i);
+                        drop(req.result.send(result));
+                        break;
+                    }
+                    _ => {}
+                }
+            }
+        }
+        Ok(())
+    }
 }
 
-// TODO this needs a better name ("create mtp" is just "Mtp::new()")
-// TODO not a fan this replaces the auth_key in the option which will always be Some after
-pub async fn create_mtp<T: Transport, R: AsyncRead + Unpin, W: AsyncWrite + Unpin>(
-    (in_stream, out_stream): (R, W),
-    auth_key: &mut Option<AuthKey>,
-) -> Result<
-    (
-        MtpSender,
-        mpsc::Receiver<tl::enums::Updates>,
-        MtpHandler<T, R, W>,
-    ),
-    AuthorizationError,
-> {
-    let (encoder, decoder) = T::instance();
-
-    let mut sender = PlainSender {
-        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        encoder,
-        out_stream,
-    };
-
-    let mut receiver = PlainReceiver {
-        buffer: vec![0; MAXIMUM_DATA].into_boxed_slice(),
-        decoder,
-        in_stream,
-    };
-
-    let mut mtp = PlainMtp::new();
-
-    let protocol = if let Some(auth_key) = auth_key {
-        info!("using input auth_key");
-        Mtp::new(auth_key.clone())
-    } else {
-        info!("no input auth_key; generating new one");
-        // A sender is not usable without an authorization key; generate one
-        let (request, data) = authentication::step1()?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (request, data) = authentication::step2(data, response)?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (request, data) = authentication::step3(data, response)?;
-        sender.send(&mtp.serialize_plain_message(&request)).await?;
-        let response = receiver.receive().await?;
-        let response = mtp.deserialize_plain_message(&response)?;
-
-        let (new_key, time_offset) = authentication::create_key(data, response)?;
-        *auth_key = Some(new_key.clone());
-
-        info!("new auth_key generation success");
-        Mtp::build().time_offset(time_offset).finish(new_key)
-    };
-
-    let protocol = Arc::new(Mutex::new(protocol));
-    let (request_sender, request_receiver) = mpsc::channel(100);
-    let (update_sender, update_receiver) = mpsc::channel(100);
-    let response_map = Arc::new(Mutex::new(BTreeMap::new()));
-
-    let sender = Sender {
-        plain: sender,
-        request_channel: request_receiver,
-        protocol: Arc::clone(&protocol),
-        response_map: Arc::clone(&response_map),
-    };
-
-    let receiver = Receiver {
-        plain: receiver,
-        update_channel: update_sender,
-        protocol: Arc::clone(&protocol),
-        response_map,
-    };
-
-    Ok((
-        MtpSender {
-            request_channel: request_sender,
-        },
-        update_receiver,
-        MtpHandler { sender, receiver },
-    ))
+impl<T: Transport> Sender<T, mtp::Encrypted> {
+    pub fn auth_key(&self) -> &AuthKey {
+        self.mtp.auth_key()
+    }
 }
 
-#[cfg(feature = "async-std")]
-pub async fn connect_mtp<T: Transport, A: async_std::net::ToSocketAddrs>(
+pub async fn connect<T: Transport, A: ToSocketAddrs>(
+    transport: T,
     addr: A,
-) -> Result<
-    (
-        MtpSender,
-        mpsc::Receiver<tl::enums::Updates>,
-        MtpHandler<T, impl AsyncRead + Unpin, impl AsyncWrite + Unpin>,
-    ),
-    AuthorizationError,
-> {
-    let stream = async_std::net::TcpStream::connect(addr).await?;
-    let in_stream = stream.clone();
-    let out_stream = stream;
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+    let mut sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
 
-    // Creating a sender without explicitly providing an input auth_key
-    // will cause it to generate a new one, because they are otherwise
-    // not usable. We're also making sure that works here.
-    create_mtp((in_stream, out_stream), None).await
+    info!("generating new authorization key...");
+    let (request, data) = authentication::step1()?;
+    debug!("gen auth key: sending step 1");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: starting step 2");
+    let (request, data) = authentication::step2(data, &response)?;
+    debug!("gen auth key: sending step 2");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: starting step 3");
+    let (request, data) = authentication::step3(data, &response)?;
+    debug!("gen auth key: sending step 3");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: completing generation");
+    let (auth_key, time_offset) = authentication::create_key(data, &response)?;
+    info!("authorization key generated successfully");
+
+    Ok(Sender {
+        stream: sender.stream,
+        transport: sender.transport,
+        mtp: mtp::Encrypted::build()
+            .time_offset(time_offset)
+            .finish(auth_key),
+        mtp_buffer: sender.mtp_buffer,
+        requests: sender.requests,
+        read_buffer: sender.read_buffer,
+        read_index: sender.read_index,
+        write_buffer: sender.write_buffer,
+        write_index: sender.write_index,
+    })
+}
+
+pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
+    transport: T,
+    addr: A,
+    auth_key: AuthKey,
+) -> Result<Sender<T, mtp::Encrypted>, io::Error> {
+    Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
 }
