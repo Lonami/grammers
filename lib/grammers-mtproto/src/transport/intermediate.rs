@@ -49,7 +49,7 @@ impl Transport for Intermediate {
 
     fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         if input.len() < 4 {
-            return Err(Error::MissingBytes(4));
+            return Err(Error::MissingBytes);
         }
 
         let len = {
@@ -60,7 +60,7 @@ impl Transport for Intermediate {
             + 4;
 
         if input.len() < len {
-            return Err(Error::MissingBytes(len));
+            return Err(Error::MissingBytes);
         }
 
         output.extend_from_slice(&input[4..len]);
@@ -107,7 +107,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(Error::MissingBytes(4))
+            Err(Error::MissingBytes)
         );
     }
 

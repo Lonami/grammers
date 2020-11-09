@@ -65,7 +65,7 @@ impl Transport for Abridged {
 
     fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         if input.len() < 1 {
-            return Err(Error::MissingBytes(1));
+            return Err(Error::MissingBytes);
         }
 
         let header_len;
@@ -75,7 +75,7 @@ impl Transport for Abridged {
             len as u32
         } else {
             if input.len() < 4 {
-                return Err(Error::MissingBytes(4));
+                return Err(Error::MissingBytes);
             }
 
             header_len = 4;
@@ -86,7 +86,7 @@ impl Transport for Abridged {
 
         let len = len as usize * 4;
         if input.len() < header_len + len {
-            return Err(Error::MissingBytes(header_len + len));
+            return Err(Error::MissingBytes);
         }
 
         output.extend_from_slice(&input[header_len..header_len + len]);
@@ -141,7 +141,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(Error::MissingBytes(5))
+            Err(Error::MissingBytes)
         );
     }
 

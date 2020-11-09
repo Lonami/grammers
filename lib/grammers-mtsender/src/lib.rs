@@ -253,7 +253,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 self.read_buffer.clear();
                 self.process_mtp_buffer().map_err(|e| e.into())
             }
-            Err(transport::Error::MissingBytes(n)) => {
+            Err(transport::Error::MissingBytes) => {
                 Ok(Vec::new())
             }
             Err(err) => return Err(err.into()),
