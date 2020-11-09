@@ -24,8 +24,8 @@
 //! [`Client`]: struct.Client.html
 //! [extension traits]: ext/index.html
 mod client;
-//pub mod ext;
-//pub mod types;
-//
-pub use client::{Client, Config, InitParams};
-//pub use grammers_mtsender::{AuthorizationError, InvocationError};
+pub mod ext;
+pub mod types;
+
+pub use client::{Client, ClientHandle, Config, InitParams, UpdateIter};
+pub use types::EntitySet;

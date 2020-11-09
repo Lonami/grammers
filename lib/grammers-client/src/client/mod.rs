@@ -5,12 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//pub mod iterators;
-//mod parsers;
-//mod auth;
-//mod chats;
-//mod messages;
-//mod updates;
+mod auth;
+mod chats;
+mod messages;
+mod updates;
 
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
@@ -18,8 +16,10 @@ use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable, Serializable};
+use log::info;
 use std::net::Ipv4Addr;
 use tokio::sync::{mpsc, oneshot};
+pub use updates::UpdateIter;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -46,6 +46,7 @@ struct Request {
 /// A client capable of connecting to Telegram and invoking requests.
 pub struct Client {
     sender: Sender<transport::Full, mtp::Encrypted>,
+    config: Config,
     handle_tx: mpsc::UnboundedSender<Request>,
     handle_rx: mpsc::UnboundedReceiver<Request>,
 }
@@ -111,6 +112,66 @@ impl Default for InitParams {
     }
 }
 
+async fn connect_sender(
+    dc_id: i32,
+    config: &mut Config,
+) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+    let transport = transport::Full::new();
+
+    let addr = DC_ADDRESSES[dc_id as usize];
+
+    let mut sender = if let Some(auth_key) = config.session.auth_key.as_ref() {
+        info!(
+            "creating a new sender with existing auth key to dc {} {:?}",
+            dc_id, addr
+        );
+        sender::connect_with_auth(transport, addr, auth_key.clone()).await?
+    } else {
+        info!(
+            "creating a new sender and auth key in dc {} {:?}",
+            dc_id, addr
+        );
+        let sender = sender::connect(transport, addr).await?;
+
+        config.session.auth_key = Some(sender.auth_key().clone());
+        config.session.save()?;
+        sender
+    };
+
+    // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
+    let remote_config = sender
+        .invoke(&tl::functions::InvokeWithLayer {
+            layer: tl::LAYER,
+            query: tl::functions::InitConnection {
+                api_id: config.api_id,
+                device_model: config.params.device_model.clone(),
+                system_version: config.params.system_version.clone(),
+                app_version: config.params.app_version.clone(),
+                system_lang_code: config.params.system_lang_code.clone(),
+                lang_pack: "".into(),
+                lang_code: config.params.lang_code.clone(),
+                proxy: None,
+                params: None,
+                query: tl::functions::help::GetConfig {}.to_bytes().into(),
+            }
+            .to_bytes()
+            .into(),
+        })
+        .await?
+        .0;
+
+    // TODO all up-to-date server addresses should be stored in the session for future initial connections
+    let _remote_config =
+        <tl::functions::help::GetConfig as tl::RemoteCall>::Return::from_bytes(&remote_config)
+            .expect("bad config from server");
+
+    // TODO use the dc id from the config as "this dc", not the input dc id
+    config.session.user_dc = Some(dc_id);
+    config.session.save()?;
+
+    Ok(sender)
+}
+
 impl Client {
     /// Creates and returns a new client instance upon successful connection to Telegram.
     ///
@@ -119,55 +180,24 @@ impl Client {
     ///
     /// The connection will be initialized with the data from the input configuration.
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let transport = transport::Full::new();
-        let addr = DC_ADDRESSES[config.session.user_dc.unwrap_or(0) as usize];
-
-        let mut sender = if let Some(auth_key) = config.session.auth_key.as_ref() {
-            sender::connect_with_auth(transport, addr, auth_key.clone()).await?
-        } else {
-            let sender = sender::connect(transport, addr).await?;
-
-            config.session.auth_key = Some(sender.auth_key().clone());
-            config.session.save()?;
-            sender
-        };
-
-        // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
-        let remote_config = sender
-            .invoke(&tl::functions::InvokeWithLayer {
-                layer: tl::LAYER,
-                query: tl::functions::InitConnection {
-                    api_id: config.api_id,
-                    device_model: config.params.device_model.clone(),
-                    system_version: config.params.system_version.clone(),
-                    app_version: config.params.app_version.clone(),
-                    system_lang_code: config.params.system_lang_code.clone(),
-                    lang_pack: "".into(),
-                    lang_code: config.params.lang_code.clone(),
-                    proxy: None,
-                    params: None,
-                    query: tl::functions::help::GetConfig {}.to_bytes().into(),
-                }
-                .to_bytes()
-                .into(),
-            })
-            .await?
-            .0;
-
-        // TODO all up-to-date server addresses should be stored in the session for future initial connections
-        let _remote_config =
-            <tl::functions::help::GetConfig as tl::RemoteCall>::Return::from_bytes(&remote_config)
-                .expect("bad config from server");
+        let sender = connect_sender(config.session.user_dc.unwrap_or(0), &mut config).await?;
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
         Ok(Self {
             sender,
+            config,
             handle_tx,
             handle_rx,
         })
     }
 
+    fn user_id(&self) -> Option<i32> {
+        // TODO actually use the user id saved in the session from login
+        Some(0)
+    }
+
+    /// Invoke a raw API call without the need to use `handle` or `step`.
     pub async fn invoke<R: tl::RemoteCall>(
         &mut self,
         request: &R,
@@ -221,5 +251,29 @@ impl Client {
         loop {
             self.step().await?;
         }
+    }
+}
+
+impl ClientHandle {
+    /// Invoke a raw API call.
+    pub async fn invoke<R: tl::RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        let (response, rx) = oneshot::channel();
+
+        drop(self.tx.send(Request {
+            request: request.to_bytes(),
+            response,
+        }));
+
+        // First receive the `oneshot::Receiver` with from the `Client`,
+        // then `await` on that to receive the response to the request.
+        // TODO remove a few some unwraps…
+        rx.await
+            .unwrap()
+            .await
+            .unwrap()
+            .map(|body| R::Return::from_bytes(&body).unwrap())
     }
 }

@@ -1,7 +1,6 @@
-use crate::{types, Client};
+use crate::{types, ClientHandle};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
-use std::io;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Generate a random message ID suitable for `send_message`.
@@ -12,7 +11,7 @@ fn generate_random_message_id() -> i64 {
         .as_nanos() as i64
 }
 
-impl Client {
+impl ClientHandle {
     /// Sends a text message to the desired chat.
     // TODO don't require nasty InputPeer
     pub async fn send_message(
@@ -56,10 +55,7 @@ impl Client {
             .into())
         } else {
             // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
-            Err(InvocationError::IO(io::Error::new(
-                io::ErrorKind::NotFound,
-                "no user has that username",
-            )))
+            todo!("user without username not handled")
         }
     }
 }

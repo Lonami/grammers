@@ -1,9 +1,9 @@
 //! Methods related to chats and entities.
-use crate::Client;
+use crate::ClientHandle;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 
-impl Client {
+impl ClientHandle {
     /// Resolves a username into the user that owns it, if any.
     pub async fn resolve_username(
         &mut self,

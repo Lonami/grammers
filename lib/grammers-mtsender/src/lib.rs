@@ -15,7 +15,7 @@ use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{debug, info, warn};
+use log::{debug, info, trace, warn};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
@@ -156,16 +156,17 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             //
             // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
             // while reading from the network, which means there's no need to handle that case.
-            debug!("reading up to {} bytes from the network", read_len);
+            trace!("reading up to {} bytes from the network", read_len);
             let n = reader
                 .read(&mut self.read_buffer[self.read_index..])
                 .await?;
 
             self.on_net_read(n)
         } else {
-            debug!(
+            trace!(
                 "reading up to {} bytes and sending up to {} bytes via network",
-                read_len, write_len
+                read_len,
+                write_len
             );
             let read = reader.read(&mut self.read_buffer[self.read_index..]);
             let write = writer.write(&self.write_buffer[self.write_index..]);
@@ -256,13 +257,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             )));
         }
 
-        debug!("read {} bytes from the network", n);
+        trace!("read {} bytes from the network", n);
         self.read_index += n;
         if self.read_index != self.read_buffer.len() {
             return Ok(Vec::new());
         }
 
-        debug!(
+        trace!(
             "trying to unpack buffer of {} bytes...",
             self.read_buffer.len()
         );
@@ -289,7 +290,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     /// Handle `n` more written bytes being ready to process by the transport.
     fn on_net_write(&mut self, n: usize) {
-        debug!("written {} bytes to the network", n);
+        trace!("written {} bytes to the network", n);
         self.write_index += n;
         if self.write_index != self.write_buffer.len() {
             return;

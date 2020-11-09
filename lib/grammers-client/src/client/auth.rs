@@ -1,9 +1,9 @@
-use crate::Client;
-use grammers_mtproto::errors::RpcError;
+use super::{connect_sender, Client};
+use crate::types::SentCode;
+use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::convert::TryInto;
-use std::io;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -16,19 +16,13 @@ pub enum SignInError {
     Other(InvocationError),
 }
 
-impl From<io::Error> for SignInError {
-    fn from(error: io::Error) -> Self {
-        Self::Other(error.into())
-    }
-}
-
 impl Client {
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
     pub async fn is_authorized(&mut self) -> Result<bool, InvocationError> {
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(_) => Ok(true),
-            Err(InvocationError::RPC(_)) => Ok(false),
+            Err(InvocationError::Rpc(_)) => Ok(false),
             Err(err) => Err(err),
         }
     }
@@ -40,7 +34,7 @@ impl Client {
         phone: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> Result<tl::types::auth::SentCode, AuthorizationError> {
+    ) -> Result<SentCode, AuthorizationError> {
         let request = tl::functions::auth::SendCode {
             phone_number: phone.to_string(),
             api_id,
@@ -55,39 +49,39 @@ impl Client {
 
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request).await {
             Ok(x) => x.into(),
-            Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "PHONE_MIGRATE" => {
+            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "PHONE_MIGRATE" => {
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
                 // authorization and re-import it at a different datacenter.
                 //
                 // Just connect and generate a new authorization key with it
-                // before trying again. Don't want to replace `self.sender`
-                // unless the entire process succeeds.
-                self.replace_mtsender(value.unwrap() as i32).await?;
-                self.init_invoke(&request).await?.into()
+                // before trying again.
+                self.config.session.auth_key = None;
+                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                self.invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
         };
 
-        self.last_phone_hash = Some((phone.to_string(), sent_code.phone_code_hash.clone()));
-        Ok(sent_code)
+        Ok(SentCode {
+            phone: phone.to_string(),
+            phone_code_hash: sent_code.phone_code_hash,
+        })
     }
 
     /// Signs in to the user account. To have the login code be sent, use
     /// [`request_login_code`] first.
     ///
     /// [`request_login_code`]: #method.request_login_code
-    pub async fn sign_in(&mut self, code: &str) -> Result<tl::types::User, SignInError> {
-        let (phone_number, phone_code_hash) = if let Some(t) = self.last_phone_hash.take() {
-            t
-        } else {
-            return Err(SignInError::NoCodeSent);
-        };
-
+    pub async fn sign_in(
+        &mut self,
+        sent: &SentCode,
+        code: &str,
+    ) -> Result<tl::types::User, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
-                phone_number,
-                phone_code_hash,
+                phone_number: sent.phone.clone(),
+                phone_code_hash: sent.phone_code_hash.clone(),
                 phone_code: code.to_string(),
             })
             .await
@@ -101,7 +95,7 @@ impl Client {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
                 })
             }
-            Err(InvocationError::RPC(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
+            Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
             }
             Err(error) => Err(SignInError::Other(error)),
@@ -124,9 +118,10 @@ impl Client {
 
         let _result = match self.invoke(&request).await {
             Ok(x) => x,
-            Err(InvocationError::RPC(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.replace_mtsender(value.unwrap() as i32).await?;
-                self.init_invoke(&request).await?
+            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
+                self.config.session.auth_key = None;
+                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
         };
