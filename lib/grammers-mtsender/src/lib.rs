@@ -152,7 +152,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             //
             // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
             // while reading from the network, which means there's no need to handle that case.
-            trace!("reading up to ∞ bytes from the network");
+            trace!("reading bytes from the network");
             let n = reader
                 .read_buf(&mut self.read_buffer)
                 .await?;
@@ -160,7 +160,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             self.on_net_read(n)
         } else {
             trace!(
-                "reading up to ∞ bytes and sending up to {} bytes via network",
+                "reading bytes and sending up to {} bytes via network",
                 write_len
             );
             let read = reader.read_buf(&mut self.read_buffer);
