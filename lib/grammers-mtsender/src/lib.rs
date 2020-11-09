@@ -14,8 +14,8 @@ use grammers_crypto::AuthKey;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
-use grammers_tl_types::{Deserializable, RemoteCall};
-use log::{debug, info};
+use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
+use log::{debug, info, warn};
 use std::io;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
@@ -136,7 +136,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Step network events, writing and reading at the same time.
-    pub async fn step(&mut self) -> Result<(), ReadError> {
+    ///
+    /// Updates received during this step, if any, are returned.
+    pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, ReadError> {
         self.try_fill_read();
         self.try_fill_write();
 
@@ -151,6 +153,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             // it would be better to always perform calls in a circular buffer to have as much data from
             // the network as possible at all times, not just reading what's needed
             // (perhaps something similar could be done with the write buffer to write packet after packet)
+            //
+            // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
+            // while reading from the network, which means there's no need to handle that case.
             debug!("reading up to {} bytes from the network", read_len);
             let n = reader
                 .read(&mut self.read_buffer[self.read_index..])
@@ -182,7 +187,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     if let Some(n) = n_read {
                         self.on_net_read(n?)
                     } else {
-                        Ok(())
+                        Ok(Vec::new())
                     }
                 }
             }
@@ -243,11 +248,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Handle `n` more read bytes being ready to process by the transport.
     ///
     /// This won't cause `ReadError::Io`, but yet another enum would be overkill.
-    fn on_net_read(&mut self, n: usize) -> Result<(), ReadError> {
+    fn on_net_read(&mut self, n: usize) -> Result<Vec<tl::enums::Updates>, ReadError> {
         debug!("read {} bytes from the network", n);
         self.read_index += n;
         if self.read_index != self.read_buffer.len() {
-            return Ok(());
+            return Ok(Vec::new());
         }
 
         debug!(
@@ -269,7 +274,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 let start = self.read_buffer.len();
                 let missing = n - start;
                 (0..missing).for_each(|_| self.read_buffer.push(0));
-                Ok(())
+                Ok(Vec::new())
             }
             Err(err) => return Err(err.into()),
         }
@@ -296,9 +301,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Process the `mtp_buffer` contents and dispatch the results and errors.
-    fn process_mtp_buffer(&mut self) -> Result<(), mtp::DeserializeError> {
+    fn process_mtp_buffer(&mut self) -> Result<Vec<tl::enums::Updates>, mtp::DeserializeError> {
         debug!("deserializing valid transport packet...");
         let result = self.mtp.deserialize(&self.mtp_buffer)?;
+
+        let updates = result
+            .updates
+            .iter()
+            .filter_map(|update| match tl::enums::Updates::from_bytes(&update) {
+                Ok(u) => Some(u),
+                Err(e) => {
+                    warn!(
+                        "telegram sent updates that failed to be deserialized: {}",
+                        e
+                    );
+                    None
+                }
+            })
+            .collect();
+
         for (msg_id, ret) in result.rpc_results {
             debug!("got result for request {:?}", msg_id);
 
@@ -338,7 +359,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             }
         }
-        Ok(())
+
+        Ok(updates)
     }
 }
 

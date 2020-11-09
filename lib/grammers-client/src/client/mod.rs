@@ -183,7 +183,10 @@ impl Client {
     }
 
     /// Perform a single network step or processing of incoming requests via handles.
-    pub async fn step(&mut self) -> Result<(), sender::ReadError> {
+    ///
+    /// If a server message is received, requests enqueued via the `handle`'s may have their
+    /// result delivered via a channel, and a (possibly empty) list of updates will be returned.
+    pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, sender::ReadError> {
         let (result, request) = {
             let network = self.sender.step();
             let request = self.handle_rx.recv();
@@ -209,11 +212,11 @@ impl Client {
 
         // TODO request cancellation if this is Err
         // (perhaps a method on the sender to cancel_all)
-        result.unwrap_or(Ok(()))
+        result.unwrap_or(Ok(Vec::new()))
     }
 
     /// Run the client by repeatedly `step`ping the client until a graceful disconnection occurs,
-    /// or a network error occurs.
+    /// or a network error occurs. Incoming updates are ignored and simply dropped.
     pub async fn run_until_disconnected(mut self) -> Result<(), sender::ReadError> {
         loop {
             self.step().await?;
