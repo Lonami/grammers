@@ -11,10 +11,20 @@ use grammers_tl_types as tl;
 pub trait MessageExt {
     /// Get the `Peer` chat where this message was sent to.
     fn chat(&self) -> tl::enums::Peer;
+    /// Get the optional reply to message id
+    fn reply_to_message_id(&self) -> Option<i32>;
 }
 
 impl MessageExt for tl::types::Message {
     fn chat(&self) -> tl::enums::Peer {
         self.peer_id.clone()
+    }
+
+    fn reply_to_message_id(&self) -> Option<i32> {
+        return if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.reply_to {
+            Some(m.reply_to_msg_id)
+        } else {
+            None
+        }
     }
 }

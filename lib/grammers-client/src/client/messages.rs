@@ -8,7 +8,7 @@
 
 //! Methods related to sending messages.
 
-use crate::{types, ClientHandle};
+use crate::{client::errors, ext::MessageExt, types, ClientHandle};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -48,6 +48,91 @@ impl ClientHandle {
         })
         .await?;
         Ok(())
+    }
+
+    /// Edits an existing text message
+    // TODO don't require nasty InputPeer
+    // TODO Media
+    pub async fn edit_message(
+        &mut self,
+        chat: tl::enums::InputPeer,
+        message_id: i32,
+        new_message: types::Message,
+    ) -> Result<(), InvocationError> {
+        self.invoke(&tl::functions::messages::EditMessage {
+            no_webpage: !new_message.link_preview,
+            peer: chat,
+            id: message_id,
+            message: Some(new_message.text),
+            media: None,
+            reply_markup: new_message.reply_markup,
+            entities: Some(new_message.entities),
+            schedule_date: new_message.schedule_date
+        }).await?;
+
+        Ok(())
+    }
+
+    /// Gets the reply to message of a message
+    /// Throws NotFound error if there's no reply to message
+    // TODO don't require nasty InputPeer
+    pub async fn get_reply_to_message(
+        &mut self,
+        chat: tl::enums::InputPeer,
+        message: &tl::types::Message
+    ) -> Result<tl::types::Message, errors::GetReplyToMessageError> {
+        let rep_id = message.reply_to_message_id();
+        if rep_id.is_none() {
+            return Err(errors::GetReplyToMessageError::NotFound);
+        }
+
+        let res: tl::enums::messages::Messages;
+        let input_id =  vec![tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id })];
+        let mut filter_req = false;
+
+        if let tl::enums::InputPeer::Channel(chan) = chat {
+            res = self.invoke(&tl::functions::channels::GetMessages{
+                id: input_id,
+                channel: tl::enums::InputChannel::Channel(tl::types::InputChannel {
+                    channel_id: chan.channel_id,
+                    access_hash: chan.access_hash
+                })
+            }).await?;
+        } else {
+            res = self.invoke(&tl::functions::messages::GetMessages {
+                id: input_id
+            }).await?;
+            filter_req = true;
+        }
+
+        let mut reply_msg_l = match res {
+            tl::enums::messages::Messages::Messages(m) => Ok(m.messages),
+            tl::enums::messages::Messages::Slice(m) => Ok(m.messages),
+            tl::enums::messages::Messages::ChannelMessages(m) => Ok(m.messages),
+            _ => Err(errors::GetReplyToMessageError::NotFound)
+        }?;
+
+        if filter_req {
+            let chat = message.chat();
+            return reply_msg_l
+                .into_iter()
+                .filter_map(|m| {
+                    if let tl::enums::Message::Message(msg) = m {
+                        Some(msg)
+                    } else {
+                        None
+                    }
+                })
+                .filter(|m| m.chat() == chat)
+                .next()
+                .ok_or(errors::GetReplyToMessageError::NotFound);
+        } else {
+            if let tl::enums::Message::Message(msg) = reply_msg_l.remove(0) {
+                return Ok(msg);
+            } else {
+                return Err(errors::GetReplyToMessageError::NotFound);
+            }
+        }
     }
 
     // TODO don't keep this, it should be implicit
