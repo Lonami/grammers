@@ -69,7 +69,7 @@ impl Transport for Full {
     fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
         // Need 4 bytes for the initial length
         if input.len() < 4 {
-            return Err(Error::MissingBytes(4));
+            return Err(Error::MissingBytes);
         }
 
         // payload len
@@ -81,7 +81,7 @@ impl Transport for Full {
         }
 
         if input.len() < len {
-            return Err(Error::MissingBytes(len));
+            return Err(Error::MissingBytes);
         }
 
         // receive counter
@@ -189,7 +189,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(TransportError::MissingBytes(4))
+            Err(Error::MissingBytes)
         );
     }
 
@@ -222,7 +222,7 @@ mod tests {
         input[last] ^= 0xff;
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(TransportError::BadCrc {
+            Err(Error::BadCrc {
                 expected: 932541318,
                 got: 3365237638,
             })
@@ -238,7 +238,7 @@ mod tests {
         transport.pack(&input, &mut packed);
         assert_eq!(
             transport.unpack(&packed, &mut unpacked),
-            Err(TransportError::BadSeq {
+            Err(Error::BadSeq {
                 expected: 0,
                 got: 1,
             })

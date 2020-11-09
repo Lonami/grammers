@@ -27,8 +27,8 @@ use std::fmt;
 /// Unless the variant is `MissingBytes`, the connection should not continue.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
-    /// Not enough bytes are provided, and the amount indicated is required to advance.
-    MissingBytes(usize),
+    /// Not enough bytes are provided.
+    MissingBytes,
 
     /// The length is either too short or too long to represent a valid packet.
     BadLen { got: u32 },
@@ -46,7 +46,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "transport error: ")?;
         match self {
-            Error::MissingBytes(n) => write!(f, "need {} bytes", n),
+            Error::MissingBytes => write!(f, "need more bytes"),
             Error::BadLen { got } => write!(f, "bad len (got {})", got),
             Error::BadSeq { expected, got } => {
                 write!(f, "bad seq (expected {}, got {})", expected, got)
