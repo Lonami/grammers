@@ -5,6 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! Methods to deal with and offer access to updates.
+
 use crate::types::EntitySet;
 use crate::Client;
 use grammers_mtsender::ReadError;

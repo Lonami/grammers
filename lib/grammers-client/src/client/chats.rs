@@ -5,10 +5,19 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
 //! Methods related to chats and entities.
-use crate::ClientHandle;
+
+use super::{Client, ClientHandle};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
+
+impl Client {
+    pub(crate) fn user_id(&self) -> Option<i32> {
+        // TODO actually use the user id saved in the session from login
+        Some(0)
+    }
+}
 
 impl ClientHandle {
     /// Resolves a username into the user that owns it, if any.

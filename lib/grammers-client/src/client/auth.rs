@@ -5,7 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{connect_sender, Client};
+
+//! Methods related to logging in or signing up.
+
+use super::net::connect_sender;
+use super::Client;
 use crate::types::SentCode;
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
