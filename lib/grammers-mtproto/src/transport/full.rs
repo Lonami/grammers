@@ -189,7 +189,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(TransportError::MissingBytes(4))
+            Err(Error::MissingBytes(4))
         );
     }
 
@@ -222,7 +222,7 @@ mod tests {
         input[last] ^= 0xff;
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(TransportError::BadCrc {
+            Err(Error::BadCrc {
                 expected: 932541318,
                 got: 3365237638,
             })
@@ -238,7 +238,7 @@ mod tests {
         transport.pack(&input, &mut packed);
         assert_eq!(
             transport.unpack(&packed, &mut unpacked),
-            Err(TransportError::BadSeq {
+            Err(Error::BadSeq {
                 expected: 0,
                 got: 1,
             })

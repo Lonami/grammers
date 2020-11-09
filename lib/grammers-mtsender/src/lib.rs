@@ -44,7 +44,6 @@ pub struct Sender<T: Transport, M: Mtp> {
 
     // Transport-level buffers and positions
     read_buffer: Vec<u8>,
-    read_index: usize,
     write_buffer: Vec<u8>,
     write_index: usize,
 }
@@ -75,7 +74,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             requests: vec![],
 
             read_buffer: Vec::with_capacity(MAXIMUM_DATA),
-            read_index: 0,
             write_buffer: Vec::with_capacity(MAXIMUM_DATA),
             write_index: 0,
         })
@@ -139,12 +137,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ///
     /// Updates received during this step, if any, are returned.
     pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, ReadError> {
-        self.try_fill_read();
         self.try_fill_write();
 
         // TODO probably want to properly set the request state on disconnect (read fail)
 
-        let read_len = self.read_buffer.len() - self.read_index;
         let write_len = self.write_buffer.len() - self.write_index;
 
         let (mut reader, mut writer) = self.stream.split();
@@ -156,19 +152,18 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             //
             // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
             // while reading from the network, which means there's no need to handle that case.
-            trace!("reading up to {} bytes from the network", read_len);
+            trace!("reading up to ∞ bytes from the network");
             let n = reader
-                .read(&mut self.read_buffer[self.read_index..])
+                .read_buf(&mut self.read_buffer)
                 .await?;
 
             self.on_net_read(n)
         } else {
             trace!(
-                "reading up to {} bytes and sending up to {} bytes via network",
-                read_len,
+                "reading up to ∞ bytes and sending up to {} bytes via network",
                 write_len
             );
-            let read = reader.read(&mut self.read_buffer[self.read_index..]);
+            let read = reader.read_buf(&mut self.read_buffer);
             let write = writer.write(&self.write_buffer[self.write_index..]);
             pin_mut!(read);
             pin_mut!(write);
@@ -192,22 +187,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     }
                 }
             }
-        }
-    }
-
-    /// Setup the read buffer for the transport, unless a read is already pending.
-    fn try_fill_read(&mut self) {
-        if !self.read_buffer.is_empty() {
-            return;
-        }
-
-        let mut empty = Vec::new();
-        match self.transport.unpack(&self.read_buffer, &mut empty) {
-            Ok(_) => panic!("transports should not handle data 0 bytes long"),
-            Err(transport::Error::MissingBytes(n)) => {
-                (0..n).for_each(|_| self.read_buffer.push(0));
-            }
-            Err(_) => panic!("transports should not fail with data 0 bytes long"),
         }
     }
 
@@ -259,10 +238,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         trace!("read {} bytes from the network", n);
-        self.read_index += n;
-        if self.read_index != self.read_buffer.len() {
-            return Ok(Vec::new());
-        }
 
         trace!(
             "trying to unpack buffer of {} bytes...",
@@ -276,13 +251,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         {
             Ok(_) => {
                 self.read_buffer.clear();
-                self.read_index = 0;
                 self.process_mtp_buffer().map_err(|e| e.into())
             }
             Err(transport::Error::MissingBytes(n)) => {
-                let start = self.read_buffer.len();
-                let missing = n - start;
-                (0..missing).for_each(|_| self.read_buffer.push(0));
                 Ok(Vec::new())
             }
             Err(err) => return Err(err.into()),
@@ -411,7 +382,6 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
         mtp_buffer: sender.mtp_buffer,
         requests: sender.requests,
         read_buffer: sender.read_buffer,
-        read_index: sender.read_index,
         write_buffer: sender.write_buffer,
         write_index: sender.write_index,
     })

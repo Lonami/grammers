@@ -107,7 +107,7 @@ mod tests {
         let mut output = Vec::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
-            Err(TransportError::MissingBytes(4))
+            Err(Error::MissingBytes(4))
         );
     }
 
