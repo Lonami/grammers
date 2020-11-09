@@ -10,14 +10,9 @@ For the time being, the examples are licensed in the same way as the libraries.
 
 Simple echo-bot. It will respond to plain text messages with the same content.
 
-## [hello_world.rs]
-
-Hello, world! This example logins under a bot account and sends a message to a username.
-
 ## [ping.rs]
 
 Pings Telegram by using raw API.
 
 [echo.rs]: echo.rs
-[hello_world.rs]: hello_world.rs
 [ping.rs]: ping.rs
