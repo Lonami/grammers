@@ -67,7 +67,12 @@ async fn async_main() -> Result {
     println!("Waiting for messages...");
     while let (updates, entity_set) = client.next_updates().await? {
         let handle = client.handle();
-        task::spawn(async move { handle_update(handle, updates, entity_set).await.unwrap() });
+        task::spawn(async move {
+            match handle_update(handle, updates, entity_set).await {
+                Ok(_) => {}
+                Err(e) => eprintln!("Error handling updates!: {}", e),
+            }
+        });
     }
 
     Ok(())

@@ -242,6 +242,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .iter_mut()
             .zip(msg_ids.into_iter())
             .for_each(|(req, msg_id)| {
+                debug!("serialized request with {:?}", msg_id);
                 req.state = RequestState::Serialized(msg_id);
             });
     }
@@ -302,6 +303,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match req.state {
                 RequestState::NotSerialized | RequestState::Sent(_) => {}
                 RequestState::Serialized(msg_id) => {
+                    debug!("sent request with {:?}", msg_id);
                     req.state = RequestState::Sent(msg_id);
                 }
             }
