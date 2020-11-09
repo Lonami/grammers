@@ -13,6 +13,8 @@ pub trait MessageExt {
     fn chat(&self) -> tl::enums::Peer;
     /// Get the optional reply to message id
     fn reply_to_message_id(&self) -> Option<i32>;
+    /// Get the id of the message's sender
+    fn from_id(&self) -> Option<i32>;
 }
 
 impl MessageExt for tl::types::Message {
@@ -23,6 +25,14 @@ impl MessageExt for tl::types::Message {
     fn reply_to_message_id(&self) -> Option<i32> {
         return if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.reply_to {
             Some(m.reply_to_msg_id)
+        } else {
+            None
+        }
+    }
+
+    fn from_id(&self) -> Option<i32> {
+        return if let Some(tl::enums::Peer::User(usr)) = &self.from_id {
+            Some(usr.user_id)
         } else {
             None
         }
