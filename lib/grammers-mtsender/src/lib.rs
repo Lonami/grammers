@@ -242,20 +242,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             self.read_buffer.len()
         );
 
-        self.mtp_buffer.clear();
-        match self
-            .transport
-            .unpack(&self.read_buffer, &mut self.mtp_buffer)
-        {
-            Ok(n) => {
-                self.read_buffer.drain(..n);
-                // TODO this should loop if the buffer has more items (potentially more packets
-                // already) or else we're lagging behind.
-                self.process_mtp_buffer().map_err(|e| e.into())
+        // TODO the buffer might have multiple transport packets, what should happen with the
+        // updates successfully read if subsequent packets fail to be deserialized properly?
+        let mut updates = Vec::new();
+        while !self.read_buffer.is_empty() {
+            self.mtp_buffer.clear();
+            match self
+                .transport
+                .unpack(&self.read_buffer, &mut self.mtp_buffer)
+            {
+                Ok(n) => {
+                    self.read_buffer.drain(..n);
+                    self.process_mtp_buffer(&mut updates)?;
+                }
+                Err(transport::Error::MissingBytes) => break,
+                Err(err) => return Err(err.into()),
             }
-            Err(transport::Error::MissingBytes) => Ok(Vec::new()),
-            Err(err) => return Err(err.into()),
         }
+
+        Ok(updates)
     }
 
     /// Handle `n` more written bytes being ready to process by the transport.
@@ -280,14 +285,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Process the `mtp_buffer` contents and dispatch the results and errors.
-    fn process_mtp_buffer(&mut self) -> Result<Vec<tl::enums::Updates>, mtp::DeserializeError> {
+    fn process_mtp_buffer(
+        &mut self,
+        updates: &mut Vec<tl::enums::Updates>,
+    ) -> Result<(), mtp::DeserializeError> {
         debug!("deserializing valid transport packet...");
         let result = self.mtp.deserialize(&self.mtp_buffer)?;
 
-        let updates = result
-            .updates
-            .iter()
-            .filter_map(|update| match tl::enums::Updates::from_bytes(&update) {
+        updates.extend(result.updates.iter().filter_map(|update| {
+            match tl::enums::Updates::from_bytes(&update) {
                 Ok(u) => Some(u),
                 Err(e) => {
                     warn!(
@@ -296,8 +302,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     );
                     None
                 }
-            })
-            .collect();
+            }
+        }));
 
         for (msg_id, ret) in result.rpc_results {
             debug!("got result for request {:?}", msg_id);
@@ -339,7 +345,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             }
         }
 
-        Ok(updates)
+        Ok(())
     }
 }
 
