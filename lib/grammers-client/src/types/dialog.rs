@@ -72,6 +72,14 @@ impl Dialog {
         self.entity.name()
     }
 
+    pub fn id(&self) -> i32 {
+        self.entity.id()
+    }
+
+    pub fn peer(&self) -> tl::enums::Peer {
+        self.entity.peer()
+    }
+
     pub fn input_peer(&self) -> tl::enums::InputPeer {
         self.entity.input_peer()
     }
