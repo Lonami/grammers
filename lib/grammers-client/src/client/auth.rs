@@ -15,17 +15,32 @@ use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::convert::TryInto;
+use std::fmt;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
 pub enum SignInError {
-    NoCodeSent,
     SignUpRequired {
         terms_of_service: Option<tl::types::help::TermsOfService>,
     },
     InvalidCode,
     Other(InvocationError),
 }
+
+impl fmt::Display for SignInError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SignInError::*;
+        match self {
+            SignUpRequired {
+                terms_of_service: tos,
+            } => write!(f, "sign in error: sign up required: {:?}", tos),
+            InvalidCode => write!(f, "sign in error: invalid code"),
+            Other(e) => write!(f, "sign in error: {}", e),
+        }
+    }
+}
+
+impl std::error::Error for SignInError {}
 
 impl Client {
     /// Returns `true` if the current account is authorized. Otherwise,

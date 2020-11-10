@@ -9,6 +9,7 @@
 //! Methods related to chats and entities.
 
 use super::{Client, ClientHandle};
+use crate::types::DialogIter;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 
@@ -20,6 +21,11 @@ impl Client {
 }
 
 impl ClientHandle {
+    /// Returns a new iterator over the dialogs.
+    pub fn iter_dialogs(&self) -> DialogIter {
+        DialogIter::new(self)
+    }
+
     /// Resolves a username into the user that owns it, if any.
     pub async fn resolve_username(
         &mut self,

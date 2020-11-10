@@ -7,13 +7,13 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
-//mod dialog;
+mod dialog;
 mod entity;
 mod entity_set;
 mod message;
 mod sent_code;
 
-//pub use dialog::Dialog;
+pub use dialog::{Dialog, DialogIter};
 pub use entity::Entity;
 pub use entity_set::EntitySet;
 pub use message::Message;
