@@ -7,22 +7,32 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
-// TODO this "maybe borrowed" thing is a bit annoying
-// ideally there would be a concrete borrowed type and a concrete owned type?
 /// Holds the various different "entities" Telegram knows about in a single place.
-#[derive(Debug)]
-pub enum Entity<'a> {
-    User(&'a tl::types::User),
-    Chat(&'a tl::types::Chat),
-    Channel(&'a tl::types::Channel),
+#[derive(Clone, Debug)]
+pub enum Entity {
+    User(tl::types::User),
+    Chat(tl::types::Chat),
+    Channel(tl::types::Channel),
 }
 
-impl<'a> Entity<'a> {
+impl Entity {
     pub fn id(&self) -> i32 {
         match self {
             Self::User(user) => user.id,
             Self::Chat(chat) => chat.id,
             Self::Channel(channel) => channel.id,
+        }
+    }
+
+    pub fn peer(&self) -> tl::enums::Peer {
+        use tl::enums::Peer::*;
+
+        match self {
+            Self::User(user) => User(tl::types::PeerUser { user_id: user.id }),
+            Self::Chat(chat) => Chat(tl::types::PeerChat { chat_id: chat.id }),
+            Self::Channel(channel) => Channel(tl::types::PeerChannel {
+                channel_id: channel.id,
+            }),
         }
     }
 

@@ -23,7 +23,7 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 async fn handle_update(
     mut client: ClientHandle,
     updates: UpdateIter,
-    entity_set: EntitySet<'_>,
+    entity_set: EntitySet,
 ) -> Result {
     for update in updates {
         if let Some(message) = update.message() {
