@@ -13,5 +13,5 @@ mod net;
 mod updates;
 
 pub(crate) use client::Request;
-pub use client::{Client, ClientHandle, Config, InitParams};
+pub use client::{Client, ClientHandle, Config, InitParams, Step};
 pub use updates::UpdateIter;

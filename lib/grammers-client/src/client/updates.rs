@@ -8,8 +8,8 @@
 
 //! Methods to deal with and offer access to updates.
 
+use super::{Client, Step};
 use crate::types::EntitySet;
-use crate::Client;
 use grammers_mtsender::ReadError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -47,31 +47,35 @@ impl Client {
     ///
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
-    pub async fn next_updates<'a, 'b>(
-        &'a mut self,
-    ) -> Result<(UpdateIter, EntitySet<'b>), ReadError> {
+    pub async fn next_updates(&mut self) -> Result<Option<(UpdateIter, EntitySet)>, ReadError> {
         use tl::enums::Updates::*;
 
-        loop {
-            let mut updates = self.step().await?;
+        Ok(loop {
+            let mut updates = match self.step().await? {
+                Step::Connected { updates } => updates,
+                Step::Disconnected => break None,
+            };
+
             if updates.len() == 0 {
                 continue;
             } else if updates.len() != 1 {
                 panic!("telegram returned more than 1 updates in 1 step");
             }
             break match updates.pop().unwrap() {
-                UpdateShort(update) => Ok((UpdateIter::single(update.update), EntitySet::empty())),
-                Combined(update) => Ok((
+                UpdateShort(update) => {
+                    Some((UpdateIter::single(update.update), EntitySet::empty()))
+                }
+                Combined(update) => Some((
                     UpdateIter::multiple(update.updates),
-                    EntitySet::new_owned(update.users, update.chats),
+                    EntitySet::new(update.users, update.chats),
                 )),
-                Updates(update) => Ok((
+                Updates(update) => Some((
                     UpdateIter::multiple(update.updates),
-                    EntitySet::new_owned(update.users, update.chats),
+                    EntitySet::new(update.users, update.chats),
                 )),
                 // We need to know our self identifier by now or this will fail.
                 // These updates will only happen after we logged in so that's fine.
-                UpdateShortMessage(update) => Ok((
+                UpdateShortMessage(update) => Some((
                     (UpdateIter::single(tl::enums::Update::NewMessage(
                         tl::types::UpdateNewMessage {
                             message: tl::enums::Message::Message(tl::types::Message {
@@ -122,7 +126,7 @@ impl Client {
                     ))),
                     EntitySet::empty(),
                 )),
-                UpdateShortChatMessage(update) => Ok((
+                UpdateShortChatMessage(update) => Some((
                     (UpdateIter::single(tl::enums::Update::NewMessage(
                         tl::types::UpdateNewMessage {
                             message: tl::enums::Message::Message(tl::types::Message {
@@ -169,6 +173,6 @@ impl Client {
                     panic!("should not receive updateShortSentMessage via passive updates")
                 }
             };
-        }
+        })
     }
 }

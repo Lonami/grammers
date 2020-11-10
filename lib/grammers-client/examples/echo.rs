@@ -27,13 +27,13 @@ async fn handle_update(
 ) -> Result {
     for update in updates {
         if let Some(message) = update.message() {
-            let peer = entity_set
+            let entity = entity_set
                 .get(&message.chat())
                 .expect("failed to find entity");
 
-            println!("Responding to {}", peer.name());
+            println!("Responding to {}", entity.name());
             client
-                .send_message(peer.to_input_peer(), message.message.as_str().into())
+                .send_message(entity.input_peer(), message.message.as_str().into())
                 .await?;
         }
     }
@@ -65,7 +65,7 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    while let (updates, entity_set) = client.next_updates().await? {
+    while let Some((updates, entity_set)) = client.next_updates().await? {
         let handle = client.handle();
         task::spawn(async move {
             match handle_update(handle, updates, entity_set).await {

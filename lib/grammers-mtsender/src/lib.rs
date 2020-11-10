@@ -153,9 +153,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
             // while reading from the network, which means there's no need to handle that case.
             trace!("reading bytes from the network");
-            let n = reader
-                .read_buf(&mut self.read_buffer)
-                .await?;
+            let n = reader.read_buf(&mut self.read_buffer).await?;
 
             self.on_net_read(n)
         } else {
@@ -253,9 +251,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 self.read_buffer.clear();
                 self.process_mtp_buffer().map_err(|e| e.into())
             }
-            Err(transport::Error::MissingBytes) => {
-                Ok(Vec::new())
-            }
+            Err(transport::Error::MissingBytes) => Ok(Vec::new()),
             Err(err) => return Err(err.into()),
         }
     }

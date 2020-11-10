@@ -9,7 +9,7 @@
 //! Methods directly related to the network on the [`Client`] and [`ClientHandle`].
 
 pub use super::updates::UpdateIter;
-use super::{Client, ClientHandle, Config, Request};
+use super::{Client, ClientHandle, Config, Request, Step};
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
 use grammers_mtproto::{mtp, transport};
@@ -132,8 +132,8 @@ impl Client {
     ///
     /// If a server message is received, requests enqueued via the `handle`'s may have their
     /// result delivered via a channel, and a (possibly empty) list of updates will be returned.
-    pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, sender::ReadError> {
-        let (result, request) = {
+    pub async fn step(&mut self) -> Result<Step, sender::ReadError> {
+        let (network, request) = {
             let network = self.sender.step();
             let request = self.handle_rx.recv();
             pin_mut!(network);
@@ -152,20 +152,36 @@ impl Client {
 
         if let Some(request) = request {
             let request = request.expect("mpsc returned None");
-            let response = self.sender.enqueue_body(request.request);
-            drop(request.response.send(response));
+            match request {
+                Request::Rpc { request, response } => {
+                    drop(response.send(self.sender.enqueue_body(request)));
+                }
+                Request::Disconnect { response } => {
+                    drop(response.send(()));
+                    return Ok(Step::Disconnected);
+                }
+            }
         }
 
         // TODO request cancellation if this is Err
         // (perhaps a method on the sender to cancel_all)
-        result.unwrap_or(Ok(Vec::new()))
+        Ok(Step::Connected {
+            updates: if let Some(updates) = network {
+                updates?
+            } else {
+                Vec::new()
+            },
+        })
     }
 
     /// Run the client by repeatedly `step`ping the client until a graceful disconnection occurs,
     /// or a network error occurs. Incoming updates are ignored and simply dropped.
     pub async fn run_until_disconnected(mut self) -> Result<(), sender::ReadError> {
         loop {
-            self.step().await?;
+            match self.step().await? {
+                Step::Connected { .. } => continue,
+                Step::Disconnected => break Ok(()),
+            }
         }
     }
 }
@@ -178,18 +194,27 @@ impl ClientHandle {
     ) -> Result<R::Return, InvocationError> {
         let (response, rx) = oneshot::channel();
 
-        drop(self.tx.send(Request {
+        drop(self.tx.send(Request::Rpc {
             request: request.to_bytes(),
             response,
         }));
 
         // First receive the `oneshot::Receiver` with from the `Client`,
         // then `await` on that to receive the response to the request.
-        // TODO remove a few some unwraps…
+        // TODO remove a few some unwraps (same for the drop above)…
         rx.await
             .unwrap()
             .await
             .unwrap()
             .map(|body| R::Return::from_bytes(&body).unwrap())
+    }
+
+    /// Gracefully tell the `Client` to disconnect and stop receiving things from the network.
+    pub async fn disconnect(&mut self) {
+        let (response, rx) = oneshot::channel();
+
+        // TODO handle errors and not just drop them
+        drop(self.tx.send(Request::Disconnect { response }));
+        rx.await.unwrap();
     }
 }

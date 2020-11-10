@@ -36,7 +36,7 @@ impl Entity {
         }
     }
 
-    pub fn to_input_peer(&self) -> tl::enums::InputPeer {
+    pub fn input_peer(&self) -> tl::enums::InputPeer {
         match self {
             Self::User(user) => tl::types::InputPeerUser {
                 user_id: user.id,

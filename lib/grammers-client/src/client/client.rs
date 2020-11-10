@@ -13,6 +13,7 @@ pub use super::updates::UpdateIter;
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
+use grammers_tl_types as tl;
 use tokio::sync::{mpsc, oneshot};
 
 /// When no locale is found, use this one instead.
@@ -50,9 +51,15 @@ pub struct InitParams {
     pub lang_code: String,
 }
 
-pub(crate) struct Request {
-    pub(crate) request: Vec<u8>,
-    pub(crate) response: oneshot::Sender<oneshot::Receiver<Result<Vec<u8>, InvocationError>>>,
+/// Request messages that the `ClientHandle` uses to communicate with the `Client`.
+pub(crate) enum Request {
+    Rpc {
+        request: Vec<u8>,
+        response: oneshot::Sender<oneshot::Receiver<Result<Vec<u8>, InvocationError>>>,
+    },
+    Disconnect {
+        response: oneshot::Sender<()>,
+    },
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -66,6 +73,15 @@ pub struct Client {
 #[derive(Clone)]
 pub struct ClientHandle {
     pub(crate) tx: mpsc::UnboundedSender<Request>,
+}
+
+/// A network step.
+pub enum Step {
+    /// The `Client` is still connected, and a possibly-empty list of updates were received
+    /// during this step.
+    Connected { updates: Vec<tl::enums::Updates> },
+    /// The `Client` has been gracefully disconnected, and no more calls to `step` are needed.
+    Disconnected,
 }
 
 impl Default for InitParams {
