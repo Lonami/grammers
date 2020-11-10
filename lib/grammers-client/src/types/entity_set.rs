@@ -75,4 +75,9 @@ impl EntitySet {
     pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Entity> {
         self.map.get(&peer.clone().into())
     }
+
+    pub(crate) fn merge(mut self, other: EntitySet) -> EntitySet {
+        self.map.extend(other.map);
+        self
+    }
 }
