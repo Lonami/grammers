@@ -70,5 +70,7 @@ pub trait Transport {
     /// Unpacks the content from `input` into `output`.
     ///
     /// Previous contents in `output` are not cleared before this operation.
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error>;
+    ///
+    /// If successful, returns how many bytes of `input` were used.
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error>;
 }

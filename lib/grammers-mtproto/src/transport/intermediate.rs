@@ -47,7 +47,7 @@ impl Transport for Intermediate {
         output.extend_from_slice(input);
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
         if input.len() < 4 {
             return Err(Error::MissingBytes);
         }
@@ -64,7 +64,7 @@ impl Transport for Intermediate {
         }
 
         output.extend_from_slice(&input[4..len]);
-        Ok(())
+        Ok(len)
     }
 }
 

@@ -247,8 +247,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .transport
             .unpack(&self.read_buffer, &mut self.mtp_buffer)
         {
-            Ok(_) => {
-                self.read_buffer.clear();
+            Ok(n) => {
+                self.read_buffer.drain(..n);
+                // TODO this should loop if the buffer has more items (potentially more packets
+                // already) or else we're lagging behind.
                 self.process_mtp_buffer().map_err(|e| e.into())
             }
             Err(transport::Error::MissingBytes) => Ok(Vec::new()),

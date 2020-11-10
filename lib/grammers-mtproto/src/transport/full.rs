@@ -66,7 +66,7 @@ impl Transport for Full {
         self.send_seq += 1;
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
         // Need 4 bytes for the initial length
         if input.len() < 4 {
             return Err(Error::MissingBytes);
@@ -121,7 +121,7 @@ impl Transport for Full {
 
         self.recv_seq += 1;
         output.extend_from_slice(body);
-        Ok(())
+        Ok(len)
     }
 }
 

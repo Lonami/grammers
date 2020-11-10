@@ -63,7 +63,7 @@ impl Transport for Abridged {
         }
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<(), Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
         if input.len() < 1 {
             return Err(Error::MissingBytes);
         }
@@ -90,7 +90,7 @@ impl Transport for Abridged {
         }
 
         output.extend_from_slice(&input[header_len..header_len + len]);
-        Ok(())
+        Ok(header_len + len)
     }
 }
 
