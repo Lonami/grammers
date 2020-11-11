@@ -33,6 +33,59 @@ fn generate_random_message_ids(n: usize) -> Vec<i64> {
     (0..n as i64).map(|i| start + i).collect()
 }
 
+fn message_id(message: &tl::enums::Message) -> i32 {
+    match message {
+        tl::enums::Message::Empty(m) => m.id,
+        tl::enums::Message::Message(m) => m.id,
+        tl::enums::Message::Service(m) => m.id,
+    }
+}
+
+fn message_date(message: &tl::enums::Message) -> Option<i32> {
+    match message {
+        tl::enums::Message::Empty(_) => None,
+        tl::enums::Message::Message(m) => Some(m.date),
+        tl::enums::Message::Service(m) => Some(m.date),
+    }
+}
+
+fn map_random_ids_to_messages(
+    random_ids: &[i64],
+    updates: tl::enums::Updates,
+) -> Vec<Option<tl::enums::Message>> {
+    match updates {
+        tl::enums::Updates::Updates(tl::types::Updates {
+            updates,
+            users: _,
+            chats: _,
+            date: _,
+            seq: _,
+        }) => {
+            let rnd_to_id = updates
+                .iter()
+                .filter_map(|update| match update {
+                    tl::enums::Update::MessageId(u) => Some((u.random_id, u.id)),
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+
+            let mut id_to_msg = updates
+                .into_iter()
+                .filter_map(|update| match update {
+                    tl::enums::Update::NewMessage(u) => Some((message_id(&u.message), u.message)),
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+
+            random_ids
+                .into_iter()
+                .map(|rnd| rnd_to_id.get(rnd).and_then(|id| id_to_msg.remove(id)))
+                .collect()
+        }
+        _ => panic!("API returned something other than Updates so messages can't be mapped"),
+    }
+}
+
 const MAX_LIMIT: usize = 100;
 
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, tl::enums::Message>;
@@ -120,65 +173,12 @@ impl MessageIter {
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
-            match &self.buffer[self.buffer.len() - 1] {
-                tl::enums::Message::Empty(_) => panic!(),
-                tl::enums::Message::Message(message) => {
-                    self.request.offset_id = message.id;
-                    self.request.offset_date = message.date;
-                }
-                tl::enums::Message::Service(message) => {
-                    self.request.offset_id = message.id;
-                    self.request.offset_date = message.date;
-                }
-            }
+            let last = &self.buffer[self.buffer.len() - 1];
+            self.request.offset_id = message_id(last);
+            self.request.offset_date = message_date(last).unwrap();
         }
 
         Ok(self.pop_item())
-    }
-}
-
-fn message_id(message: &tl::enums::Message) -> i32 {
-    match message {
-        tl::enums::Message::Empty(m) => m.id,
-        tl::enums::Message::Message(m) => m.id,
-        tl::enums::Message::Service(m) => m.id,
-    }
-}
-
-fn map_random_ids_to_messages(
-    random_ids: &[i64],
-    updates: tl::enums::Updates,
-) -> Vec<Option<tl::enums::Message>> {
-    match updates {
-        tl::enums::Updates::Updates(tl::types::Updates {
-            updates,
-            users: _,
-            chats: _,
-            date: _,
-            seq: _,
-        }) => {
-            let rnd_to_id = updates
-                .iter()
-                .filter_map(|update| match update {
-                    tl::enums::Update::MessageId(u) => Some((u.random_id, u.id)),
-                    _ => None,
-                })
-                .collect::<HashMap<_, _>>();
-
-            let mut id_to_msg = updates
-                .into_iter()
-                .filter_map(|update| match update {
-                    tl::enums::Update::NewMessage(u) => Some((message_id(&u.message), u.message)),
-                    _ => None,
-                })
-                .collect::<HashMap<_, _>>();
-
-            random_ids
-                .into_iter()
-                .map(|rnd| rnd_to_id.get(rnd).map(|id| id_to_msg.remove(id)).flatten())
-                .collect()
-        }
-        _ => panic!("API returned something other than Updates so messages can't be mapped"),
     }
 }
 
