@@ -212,8 +212,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         // TODO make mtp itself use BytesMut to avoid copies
-        let mut temp_vec = vec![];
-        let msg_ids = self.mtp.serialize(&requests, &mut temp_vec);
+        let mut msg_ids = Vec::new();
+        for request in requests {
+            if let Some(msg_id) = self.mtp.push(&request) {
+                msg_ids.push(msg_id);
+            } else {
+                break;
+            }
+        }
+        let temp_vec = self.mtp.finalize();
         self.mtp_buffer = temp_vec[..].into();
         self.write_buffer.clear();
         self.transport
