@@ -182,6 +182,121 @@ impl MessageIter {
     }
 }
 
+pub type SearchIter = IterBuffer<tl::functions::messages::Search, tl::enums::Message>;
+
+impl SearchIter {
+    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> SearchIter {
+        // TODO let users tweak all the options from the request
+        Self::from_request(
+            client,
+            MAX_LIMIT,
+            tl::functions::messages::Search {
+                peer,
+                q: String::new(),
+                from_id: None,
+                top_msg_id: None,
+                filter: tl::enums::MessagesFilter::InputMessagesFilterEmpty,
+                min_date: 0,
+                max_date: 0,
+                offset_id: 0,
+                add_offset: 0,
+                limit: 0,
+                max_id: 0,
+                min_id: 0,
+                hash: 0,
+            },
+        )
+    }
+
+    /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
+    /// this query (so a world in singular may also return messages with the word in plural, for
+    /// example).
+    pub fn query(mut self, query: &str) -> Self {
+        self.request.q = query.to_string();
+        self
+    }
+
+    /// Changes the media filter. Only messages with this type of media will be fetched.
+    pub fn filter(mut self, filter: tl::enums::MessagesFilter) -> Self {
+        self.request.filter = filter;
+        self
+    }
+
+    /// Determines how many messages there are in total.
+    ///
+    /// This only performs a network call if `next` has not been called before.
+    pub async fn total(&mut self) -> Result<usize, InvocationError> {
+        if let Some(total) = self.total {
+            return Ok(total);
+        }
+
+        use tl::enums::messages::Messages;
+
+        // Unlike most requests, a limit of 0 actually returns 0 and not a default amount
+        // (as of layer 120).
+        self.request.limit = 0;
+        let total = match self.client.invoke(&self.request).await? {
+            Messages::Messages(messages) => messages.messages.len(),
+            Messages::Slice(messages) => messages.count as usize,
+            Messages::ChannelMessages(messages) => messages.count as usize,
+            Messages::NotModified(messages) => messages.count as usize,
+        };
+        self.total = Some(total);
+        Ok(total)
+    }
+
+    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
+    /// empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no messages left.
+    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+        if let Some(result) = self.next_raw() {
+            return result;
+        }
+
+        use tl::enums::messages::Messages;
+
+        self.request.limit = self.determine_limit(MAX_LIMIT);
+        let (messages, users, chats) = match self.client.invoke(&self.request).await? {
+            Messages::Messages(m) => {
+                self.last_chunk = true;
+                self.total = Some(m.messages.len());
+                (m.messages, m.users, m.chats)
+            }
+            Messages::Slice(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats)
+            }
+            Messages::ChannelMessages(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats)
+            }
+            Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though hash = 0")
+            }
+        };
+
+        let _entities = EntitySet::new(users, chats);
+
+        self.buffer.extend(
+            messages
+                .into_iter()
+                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
+        );
+
+        // Don't bother updating offsets if this is the last time stuff has to be fetched.
+        if !self.last_chunk && !self.buffer.is_empty() {
+            let last = &self.buffer[self.buffer.len() - 1];
+            self.request.offset_id = message_id(last);
+            self.request.max_date = message_date(last).unwrap();
+        }
+
+        Ok(self.pop_item())
+    }
+}
+
 impl ClientHandle {
     /// Sends a text message to the desired chat.
     // TODO don't require nasty InputPeer
@@ -395,7 +510,15 @@ impl ClientHandle {
         }
     }
 
+    /// Iterate over the message history of a chat, from most recent to oldest.
     pub fn iter_messages(&self, chat: tl::enums::InputPeer) -> MessageIter {
         MessageIter::new(self, chat)
+    }
+
+    /// Iterate over the messages that match certain search criteria.
+    ///
+    /// This allows you to search by text within a chat or filter by media among other things.
+    pub fn search_messages(&self, chat: tl::enums::InputPeer) -> SearchIter {
+        SearchIter::new(self, chat)
     }
 }
