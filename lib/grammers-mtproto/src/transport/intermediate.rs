@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
+use bytes::{Buf, BufMut, BytesMut};
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -35,36 +36,31 @@ impl Intermediate {
 }
 
 impl Transport for Intermediate {
-    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
+    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
         assert_eq!(input.len() % 4, 0);
 
         if !self.init {
-            output.extend_from_slice(&[0xee, 0xee, 0xee, 0xee]);
+            output.put_u32_le(0xee_ee_ee_ee);
             self.init = true;
         }
 
-        output.extend_from_slice(&(input.len() as u32).to_le_bytes());
-        output.extend_from_slice(input);
+        output.put_u32_le(input.len() as _);
+        output.put(input);
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
         if input.len() < 4 {
             return Err(Error::MissingBytes);
         }
+        let mut needle = &mut &input[..];
 
-        let len = {
-            let mut buf = [0; 4];
-            buf.copy_from_slice(&input[0..4]);
-            u32::from_le_bytes(buf)
-        } as usize
-            + 4;
-
-        if input.len() < len {
+        let len = needle.get_u32_le() as usize;
+        if needle.len() < len {
             return Err(Error::MissingBytes);
         }
+        output.put(&needle[..len]);
 
-        output.extend_from_slice(&input[4..len]);
-        Ok(len)
+        Ok(len + 4)
     }
 }
 
@@ -73,16 +69,16 @@ mod tests {
     use super::*;
 
     /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, Vec<u8>) {
+    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, BytesMut) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Intermediate::new(), input, Vec::new())
+        (Intermediate::new(), input, BytesMut::new())
     }
 
     #[test]
     fn pack_empty() {
         let (mut transport, input, mut output) = setup_pack(0);
         transport.pack(&input, &mut output);
-        assert_eq!(&output, &[0xee, 0xee, 0xee, 0xee, 0, 0, 0, 0]);
+        assert_eq!(&output[..], &[0xee, 0xee, 0xee, 0xee, 0, 0, 0, 0]);
     }
 
     #[test]
@@ -104,7 +100,7 @@ mod tests {
     fn unpack_small() {
         let mut transport = Intermediate::new();
         let input = [1];
-        let mut output = Vec::new();
+        let mut output = BytesMut::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
             Err(Error::MissingBytes)
@@ -114,7 +110,7 @@ mod tests {
     #[test]
     fn unpack_normal() {
         let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = Vec::new();
+        let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         transport.unpack(&packed[4..], &mut unpacked).unwrap();
         assert_eq!(input, unpacked);

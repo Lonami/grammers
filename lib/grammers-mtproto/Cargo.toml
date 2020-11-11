@@ -20,6 +20,7 @@ grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
 flate2 = "1.0.13"
 num-bigint = "0.2.6"
 sha1 = "0.6.0"
+bytes = "0.6"
 
 [dependencies.grammers-tl-types]
 path = "../grammers-tl-types"
