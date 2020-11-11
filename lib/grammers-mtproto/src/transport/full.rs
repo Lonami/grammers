@@ -69,7 +69,7 @@ impl Transport for Full {
         }
 
         let total_len = input.len();
-        let mut needle = &mut &input[..];
+        let needle = &mut &input[..];
 
         // payload len
         let len = needle.get_u32_le() as usize;

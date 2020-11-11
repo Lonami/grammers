@@ -52,7 +52,7 @@ impl Transport for Intermediate {
         if input.len() < 4 {
             return Err(Error::MissingBytes);
         }
-        let mut needle = &mut &input[..];
+        let needle = &mut &input[..];
 
         let len = needle.get_u32_le() as usize;
         if needle.len() < len {

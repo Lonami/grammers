@@ -14,6 +14,8 @@ jobs:
 
     steps:
     - uses: actions/checkout@v2
+    - name: Setup environment
+      run: echo "RUSTFLAGS=-D warnings" >> $GITHUB_ENV
     - name: rustfmt
       run: cargo fmt -- --check
     - name: Build

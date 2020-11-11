@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{BufMut, BytesMut};
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
