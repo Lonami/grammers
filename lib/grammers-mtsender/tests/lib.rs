@@ -15,12 +15,15 @@ use grammers_mtproto::transport;
 use grammers_mtsender::connect;
 use grammers_tl_types::{enums, functions};
 use log;
-use simple_logger;
+use simple_logger::SimpleLogger;
 use tokio::runtime;
 
 #[test]
 fn test_invoke_encrypted_method() {
-    simple_logger::init_with_level(log::Level::Debug).unwrap();
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Debug)
+        .init()
+        .unwrap();
 
     let rt = runtime::Builder::new_current_thread()
         .enable_all()

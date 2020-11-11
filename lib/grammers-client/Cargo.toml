@@ -32,5 +32,5 @@ tokio = { version = "0.3", features = ["sync"] }
 log = "0.4.8"
 
 [dev-dependencies]
-simple_logger = "1.6.0"
+simple_logger = "1.11.0"
 tokio = { version = "0.3", features = ["rt"] }

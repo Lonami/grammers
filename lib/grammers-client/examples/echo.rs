@@ -14,7 +14,7 @@ use grammers_client::ext::{MessageExt as _, UpdateExt as _};
 use grammers_client::{Client, ClientHandle, Config, EntitySet, UpdateIter};
 use grammers_session::Session;
 use log;
-use simple_logger;
+use simple_logger::SimpleLogger;
 use std::env;
 use tokio::{runtime, task};
 
@@ -42,7 +42,10 @@ async fn handle_update(
 }
 
 async fn async_main() -> Result {
-    simple_logger::init_with_level(log::Level::Debug).expect("failed to setup logging");
+    SimpleLogger::new()
+        .with_level(log::LevelFilter::Debug)
+        .init()
+        .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let api_hash = env!("TG_HASH").to_string();
