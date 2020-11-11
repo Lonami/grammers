@@ -67,8 +67,9 @@ impl ClientHandle {
             media: None,
             reply_markup: new_message.reply_markup,
             entities: Some(new_message.entities),
-            schedule_date: new_message.schedule_date
-        }).await?;
+            schedule_date: new_message.schedule_date,
+        })
+        .await?;
 
         Ok(())
     }
@@ -76,7 +77,7 @@ impl ClientHandle {
     async fn a_reply_msg(
         &mut self,
         chat: &tl::enums::InputPeer,
-        id: tl::enums::InputMessage
+        id: tl::enums::InputMessage,
     ) -> (Option<tl::enums::messages::Messages>, bool) {
         if let tl::enums::InputPeer::Channel(chan) = chat {
             (
@@ -84,17 +85,19 @@ impl ClientHandle {
                     id: vec![id],
                     channel: tl::enums::InputChannel::Channel(tl::types::InputChannel {
                         channel_id: chan.channel_id,
-                        access_hash: chan.access_hash
-                    })
-                }).await.ok(),
-                false
+                        access_hash: chan.access_hash,
+                    }),
+                })
+                .await
+                .ok(),
+                false,
             )
         } else {
             (
-                self.invoke(&tl::functions::messages::GetMessages{
-                    id: vec![id]
-                }).await.ok(),
-                true
+                self.invoke(&tl::functions::messages::GetMessages { id: vec![id] })
+                    .await
+                    .ok(),
+                true,
             )
         }
     }
@@ -105,13 +108,16 @@ impl ClientHandle {
     pub async fn get_reply_to_message(
         &mut self,
         chat: tl::enums::InputPeer,
-        message: &tl::types::Message
+        message: &tl::types::Message,
     ) -> Option<tl::types::Message> {
-        let input_id = tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id });
+        let input_id =
+            tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id });
 
         let (mut res, mut filter_req) = self.a_reply_msg(&chat, input_id).await;
-        if res.is_none() { 
-            let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId { id: message.reply_to_message_id()? });
+        if res.is_none() {
+            let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
+                id: message.reply_to_message_id()?,
+            });
             let r = self.a_reply_msg(&chat, input_id).await;
             res = r.0;
             filter_req = r.1;
@@ -121,7 +127,7 @@ impl ClientHandle {
             tl::enums::messages::Messages::Messages(m) => Some(m.messages),
             tl::enums::messages::Messages::Slice(m) => Some(m.messages),
             tl::enums::messages::Messages::ChannelMessages(m) => Some(m.messages),
-            _ => None
+            _ => None,
         }?;
 
         if filter_req {

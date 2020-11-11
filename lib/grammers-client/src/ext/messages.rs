@@ -23,7 +23,7 @@ impl MessageExt for tl::types::Message {
     }
 
     fn reply_to_message_id(&self) -> Option<i32> {
-        return if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.reply_to {
+        if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.reply_to {
             Some(m.reply_to_msg_id)
         } else {
             None
@@ -31,7 +31,7 @@ impl MessageExt for tl::types::Message {
     }
 
     fn from_id(&self) -> Option<i32> {
-        return if let Some(tl::enums::Peer::User(usr)) = &self.from_id {
+        if let Some(tl::enums::Peer::User(usr)) = &self.from_id {
             Some(usr.user_id)
         } else {
             None
