@@ -509,7 +509,10 @@ pub(crate) fn write_category_mod<W: Write>(
             writeln!(file, "{}use std::convert::TryFrom;", indent)?;
         }
 
-        for definition in grouped[key].iter().filter(|def| !ignore_type(&def.ty)) {
+        for definition in grouped[key]
+            .iter()
+            .filter(|def| def.category == Category::Functions || !ignore_type(&def.ty))
+        {
             write_definition(&mut file, indent, definition, metadata, config)?;
         }
 
