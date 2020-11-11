@@ -118,15 +118,24 @@ impl Mtp for Plain {
 mod tests {
     use super::*;
 
+    const REQUEST: &[u8] = b"Hey!";
+
     #[test]
     fn ensure_finalize_clears_buffer() {
         let mut mtp = Plain::new();
-        let request = b"Hey!";
 
-        mtp.push(request);
+        mtp.push(REQUEST);
         assert_eq!(mtp.finalize().len(), 24);
 
-        mtp.push(request);
+        mtp.push(REQUEST);
         assert_eq!(mtp.finalize().len(), 24);
+    }
+
+    #[test]
+    fn ensure_only_one_push_allowed() {
+        let mut mtp = Plain::new();
+
+        assert!(mtp.push(REQUEST).is_some());
+        assert!(mtp.push(REQUEST).is_none());
     }
 }
