@@ -20,6 +20,8 @@ pub use full::Full;
 pub use intermediate::Intermediate;
 use std::fmt;
 
+use bytes::BytesMut;
+
 /// The error type reported by the different transports when something is wrong.
 ///
 /// Certain transports will only produce certain variants of this error.
@@ -65,12 +67,12 @@ pub trait Transport {
     /// Previous contents in `output` are not cleared before this operation.
     ///
     /// Panics if `input.len()` is not divisible by 4.
-    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>);
+    fn pack(&mut self, input: &[u8], output: &mut BytesMut);
 
     /// Unpacks the content from `input` into `output`.
     ///
     /// Previous contents in `output` are not cleared before this operation.
     ///
     /// If successful, returns how many bytes of `input` were used.
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error>;
+    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error>;
 }

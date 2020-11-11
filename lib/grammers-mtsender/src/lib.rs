@@ -7,6 +7,7 @@
 // except according to those terms.
 mod errors;
 
+use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
@@ -38,13 +39,13 @@ pub struct Sender<T: Transport, M: Mtp> {
     stream: TcpStream,
     transport: T,
     mtp: M,
-    mtp_buffer: Vec<u8>,
+    mtp_buffer: BytesMut,
 
     requests: Vec<Request>,
 
     // Transport-level buffers and positions
-    read_buffer: Vec<u8>,
-    write_buffer: Vec<u8>,
+    read_buffer: BytesMut,
+    write_buffer: BytesMut,
     write_index: usize,
 }
 
@@ -69,12 +70,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             stream,
             transport,
             mtp,
-            mtp_buffer: Vec::with_capacity(MAXIMUM_DATA),
+            mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
 
             requests: vec![],
 
-            read_buffer: Vec::with_capacity(MAXIMUM_DATA),
-            write_buffer: Vec::with_capacity(MAXIMUM_DATA),
+            read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+            write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
             write_index: 0,
         })
     }
@@ -210,7 +211,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             return;
         }
 
-        let msg_ids = self.mtp.serialize(&requests, &mut self.mtp_buffer);
+        // TODO make mtp itself use BytesMut to avoid copies
+        let mut temp_vec = vec![];
+        let msg_ids = self.mtp.serialize(&requests, &mut temp_vec);
+        self.mtp_buffer = temp_vec[..].into();
         self.write_buffer.clear();
         self.transport
             .pack(&self.mtp_buffer, &mut self.write_buffer);
@@ -252,7 +256,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 .unpack(&self.read_buffer, &mut self.mtp_buffer)
             {
                 Ok(n) => {
-                    self.read_buffer.drain(..n);
+                    self.read_buffer.advance(n);
                     self.process_mtp_buffer(&mut updates)?;
                 }
                 Err(transport::Error::MissingBytes) => break,

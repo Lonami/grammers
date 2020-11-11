@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
+use bytes::{Buf, BufMut, BytesMut};
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -44,26 +45,26 @@ impl Abridged {
 }
 
 impl Transport for Abridged {
-    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
+    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
         assert_eq!(input.len() % 4, 0);
 
         if !self.init {
-            output.push(0xef);
+            output.put_u8(0xef);
             self.init = true;
         }
 
         let len = input.len() / 4;
         if len < 127 {
-            output.push(len as u8);
-            output.extend_from_slice(input);
+            output.put_u8(len as u8);
+            output.put(input);
         } else {
-            output.push(0x7f);
-            output.extend_from_slice(&len.to_le_bytes()[..3]);
-            output.extend_from_slice(input);
+            output.put_u8(0x7f);
+            output.put_uint_le(len as _, 3);
+            output.put(input);
         }
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
         if input.len() < 1 {
             return Err(Error::MissingBytes);
         }
@@ -89,7 +90,7 @@ impl Transport for Abridged {
             return Err(Error::MissingBytes);
         }
 
-        output.extend_from_slice(&input[header_len..header_len + len]);
+        output.put(&input[header_len..header_len + len]);
         Ok(header_len + len)
     }
 }
@@ -99,16 +100,16 @@ mod tests {
     use super::*;
 
     /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, Vec<u8>) {
+    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, BytesMut) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Abridged::new(), input, Vec::new())
+        (Abridged::new(), input, BytesMut::new())
     }
 
     #[test]
     fn pack_empty() {
         let (mut transport, input, mut output) = setup_pack(0);
         transport.pack(&input, &mut output);
-        assert_eq!(&output, &[0xef, 0]);
+        assert_eq!(&output[..], &[0xef, 0]);
     }
 
     #[test]
@@ -138,7 +139,7 @@ mod tests {
     fn unpack_small() {
         let mut transport = Abridged::new();
         let input = [1];
-        let mut output = Vec::new();
+        let mut output = BytesMut::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
             Err(Error::MissingBytes)
@@ -148,7 +149,7 @@ mod tests {
     #[test]
     fn unpack_normal() {
         let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = Vec::new();
+        let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         transport.unpack(&packed[1..], &mut unpacked).unwrap();
         assert_eq!(input, unpacked);
@@ -157,7 +158,7 @@ mod tests {
     #[test]
     fn unpack_large() {
         let (mut transport, input, mut packed) = setup_pack(1024);
-        let mut unpacked = Vec::new();
+        let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         transport.unpack(&packed[1..], &mut unpacked).unwrap();
         assert_eq!(input, unpacked);

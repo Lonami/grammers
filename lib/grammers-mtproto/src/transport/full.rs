@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
+use bytes::{Buf, BufMut, BytesMut};
 use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
@@ -40,54 +41,48 @@ impl Full {
 }
 
 impl Transport for Full {
-    fn pack(&mut self, input: &[u8], output: &mut Vec<u8>) {
+    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
         assert_eq!(input.len() % 4, 0);
 
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
         output.reserve(len);
 
-        let len_bytes = (len as u32).to_le_bytes();
-        let seq = self.send_seq.to_le_bytes();
-
+        let buf_start = output.len();
+        output.put_u32_le(len as _);
+        output.put_u32_le(self.send_seq);
+        output.put(input);
         let crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&len_bytes);
-            digest.write(&seq);
-            digest.write(input);
-            digest.sum32().to_le_bytes()
+            digest.write(&output[buf_start..]);
+            digest.sum32()
         };
-
-        output.extend_from_slice(&len_bytes);
-        output.extend_from_slice(&seq);
-        output.extend_from_slice(input);
-        output.extend_from_slice(&crc);
+        output.put_u32_le(crc);
 
         self.send_seq += 1;
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut Vec<u8>) -> Result<usize, Error> {
+    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
         // Need 4 bytes for the initial length
         if input.len() < 4 {
             return Err(Error::MissingBytes);
         }
 
+        let total_len = input.len();
+        let mut needle = &mut &input[..];
+
         // payload len
-        let mut len_bytes = [0; 4];
-        len_bytes.copy_from_slice(&input[0..4]);
-        let len = u32::from_le_bytes(len_bytes) as usize;
+        let len = needle.get_u32_le() as usize;
         if len < 12 {
             return Err(Error::BadLen { got: len as u32 });
         }
 
-        if input.len() < len {
+        if total_len < len {
             return Err(Error::MissingBytes);
         }
 
         // receive counter
-        let mut seq_bytes = [0; 4];
-        seq_bytes.copy_from_slice(&input[4..8]);
-        let seq = u32::from_le_bytes(seq_bytes);
+        let seq = needle.get_u32_le();
         if seq != self.recv_seq {
             return Err(Error::BadSeq {
                 expected: self.recv_seq,
@@ -95,21 +90,15 @@ impl Transport for Full {
             });
         }
 
-        // payload
-        let body = &input[8..len - 4];
+        // skip payload for now
+        needle.advance(len - 12);
 
         // crc32
-        let crc = {
-            let mut buf = [0; 4];
-            buf.copy_from_slice(&input[len - 4..len]);
-            u32::from_le_bytes(buf)
-        };
+        let crc = needle.get_u32_le();
 
         let valid_crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&len_bytes);
-            digest.write(&seq_bytes);
-            digest.write(body);
+            digest.write(&input[..len - 4]);
             digest.sum32()
         };
         if crc != valid_crc {
@@ -120,7 +109,7 @@ impl Transport for Full {
         }
 
         self.recv_seq += 1;
-        output.extend_from_slice(body);
+        output.extend_from_slice(&input[8..len - 4]);
         Ok(len)
     }
 }
@@ -130,17 +119,22 @@ mod tests {
     use super::*;
 
     /// Returns a new full transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Full, Vec<u8>, Vec<u8>) {
+    fn setup_pack(n: u32) -> (Full, Vec<u8>, BytesMut) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Full::new(), input, Vec::new())
+        (Full::new(), input, BytesMut::new())
     }
 
     /// Returns the expected data after unpacking, a new full transport, input data and an empty output buffer.
-    fn setup_unpack(n: u32) -> (Vec<u8>, Full, Vec<u8>, Vec<u8>) {
+    fn setup_unpack(n: u32) -> (Vec<u8>, Full, Vec<u8>, BytesMut) {
         let (mut transport, expected_output, mut input) = setup_pack(n);
         transport.pack(&expected_output, &mut input);
 
-        (expected_output, Full::new(), input, Vec::new())
+        (
+            expected_output,
+            Full::new(),
+            input.to_vec(),
+            BytesMut::new(),
+        )
     }
 
     #[test]
@@ -148,7 +142,7 @@ mod tests {
         let (mut transport, input, mut output) = setup_pack(0);
         transport.pack(&input, &mut output);
 
-        assert_eq!(&output, &[12, 0, 0, 0, 0, 0, 0, 0, 38, 202, 141, 50]);
+        assert_eq!(&output[..], &[12, 0, 0, 0, 0, 0, 0, 0, 38, 202, 141, 50]);
     }
 
     #[test]
@@ -186,7 +180,7 @@ mod tests {
     fn unpack_small() {
         let mut transport = Full::new();
         let input = [0, 1, 2];
-        let mut output = Vec::new();
+        let mut output = BytesMut::new();
         assert_eq!(
             transport.unpack(&input, &mut output),
             Err(Error::MissingBytes)
@@ -203,7 +197,7 @@ mod tests {
     #[test]
     fn unpack_twice() {
         let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = Vec::new();
+        let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         transport.unpack(&packed, &mut unpacked).unwrap();
         assert_eq!(input, unpacked);
@@ -232,7 +226,7 @@ mod tests {
     #[test]
     fn unpack_bad_seq() {
         let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = Vec::new();
+        let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         packed.clear();
         transport.pack(&input, &mut packed);
