@@ -8,9 +8,11 @@
 
 //! Methods related to sending messages.
 
-use crate::{ext::MessageExt, types, ClientHandle};
+use crate::types::Message;
+use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
+use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Generate a random message ID suitable for `send_message`.
@@ -19,6 +21,162 @@ fn generate_random_message_id() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system time is before epoch")
         .as_nanos() as i64
+}
+
+const MAX_LIMIT: usize = 100;
+
+pub struct MessageIter {
+    client: ClientHandle,
+    limit: Option<usize>,
+    fetched: usize,
+    buffer: VecDeque<tl::enums::Message>,
+    last_chunk: bool,
+    total: Option<usize>,
+    request: tl::functions::messages::GetHistory,
+}
+
+impl MessageIter {
+    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
+        Self {
+            client: client.clone(),
+            limit: None,
+            fetched: 0,
+            buffer: VecDeque::with_capacity(MAX_LIMIT),
+            last_chunk: false,
+            total: None,
+            // TODO let users tweak all the options from the request
+            request: tl::functions::messages::GetHistory {
+                peer,
+                offset_id: 0,
+                offset_date: 0,
+                add_offset: 0,
+                limit: 0,
+                max_id: 0,
+                min_id: 0,
+                hash: 0,
+            },
+        }
+    }
+
+    /// Change how many messages will be fetched.
+    pub fn limit(mut self, n: usize) -> Self {
+        self.limit = Some(n);
+        self
+    }
+
+    /// Determines how many dialogs there are in total.
+    ///
+    /// This only performs a network call if `next` has not been called before.
+    pub async fn total(&mut self) -> Result<usize, InvocationError> {
+        if let Some(total) = self.total {
+            return Ok(total);
+        }
+
+        use tl::enums::messages::Messages;
+
+        self.request.limit = 1;
+        let total = match self.client.invoke(&self.request).await? {
+            Messages::Messages(messages) => messages.messages.len(),
+            Messages::Slice(messages) => messages.count as usize,
+            Messages::ChannelMessages(messages) => messages.count as usize,
+            Messages::NotModified(messages) => messages.count as usize,
+        };
+        self.total = Some(total);
+        Ok(total)
+    }
+
+    /// Return the next `Dialog` from the internal buffer, filling the buffer previously if it's
+    /// empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no dialogs left.
+    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+        if !self.check_fetch_count() || (self.buffer.is_empty() && self.last_chunk) {
+            return Ok(None);
+        }
+
+        if let Some(item) = self.pop_buffered() {
+            return Ok(Some(item));
+        }
+
+        use tl::enums::messages::Messages;
+
+        self.request.limit = self.determine_limit();
+        let (messages, users, chats) = match self.client.invoke(&self.request).await? {
+            Messages::Messages(m) => {
+                self.last_chunk = true;
+                self.total = Some(m.messages.len());
+                (m.messages, m.users, m.chats)
+            }
+            Messages::Slice(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats)
+            }
+            Messages::ChannelMessages(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats)
+            }
+            Messages::NotModified(m) => {
+                panic!("API returned Messages::NotModified even though hash = 0")
+            }
+        };
+
+        let _entities = EntitySet::new(users, chats);
+
+        self.buffer.extend(
+            messages
+                .into_iter()
+                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
+        );
+
+        // Don't bother updating offsets if this is the last time stuff has to be fetched.
+        if !self.last_chunk && !self.buffer.is_empty() {
+            match &self.buffer[self.buffer.len() - 1] {
+                tl::enums::Message::Empty(_) => panic!(),
+                tl::enums::Message::Message(message) => {
+                    self.request.offset_id = message.id;
+                    self.request.offset_date = message.date;
+                }
+                tl::enums::Message::Service(message) => {
+                    self.request.offset_id = message.id;
+                    self.request.offset_date = message.date;
+                }
+            }
+        }
+
+        Ok(self.pop_buffered())
+    }
+
+    // TODO check_fetch_count, determine_limit and pop_buffered can probably be abstracted into a custom Buffer
+    fn check_fetch_count(&self) -> bool {
+        if let Some(limit) = self.limit {
+            self.fetched < limit
+        } else {
+            true
+        }
+    }
+
+    fn determine_limit(&self) -> i32 {
+        if let Some(limit) = self.limit {
+            if self.fetched < limit {
+                return (limit - self.fetched).min(MAX_LIMIT) as i32;
+            } else {
+                1 // 0 would cause Telegram to send a default amount and not actually 0
+            }
+        } else {
+            MAX_LIMIT as i32
+        }
+    }
+
+    fn pop_buffered(&mut self) -> Option<tl::enums::Message> {
+        if let Some(item) = self.buffer.pop_front() {
+            self.fetched += 1;
+            Some(item)
+        } else {
+            None
+        }
+    }
 }
 
 impl ClientHandle {
@@ -169,5 +327,9 @@ impl ClientHandle {
             // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
             todo!("user without username not handled")
         }
+    }
+
+    pub fn iter_messages(&self, chat: tl::enums::InputPeer) -> MessageIter {
+        MessageIter::new(self, chat)
     }
 }

@@ -94,6 +94,7 @@ impl DialogIter {
             buffer: VecDeque::with_capacity(MAX_LIMIT),
             last_chunk: false,
             total: None,
+            // TODO let users tweak all the options from the request
             request: tl::functions::messages::GetDialogs {
                 exclude_pinned: false,
                 folder_id: None,
@@ -167,10 +168,11 @@ impl DialogIter {
         let entities = EntitySet::new(users, chats);
         // TODO MessageSet
 
-        dialogs.into_iter().for_each(|dialog| {
-            self.buffer
-                .push_back(Dialog::new(dialog, &messages, &entities));
-        });
+        self.buffer.extend(
+            dialogs
+                .into_iter()
+                .map(|dialog| Dialog::new(dialog, &messages, &entities)),
+        );
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {

@@ -27,7 +27,7 @@ impl MessageExt for tl::types::Message {
             Some(m.reply_to_msg_id)
         } else {
             None
-        };
+        }
     }
 
     fn from_id(&self) -> Option<i32> {
@@ -35,6 +35,6 @@ impl MessageExt for tl::types::Message {
             Some(usr.user_id)
         } else {
             None
-        };
+        }
     }
 }
