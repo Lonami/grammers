@@ -521,4 +521,84 @@ impl ClientHandle {
     pub fn search_messages(&self, chat: tl::enums::InputPeer) -> SearchIter {
         SearchIter::new(self, chat)
     }
+
+    /// Get up to 100 messages using their ID.
+    ///
+    /// The `chat` must only be specified when fetching messages from a broadcast channel or
+    /// megagroup, not when fetching from small group chats or private conversations.
+    ///
+    /// Returns the new retrieved messages in a list. Those messages that could not be retrieved
+    /// will be `None`. The length of the resulting list is the same as the length of the input
+    /// message IDs, and the indices from the list of IDs map to the indices in the result so
+    /// you can map them into the new list.
+    pub async fn get_messages_by_id(
+        &mut self,
+        chat: Option<&tl::enums::InputChannel>,
+        message_ids: &[i32],
+    ) -> Result<Vec<Option<tl::enums::Message>>, InvocationError> {
+        let id = message_ids
+            .into_iter()
+            .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
+            .collect();
+
+        let result = if let Some(chat) = chat {
+            self.invoke(&tl::functions::channels::GetMessages {
+                channel: chat.clone(),
+                id,
+            })
+            .await
+        } else {
+            self.invoke(&tl::functions::messages::GetMessages { id })
+                .await
+        }?;
+
+        let messages = match result {
+            tl::enums::messages::Messages::Messages(m) => m.messages,
+            tl::enums::messages::Messages::Slice(m) => m.messages,
+            tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+            tl::enums::messages::Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though GetMessages was used")
+            }
+        };
+
+        let mut map = messages
+            .into_iter()
+            .map(|m| (message_id(&m), m))
+            .collect::<HashMap<_, _>>();
+
+        Ok(message_ids.iter().map(|id| map.remove(id)).collect())
+    }
+
+    /// Get the latest pin from a chat.
+    ///
+    /// The `chat` must only be specified when fetching messages from a broadcast channel or
+    /// megagroup, not when fetching from small group chats or private conversations.
+    pub async fn get_pinned_message(
+        &mut self,
+        chat: Option<&tl::enums::InputChannel>,
+    ) -> Result<Option<tl::enums::Message>, InvocationError> {
+        let id = vec![tl::enums::InputMessage::Pinned];
+
+        let result = if let Some(chat) = chat {
+            self.invoke(&tl::functions::channels::GetMessages {
+                channel: chat.clone(),
+                id,
+            })
+            .await
+        } else {
+            self.invoke(&tl::functions::messages::GetMessages { id })
+                .await
+        }?;
+
+        let mut messages = match result {
+            tl::enums::messages::Messages::Messages(m) => m.messages,
+            tl::enums::messages::Messages::Slice(m) => m.messages,
+            tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+            tl::enums::messages::Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though GetMessages was used")
+            }
+        };
+
+        Ok(messages.pop())
+    }
 }
