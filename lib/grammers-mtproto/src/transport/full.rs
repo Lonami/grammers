@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
-use crc::crc32::{self, Hasher32};
 use bytes::{Buf, BufMut, BytesMut};
+use crc::crc32::{self, Hasher32};
 
 /// The basic MTProto transport protocol. This is an implementation of the
 /// [full transport].
@@ -98,7 +98,7 @@ impl Transport for Full {
 
         let valid_crc = {
             let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&input[..len-4]);
+            digest.write(&input[..len - 4]);
             digest.sum32()
         };
         if crc != valid_crc {
@@ -109,7 +109,7 @@ impl Transport for Full {
         }
 
         self.recv_seq += 1;
-        output.extend_from_slice(&input[8..len-4]);
+        output.extend_from_slice(&input[8..len - 4]);
         Ok(len)
     }
 }
@@ -129,7 +129,12 @@ mod tests {
         let (mut transport, expected_output, mut input) = setup_pack(n);
         transport.pack(&expected_output, &mut input);
 
-        (expected_output, Full::new(), input.to_vec(), BytesMut::new())
+        (
+            expected_output,
+            Full::new(),
+            input.to_vec(),
+            BytesMut::new(),
+        )
     }
 
     #[test]

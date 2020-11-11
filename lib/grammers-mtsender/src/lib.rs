@@ -7,6 +7,7 @@
 // except according to those terms.
 mod errors;
 
+use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
@@ -21,7 +22,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use bytes::{Buf,BytesMut};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
