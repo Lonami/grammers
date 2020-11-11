@@ -385,7 +385,11 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
     debug!("gen auth key: sending step 3");
     let response = sender.send(request).await?;
     debug!("gen auth key: completing generation");
-    let (auth_key, time_offset) = authentication::create_key(data, &response)?;
+    let authentication::Finished {
+        auth_key,
+        time_offset,
+        first_salt,
+    } = authentication::create_key(data, &response)?;
     info!("authorization key generated successfully");
 
     Ok(Sender {
@@ -393,6 +397,7 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
         transport: sender.transport,
         mtp: mtp::Encrypted::build()
             .time_offset(time_offset)
+            .first_salt(first_salt)
             .finish(auth_key),
         mtp_buffer: sender.mtp_buffer,
         requests: sender.requests,

@@ -21,6 +21,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 /// [`Encrypted::build`]: fn.mtp.build.html
 pub struct Builder {
     time_offset: i32,
+    first_salt: i64,
     compression_threshold: Option<usize>,
 }
 
@@ -85,6 +86,11 @@ impl Builder {
         self
     }
 
+    pub fn first_salt(mut self, first_salt: i64) -> Self {
+        self.first_salt = first_salt;
+        self
+    }
+
     /// Configures the compression threshold for outgoing messages.
     pub fn compression_threshold(mut self, threshold: Option<usize>) -> Self {
         self.compression_threshold = threshold;
@@ -97,7 +103,7 @@ impl Builder {
         Encrypted {
             auth_key,
             time_offset: self.time_offset,
-            salt: 0,
+            salt: self.first_salt,
             client_id: {
                 let mut buffer = [0u8; 8];
                 getrandom(&mut buffer).expect("failed to generate a secure client_id");
@@ -121,6 +127,7 @@ impl Encrypted {
         Builder {
             time_offset: 0,
             compression_threshold: crate::DEFAULT_COMPRESSION_THRESHOLD,
+            first_salt: 0,
         }
     }
 
