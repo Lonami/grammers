@@ -8,11 +8,10 @@
 
 //! Methods related to sending messages.
 
-use crate::types::Message;
+use crate::types::IterBuffer;
 use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
-use std::collections::VecDeque;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Generate a random message ID suitable for `send_message`.
@@ -25,27 +24,15 @@ fn generate_random_message_id() -> i64 {
 
 const MAX_LIMIT: usize = 100;
 
-pub struct MessageIter {
-    client: ClientHandle,
-    limit: Option<usize>,
-    fetched: usize,
-    buffer: VecDeque<tl::enums::Message>,
-    last_chunk: bool,
-    total: Option<usize>,
-    request: tl::functions::messages::GetHistory,
-}
+pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, tl::enums::Message>;
 
 impl MessageIter {
-    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
-        Self {
-            client: client.clone(),
-            limit: None,
-            fetched: 0,
-            buffer: VecDeque::with_capacity(MAX_LIMIT),
-            last_chunk: false,
-            total: None,
-            // TODO let users tweak all the options from the request
-            request: tl::functions::messages::GetHistory {
+    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> MessageIter {
+        // TODO let users tweak all the options from the request
+        Self::from_request(
+            client,
+            MAX_LIMIT,
+            tl::functions::messages::GetHistory {
                 peer,
                 offset_id: 0,
                 offset_date: 0,
@@ -55,16 +42,10 @@ impl MessageIter {
                 min_id: 0,
                 hash: 0,
             },
-        }
+        )
     }
 
-    /// Change how many messages will be fetched.
-    pub fn limit(mut self, n: usize) -> Self {
-        self.limit = Some(n);
-        self
-    }
-
-    /// Determines how many dialogs there are in total.
+    /// Determines how many messages there are in total.
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
@@ -85,22 +66,18 @@ impl MessageIter {
         Ok(total)
     }
 
-    /// Return the next `Dialog` from the internal buffer, filling the buffer previously if it's
+    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
     /// empty.
     ///
-    /// Returns `None` if the `limit` is reached or there are no dialogs left.
+    /// Returns `None` if the `limit` is reached or there are no messages left.
     pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
-        if !self.check_fetch_count() || (self.buffer.is_empty() && self.last_chunk) {
-            return Ok(None);
-        }
-
-        if let Some(item) = self.pop_buffered() {
-            return Ok(Some(item));
+        if let Some(result) = self.next_raw() {
+            return result;
         }
 
         use tl::enums::messages::Messages;
 
-        self.request.limit = self.determine_limit();
+        self.request.limit = self.determine_limit(MAX_LIMIT);
         let (messages, users, chats) = match self.client.invoke(&self.request).await? {
             Messages::Messages(m) => {
                 self.last_chunk = true;
@@ -117,7 +94,7 @@ impl MessageIter {
                 self.total = Some(m.count as usize);
                 (m.messages, m.users, m.chats)
             }
-            Messages::NotModified(m) => {
+            Messages::NotModified(_) => {
                 panic!("API returned Messages::NotModified even though hash = 0")
             }
         };
@@ -145,37 +122,7 @@ impl MessageIter {
             }
         }
 
-        Ok(self.pop_buffered())
-    }
-
-    // TODO check_fetch_count, determine_limit and pop_buffered can probably be abstracted into a custom Buffer
-    fn check_fetch_count(&self) -> bool {
-        if let Some(limit) = self.limit {
-            self.fetched < limit
-        } else {
-            true
-        }
-    }
-
-    fn determine_limit(&self) -> i32 {
-        if let Some(limit) = self.limit {
-            if self.fetched < limit {
-                return (limit - self.fetched).min(MAX_LIMIT) as i32;
-            } else {
-                1 // 0 would cause Telegram to send a default amount and not actually 0
-            }
-        } else {
-            MAX_LIMIT as i32
-        }
-    }
-
-    fn pop_buffered(&mut self) -> Option<tl::enums::Message> {
-        if let Some(item) = self.buffer.pop_front() {
-            self.fetched += 1;
-            Some(item)
-        } else {
-            None
-        }
+        Ok(self.pop_item())
     }
 }
 

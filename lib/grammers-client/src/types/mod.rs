@@ -10,11 +10,13 @@
 mod dialog;
 mod entity;
 mod entity_set;
+mod iter_buffer;
 mod message;
 mod sent_code;
 
 pub use dialog::{Dialog, DialogIter};
 pub use entity::Entity;
 pub use entity_set::EntitySet;
+pub use iter_buffer::IterBuffer;
 pub use message::Message;
 pub use sent_code::SentCode;
