@@ -27,5 +27,5 @@ mod client;
 pub mod ext;
 pub mod types;
 
-pub use client::{Client, ClientHandle, Config, InitParams, UpdateIter};
+pub use client::{Client, ClientHandle, Config, InitParams, UpdateIter, SignInError};
 pub use types::EntitySet;
