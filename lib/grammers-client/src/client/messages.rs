@@ -12,6 +12,7 @@ use crate::types::IterBuffer;
 use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
+use std::collections::HashMap;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Generate a random message ID suitable for `send_message`.
@@ -20,6 +21,16 @@ fn generate_random_message_id() -> i64 {
         .duration_since(UNIX_EPOCH)
         .expect("system time is before epoch")
         .as_nanos() as i64
+}
+
+// TODO these functions might cause issues if the system does not give enough time precision
+fn generate_random_message_ids(n: usize) -> Vec<i64> {
+    let start = SystemTime::now()
+        .duration_since(UNIX_EPOCH)
+        .expect("system time is before epoch")
+        .as_nanos() as i64;
+
+    (0..n as i64).map(|i| start + i).collect()
 }
 
 const MAX_LIMIT: usize = 100;
@@ -126,6 +137,51 @@ impl MessageIter {
     }
 }
 
+fn message_id(message: &tl::enums::Message) -> i32 {
+    match message {
+        tl::enums::Message::Empty(m) => m.id,
+        tl::enums::Message::Message(m) => m.id,
+        tl::enums::Message::Service(m) => m.id,
+    }
+}
+
+fn map_random_ids_to_messages(
+    random_ids: &[i64],
+    updates: tl::enums::Updates,
+) -> Vec<Option<tl::enums::Message>> {
+    match updates {
+        tl::enums::Updates::Updates(tl::types::Updates {
+            updates,
+            users: _,
+            chats: _,
+            date: _,
+            seq: _,
+        }) => {
+            let rnd_to_id = updates
+                .iter()
+                .filter_map(|update| match update {
+                    tl::enums::Update::MessageId(u) => Some((u.random_id, u.id)),
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+
+            let mut id_to_msg = updates
+                .into_iter()
+                .filter_map(|update| match update {
+                    tl::enums::Update::NewMessage(u) => Some((message_id(&u.message), u.message)),
+                    _ => None,
+                })
+                .collect::<HashMap<_, _>>();
+
+            random_ids
+                .into_iter()
+                .map(|rnd| rnd_to_id.get(rnd).map(|id| id_to_msg.remove(id)).flatten())
+                .collect()
+        }
+        _ => panic!("API returned something other than Updates so messages can't be mapped"),
+    }
+}
+
 impl ClientHandle {
     /// Sends a text message to the desired chat.
     // TODO don't require nasty InputPeer
@@ -210,6 +266,36 @@ impl ClientHandle {
         }?;
 
         Ok(affected.pts_count as usize)
+    }
+
+    /// Forwards up to 100 messages from `source` into `destination`.
+    ///
+    /// For consistency with other methods, the chat upon which this request acts comes first
+    /// (destination), and then the source chat.
+    ///
+    /// Returns the new forwarded messages in a list. Those messages that could not be forwarded
+    /// will be `None`. The length of the resulting list is the same as the length of the input
+    /// message IDs, and the indices from the list of IDs map to the indices in the result so
+    /// you can find which messages were forwarded and which message they became.
+    pub async fn forward_messages(
+        &mut self,
+        destination: &tl::enums::InputPeer,
+        message_ids: &[i32],
+        source: &tl::enums::InputPeer,
+    ) -> Result<Vec<Option<tl::enums::Message>>, InvocationError> {
+        // TODO let user customize more options
+        let request = tl::functions::messages::ForwardMessages {
+            silent: false,
+            background: false,
+            with_my_score: false,
+            from_peer: source.clone(),
+            id: message_ids.to_vec(),
+            random_id: generate_random_message_ids(message_ids.len()),
+            to_peer: destination.clone(),
+            schedule_date: None,
+        };
+        let result = self.invoke(&request).await?;
+        Ok(map_random_ids_to_messages(&request.random_id, result))
     }
 
     async fn a_reply_msg(
