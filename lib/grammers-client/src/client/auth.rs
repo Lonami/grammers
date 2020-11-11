@@ -53,6 +53,33 @@ impl Client {
         }
     }
 
+    /// Signs in to the bot account associated with this token.
+    pub async fn bot_sign_in(
+        &mut self,
+        token: &str,
+        api_id: i32,
+        api_hash: &str,
+    ) -> Result<(), AuthorizationError> {
+        let request = tl::functions::auth::ImportBotAuthorization {
+            flags: 0,
+            api_id,
+            api_hash: api_hash.to_string(),
+            bot_auth_token: token.to_string(),
+        };
+
+        let _result = match self.invoke(&request).await {
+            Ok(x) => x,
+            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
+                self.config.session.auth_key = None;
+                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                self.invoke(&request).await?
+            }
+            Err(e) => return Err(e.into()),
+        };
+
+        Ok(())
+    }
+
     /// Requests the login code for the account associated to the given phone
     /// number via another Telegram application or SMS.
     pub async fn request_login_code(
@@ -128,31 +155,34 @@ impl Client {
         }
     }
 
-    /// Signs in to the bot account associated with this token.
-    pub async fn bot_sign_in(
+    /// Signs up a new user account to Telegram. This method should be called only after `sign_in`
+    /// fails with `SignInError::SignUpRequired`.
+    ///
+    /// Only the `last_name` may be empty.
+    pub async fn sign_up(
         &mut self,
-        token: &str,
-        api_id: i32,
-        api_hash: &str,
-    ) -> Result<(), AuthorizationError> {
-        let request = tl::functions::auth::ImportBotAuthorization {
-            flags: 0,
-            api_id,
-            api_hash: api_hash.to_string(),
-            bot_auth_token: token.to_string(),
-        };
-
-        let _result = match self.invoke(&request).await {
-            Ok(x) => x,
-            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.config.session.auth_key = None;
-                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
-                self.invoke(&request).await?
+        token: &LoginToken,
+        first_name: &str,
+        last_name: &str,
+    ) -> Result<tl::types::User, InvocationError> {
+        match self
+            .invoke(&tl::functions::auth::SignUp {
+                phone_number: token.phone.clone(),
+                phone_code_hash: token.phone_code_hash.clone(),
+                first_name: first_name.to_string(),
+                last_name: last_name.to_string(),
+            })
+            .await
+        {
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                // Safe to unwrap, Telegram won't send `UserEmpty` here.
+                Ok(x.user.try_into().unwrap())
             }
-            Err(e) => return Err(e.into()),
-        };
-
-        Ok(())
+            Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
+                panic!("API returned SignUpRequired even though we just invoked SignUp");
+            }
+            Err(error) => Err(error),
+        }
     }
 
     /// Signs out of the account authorized by this client's session.
