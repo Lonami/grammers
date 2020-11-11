@@ -59,7 +59,7 @@ impl Client {
         token: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> Result<(), AuthorizationError> {
+    ) -> Result<tl::types::User, AuthorizationError> {
         let request = tl::functions::auth::ImportBotAuthorization {
             flags: 0,
             api_id,
@@ -67,7 +67,7 @@ impl Client {
             bot_auth_token: token.to_string(),
         };
 
-        let _result = match self.invoke(&request).await {
+        let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 self.config.session.auth_key = None;
@@ -77,7 +77,15 @@ impl Client {
             Err(e) => return Err(e.into()),
         };
 
-        Ok(())
+        match result {
+            tl::enums::auth::Authorization::Authorization(x) => {
+                // Safe to unwrap, Telegram won't send `UserEmpty` here.
+                Ok(x.user.try_into().unwrap())
+            }
+            tl::enums::auth::Authorization::SignUpRequired(_) => {
+                panic!("API returned SignUpRequired even though we're logging in as a bot");
+            }
+        }
     }
 
     /// Requests the login code for the account associated to the given phone
