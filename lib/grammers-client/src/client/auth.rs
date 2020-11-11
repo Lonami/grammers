@@ -154,4 +154,17 @@ impl Client {
 
         Ok(())
     }
+
+    /// Signs out of the account authorized by this client's session.
+    ///
+    /// If the client was not logged in, this method returns false.
+    ///
+    /// The client is not disconnected after signing out.
+    ///
+    /// Note that after using this method you will have to sign in again. If all you want to do
+    /// is disconnect, simply drop the `Client` instance or use the `disconnect` method from a
+    /// `ClientHandle`.
+    pub async fn sign_out(&mut self) -> Result<bool, InvocationError> {
+        self.invoke(&tl::functions::auth::LogOut {}).await
+    }
 }
