@@ -20,7 +20,7 @@ use tokio::runtime;
 
 #[test]
 fn test_invoke_encrypted_method() {
-    simple_logger::init_with_level(log::Level::Debug).unwrap();
+    simple_logger::init_with_level(log::Level::Trace).unwrap();
 
     let rt = runtime::Builder::new_current_thread()
         .enable_all()

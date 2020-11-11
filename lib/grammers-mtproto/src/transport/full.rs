@@ -63,10 +63,8 @@ impl Transport for Full {
     }
 
     fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
-        eprintln!("unpack()");
         // Need 4 bytes for the initial length
         if input.len() < 4 {
-            eprintln!("missing bytes - <4");
             return Err(Error::MissingBytes);
         }
 
@@ -80,7 +78,6 @@ impl Transport for Full {
         }
 
         if total_len < len {
-            eprintln!("missing bytes - {} < {}", total_len, len);
             return Err(Error::MissingBytes);
         }
 
