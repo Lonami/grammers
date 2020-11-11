@@ -5,7 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub struct SentCode {
+
+pub struct LoginToken {
     pub(crate) phone: String,
     pub(crate) phone_code_hash: String,
 }

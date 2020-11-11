@@ -11,12 +11,12 @@ mod dialog;
 mod entity;
 mod entity_set;
 mod iter_buffer;
+mod login_token;
 mod message;
-mod sent_code;
 
 pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;
 pub use iter_buffer::IterBuffer;
+pub use login_token::LoginToken;
 pub use message::Message;
-pub use sent_code::SentCode;

@@ -10,7 +10,7 @@
 
 use super::net::connect_sender;
 use super::Client;
-use crate::types::SentCode;
+use crate::types::LoginToken;
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -60,7 +60,7 @@ impl Client {
         phone: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> Result<SentCode, AuthorizationError> {
+    ) -> Result<LoginToken, AuthorizationError> {
         let request = tl::functions::auth::SendCode {
             phone_number: phone.to_string(),
             api_id,
@@ -89,7 +89,7 @@ impl Client {
             Err(e) => return Err(e.into()),
         };
 
-        Ok(SentCode {
+        Ok(LoginToken {
             phone: phone.to_string(),
             phone_code_hash: sent_code.phone_code_hash,
         })
@@ -101,13 +101,13 @@ impl Client {
     /// [`request_login_code`]: #method.request_login_code
     pub async fn sign_in(
         &mut self,
-        sent: &SentCode,
+        token: &LoginToken,
         code: &str,
     ) -> Result<tl::types::User, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
-                phone_number: sent.phone.clone(),
-                phone_code_hash: sent.phone_code_hash.clone(),
+                phone_number: token.phone.clone(),
+                phone_code_hash: token.phone_code_hash.clone(),
                 phone_code: code.to_string(),
             })
             .await
