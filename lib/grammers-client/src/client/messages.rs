@@ -179,6 +179,39 @@ impl ClientHandle {
         Ok(())
     }
 
+    /// Deletes up to 100 messages in a chat.
+    ///
+    /// The `chat` must only be specified when deleting messages from a broadcast channel or
+    /// megagroup, not when deleting from small group chats or private conversations.
+    ///
+    /// The messages are deleted for both ends.
+    ///
+    /// The amount of deleted messages is returned (it might be less than the amount of input
+    /// message IDs if some of them were already missing). It is not possible to find out which
+    /// messages were actually deleted, but if the request succeeds, none of the specified message
+    /// IDs will appear in the message history from that point on.
+    pub async fn delete_messages(
+        &mut self,
+        chat: Option<&tl::enums::InputChannel>,
+        message_ids: &[i32],
+    ) -> Result<usize, InvocationError> {
+        let tl::enums::messages::AffectedMessages::Messages(affected) = if let Some(chat) = chat {
+            self.invoke(&tl::functions::channels::DeleteMessages {
+                channel: chat.clone(),
+                id: message_ids.to_vec(),
+            })
+            .await
+        } else {
+            self.invoke(&tl::functions::messages::DeleteMessages {
+                revoke: true,
+                id: message_ids.to_vec(),
+            })
+            .await
+        }?;
+
+        Ok(affected.pts_count as usize)
+    }
+
     async fn a_reply_msg(
         &mut self,
         chat: &tl::enums::InputPeer,
