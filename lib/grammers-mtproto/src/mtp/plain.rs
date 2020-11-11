@@ -8,6 +8,7 @@
 use super::{Deserialization, DeserializeError, Mtp};
 use crate::MsgId;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
+use std::mem;
 
 /// An implementation of the [Mobile Transport Protocol] for plaintext
 /// (unencrypted) messages.
@@ -26,11 +27,13 @@ use grammers_tl_types::{Cursor, Deserializable, Serializable};
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 /// [`Mtp`]: struct.Mtp.html
 #[non_exhaustive]
-pub struct Plain;
+pub struct Plain {
+    buffer: Vec<u8>,
+}
 
 impl Plain {
     pub fn new() -> Self {
-        Self
+        Self { buffer: Vec::new() }
     }
 }
 
@@ -42,26 +45,27 @@ impl Mtp for Plain {
     /// authorization key to be present, such as those needed to generate
     /// the authorization key itself.
     ///
-    /// Panics unless exactly one request is given.
-    ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Vec<MsgId> {
-        assert_eq!(requests.len(), 1);
-        let body = &requests[0];
+    fn push(&mut self, request: &[u8]) -> Option<MsgId> {
+        if !self.buffer.is_empty() {
+            return None;
+        }
 
-        output.clear();
-
-        0i64.serialize(output); // auth_key_id = 0
+        0i64.serialize(&mut self.buffer); // auth_key_id = 0
 
         // Even though https://core.telegram.org/mtproto/samples-auth_key
         // seems to imply the `msg_id` has to follow some rules, there is
         // no need to generate a valid `msg_id`, it seems. Just use `0`.
-        0i64.serialize(output); // message_id
+        0i64.serialize(&mut self.buffer); // message_id
 
-        (body.len() as i32).serialize(output); // message_data_length
-        output.extend_from_slice(&body); // message_data
+        (request.len() as i32).serialize(&mut self.buffer); // message_data_length
+        &mut self.buffer.extend_from_slice(request); // message_data
 
-        vec![MsgId(0)]
+        Some(MsgId(0))
+    }
+
+    fn finalize(&mut self) -> Vec<u8> {
+        mem::take(&mut self.buffer)
     }
 
     /// Validates that the returned data is a correct plain message, and
@@ -115,15 +119,14 @@ mod tests {
     use super::*;
 
     #[test]
-    fn ensure_serialize_clears_buffer() {
+    fn ensure_finalize_clears_buffer() {
         let mut mtp = Plain::new();
-        let requests = vec![vec![b'H', b'e', b'y', b'!']];
-        let mut output = Vec::new();
+        let request = b"Hey!";
 
-        mtp.serialize(&requests, &mut output);
-        assert_eq!(output.len(), 24);
+        mtp.push(request);
+        assert_eq!(mtp.finalize().len(), 24);
 
-        mtp.serialize(&requests, &mut output);
-        assert_eq!(output.len(), 24);
+        mtp.push(request);
+        assert_eq!(mtp.finalize().len(), 24);
     }
 }

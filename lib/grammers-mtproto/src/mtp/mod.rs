@@ -238,15 +238,11 @@ impl From<tl::deserialize::Error> for RequestError {
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto/description
 pub trait Mtp {
-    /// Serializes zero or more requests into a single outgoing message that
-    /// should be sent over a transport.
+    /// Serializes one request to the internal buffer, which can be later retrieved by calling
+    /// `finalize` after one or more `push` have been made.
     ///
-    /// Note that even if there are no requests to serialize, the protocol may
-    /// produce data that has to be sent after deserializing incoming messages.
-    ///
-    /// Returns the assigned message IDs to each request in order. If a request
-    /// does not have a corresponding message ID, it has not been enqueued, and
-    /// must be resent.
+    /// Returns the message ID assigned the request if it was serialized, or `None` if the buffer
+    /// is full and cannot hold more requests.
     ///
     /// # Panics
     ///
@@ -262,7 +258,13 @@ pub trait Mtp {
     ///
     /// The definition of "too large" is roughly 1MB, so as long as the
     /// payload is below that mark, it's safe to call.
-    fn serialize(&mut self, requests: &Vec<Vec<u8>>, output: &mut Vec<u8>) -> Vec<MsgId>;
+    fn push(&mut self, request: &[u8]) -> Option<MsgId>;
+
+    /// Finalizes the internal buffer of requests.
+    ///
+    /// Note that even if there are no requests to serialize, the protocol may
+    /// produce data that has to be sent after deserializing incoming messages.
+    fn finalize(&mut self) -> Vec<u8>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;
