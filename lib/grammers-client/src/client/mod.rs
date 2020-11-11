@@ -8,6 +8,7 @@
 mod auth;
 mod chats;
 mod client;
+mod dialogs;
 mod messages;
 mod net;
 mod updates;

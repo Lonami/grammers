@@ -14,7 +14,7 @@ mod iter_buffer;
 mod message;
 mod sent_code;
 
-pub use dialog::{Dialog, DialogIter};
+pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;
 pub use iter_buffer::IterBuffer;
