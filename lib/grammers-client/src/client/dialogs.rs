@@ -126,4 +126,64 @@ impl ClientHandle {
     pub fn iter_dialogs(&self) -> DialogIter {
         DialogIter::new(self)
     }
+
+    /// Deletes a dialog, effectively removing it from your list of open conversations.
+    ///
+    /// The dialog is only deleted for yourself.
+    ///
+    /// Deleting a dialog effectively clears the message history and "kicks" you from it.
+    ///
+    /// For groups and channels, this is the same as leaving said chat. This method does **not**
+    /// delete the chat itself (the chat still exists and the other members will remain inside).
+    pub async fn delete_dialog(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+    ) -> Result<(), InvocationError> {
+        use tl::enums::InputPeer::*;
+
+        match chat {
+            Empty => Ok(()),
+            PeerSelf | User(_) | UserFromMessage(_) => {
+                // TODO only do this if we're not a bot
+                self.invoke(&tl::functions::messages::DeleteHistory {
+                    just_clear: false,
+                    revoke: false,
+                    peer: chat.clone(),
+                    max_id: 0,
+                })
+                .await
+                .map(drop)
+            }
+            Chat(chat) => {
+                // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
+                self.invoke(&tl::functions::messages::DeleteChatUser {
+                    chat_id: chat.chat_id,
+                    user_id: tl::enums::InputUser::UserSelf,
+                })
+                .await
+                .map(drop)
+            }
+            Channel(channel) => self
+                .invoke(&tl::functions::channels::LeaveChannel {
+                    channel: tl::types::InputChannel {
+                        channel_id: channel.channel_id,
+                        access_hash: channel.access_hash,
+                    }
+                    .into(),
+                })
+                .await
+                .map(drop),
+            ChannelFromMessage(channel) => self
+                .invoke(&tl::functions::channels::LeaveChannel {
+                    channel: tl::types::InputChannelFromMessage {
+                        peer: channel.peer.clone(),
+                        msg_id: channel.msg_id,
+                        channel_id: channel.channel_id,
+                    }
+                    .into(),
+                })
+                .await
+                .map(drop),
+        }
+    }
 }
