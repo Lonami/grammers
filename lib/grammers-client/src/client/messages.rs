@@ -86,6 +86,66 @@ fn map_random_ids_to_messages(
 
 const MAX_LIMIT: usize = 100;
 
+impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, tl::enums::Message> {
+    /// Fetches the total unless cached.
+    ///
+    /// The `request.limit` should be set to the right value before calling this method.
+    async fn get_total(&mut self) -> Result<usize, InvocationError> {
+        if let Some(total) = self.total {
+            return Ok(total);
+        }
+
+        use tl::enums::messages::Messages;
+
+        let total = match self.client.invoke(&self.request).await? {
+            Messages::Messages(messages) => messages.messages.len(),
+            Messages::Slice(messages) => messages.count as usize,
+            Messages::ChannelMessages(messages) => messages.count as usize,
+            Messages::NotModified(messages) => messages.count as usize,
+        };
+        self.total = Some(total);
+        Ok(total)
+    }
+
+    /// Performs the network call, fills the buffer, and returns the `offset_rate` if any.
+    ///
+    /// The `request.limit` should be set to the right value before calling this method.
+    async fn fill_buffer(&mut self, limit: i32) -> Result<Option<i32>, InvocationError> {
+        use tl::enums::messages::Messages;
+
+        let (messages, users, chats, rate) = match self.client.invoke(&self.request).await? {
+            Messages::Messages(m) => {
+                self.last_chunk = true;
+                self.total = Some(m.messages.len());
+                (m.messages, m.users, m.chats, None)
+            }
+            Messages::Slice(m) => {
+                self.last_chunk = m.messages.len() < limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats, m.next_rate)
+            }
+            Messages::ChannelMessages(m) => {
+                self.last_chunk = m.messages.len() < limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats, None)
+            }
+            Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though hash = 0")
+            }
+        };
+
+        let _entities = EntitySet::new(users, chats);
+
+        self.buffer.extend(
+            messages
+                .into_iter()
+                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
+        );
+
+        Ok(rate)
+    }
+}
+
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, tl::enums::Message>;
 
 impl MessageIter {
@@ -111,21 +171,8 @@ impl MessageIter {
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
-        if let Some(total) = self.total {
-            return Ok(total);
-        }
-
-        use tl::enums::messages::Messages;
-
         self.request.limit = 1;
-        let total = match self.client.invoke(&self.request).await? {
-            Messages::Messages(messages) => messages.messages.len(),
-            Messages::Slice(messages) => messages.count as usize,
-            Messages::ChannelMessages(messages) => messages.count as usize,
-            Messages::NotModified(messages) => messages.count as usize,
-        };
-        self.total = Some(total);
-        Ok(total)
+        self.get_total().await
     }
 
     /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
@@ -137,37 +184,8 @@ impl MessageIter {
             return result;
         }
 
-        use tl::enums::messages::Messages;
-
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        let (messages, users, chats) = match self.client.invoke(&self.request).await? {
-            Messages::Messages(m) => {
-                self.last_chunk = true;
-                self.total = Some(m.messages.len());
-                (m.messages, m.users, m.chats)
-            }
-            Messages::Slice(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats)
-            }
-            Messages::ChannelMessages(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats)
-            }
-            Messages::NotModified(_) => {
-                panic!("API returned Messages::NotModified even though hash = 0")
-            }
-        };
-
-        let _entities = EntitySet::new(users, chats);
-
-        self.buffer.extend(
-            messages
-                .into_iter()
-                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
-        );
+        self.fill_buffer(self.request.limit).await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -224,23 +242,10 @@ impl SearchIter {
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
-        if let Some(total) = self.total {
-            return Ok(total);
-        }
-
-        use tl::enums::messages::Messages;
-
         // Unlike most requests, a limit of 0 actually returns 0 and not a default amount
         // (as of layer 120).
         self.request.limit = 0;
-        let total = match self.client.invoke(&self.request).await? {
-            Messages::Messages(messages) => messages.messages.len(),
-            Messages::Slice(messages) => messages.count as usize,
-            Messages::ChannelMessages(messages) => messages.count as usize,
-            Messages::NotModified(messages) => messages.count as usize,
-        };
-        self.total = Some(total);
-        Ok(total)
+        self.get_total().await
     }
 
     /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
@@ -252,37 +257,8 @@ impl SearchIter {
             return result;
         }
 
-        use tl::enums::messages::Messages;
-
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        let (messages, users, chats) = match self.client.invoke(&self.request).await? {
-            Messages::Messages(m) => {
-                self.last_chunk = true;
-                self.total = Some(m.messages.len());
-                (m.messages, m.users, m.chats)
-            }
-            Messages::Slice(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats)
-            }
-            Messages::ChannelMessages(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats)
-            }
-            Messages::NotModified(_) => {
-                panic!("API returned Messages::NotModified even though hash = 0")
-            }
-        };
-
-        let _entities = EntitySet::new(users, chats);
-
-        self.buffer.extend(
-            messages
-                .into_iter()
-                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
-        );
+        self.fill_buffer(self.request.limit).await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -335,23 +311,8 @@ impl GlobalSearchIter {
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
-        if let Some(total) = self.total {
-            return Ok(total);
-        }
-
-        use tl::enums::messages::Messages;
-
-        // Unlike most requests, a limit of 0 actually returns 0 and not a default amount
-        // (as of layer 120).
-        self.request.limit = 0;
-        let total = match self.client.invoke(&self.request).await? {
-            Messages::Messages(messages) => messages.messages.len(),
-            Messages::Slice(messages) => messages.count as usize,
-            Messages::ChannelMessages(messages) => messages.count as usize,
-            Messages::NotModified(messages) => messages.count as usize,
-        };
-        self.total = Some(total);
-        Ok(total)
+        self.request.limit = 1;
+        self.get_total().await
     }
 
     /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
@@ -363,42 +324,13 @@ impl GlobalSearchIter {
             return result;
         }
 
-        use tl::enums::messages::Messages;
-
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        let (messages, users, chats, rate) = match self.client.invoke(&self.request).await? {
-            Messages::Messages(m) => {
-                self.last_chunk = true;
-                self.total = Some(m.messages.len());
-                (m.messages, m.users, m.chats, None)
-            }
-            Messages::Slice(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats, m.next_rate)
-            }
-            Messages::ChannelMessages(m) => {
-                self.last_chunk = m.messages.len() < self.request.limit as usize;
-                self.total = Some(m.count as usize);
-                (m.messages, m.users, m.chats, None)
-            }
-            Messages::NotModified(_) => {
-                panic!("API returned Messages::NotModified even though hash = 0")
-            }
-        };
-
-        let _entities = EntitySet::new(users, chats);
-
-        self.buffer.extend(
-            messages
-                .into_iter()
-                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
-        );
+        let offset_rate = self.fill_buffer(self.request.limit).await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_rate = rate.unwrap_or(0);
+            self.request.offset_rate = offset_rate.unwrap_or(0);
             self.request.offset_peer = message_input_peer(last);
             self.request.offset_id = message_id(last);
         }
