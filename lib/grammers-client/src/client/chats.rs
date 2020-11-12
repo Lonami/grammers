@@ -8,6 +8,7 @@
 
 //! Methods related to chats and entities.
 
+use crate::types::Entity;
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
 use crate::types::IterBuffer;
@@ -333,11 +334,11 @@ impl ClientHandle {
     pub async fn resolve_username(
         &mut self,
         username: &str,
-    ) -> Result<Option<tl::types::User>, InvocationError> {
+    ) -> Result<Option<Entity>, InvocationError> {
         let tl::enums::contacts::ResolvedPeer::Peer(tl::types::contacts::ResolvedPeer {
             peer,
             users,
-            ..
+            chats,
         }) = self
             .invoke(&tl::functions::contacts::ResolveUsername {
                 username: username.into(),
@@ -347,11 +348,22 @@ impl ClientHandle {
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
                 users.into_iter().find_map(|user| match user {
-                    tl::enums::User::User(user) if user.id == user_id => Some(user),
+                    tl::enums::User::User(user) if user.id == user_id => Some(Entity::User(user)),
                     tl::enums::User::User(_) | tl::enums::User::Empty(_) => None,
                 })
             }
-            tl::enums::Peer::Chat(_) | tl::enums::Peer::Channel(_) => None,
+            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => {
+                chats.into_iter().find_map(|chat| match chat {
+                    tl::enums::Chat::Chat(c) if c.id == chat_id => Some(Entity::Chat(c)),
+                    _ => None
+                })
+            },
+            tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => {
+                chats.into_iter().find_map(|chan| match chan {
+                    tl::enums::Chat::Channel(ch) if ch.id == channel_id => Some(Entity::Channel(ch)),
+                    _ => None
+                })
+            },
         })
     }
 
