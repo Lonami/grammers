@@ -9,6 +9,9 @@
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use std::fs;
+use std::io::{self, Write as _};
+use std::path::Path;
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
@@ -88,5 +91,30 @@ impl ClientHandle {
     /// Returns a new iterator over the contents of a media document that will be downloaded.
     pub fn iter_download(&self, file: tl::enums::InputFileLocation) -> DownloadIter {
         DownloadIter::new(self, file)
+    }
+
+    /// Downloads a media file into the specified path.
+    ///
+    /// If the file already exists, it will be overwritten.
+    ///
+    /// This is a small wrapper around `iter_download` for the common case of wanting to save the
+    /// file locally.
+    pub async fn download_media<P: AsRef<Path>>(
+        &mut self,
+        media: tl::enums::InputFileLocation,
+        path: P,
+    ) -> Result<(), io::Error> {
+        let mut file = fs::File::create(path)?;
+        let mut download = self.iter_download(media);
+
+        while let Some(chunk) = download
+            .next()
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        {
+            file.write_all(&chunk)?;
+        }
+
+        Ok(())
     }
 }
