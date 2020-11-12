@@ -71,6 +71,9 @@ fn map_random_ids_to_messages(
                 .into_iter()
                 .filter_map(|update| match update {
                     tl::enums::Update::NewMessage(u) => Some((message_id(&u.message), u.message)),
+                    tl::enums::Update::NewChannelMessage(u) => {
+                        Some((message_id(&u.message), u.message))
+                    }
                     _ => None,
                 })
                 .collect::<HashMap<_, _>>();
