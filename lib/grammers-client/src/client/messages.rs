@@ -13,24 +13,17 @@ use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 /// Generate a random message ID suitable for `send_message`.
 fn generate_random_message_id() -> i64 {
-    SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time is before epoch")
-        .as_nanos() as i64
+    let mut buffer = [0; 8];
+    getrandom::getrandom(&mut buffer).expect("failed to generate random message id");
+    i64::from_le_bytes(buffer)
 }
 
-// TODO these functions might cause issues if the system does not give enough time precision
 fn generate_random_message_ids(n: usize) -> Vec<i64> {
-    let start = SystemTime::now()
-        .duration_since(UNIX_EPOCH)
-        .expect("system time is before epoch")
-        .as_nanos() as i64;
-
-    (0..n as i64).map(|i| start + i).collect()
+    let start = generate_random_message_id();
+    (0..n as i64).map(|i| start.wrapping_add(i)).collect()
 }
 
 fn message_id(message: &tl::enums::Message) -> i32 {

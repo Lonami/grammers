@@ -15,7 +15,7 @@ edition = "2018"
 
 [dependencies]
 crc = "1.8.1"
-getrandom = "0.1.14"
+getrandom = "0.2"
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
 flate2 = "1.0.13"
 num-bigint = "0.2.6"

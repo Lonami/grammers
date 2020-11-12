@@ -14,7 +14,7 @@ categories = ["api-bindings", "network-programming"]
 edition = "2018"
 
 [dependencies]
-getrandom = "0.1.14"
+getrandom = "0.2"
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.2.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0", features = [ "tl-mtproto" ]}
