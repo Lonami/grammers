@@ -42,6 +42,11 @@ fn message_date(message: &tl::enums::Message) -> Option<i32> {
     }
 }
 
+fn message_input_peer(_message: &tl::enums::Message) -> tl::enums::InputPeer {
+    // TODO return actual input peer
+    tl::enums::InputPeer::Empty
+}
+
 fn map_random_ids_to_messages(
     random_ids: &[i64],
     updates: tl::enums::Updates,
@@ -84,7 +89,7 @@ const MAX_LIMIT: usize = 100;
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, tl::enums::Message>;
 
 impl MessageIter {
-    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> MessageIter {
+    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
@@ -178,7 +183,7 @@ impl MessageIter {
 pub type SearchIter = IterBuffer<tl::functions::messages::Search, tl::enums::Message>;
 
 impl SearchIter {
-    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> SearchIter {
+    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
@@ -284,6 +289,118 @@ impl SearchIter {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_id = message_id(last);
             self.request.max_date = message_date(last).unwrap();
+        }
+
+        Ok(self.pop_item())
+    }
+}
+
+pub type GlobalSearchIter = IterBuffer<tl::functions::messages::SearchGlobal, tl::enums::Message>;
+
+impl GlobalSearchIter {
+    fn new(client: &ClientHandle) -> Self {
+        // TODO let users tweak all the options from the request
+        Self::from_request(
+            client,
+            MAX_LIMIT,
+            tl::functions::messages::SearchGlobal {
+                folder_id: None,
+                q: String::new(),
+                filter: tl::enums::MessagesFilter::InputMessagesFilterEmpty,
+                min_date: 0,
+                max_date: 0,
+                offset_rate: 0,
+                offset_peer: tl::enums::InputPeer::Empty,
+                offset_id: 0,
+                limit: 0,
+            },
+        )
+    }
+
+    /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
+    /// this query (so a world in singular may also return messages with the word in plural, for
+    /// example).
+    pub fn query(mut self, query: &str) -> Self {
+        self.request.q = query.to_string();
+        self
+    }
+
+    /// Changes the media filter. Only messages with this type of media will be fetched.
+    pub fn filter(mut self, filter: tl::enums::MessagesFilter) -> Self {
+        self.request.filter = filter;
+        self
+    }
+
+    /// Determines how many messages there are in total.
+    ///
+    /// This only performs a network call if `next` has not been called before.
+    pub async fn total(&mut self) -> Result<usize, InvocationError> {
+        if let Some(total) = self.total {
+            return Ok(total);
+        }
+
+        use tl::enums::messages::Messages;
+
+        // Unlike most requests, a limit of 0 actually returns 0 and not a default amount
+        // (as of layer 120).
+        self.request.limit = 0;
+        let total = match self.client.invoke(&self.request).await? {
+            Messages::Messages(messages) => messages.messages.len(),
+            Messages::Slice(messages) => messages.count as usize,
+            Messages::ChannelMessages(messages) => messages.count as usize,
+            Messages::NotModified(messages) => messages.count as usize,
+        };
+        self.total = Some(total);
+        Ok(total)
+    }
+
+    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
+    /// empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no messages left.
+    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+        if let Some(result) = self.next_raw() {
+            return result;
+        }
+
+        use tl::enums::messages::Messages;
+
+        self.request.limit = self.determine_limit(MAX_LIMIT);
+        let (messages, users, chats, rate) = match self.client.invoke(&self.request).await? {
+            Messages::Messages(m) => {
+                self.last_chunk = true;
+                self.total = Some(m.messages.len());
+                (m.messages, m.users, m.chats, None)
+            }
+            Messages::Slice(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats, m.next_rate)
+            }
+            Messages::ChannelMessages(m) => {
+                self.last_chunk = m.messages.len() < self.request.limit as usize;
+                self.total = Some(m.count as usize);
+                (m.messages, m.users, m.chats, None)
+            }
+            Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though hash = 0")
+            }
+        };
+
+        let _entities = EntitySet::new(users, chats);
+
+        self.buffer.extend(
+            messages
+                .into_iter()
+                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
+        );
+
+        // Don't bother updating offsets if this is the last time stuff has to be fetched.
+        if !self.last_chunk && !self.buffer.is_empty() {
+            let last = &self.buffer[self.buffer.len() - 1];
+            self.request.offset_rate = rate.unwrap_or(0);
+            self.request.offset_peer = message_input_peer(last);
+            self.request.offset_id = message_id(last);
         }
 
         Ok(self.pop_item())
@@ -513,6 +630,14 @@ impl ClientHandle {
     /// This allows you to search by text within a chat or filter by media among other things.
     pub fn search_messages(&self, chat: tl::enums::InputPeer) -> SearchIter {
         SearchIter::new(self, chat)
+    }
+
+    /// Iterate over the messages that match certain search criteria, without being restricted to
+    /// searching in a specific chat. The downside is that this global search supports less filters.
+    ///
+    /// This allows you to search by text within a chat or filter by media among other things.
+    pub fn search_all_messages(&self) -> GlobalSearchIter {
+        GlobalSearchIter::new(self)
     }
 
     /// Get up to 100 messages using their ID.
