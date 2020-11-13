@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::ext::InputPeerExt;
 use crate::types::{Dialog, EntitySet, IterBuffer};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
@@ -163,27 +164,44 @@ impl ClientHandle {
                 .await
                 .map(drop)
             }
-            Channel(channel) => self
+            Channel(_) | ChannelFromMessage(_) => self
                 .invoke(&tl::functions::channels::LeaveChannel {
-                    channel: tl::types::InputChannel {
-                        channel_id: channel.channel_id,
-                        access_hash: channel.access_hash,
-                    }
-                    .into(),
-                })
-                .await
-                .map(drop),
-            ChannelFromMessage(channel) => self
-                .invoke(&tl::functions::channels::LeaveChannel {
-                    channel: tl::types::InputChannelFromMessage {
-                        peer: channel.peer.clone(),
-                        msg_id: channel.msg_id,
-                        channel_id: channel.channel_id,
-                    }
-                    .into(),
+                    channel: chat.to_input_channel().unwrap(),
                 })
                 .await
                 .map(drop),
         }
+    }
+
+    /// Mark a chat as read.
+    ///
+    /// If you want to get rid of all the mentions (for example, a voice note that you have not
+    /// listened to yet), you need to also use `clear_mentions`.
+    pub async fn mark_as_read(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+    ) -> Result<(), InvocationError> {
+        if let Some(channel) = chat.to_input_channel() {
+            self.invoke(&tl::functions::channels::ReadHistory { channel, max_id: 0 })
+                .await
+                .map(drop)
+        } else {
+            self.invoke(&tl::functions::messages::ReadHistory {
+                peer: chat.clone(),
+                max_id: 0,
+            })
+            .await
+            .map(drop)
+        }
+    }
+
+    /// Clears all pending mentions from a chat, marking them as read.
+    pub async fn clear_mentions(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+    ) -> Result<(), InvocationError> {
+        self.invoke(&tl::functions::messages::ReadMentions { peer: chat.clone() })
+            .await
+            .map(drop)
     }
 }
