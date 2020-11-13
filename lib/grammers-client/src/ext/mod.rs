@@ -11,5 +11,5 @@ mod peers;
 mod updates;
 
 pub use messages::MessageExt;
-pub use peers::InputPeerExt;
+pub use peers::{InputPeerExt, UserExt};
 pub use updates::UpdateExt;
