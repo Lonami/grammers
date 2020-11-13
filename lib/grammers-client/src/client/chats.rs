@@ -15,8 +15,10 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 const MAX_LIMIT: usize = 200;
+const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
 
 fn full_rights() -> tl::types::ChatAdminRights {
     tl::types::ChatAdminRights {
@@ -378,5 +380,83 @@ impl ClientHandle {
     /// When used to iterate the participants of "user", the iterator won't produce values.
     pub fn iter_participants(&self, chat: &tl::enums::InputPeer) -> ParticipantIter {
         ParticipantIter::new(self, chat)
+    }
+
+    /// Kicks the participant from the chat.
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// The kicked user will be able to join after being kicked (they are not permanently banned).
+    ///
+    /// Kicking someone who was not in the chat prior to running this method will be able to join
+    /// after as well (effectively unbanning them).
+    ///
+    /// When used to kick users from "user" chat, nothing will be done.
+    pub async fn kick_participant(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+        user: &tl::enums::InputUser,
+    ) -> Result<(), InvocationError> {
+        if let Some(channel) = chat.to_input_channel() {
+            use tl::enums::InputUser::*;
+
+            match user {
+                Empty => Ok(()),
+                UserSelf => self
+                    .invoke(&tl::functions::channels::LeaveChannel { channel })
+                    .await
+                    .map(drop),
+                User(_) | FromMessage(_) => {
+                    // TODO this should account for the server time instead (via sender's offset)
+                    let now = SystemTime::now()
+                        .duration_since(UNIX_EPOCH)
+                        .expect("system time is before epoch")
+                        .as_secs() as i32;
+
+                    // ChatBannedRights fields indicate "which right to take away".
+                    let mut request = tl::functions::channels::EditBanned {
+                        channel,
+                        user_id: user.clone(),
+                        banned_rights: tl::types::ChatBannedRights {
+                            view_messages: true,
+                            send_messages: false,
+                            send_media: false,
+                            send_stickers: false,
+                            send_gifs: false,
+                            send_games: false,
+                            send_inline: false,
+                            embed_links: false,
+                            send_polls: false,
+                            change_info: false,
+                            invite_users: false,
+                            pin_messages: false,
+                            until_date: now + KICK_BAN_DURATION,
+                        }
+                        .into(),
+                    };
+
+                    // This will fail if the user represents ourself, but either verifying
+                    // beforehand that the user is in fact ourselves or checking it after
+                    // an error occurs is not really worth it.
+                    self.invoke(&request).await?;
+                    match &mut request.banned_rights {
+                        tl::enums::ChatBannedRights::Rights(rights) => {
+                            rights.view_messages = false;
+                            rights.until_date = 0;
+                        }
+                    }
+                    self.invoke(&request).await.map(drop)
+                }
+            }
+        } else if let Some(chat_id) = chat.to_chat_id() {
+            self.invoke(&tl::functions::messages::DeleteChatUser {
+                chat_id,
+                user_id: user.clone(),
+            })
+            .await
+            .map(drop)
+        } else {
+            Ok(())
+        }
     }
 }
