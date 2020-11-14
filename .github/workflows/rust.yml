@@ -21,4 +21,8 @@ jobs:
     - name: Build
       run: cargo build --verbose
     - name: Run tests
+      env:
+        # Doesn't need to be valid, just set for the examples to compile
+        TG_ID: 1
+        TG_HASH: a
       run: cargo test --verbose
