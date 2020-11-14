@@ -544,11 +544,7 @@ impl ClientHandle {
         if username.eq_ignore_ascii_case("me") {
             Ok(tl::enums::InputPeer::PeerSelf)
         } else if let Some(user) = self.resolve_username(username).await? {
-            Ok(tl::types::InputPeerUser {
-                user_id: user.id,
-                access_hash: user.access_hash.unwrap(), // TODO don't unwrap
-            }
-            .into())
+            Ok(user.input_peer())
         } else {
             // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
             todo!("user without username not handled")
