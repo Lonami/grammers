@@ -8,9 +8,9 @@
 
 //! Methods related to chats and entities.
 
-use crate::types::Entity;
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
+use crate::types::Entity;
 use crate::types::IterBuffer;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -355,15 +355,17 @@ impl ClientHandle {
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => {
                 chats.into_iter().find_map(|chat| match chat {
                     tl::enums::Chat::Chat(c) if c.id == chat_id => Some(Entity::Chat(c)),
-                    _ => None
+                    _ => None,
                 })
-            },
+            }
             tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => {
                 chats.into_iter().find_map(|chan| match chan {
-                    tl::enums::Chat::Channel(ch) if ch.id == channel_id => Some(Entity::Channel(ch)),
-                    _ => None
+                    tl::enums::Chat::Channel(ch) if ch.id == channel_id => {
+                        Some(Entity::Channel(ch))
+                    }
+                    _ => None,
                 })
-            },
+            }
         })
     }
 
