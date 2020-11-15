@@ -14,7 +14,7 @@ const SCHEDULE_ONCE_ONLINE: i32 = 0x7FFFFFFE;
 
 /// Construct and send rich text messages with various options.
 #[derive(Default)]
-pub struct Message {
+pub struct InputMessage {
     pub(crate) background: bool,
     pub(crate) clear_draft: bool,
     pub(crate) entities: Vec<tl::enums::MessageEntity>,
@@ -29,7 +29,7 @@ pub struct Message {
     mime_type: Option<String>,
 }
 
-impl Message {
+impl InputMessage {
     /// Whether to "send this message as a background message".
     ///
     /// This description is taken from https://core.telegram.org/method/messages.sendMessage.
@@ -249,15 +249,15 @@ impl Message {
     }
 }
 
-impl From<&str> for Message {
+impl From<&str> for InputMessage {
     fn from(text: &str) -> Self {
-        Message::text(text)
+        Self::text(text)
     }
 }
 
-impl From<String> for Message {
+impl From<String> for InputMessage {
     fn from(text: String) -> Self {
-        Message {
+        Self {
             text,
             ..Self::default()
         }

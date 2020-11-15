@@ -338,7 +338,7 @@ impl ClientHandle {
     pub async fn send_message(
         &mut self,
         chat: tl::enums::InputPeer,
-        message: types::Message,
+        message: types::InputMessage,
     ) -> Result<(), InvocationError> {
         if let Some(media) = message.media {
             self.invoke(&tl::functions::messages::SendMedia {
@@ -390,7 +390,7 @@ impl ClientHandle {
         &mut self,
         chat: tl::enums::InputPeer,
         message_id: i32,
-        new_message: types::Message,
+        new_message: types::InputMessage,
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
