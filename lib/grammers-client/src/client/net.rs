@@ -14,7 +14,7 @@ use futures::future::FutureExt as _;
 use futures::{future, pin_mut};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
-use grammers_tl_types::{self as tl, Deserializable, Serializable};
+use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::net::Ipv4Addr;
 use tokio::sync::{mpsc, oneshot};
@@ -60,7 +60,8 @@ pub(crate) async fn connect_sender(
     };
 
     // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
-    let remote_config = sender
+    // TODO all up-to-date server addresses should be stored in the session for future initial connections
+    let _remote_config = sender
         .invoke(&tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
             query: tl::functions::InitConnection {
@@ -73,18 +74,10 @@ pub(crate) async fn connect_sender(
                 lang_code: config.params.lang_code.clone(),
                 proxy: None,
                 params: None,
-                query: tl::functions::help::GetConfig {}.to_bytes().into(),
-            }
-            .to_bytes()
-            .into(),
+                query: tl::functions::help::GetConfig {},
+            },
         })
-        .await?
-        .0;
-
-    // TODO all up-to-date server addresses should be stored in the session for future initial connections
-    let _remote_config =
-        <tl::functions::help::GetConfig as tl::RemoteCall>::Return::from_bytes(&remote_config)
-            .expect("bad config from server");
+        .await?;
 
     // TODO use the dc id from the config as "this dc", not the input dc id
     config.session.user_dc = Some(dc_id);

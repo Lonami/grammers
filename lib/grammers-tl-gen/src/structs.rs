@@ -15,6 +15,37 @@ use crate::{ignore_type, Config};
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
+/// Get the list of generic parameters:
+///
+/// ```ignore
+/// <X, Y>
+/// ```
+fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
+    let mut result = String::new();
+    for param in def.params.iter() {
+        match param.ty {
+            ParameterType::Flags => {}
+            ParameterType::Normal { ref ty, .. } => {
+                if ty.generic_ref {
+                    if result.is_empty() {
+                        result.push('<');
+                    } else {
+                        result.push_str(", ");
+                    }
+                    result.push_str(&ty.name);
+                    if declaring {
+                        result.push_str(": crate::RemoteCall");
+                    }
+                }
+            }
+        }
+    }
+    if !result.is_empty() {
+        result.push('>');
+    }
+    result
+}
+
 /// Defines the `struct` corresponding to the definition:
 ///
 /// ```ignore
@@ -35,12 +66,15 @@ fn write_struct<W: Write>(
     }
 
     writeln!(file, "{}#[derive(Clone, PartialEq)]", indent)?;
-    writeln!(
+    write!(
         file,
-        "{}pub struct {} {{",
+        "{}pub struct {}{} {{",
         indent,
-        rustifier::definitions::type_name(def)
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, true),
     )?;
+
+    writeln!(file, "")?;
     for param in def.params.iter() {
         match param.ty {
             ParameterType::Flags => {
@@ -76,9 +110,11 @@ fn write_identifiable<W: Write>(
 ) -> io::Result<()> {
     writeln!(
         file,
-        "{}impl crate::Identifiable for {} {{",
+        "{}impl{} crate::Identifiable for {}{} {{",
         indent,
-        rustifier::definitions::type_name(def)
+        get_generic_param_list(def, true),
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, false),
     )?;
     writeln!(
         file,
@@ -106,9 +142,11 @@ fn write_serializable<W: Write>(
 ) -> io::Result<()> {
     writeln!(
         file,
-        "{}impl crate::Serializable for {} {{",
+        "{}impl{} crate::Serializable for {}{} {{",
         indent,
-        rustifier::definitions::type_name(def)
+        get_generic_param_list(def, true),
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, false),
     )?;
     writeln!(
         file,
@@ -216,9 +254,11 @@ fn write_deserializable<W: Write>(
 ) -> io::Result<()> {
     writeln!(
         file,
-        "{}impl crate::Deserializable for {} {{",
+        "{}impl{} crate::Deserializable for {}{} {{",
         indent,
-        rustifier::definitions::type_name(def)
+        get_generic_param_list(def, true),
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, false),
     )?;
     writeln!(
         file,
@@ -334,15 +374,18 @@ fn write_rpc<W: Write>(
 ) -> io::Result<()> {
     writeln!(
         file,
-        "{}impl crate::RemoteCall for {} {{",
+        "{}impl{} crate::RemoteCall for {}{} {{",
         indent,
-        rustifier::definitions::type_name(def)
+        get_generic_param_list(def, true),
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, false),
     )?;
     writeln!(
         file,
-        "{}    type Return = {};",
+        "{}    type Return = {}{};",
         indent,
-        rustifier::types::qual_name(&def.ty)
+        rustifier::types::qual_name(&def.ty),
+        if def.ty.generic_ref { "::Return" } else { "" },
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())

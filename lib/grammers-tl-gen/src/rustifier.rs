@@ -165,7 +165,7 @@ pub mod types {
     // 2. missing angle brackets in associated item path
     fn get_path(ty: &Type, path: bool) -> String {
         if ty.generic_ref {
-            return "crate::Blob".to_string();
+            return ty.name.clone();
         }
 
         let mut result = if let Some(name) = builtin_type(ty, path) {
@@ -374,7 +374,7 @@ mod tests {
         let mut ty: Type = "X".parse().unwrap();
         ty.generic_ref = true;
         let name = types::qual_name(&ty);
-        assert_eq!(name, "crate::Blob");
+        assert_eq!(name, "X");
     }
 
     #[test]
