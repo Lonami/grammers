@@ -219,13 +219,6 @@ impl<T: Serializable> Serializable for crate::RawVec<T> {
     }
 }
 
-impl Serializable for crate::Blob {
-    /// Serializes a blob by doing no parsing or interpretation.
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(&self.0)
-    }
-}
-
 impl Serializable for String {
     /// Serializes a UTF-8 string according to the following definition:
     ///

@@ -341,15 +341,6 @@ impl<T: Deserializable> Deserializable for crate::RawVec<T> {
     }
 }
 
-impl Deserializable for crate::Blob {
-    /// Deserializes a blob by doing no parsing or interpretation.
-    fn deserialize(buf: Buffer) -> Result<Self> {
-        let mut result = Vec::new();
-        buf.read_to_end(&mut result)?;
-        Ok(Self(result))
-    }
-}
-
 impl Deserializable for String {
     /// Deserializes a UTF-8 string according to the following definition:
     ///
