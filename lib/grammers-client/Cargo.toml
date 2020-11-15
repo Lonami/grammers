@@ -32,6 +32,7 @@ tokio = { version = "0.3", features = ["sync"] }
 log = "0.4.8"
 getrandom = "0.2"
 md5 = "0.7.0"
+mime_guess = "2.0.3"
 
 [dev-dependencies]
 simple_logger = "1.11.0"

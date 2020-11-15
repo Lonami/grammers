@@ -5,9 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::time::{SystemTime, UNIX_EPOCH};
-
+use crate::ext::InputFileExt;
 use grammers_tl_types as tl;
+use std::time::{SystemTime, UNIX_EPOCH};
 
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7FFFFFFE;
@@ -24,6 +24,9 @@ pub struct Message {
     pub(crate) schedule_date: Option<i32>,
     pub(crate) silent: bool,
     pub(crate) text: String,
+    pub(crate) media: Option<tl::enums::InputMedia>,
+    media_ttl: Option<i32>,
+    mime_type: Option<String>,
 }
 
 impl Message {
@@ -104,6 +107,107 @@ impl Message {
     pub fn silent(mut self, silent: bool) -> Self {
         self.silent = silent;
         self
+    }
+
+    /// Include the uploaded file as a photo in the message.
+    ///
+    /// The server will compress the image and convert it to JPEG format if necessary.
+    ///
+    /// The text will be the caption of the photo, which may be empty for no caption.
+    pub fn photo(mut self, file: tl::enums::InputFile) -> Self {
+        self.media = Some(
+            tl::types::InputMediaUploadedPhoto {
+                file,
+                stickers: None,
+                ttl_seconds: self.media_ttl,
+            }
+            .into(),
+        );
+        self
+    }
+
+    /// Include the uploaded file as a document in the message.
+    ///
+    /// You can use this to send videos, stickers, audios, or uncompressed photos.
+    ///
+    /// The text will be the caption of the document, which may be empty for no caption.
+    pub fn document(mut self, file: tl::enums::InputFile) -> Self {
+        let mime_type = self.get_file_mime(&file);
+        self.media = Some(
+            tl::types::InputMediaUploadedDocument {
+                nosound_video: false,
+                force_file: false,
+                file,
+                thumb: None,
+                mime_type,
+                attributes: Vec::new(),
+                stickers: None,
+                ttl_seconds: self.media_ttl,
+            }
+            .into(),
+        );
+        self
+    }
+
+    /// Include the uploaded file as a document file in the message.
+    ///
+    /// You can use this to send any type of media as a simple document file.
+    ///
+    /// The text will be the caption of the file, which may be empty for no caption.
+    pub fn file(mut self, file: tl::enums::InputFile) -> Self {
+        let mime_type = self.get_file_mime(&file);
+        self.media = Some(
+            tl::types::InputMediaUploadedDocument {
+                nosound_video: false,
+                force_file: true,
+                file,
+                thumb: None,
+                mime_type,
+                attributes: Vec::new(),
+                stickers: None,
+                ttl_seconds: self.media_ttl,
+            }
+            .into(),
+        );
+        self
+    }
+
+    /// Change the media's Time To Live (TTL).
+    ///
+    /// For example, this enables you to send a `photo` that can only be viewed for a certain
+    /// amount of seconds before it expires.
+    ///
+    /// Not all media supports this feature.
+    ///
+    /// This method should be called before setting any media, else it won't have any effect.
+    pub fn media_ttl(mut self, seconds: i32) -> Self {
+        self.media_ttl = if seconds < 0 { None } else { Some(seconds) };
+        self
+    }
+
+    /// Change the media's mime type.
+    ///
+    /// This method will override the mime type that would otherwise be automatically inferred
+    /// from the extension of the used file
+    ///
+    /// If no mime type is set and it cannot be inferred, the mime type will be
+    /// "application/octet-stream".
+    ///
+    /// This method should be called before setting any media, else it won't have any effect.
+    pub fn mime_type(mut self, mime_type: &str) -> Self {
+        self.mime_type = Some(mime_type.to_string());
+        self
+    }
+
+    /// Return the mime type string for the given file.
+    fn get_file_mime(&self, file: &tl::enums::InputFile) -> String {
+        if let Some(mime) = self.mime_type.as_ref() {
+            mime.clone()
+        } else if let Some(mime) = mime_guess::from_path(file.name()).first() {
+            mime.essence_str().to_string()
+        } else {
+            "application/octet-stream".to_string()
+        }
     }
 
     /// Builds a new message using the given plaintext as the message contents.

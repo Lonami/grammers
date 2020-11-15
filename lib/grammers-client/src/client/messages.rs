@@ -345,30 +345,53 @@ impl GlobalSearchIter {
 impl ClientHandle {
     /// Sends a text message to the desired chat.
     // TODO don't require nasty InputPeer
+    // TODO return Message
     pub async fn send_message(
         &mut self,
         chat: tl::enums::InputPeer,
         message: types::Message,
     ) -> Result<(), InvocationError> {
-        self.invoke(&tl::functions::messages::SendMessage {
-            no_webpage: !message.link_preview,
-            silent: message.silent,
-            background: message.background,
-            clear_draft: message.clear_draft,
-            peer: chat,
-            reply_to_msg_id: message.reply_to,
-            message: message.text,
-            random_id: generate_random_message_id(),
-            reply_markup: message.reply_markup,
-            entities: if message.entities.is_empty() {
-                None
-            } else {
-                Some(message.entities)
-            },
-            schedule_date: message.schedule_date,
-        })
-        .await?;
-        Ok(())
+        if let Some(media) = message.media {
+            self.invoke(&tl::functions::messages::SendMedia {
+                silent: message.silent,
+                background: message.background,
+                clear_draft: message.clear_draft,
+                peer: chat,
+                reply_to_msg_id: message.reply_to,
+                media,
+                message: message.text,
+                random_id: generate_random_message_id(),
+                reply_markup: message.reply_markup,
+                entities: if message.entities.is_empty() {
+                    None
+                } else {
+                    Some(message.entities)
+                },
+                schedule_date: message.schedule_date,
+            })
+            .await
+            .map(drop)
+        } else {
+            self.invoke(&tl::functions::messages::SendMessage {
+                no_webpage: !message.link_preview,
+                silent: message.silent,
+                background: message.background,
+                clear_draft: message.clear_draft,
+                peer: chat,
+                reply_to_msg_id: message.reply_to,
+                message: message.text,
+                random_id: generate_random_message_id(),
+                reply_markup: message.reply_markup,
+                entities: if message.entities.is_empty() {
+                    None
+                } else {
+                    Some(message.entities)
+                },
+                schedule_date: message.schedule_date,
+            })
+            .await
+            .map(drop)
+        }
     }
 
     /// Edits an existing text message

@@ -5,13 +5,18 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-//! Extension traits to make dealing with Telegram types more pleasant.
-mod files;
-mod messages;
-mod peers;
-mod updates;
+use grammers_tl_types as tl;
 
-pub use files::InputFileExt;
-pub use messages::MessageExt;
-pub use peers::{InputPeerExt, UserExt};
-pub use updates::UpdateExt;
+pub trait InputFileExt {
+    /// Get the file's name.
+    fn name(&self) -> &str;
+}
+
+impl InputFileExt for tl::enums::InputFile {
+    fn name(&self) -> &str {
+        match self {
+            tl::enums::InputFile::File(f) => &f.name,
+            tl::enums::InputFile::Big(f) => &f.name,
+        }
+    }
+}
