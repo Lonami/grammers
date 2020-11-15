@@ -673,4 +673,50 @@ impl ClientHandle {
 
         Ok(messages.pop())
     }
+
+    /// Pin a message in the chat. This will not notify any users.
+    // TODO return produced Option<service message>
+    pub async fn pin_message(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+        message_id: i32,
+    ) -> Result<(), InvocationError> {
+        self.update_pinned(chat, message_id, true).await
+    }
+
+    /// Unpin a message from the chat.
+    pub async fn unpin_message(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+        message_id: i32,
+    ) -> Result<(), InvocationError> {
+        self.update_pinned(chat, message_id, false).await
+    }
+
+    pub async fn update_pinned(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+        id: i32,
+        pin: bool,
+    ) -> Result<(), InvocationError> {
+        self.invoke(&tl::functions::messages::UpdatePinnedMessage {
+            silent: true,
+            unpin: !pin,
+            pm_oneside: false,
+            peer: chat.clone(),
+            id,
+        })
+        .await
+        .map(drop)
+    }
+
+    /// Unpin all currently-pinned messages from the chat.
+    pub async fn unpin_all_messages(
+        &mut self,
+        chat: &tl::enums::InputPeer,
+    ) -> Result<(), InvocationError> {
+        self.invoke(&tl::functions::messages::UnpinAllMessages { peer: chat.clone() })
+            .await
+            .map(drop)
+    }
 }
