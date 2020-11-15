@@ -60,6 +60,7 @@ pub enum Role {
         date: i32,
         banned_rights: tl::types::ChatBannedRights,
     },
+    Left,
 }
 
 #[derive(Clone, Debug)]
@@ -273,6 +274,7 @@ impl ParticipantIter {
                                     banned_rights: p.banned_rights.into(),
                                 },
                             ),
+                            ChPart::Left(p) => (p.user_id, Role::Left),
                         };
                         users.remove(&user_id).and_then(|user| {
                             Some(Participant {

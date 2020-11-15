@@ -107,6 +107,7 @@ impl Client {
                         from_scheduled: false,
                         legacy: false,
                         edit_hide: false,
+                        pinned: false,
                         id: update.id,
                         from_id: Some(tl::enums::Peer::User(tl::types::PeerUser {
                             user_id: if update.out {
@@ -156,6 +157,7 @@ impl Client {
                         from_scheduled: false,
                         legacy: false,
                         edit_hide: false,
+                        pinned: false,
                         id: update.id,
                         from_id: Some(tl::enums::Peer::User(tl::types::PeerUser {
                             user_id: update.from_id,
