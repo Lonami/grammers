@@ -18,7 +18,8 @@ use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
 use std::time::{SystemTime, UNIX_EPOCH};
 
-const MAX_LIMIT: usize = 200;
+const MAX_PARTICIPANT_LIMIT: usize = 200;
+const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
 
 fn full_rights() -> tl::types::ChatAdminRights {
@@ -83,7 +84,7 @@ impl ParticipantIter {
         if let Some(channel) = chat.to_input_channel() {
             Self::Channel(IterBuffer::from_request(
                 client,
-                MAX_LIMIT,
+                MAX_PARTICIPANT_LIMIT,
                 tl::functions::channels::GetParticipants {
                     channel,
                     filter: tl::enums::ChannelParticipantsFilter::ChannelParticipantsRecent,
@@ -209,7 +210,7 @@ impl ParticipantIter {
                 assert!(iter.buffer.is_empty());
                 use tl::enums::channels::ChannelParticipants::*;
 
-                iter.request.limit = iter.determine_limit(MAX_LIMIT);
+                iter.request.limit = iter.determine_limit(MAX_PARTICIPANT_LIMIT);
                 let (count, participants, users) = match iter.client.invoke(&iter.request).await? {
                     Participants(p) => (p.count, p.participants, p.users),
                     NotModified => panic!("API returned Dialogs::NotModified even though hash = 0"),
@@ -318,6 +319,120 @@ impl ParticipantIter {
                 Ok(result)
             }
             Self::Channel(iter) => Ok(iter.pop_item()),
+        }
+    }
+}
+
+pub enum ProfilePhotoIter {
+    User(IterBuffer<tl::functions::photos::GetUserPhotos, tl::types::Photo>),
+    Chat(IterBuffer<tl::functions::messages::Search, tl::enums::Message>),
+}
+
+impl ProfilePhotoIter {
+    fn new(client: &ClientHandle, chat: &tl::enums::InputPeer) -> Self {
+        if let Some(user_id) = chat.to_input_user() {
+            Self::User(IterBuffer::from_request(
+                client,
+                MAX_PHOTO_LIMIT,
+                tl::functions::photos::GetUserPhotos {
+                    user_id,
+                    offset: 0,
+                    max_id: 0,
+                    limit: 0,
+                },
+            ))
+        } else {
+            Self::Chat(
+                client
+                    .search_messages(chat.clone())
+                    .filter(tl::enums::MessagesFilter::InputMessagesFilterChatPhotos),
+            )
+        }
+    }
+
+    /// Determines how many profile photos there are in total.
+    ///
+    /// This only performs a network call if `next` has not been called before.
+    pub async fn total(&mut self) -> Result<usize, InvocationError> {
+        match self {
+            Self::User(iter) => {
+                if let Some(total) = iter.total {
+                    Ok(total)
+                } else {
+                    self.fill_buffer().await
+                }
+            }
+            Self::Chat(iter) => iter.total().await,
+        }
+    }
+
+    /// Fills the buffer, and returns the total count.
+    async fn fill_buffer(&mut self) -> Result<usize, InvocationError> {
+        match self {
+            Self::User(iter) => {
+                use tl::enums::photos::Photos;
+
+                iter.request.limit = iter.determine_limit(MAX_PHOTO_LIMIT);
+                let (total, photos) = match iter.client.invoke(&iter.request).await? {
+                    Photos::Photos(p) => {
+                        iter.last_chunk = true;
+                        iter.total = Some(p.photos.len());
+                        (p.photos.len(), p.photos)
+                    }
+                    Photos::Slice(p) => {
+                        iter.last_chunk = p.photos.len() < iter.request.limit as usize;
+                        iter.total = Some(p.count as usize);
+                        (p.count as usize, p.photos)
+                    }
+                };
+
+                // Don't bother updating offsets if this is the last time stuff has to be fetched.
+                if !iter.last_chunk && !iter.buffer.is_empty() {
+                    iter.request.offset += photos.len() as i32;
+                }
+
+                iter.buffer
+                    .extend(photos.into_iter().flat_map(|photo| photo.try_into().ok()));
+                Ok(total)
+            }
+            Self::Chat(_) => panic!("fill_buffer should not be called for Chat variant"),
+        }
+    }
+
+    /// Return the next photo from the internal buffer, filling the buffer previously if it's
+    /// empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no photos left.
+    pub async fn next(&mut self) -> Result<Option<tl::types::Photo>, InvocationError> {
+        use tl::enums::{Message, MessageAction, Photo};
+
+        // Need to split the `match` because `fill_buffer()` borrows mutably.
+        match self {
+            Self::User(iter) => {
+                if let Some(result) = iter.next_raw() {
+                    return result;
+                }
+                self.fill_buffer().await?;
+            }
+            Self::Chat(iter) => {
+                while let Some(message) = iter.next().await? {
+                    match message {
+                        Message::Empty(_) | Message::Message(_) => continue,
+                        Message::Service(m) => match m.action {
+                            MessageAction::ChatEditPhoto(a) => match a.photo {
+                                Photo::Empty(_) => continue,
+                                Photo::Photo(p) => return Ok(Some(p)),
+                            },
+                            _ => continue,
+                        },
+                    }
+                }
+            }
+        }
+
+        match self {
+            Self::User(iter) => Ok(iter.pop_item()),
+            Self::Chat(_) => Ok(None),
         }
     }
 }
@@ -472,5 +587,14 @@ impl ClientHandle {
         } else {
             Ok(())
         }
+    }
+
+    /// Iterate over the history of profile photos for the given user or chat.
+    ///
+    /// Note that the current photo might not be present in the history, and to avoid doing more
+    /// work when it's generally not needed (the photo history tends to be complete but in some
+    /// cases it might not be), it's up to you to fetch this photo from the full channel.
+    pub fn iter_profile_photos(&self, chat: &tl::enums::InputPeer) -> ProfilePhotoIter {
+        ProfilePhotoIter::new(self, chat)
     }
 }
