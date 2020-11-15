@@ -26,6 +26,7 @@
 mod client;
 pub mod ext;
 pub mod types;
+pub(crate) mod utils;
 
 pub use client::{Client, ClientHandle, Config, InitParams, SignInError, UpdateIter};
 pub use types::EntitySet;

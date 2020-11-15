@@ -1,0 +1,124 @@
+// Copyright 2020 - developers of the `grammers` project.
+//
+// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
+// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
+// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
+// option. This file may not be copied, modified, or distributed
+// except according to those terms.
+
+use super::ClientHandle;
+use crate::types::IterBuffer;
+use crate::utils::generate_random_id;
+pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_tl_types as tl;
+
+const MAX_LIMIT: usize = 50;
+
+pub struct InlineResult {
+    client: ClientHandle,
+    query_id: i64,
+    result: tl::enums::BotInlineResult,
+}
+
+pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
+
+impl InlineResult {
+    /// Send this inline result to the specified chat.
+    // TODO return the produced message
+    pub async fn send(&mut self, chat: &tl::enums::InputPeer) -> Result<(), InvocationError> {
+        self.client
+            .invoke(&tl::functions::messages::SendInlineBotResult {
+                silent: false,
+                background: false,
+                clear_draft: false,
+                hide_via: false,
+                peer: chat.clone(),
+                reply_to_msg_id: None,
+                random_id: generate_random_id(),
+                query_id: self.query_id,
+                id: self.id().to_string(),
+                schedule_date: None,
+            })
+            .await
+            .map(drop)
+    }
+
+    /// The ID for this result.
+    pub fn id(&self) -> &str {
+        use tl::enums::BotInlineResult::*;
+
+        match &self.result {
+            Result(r) => &r.id,
+            BotInlineMediaResult(r) => &r.id,
+        }
+    }
+}
+
+impl InlineResultIter {
+    fn new(client: &ClientHandle, bot: &tl::enums::InputUser, query: &str) -> Self {
+        Self::from_request(
+            client,
+            MAX_LIMIT,
+            tl::functions::messages::GetInlineBotResults {
+                bot: bot.clone(),
+                peer: tl::enums::InputPeer::Empty,
+                geo_point: None,
+                query: query.to_string(),
+                offset: String::new(),
+            },
+        )
+    }
+
+    /// Indicate the bot the chat where this inline query will be sent to.
+    ///
+    /// Some bots use this information to return different results depending on the type of the
+    /// chat, and some even "need" it to give useful results.
+    pub fn chat(mut self, chat: &tl::enums::InputPeer) -> Self {
+        self.request.peer = chat.clone();
+        self
+    }
+
+    /// Return the next `InlineResult` from the internal buffer, filling the buffer previously if
+    /// it's empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no results left.
+    pub async fn next(&mut self) -> Result<Option<InlineResult>, InvocationError> {
+        if let Some(result) = self.next_raw() {
+            return result;
+        }
+
+        let tl::enums::messages::BotResults::Results(tl::types::messages::BotResults {
+            query_id,
+            next_offset,
+            results,
+            ..
+        }) = dbg!(self.client.invoke(&self.request).await?);
+
+        if let Some(offset) = next_offset {
+            self.request.offset = offset;
+        } else {
+            self.last_chunk = true;
+        }
+
+        let client = self.client.clone();
+        self.buffer
+            .extend(results.into_iter().map(|r| InlineResult {
+                client: client.clone(),
+                query_id: query_id,
+                result: r,
+            }));
+
+        Ok(self.pop_item())
+    }
+}
+
+impl ClientHandle {
+    /// Perform an inline query to the specified bot.
+    ///
+    /// The query text may be empty.
+    ///
+    /// The return value is used like any other async iterator, by repeatedly calling `next`.
+    pub fn inline_query(&self, bot: &tl::enums::InputUser, query: &str) -> InlineResultIter {
+        InlineResultIter::new(self, bot, query)
+    }
+}

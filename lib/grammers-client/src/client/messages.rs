@@ -9,22 +9,11 @@
 //! Methods related to sending messages.
 
 use crate::types::IterBuffer;
+use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
-
-/// Generate a random message ID suitable for `send_message`.
-fn generate_random_message_id() -> i64 {
-    let mut buffer = [0; 8];
-    getrandom::getrandom(&mut buffer).expect("failed to generate random message id");
-    i64::from_le_bytes(buffer)
-}
-
-fn generate_random_message_ids(n: usize) -> Vec<i64> {
-    let start = generate_random_message_id();
-    (0..n as i64).map(|i| start.wrapping_add(i)).collect()
-}
 
 fn message_id(message: &tl::enums::Message) -> i32 {
     match message {
@@ -360,7 +349,7 @@ impl ClientHandle {
                 reply_to_msg_id: message.reply_to,
                 media,
                 message: message.text,
-                random_id: generate_random_message_id(),
+                random_id: generate_random_id(),
                 reply_markup: message.reply_markup,
                 entities: if message.entities.is_empty() {
                     None
@@ -380,7 +369,7 @@ impl ClientHandle {
                 peer: chat,
                 reply_to_msg_id: message.reply_to,
                 message: message.text,
-                random_id: generate_random_message_id(),
+                random_id: generate_random_id(),
                 reply_markup: message.reply_markup,
                 entities: if message.entities.is_empty() {
                     None
@@ -473,7 +462,7 @@ impl ClientHandle {
             with_my_score: false,
             from_peer: source.clone(),
             id: message_ids.to_vec(),
-            random_id: generate_random_message_ids(message_ids.len()),
+            random_id: generate_random_ids(message_ids.len()),
             to_peer: destination.clone(),
             schedule_date: None,
         };
