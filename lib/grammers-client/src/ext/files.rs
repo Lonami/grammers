@@ -12,11 +12,49 @@ pub trait InputFileExt {
     fn name(&self) -> &str;
 }
 
+pub trait MessageMediaExt {
+    fn to_input_file(&self) -> Option<tl::enums::InputFileLocation>;
+}
+
 impl InputFileExt for tl::enums::InputFile {
     fn name(&self) -> &str {
         match self {
             tl::enums::InputFile::File(f) => &f.name,
             tl::enums::InputFile::Big(f) => &f.name,
+        }
+    }
+}
+
+impl MessageMediaExt for tl::enums::MessageMedia {
+    fn to_input_file(&self) -> Option<tl::enums::InputFileLocation> {
+        use tl::enums::MessageMedia::*;
+
+        match self {
+            Photo(tl::types::MessageMediaPhoto {
+                photo: Some(tl::enums::Photo::Photo(photo)),
+                ..
+            }) => Some(
+                tl::types::InputPhotoFileLocation {
+                    id: photo.id,
+                    access_hash: photo.access_hash,
+                    file_reference: photo.file_reference.clone(),
+                    thumb_size: String::new(),
+                }
+                .into(),
+            ),
+            Document(tl::types::MessageMediaDocument {
+                document: Some(tl::enums::Document::Document(doc)),
+                ..
+            }) => Some(
+                tl::types::InputDocumentFileLocation {
+                    id: doc.id,
+                    access_hash: doc.access_hash,
+                    file_reference: doc.file_reference.clone(),
+                    thumb_size: String::new(),
+                }
+                .into(),
+            ),
+            _ => None,
         }
     }
 }

@@ -501,6 +501,7 @@ impl ClientHandle {
     /// Gets the reply to message of a message
     /// Throws NotFound error if there's no reply to message
     // TODO don't require nasty InputPeer
+    // TODO this should return Result<Option<...>>
     pub async fn get_reply_to_message(
         &mut self,
         chat: tl::enums::InputPeer,
