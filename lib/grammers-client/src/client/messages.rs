@@ -17,6 +17,7 @@ use grammers_tl_types as tl;
 use std::collections::HashMap;
 
 fn map_random_ids_to_messages(
+    client: &ClientHandle,
     random_ids: &[i64],
     updates: tl::enums::Updates,
 ) -> Vec<Option<Message>> {
@@ -38,7 +39,7 @@ fn map_random_ids_to_messages(
 
             let mut id_to_msg = updates
                 .into_iter()
-                .filter_map(|update| update.message())
+                .filter_map(|update| update.message().and_then(|m| Message::new(client, m)))
                 .map(|message| (message.msg.id, message))
                 .collect::<HashMap<_, _>>();
 
@@ -443,7 +444,7 @@ impl ClientHandle {
             schedule_date: None,
         };
         let result = self.invoke(&request).await?;
-        Ok(map_random_ids_to_messages(&request.random_id, result))
+        Ok(map_random_ids_to_messages(self, &request.random_id, result))
     }
 
     /// Gets the reply to message of a message
