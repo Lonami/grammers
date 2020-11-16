@@ -8,9 +8,10 @@
 
 //! Methods related to sending messages.
 
+use crate::ext::{InputPeerExt, MessageExt};
 use crate::types::IterBuffer;
 use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{ext::MessageExt, types, ClientHandle, EntitySet};
+use crate::{types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -474,62 +475,61 @@ impl ClientHandle {
         &mut self,
         chat: &tl::enums::InputPeer,
         id: tl::enums::InputMessage,
-    ) -> (Option<tl::enums::messages::Messages>, bool) {
-        if let tl::enums::InputPeer::Channel(chan) = chat {
-            (
-                self.invoke(&tl::functions::channels::GetMessages {
-                    id: vec![id],
-                    channel: tl::enums::InputChannel::Channel(tl::types::InputChannel {
-                        channel_id: chan.channel_id,
-                        access_hash: chan.access_hash,
-                    }),
-                })
-                .await
-                .ok(),
-                false,
-            )
+    ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
+        if let Some(channel) = chat.to_input_channel() {
+            self.invoke(&tl::functions::channels::GetMessages {
+                id: vec![id],
+                channel,
+            })
+            .await
+            .map(|res| (res, false))
         } else {
-            (
-                self.invoke(&tl::functions::messages::GetMessages { id: vec![id] })
-                    .await
-                    .ok(),
-                true,
-            )
+            self.invoke(&tl::functions::messages::GetMessages { id: vec![id] })
+                .await
+                .map(|res| (res, true))
         }
     }
 
     /// Gets the reply to message of a message
     /// Throws NotFound error if there's no reply to message
     // TODO don't require nasty InputPeer
-    // TODO this should return Result<Option<...>>
     pub async fn get_reply_to_message(
         &mut self,
         chat: tl::enums::InputPeer,
         message: &tl::types::Message,
-    ) -> Option<tl::types::Message> {
+    ) -> Result<Option<tl::types::Message>, InvocationError> {
+        let reply_to_message_id = match message.reply_to_message_id() {
+            Some(id) => id,
+            None => return Ok(None),
+        };
+
         let input_id =
             tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id });
 
-        let (mut res, mut filter_req) = self.a_reply_msg(&chat, input_id).await;
-        if res.is_none() {
-            let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
-                id: message.reply_to_message_id()?,
-            });
-            let r = self.a_reply_msg(&chat, input_id).await;
-            res = r.0;
-            filter_req = r.1;
-        }
+        let (res, filter_req) = match self.a_reply_msg(&chat, input_id).await {
+            Ok(tup) => tup,
+            Err(_) => {
+                let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
+                    id: reply_to_message_id,
+                });
+                self.a_reply_msg(&chat, input_id).await?
+            }
+        };
 
-        let mut reply_msg_l = match res? {
-            tl::enums::messages::Messages::Messages(m) => Some(m.messages),
-            tl::enums::messages::Messages::Slice(m) => Some(m.messages),
-            tl::enums::messages::Messages::ChannelMessages(m) => Some(m.messages),
-            _ => None,
-        }?;
+        use tl::enums::messages::Messages;
 
-        if filter_req {
+        let mut reply_msg_l = match res {
+            Messages::Messages(m) => m.messages,
+            Messages::Slice(m) => m.messages,
+            Messages::ChannelMessages(m) => m.messages,
+            Messages::NotModified(_) => {
+                panic!("API returned Messages::NotModified even though GetMessages was used")
+            }
+        };
+
+        let result = if filter_req {
             let chat = message.chat();
-            return reply_msg_l
+            reply_msg_l
                 .into_iter()
                 .filter_map(|m| {
                     if let tl::enums::Message::Message(msg) = m {
@@ -539,14 +539,16 @@ impl ClientHandle {
                     }
                 })
                 .filter(|m| m.chat() == chat)
-                .next();
+                .next()
         } else {
             if let tl::enums::Message::Message(msg) = reply_msg_l.remove(0) {
-                return Some(msg);
+                Some(msg)
             } else {
-                return None;
+                None
             }
-        }
+        };
+
+        Ok(result)
     }
 
     // TODO don't keep this, it should be implicit

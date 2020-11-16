@@ -270,10 +270,9 @@ impl Message {
     /// Shorthand for `ClientHandle::get_reply_to_message`.
     pub async fn get_reply(&mut self) -> Result<Option<tl::types::Message>, InvocationError> {
         // TODO return `Message`
-        Ok(self
-            .client
+        self.client
             .get_reply_to_message(self.input_chat(), &self.msg)
-            .await)
+            .await
     }
 
     /// Respond to this message by sending a new message in the same chat, but without directly
