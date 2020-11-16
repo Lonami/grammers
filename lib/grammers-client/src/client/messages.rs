@@ -8,39 +8,18 @@
 
 //! Methods related to sending messages.
 
-use crate::ext::{InputPeerExt, MessageExt};
-use crate::types::IterBuffer;
+use crate::ext::{InputPeerExt, UpdateExt};
+use crate::types::{IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ClientHandle, EntitySet};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
-fn message_id(message: &tl::enums::Message) -> i32 {
-    match message {
-        tl::enums::Message::Empty(m) => m.id,
-        tl::enums::Message::Message(m) => m.id,
-        tl::enums::Message::Service(m) => m.id,
-    }
-}
-
-fn message_date(message: &tl::enums::Message) -> Option<i32> {
-    match message {
-        tl::enums::Message::Empty(_) => None,
-        tl::enums::Message::Message(m) => Some(m.date),
-        tl::enums::Message::Service(m) => Some(m.date),
-    }
-}
-
-fn message_input_peer(_message: &tl::enums::Message) -> tl::enums::InputPeer {
-    // TODO return actual input peer
-    tl::enums::InputPeer::Empty
-}
-
 fn map_random_ids_to_messages(
     random_ids: &[i64],
     updates: tl::enums::Updates,
-) -> Vec<Option<tl::enums::Message>> {
+) -> Vec<Option<Message>> {
     match updates {
         tl::enums::Updates::Updates(tl::types::Updates {
             updates,
@@ -59,13 +38,8 @@ fn map_random_ids_to_messages(
 
             let mut id_to_msg = updates
                 .into_iter()
-                .filter_map(|update| match update {
-                    tl::enums::Update::NewMessage(u) => Some((message_id(&u.message), u.message)),
-                    tl::enums::Update::NewChannelMessage(u) => {
-                        Some((message_id(&u.message), u.message))
-                    }
-                    _ => None,
-                })
+                .filter_map(|update| update.message())
+                .map(|message| (message.msg.id, message))
                 .collect::<HashMap<_, _>>();
 
             random_ids
@@ -79,7 +53,7 @@ fn map_random_ids_to_messages(
 
 const MAX_LIMIT: usize = 100;
 
-impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, tl::enums::Message> {
+impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Message> {
     /// Fetches the total unless cached.
     ///
     /// The `request.limit` should be set to the right value before calling this method.
@@ -129,17 +103,18 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, tl
 
         let _entities = EntitySet::new(users, chats);
 
+        let client = self.client.clone();
         self.buffer.extend(
             messages
                 .into_iter()
-                .filter(|message| !matches!(message, tl::enums::Message::Empty(_))),
+                .flat_map(|message| Message::new(&client, message)),
         );
 
         Ok(rate)
     }
 }
 
-pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, tl::enums::Message>;
+pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
 impl MessageIter {
     fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
@@ -172,7 +147,7 @@ impl MessageIter {
     /// empty.
     ///
     /// Returns `None` if the `limit` is reached or there are no messages left.
-    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+    pub async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
         if let Some(result) = self.next_raw() {
             return result;
         }
@@ -183,15 +158,15 @@ impl MessageIter {
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_id = message_id(last);
-            self.request.offset_date = message_date(last).unwrap();
+            self.request.offset_id = last.msg.id;
+            self.request.offset_date = last.msg.date;
         }
 
         Ok(self.pop_item())
     }
 }
 
-pub type SearchIter = IterBuffer<tl::functions::messages::Search, tl::enums::Message>;
+pub type SearchIter = IterBuffer<tl::functions::messages::Search, Message>;
 
 impl SearchIter {
     fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
@@ -245,7 +220,7 @@ impl SearchIter {
     /// empty.
     ///
     /// Returns `None` if the `limit` is reached or there are no messages left.
-    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+    pub async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
         if let Some(result) = self.next_raw() {
             return result;
         }
@@ -256,15 +231,15 @@ impl SearchIter {
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_id = message_id(last);
-            self.request.max_date = message_date(last).unwrap();
+            self.request.offset_id = last.msg.id;
+            self.request.max_date = last.msg.date;
         }
 
         Ok(self.pop_item())
     }
 }
 
-pub type GlobalSearchIter = IterBuffer<tl::functions::messages::SearchGlobal, tl::enums::Message>;
+pub type GlobalSearchIter = IterBuffer<tl::functions::messages::SearchGlobal, Message>;
 
 impl GlobalSearchIter {
     fn new(client: &ClientHandle) -> Self {
@@ -312,7 +287,7 @@ impl GlobalSearchIter {
     /// empty.
     ///
     /// Returns `None` if the `limit` is reached or there are no messages left.
-    pub async fn next(&mut self) -> Result<Option<tl::enums::Message>, InvocationError> {
+    pub async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
         if let Some(result) = self.next_raw() {
             return result;
         }
@@ -324,8 +299,8 @@ impl GlobalSearchIter {
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = message_input_peer(last);
-            self.request.offset_id = message_id(last);
+            self.request.offset_peer = last.input_chat();
+            self.request.offset_id = last.msg.id;
         }
 
         Ok(self.pop_item())
@@ -455,7 +430,7 @@ impl ClientHandle {
         destination: &tl::enums::InputPeer,
         message_ids: &[i32],
         source: &tl::enums::InputPeer,
-    ) -> Result<Vec<Option<tl::enums::Message>>, InvocationError> {
+    ) -> Result<Vec<Option<Message>>, InvocationError> {
         // TODO let user customize more options
         let request = tl::functions::messages::ForwardMessages {
             silent: false,
@@ -496,15 +471,15 @@ impl ClientHandle {
     pub async fn get_reply_to_message(
         &mut self,
         chat: tl::enums::InputPeer,
-        message: &tl::types::Message,
-    ) -> Result<Option<tl::types::Message>, InvocationError> {
+        message: &Message,
+    ) -> Result<Option<Message>, InvocationError> {
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
         };
 
         let input_id =
-            tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id });
+            tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.msg.id });
 
         let (res, filter_req) = match self.a_reply_msg(&chat, input_id).await {
             Ok(tup) => tup,
@@ -518,7 +493,7 @@ impl ClientHandle {
 
         use tl::enums::messages::Messages;
 
-        let mut reply_msg_l = match res {
+        let reply_msg_l = match res {
             Messages::Messages(m) => m.messages,
             Messages::Slice(m) => m.messages,
             Messages::ChannelMessages(m) => m.messages,
@@ -527,28 +502,12 @@ impl ClientHandle {
             }
         };
 
-        let result = if filter_req {
-            let chat = message.chat();
-            reply_msg_l
-                .into_iter()
-                .filter_map(|m| {
-                    if let tl::enums::Message::Message(msg) = m {
-                        Some(msg)
-                    } else {
-                        None
-                    }
-                })
-                .filter(|m| m.chat() == chat)
-                .next()
-        } else {
-            if let tl::enums::Message::Message(msg) = reply_msg_l.remove(0) {
-                Some(msg)
-            } else {
-                None
-            }
-        };
-
-        Ok(result)
+        // TODO filtering should not be needed
+        Ok(reply_msg_l
+            .into_iter()
+            .flat_map(|m| Message::new(self, m))
+            .next()
+            .filter(|m| !filter_req || m.msg.peer_id == message.msg.peer_id))
     }
 
     // TODO don't keep this, it should be implicit
@@ -599,7 +558,7 @@ impl ClientHandle {
         &mut self,
         chat: Option<&tl::enums::InputChannel>,
         message_ids: &[i32],
-    ) -> Result<Vec<Option<tl::enums::Message>>, InvocationError> {
+    ) -> Result<Vec<Option<Message>>, InvocationError> {
         let id = message_ids
             .into_iter()
             .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
@@ -627,7 +586,8 @@ impl ClientHandle {
 
         let mut map = messages
             .into_iter()
-            .map(|m| (message_id(&m), m))
+            .flat_map(|m| Message::new(self, m))
+            .map(|m| (m.msg.id, m))
             .collect::<HashMap<_, _>>();
 
         Ok(message_ids.iter().map(|id| map.remove(id)).collect())

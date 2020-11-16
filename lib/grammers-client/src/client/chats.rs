@@ -10,8 +10,7 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::Entity;
-use crate::types::IterBuffer;
+use crate::types::{Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -327,7 +326,7 @@ impl ParticipantIter {
 
 pub enum ProfilePhotoIter {
     User(IterBuffer<tl::functions::photos::GetUserPhotos, tl::types::Photo>),
-    Chat(IterBuffer<tl::functions::messages::Search, tl::enums::Message>),
+    Chat(IterBuffer<tl::functions::messages::Search, Message>),
 }
 
 impl ProfilePhotoIter {
@@ -406,7 +405,7 @@ impl ProfilePhotoIter {
     ///
     /// Returns `None` if the `limit` is reached or there are no photos left.
     pub async fn next(&mut self) -> Result<Option<tl::types::Photo>, InvocationError> {
-        use tl::enums::{Message, MessageAction, Photo};
+        use tl::enums::{MessageAction, Photo};
 
         // Need to split the `match` because `fill_buffer()` borrows mutably.
         match self {
@@ -418,15 +417,15 @@ impl ProfilePhotoIter {
             }
             Self::Chat(iter) => {
                 while let Some(message) = iter.next().await? {
-                    match message {
-                        Message::Empty(_) | Message::Message(_) => continue,
-                        Message::Service(m) => match m.action {
-                            MessageAction::ChatEditPhoto(a) => match a.photo {
-                                Photo::Empty(_) => continue,
-                                Photo::Photo(p) => return Ok(Some(p)),
-                            },
-                            _ => continue,
+                    if let Some(MessageAction::ChatEditPhoto(
+                        tl::types::MessageActionChatEditPhoto {
+                            photo: Photo::Photo(photo),
                         },
+                    )) = message.action
+                    {
+                        return Ok(Some(photo));
+                    } else {
+                        continue;
                     }
                 }
             }

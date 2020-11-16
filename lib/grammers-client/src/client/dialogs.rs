@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::ext::InputPeerExt;
-use crate::types::{Dialog, EntitySet, IterBuffer};
+use crate::types::{Dialog, EntitySet, IterBuffer, Message};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -83,6 +83,10 @@ impl DialogIter {
         };
 
         let entities = EntitySet::new(users, chats);
+        let messages = messages
+            .into_iter()
+            .flat_map(|m| Message::new(&self.client, m))
+            .collect::<Vec<_>>();
         // TODO MessageSet
 
         self.buffer.extend(
@@ -100,20 +104,8 @@ impl DialogIter {
                 .rev()
                 .find_map(|dialog| dialog.last_message.as_ref())
             {
-                // TODO build some abstractions to extract common fields
-                match last_message {
-                    tl::enums::Message::Message(message) => {
-                        self.request.offset_date = message.date;
-                        self.request.offset_id = message.id;
-                    }
-                    tl::enums::Message::Service(message) => {
-                        self.request.offset_date = message.date;
-                        self.request.offset_id = message.id;
-                    }
-                    tl::enums::Message::Empty(message) => {
-                        self.request.offset_id = message.id;
-                    }
-                }
+                self.request.offset_date = last_message.msg.date;
+                self.request.offset_id = last_message.msg.id;
             }
             self.request.offset_peer = self.buffer[self.buffer.len() - 1].input_peer();
         }

@@ -7,11 +7,9 @@
 // except according to those terms.
 //! Extension traits to make dealing with Telegram types more pleasant.
 mod files;
-mod messages;
 mod peers;
 mod updates;
 
 pub use files::{InputFileExt, MessageMediaExt};
-pub use messages::MessageExt;
 pub use peers::{InputPeerExt, UserExt};
 pub use updates::UpdateExt;

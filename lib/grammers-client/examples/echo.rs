@@ -10,7 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use grammers_client::ext::{MessageExt as _, UpdateExt as _};
+use grammers_client::ext::UpdateExt as _;
 use grammers_client::{Client, ClientHandle, Config, EntitySet, UpdateIter};
 use grammers_session::Session;
 use log;

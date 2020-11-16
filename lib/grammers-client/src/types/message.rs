@@ -18,18 +18,18 @@ use std::path::Path;
 ///
 /// This message should be treated as a snapshot in time, that is, if the message is edited while
 /// using this object, those changes won't alter this structure.
+#[derive(Clone)]
 pub struct Message {
     // Message services are a trimmed-down version of normal messages, but with `action`.
     //
     // Using `enum` just for that would clutter all methods with `match`, so instead service
     // messages are interpreted as messages and their action stored separatedly.
-    msg: tl::types::Message,
-    action: Option<tl::enums::MessageAction>,
-    client: ClientHandle,
+    pub(crate) msg: tl::types::Message,
+    pub(crate) action: Option<tl::enums::MessageAction>,
+    pub(crate) client: ClientHandle,
 }
 
 impl Message {
-    /*
     pub(crate) fn new(client: &ClientHandle, message: tl::enums::Message) -> Option<Self> {
         match message {
             // Don't even bother to expose empty messages to the user, even if they have an ID.
@@ -74,7 +74,6 @@ impl Message {
             }),
         }
     }
-    */
 
     /// Whether the message is outgoing (i.e. you sent this message to some other chat) or
     /// incoming (i.e. someone else sent it to you or the chat).
@@ -264,14 +263,23 @@ impl Message {
         self.action.as_ref()
     }
 
+    /// If this message is replying to another message, return the replied message ID.
+    pub fn reply_to_message_id(&self) -> Option<i32> {
+        if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.msg.reply_to {
+            Some(m.reply_to_msg_id)
+        } else {
+            None
+        }
+    }
+
     /// Fetch the message that this message is replying to, or `None` if this message is not a
     /// reply to a previous message.
     ///
     /// Shorthand for `ClientHandle::get_reply_to_message`.
-    pub async fn get_reply(&mut self) -> Result<Option<tl::types::Message>, InvocationError> {
-        // TODO return `Message`
+    pub async fn get_reply(&mut self) -> Result<Option<Self>, InvocationError> {
         self.client
-            .get_reply_to_message(self.input_chat(), &self.msg)
+            .clone() // TODO don't clone
+            .get_reply_to_message(self.input_chat(), self)
             .await
     }
 
@@ -300,7 +308,7 @@ impl Message {
     pub async fn forward_to(
         &mut self,
         chat: &tl::enums::InputPeer,
-    ) -> Result<tl::enums::Message, InvocationError> {
+    ) -> Result<Self, InvocationError> {
         // TODO return `Message`
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
@@ -354,11 +362,11 @@ impl Message {
         }
     }
 
-    fn input_chat(&self) -> tl::enums::InputPeer {
+    pub(crate) fn input_chat(&self) -> tl::enums::InputPeer {
         todo!()
     }
 
-    fn input_channel(&self) -> Option<tl::enums::InputChannel> {
+    pub(crate) fn input_channel(&self) -> Option<tl::enums::InputChannel> {
         todo!()
     }
 
