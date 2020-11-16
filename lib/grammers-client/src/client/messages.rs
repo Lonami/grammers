@@ -446,25 +446,6 @@ impl ClientHandle {
         Ok(map_random_ids_to_messages(&request.random_id, result))
     }
 
-    async fn a_reply_msg(
-        &mut self,
-        chat: &tl::enums::InputPeer,
-        id: tl::enums::InputMessage,
-    ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
-        if let Some(channel) = chat.to_input_channel() {
-            self.invoke(&tl::functions::channels::GetMessages {
-                id: vec![id],
-                channel,
-            })
-            .await
-            .map(|res| (res, false))
-        } else {
-            self.invoke(&tl::functions::messages::GetMessages { id: vec![id] })
-                .await
-                .map(|res| (res, true))
-        }
-    }
-
     /// Gets the reply to message of a message
     /// Throws NotFound error if there's no reply to message
     // TODO don't require nasty InputPeer
@@ -473,6 +454,28 @@ impl ClientHandle {
         chat: tl::enums::InputPeer,
         message: &Message,
     ) -> Result<Option<Message>, InvocationError> {
+        /// Helper method to fetch a single message by its input message.
+        async fn get_message(
+            client: &mut ClientHandle,
+            chat: &tl::enums::InputPeer,
+            id: tl::enums::InputMessage,
+        ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
+            if let Some(channel) = chat.to_input_channel() {
+                client
+                    .invoke(&tl::functions::channels::GetMessages {
+                        id: vec![id],
+                        channel,
+                    })
+                    .await
+                    .map(|res| (res, false))
+            } else {
+                client
+                    .invoke(&tl::functions::messages::GetMessages { id: vec![id] })
+                    .await
+                    .map(|res| (res, true))
+            }
+        }
+
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -481,19 +484,19 @@ impl ClientHandle {
         let input_id =
             tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.msg.id });
 
-        let (res, filter_req) = match self.a_reply_msg(&chat, input_id).await {
+        let (res, filter_req) = match get_message(self, &chat, input_id).await {
             Ok(tup) => tup,
             Err(_) => {
                 let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
                     id: reply_to_message_id,
                 });
-                self.a_reply_msg(&chat, input_id).await?
+                get_message(self, &chat, input_id).await?
             }
         };
 
         use tl::enums::messages::Messages;
 
-        let reply_msg_l = match res {
+        let messages = match res {
             Messages::Messages(m) => m.messages,
             Messages::Slice(m) => m.messages,
             Messages::ChannelMessages(m) => m.messages,
@@ -502,8 +505,7 @@ impl ClientHandle {
             }
         };
 
-        // TODO filtering should not be needed
-        Ok(reply_msg_l
+        Ok(messages
             .into_iter()
             .flat_map(|m| Message::new(self, m))
             .next()
