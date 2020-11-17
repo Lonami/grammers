@@ -11,7 +11,7 @@
 //! ```
 
 use grammers_client::ext::UpdateExt as _;
-use grammers_client::{Client, ClientHandle, Config, EntitySet, UpdateIter};
+use grammers_client::{Client, ClientHandle, Config, UpdateIter};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
@@ -20,21 +20,10 @@ use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
-async fn handle_update(
-    mut client: ClientHandle,
-    updates: UpdateIter,
-    entity_set: EntitySet,
-) -> Result {
+async fn handle_update(mut client: ClientHandle, updates: UpdateIter) -> Result {
     for update in updates {
         if let Some(message) = update.message() {
-            let entity = entity_set
-                .get(&message.chat())
-                .expect("failed to find entity");
-
-            println!("Responding to {}", entity.name());
-            client
-                .send_message(entity.input_peer(), message.message.as_str().into())
-                .await?;
+            todo!("new update design");
         }
     }
 
@@ -68,10 +57,10 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    while let Some((updates, entity_set)) = client.next_updates().await? {
+    while let Some(updates) = client.next_updates().await? {
         let handle = client.handle();
         task::spawn(async move {
-            match handle_update(handle, updates, entity_set).await {
+            match handle_update(handle, updates).await {
                 Ok(_) => {}
                 Err(e) => eprintln!("Error handling updates!: {}", e),
             }
