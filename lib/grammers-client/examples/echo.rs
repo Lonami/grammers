@@ -10,8 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use grammers_client::ext::UpdateExt as _;
-use grammers_client::{Client, ClientHandle, Config, UpdateIter};
+use grammers_client::{Client, ClientHandle, Config, Update, UpdateIter};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
@@ -22,8 +21,15 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 async fn handle_update(mut client: ClientHandle, updates: UpdateIter) -> Result {
     for update in updates {
-        if let Some(message) = update.message() {
-            todo!("new update design");
+        match update {
+            Update::NewMessage(message) => {
+                let chat = message.chat().expect("Telegram did not send chat info");
+                println!("Responding to {}", chat.name());
+                client
+                    .send_message(chat.input_peer(), message.text().into())
+                    .await?;
+            }
+            _ => {}
         }
     }
 

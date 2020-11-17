@@ -8,6 +8,7 @@
 use crate::types::Entity;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
+use std::sync::Arc;
 
 /// Hashable `Peer`.
 #[derive(Hash, PartialEq, Eq)]
@@ -40,10 +41,10 @@ pub struct EntitySet {
 
 impl EntitySet {
     /// Create a new entity set.
-    pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Self {
+    pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
         use tl::enums::{Chat, User};
 
-        Self {
+        Arc::new(Self {
             map: users
                 .into_iter()
                 .filter_map(|user| match user {
@@ -61,14 +62,14 @@ impl EntitySet {
                 }))
                 .map(|entity| (entity.peer().into(), entity))
                 .collect(),
-        }
+        })
     }
 
     /// Create a new empty entity set.
-    pub fn empty() -> Self {
-        Self {
+    pub fn empty() -> Arc<Self> {
+        Arc::new(Self {
             map: HashMap::new(),
-        }
+        })
     }
 
     /// Retrieve the full `Entity` object given its `Peer`.

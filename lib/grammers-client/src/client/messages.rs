@@ -24,11 +24,13 @@ fn map_random_ids_to_messages(
     match updates {
         tl::enums::Updates::Updates(tl::types::Updates {
             updates,
-            users: _,
-            chats: _,
+            users,
+            chats,
             date: _,
             seq: _,
         }) => {
+            let entities = EntitySet::new(users, chats);
+
             let rnd_to_id = updates
                 .iter()
                 .filter_map(|update| match update {
@@ -51,7 +53,7 @@ fn map_random_ids_to_messages(
                     }) => Some(message),
                     _ => None,
                 })
-                .filter_map(|message| Message::new(client, message))
+                .filter_map(|message| Message::new(client, message, &entities))
                 .map(|message| (message.msg.id, message))
                 .collect::<HashMap<_, _>>();
 
@@ -114,13 +116,13 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let _entities = EntitySet::new(users, chats);
+        let entities = EntitySet::new(users, chats);
 
         let client = self.client.clone();
         self.buffer.extend(
             messages
                 .into_iter()
-                .flat_map(|message| Message::new(&client, message)),
+                .flat_map(|message| Message::new(&client, message, &entities)),
         );
 
         Ok(rate)
@@ -509,18 +511,19 @@ impl ClientHandle {
 
         use tl::enums::messages::Messages;
 
-        let messages = match res {
-            Messages::Messages(m) => m.messages,
-            Messages::Slice(m) => m.messages,
-            Messages::ChannelMessages(m) => m.messages,
+        let (messages, users, chats) = match res {
+            Messages::Messages(m) => (m.messages, m.users, m.chats),
+            Messages::Slice(m) => (m.messages, m.users, m.chats),
+            Messages::ChannelMessages(m) => (m.messages, m.users, m.chats),
             Messages::NotModified(_) => {
                 panic!("API returned Messages::NotModified even though GetMessages was used")
             }
         };
 
+        let entities = EntitySet::new(users, chats);
         Ok(messages
             .into_iter()
-            .flat_map(|m| Message::new(self, m))
+            .flat_map(|m| Message::new(self, m, &entities))
             .next()
             .filter(|m| !filter_req || m.msg.peer_id == message.msg.peer_id))
     }
@@ -590,18 +593,19 @@ impl ClientHandle {
                 .await
         }?;
 
-        let messages = match result {
-            tl::enums::messages::Messages::Messages(m) => m.messages,
-            tl::enums::messages::Messages::Slice(m) => m.messages,
-            tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+        let (messages, users, chats) = match result {
+            tl::enums::messages::Messages::Messages(m) => (m.messages, m.users, m.chats),
+            tl::enums::messages::Messages::Slice(m) => (m.messages, m.users, m.chats),
+            tl::enums::messages::Messages::ChannelMessages(m) => (m.messages, m.users, m.chats),
             tl::enums::messages::Messages::NotModified(_) => {
                 panic!("API returned Messages::NotModified even though GetMessages was used")
             }
         };
 
+        let entities = EntitySet::new(users, chats);
         let mut map = messages
             .into_iter()
-            .flat_map(|m| Message::new(self, m))
+            .flat_map(|m| Message::new(self, m, &entities))
             .map(|m| (m.msg.id, m))
             .collect::<HashMap<_, _>>();
 

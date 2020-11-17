@@ -29,4 +29,4 @@ pub mod types;
 pub(crate) mod utils;
 
 pub use client::{Client, ClientHandle, Config, InitParams, SignInError, UpdateIter};
-pub use types::EntitySet;
+pub use types::{EntitySet, Update};

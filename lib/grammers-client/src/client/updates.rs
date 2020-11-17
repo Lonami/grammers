@@ -14,23 +14,24 @@ use grammers_mtsender::ReadError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
+use std::sync::Arc;
 
 pub struct UpdateIter {
     client: ClientHandle,
     updates: VecDeque<tl::enums::Update>,
-    _entities: EntitySet,
+    entities: Arc<EntitySet>,
 }
 
 impl UpdateIter {
     pub(crate) fn new(
         client: ClientHandle,
         updates: Vec<tl::enums::Update>,
-        entities: EntitySet,
+        entities: Arc<EntitySet>,
     ) -> Self {
         Self {
             client,
             updates: updates.into(),
-            _entities: entities,
+            entities,
         }
     }
 }
@@ -40,7 +41,7 @@ impl Iterator for UpdateIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(update) = self.updates.pop_front() {
-            if let Some(update) = Update::new(&self.client, update) {
+            if let Some(update) = Update::new(&self.client, update, &self.entities) {
                 return Some(update);
             }
         }

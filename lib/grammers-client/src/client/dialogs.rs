@@ -85,7 +85,7 @@ impl DialogIter {
         let entities = EntitySet::new(users, chats);
         let messages = messages
             .into_iter()
-            .flat_map(|m| Message::new(&self.client, m))
+            .flat_map(|m| Message::new(&self.client, m, &entities))
             .collect::<Vec<_>>();
         // TODO MessageSet
 

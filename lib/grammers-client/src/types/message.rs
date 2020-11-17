@@ -12,6 +12,7 @@ use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::io;
 use std::path::Path;
+use std::sync::Arc;
 
 /// Represents a Telegram message, which includes text messages, messages with media, and service
 /// messages.
@@ -27,10 +28,19 @@ pub struct Message {
     pub(crate) msg: tl::types::Message,
     pub(crate) action: Option<tl::enums::MessageAction>,
     pub(crate) client: ClientHandle,
+    // When fetching messages or receiving updates, a set of entities will be present. A single
+    // server response contains a lot of entities, and some might be related to deep layers of
+    // a message action for instance. Keeping the entire set like this allows for cheaper clones
+    // and moves, and saves us from worrying about picking out all the entities we care about.
+    pub(crate) entities: Arc<types::EntitySet>,
 }
 
 impl Message {
-    pub(crate) fn new(client: &ClientHandle, message: tl::enums::Message) -> Option<Self> {
+    pub(crate) fn new(
+        client: &ClientHandle,
+        message: tl::enums::Message,
+        entities: &Arc<types::EntitySet>,
+    ) -> Option<Self> {
         match message {
             // Don't even bother to expose empty messages to the user, even if they have an ID.
             tl::enums::Message::Empty(_) => None,
@@ -38,6 +48,7 @@ impl Message {
                 msg,
                 action: None,
                 client: client.clone(),
+                entities: Arc::clone(entities),
             }),
             tl::enums::Message::Service(msg) => Some(Message {
                 msg: tl::types::Message {
@@ -71,6 +82,7 @@ impl Message {
                 },
                 action: Some(msg.action),
                 client: client.clone(),
+                entities: Arc::clone(entities),
             }),
         }
     }
@@ -141,19 +153,22 @@ impl Message {
     }
 
     /// The sender of this message, if any.
-    pub fn sender(&self) -> Option<tl::enums::Peer> {
-        // TODO return entity or custom peer type
-        // should we return the entire entity even if we don't have information? probably yes
-        self.msg.from_id.clone()
+    pub fn sender(&self) -> Option<types::Entity> {
+        self.msg
+            .from_id
+            .as_ref()
+            .and_then(|from| self.entities.get(from))
+            .map(|e| e.clone())
     }
 
     /// The chat where this message was sent to.
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    pub fn chat(&self) -> tl::enums::Peer {
-        // TODO return entity or custom peer type
-        self.msg.peer_id.clone()
+    ///
+    /// This value will be `None` if no information about the chat is present.
+    pub fn chat(&self) -> Option<types::Entity> {
+        self.entities.get(&self.msg.peer_id).map(|e| e.clone())
     }
 
     /// If this message was forwarded from a previous message, return the header with information
