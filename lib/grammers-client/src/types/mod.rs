@@ -14,6 +14,7 @@ mod input_message;
 mod iter_buffer;
 mod login_token;
 mod message;
+mod update;
 
 pub use dialog::Dialog;
 pub use entity::Entity;
@@ -22,3 +23,4 @@ pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
+pub use update::Update;

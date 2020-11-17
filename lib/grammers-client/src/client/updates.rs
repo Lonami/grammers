@@ -8,45 +8,44 @@
 
 //! Methods to deal with and offer access to updates.
 
-use super::{Client, Step};
-use crate::types::EntitySet;
+use super::{Client, ClientHandle, Step};
+use crate::types::{EntitySet, Update};
 use grammers_mtsender::ReadError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 
 pub struct UpdateIter {
+    client: ClientHandle,
     updates: VecDeque<tl::enums::Update>,
-    entities: EntitySet,
+    _entities: EntitySet,
 }
 
 impl UpdateIter {
-    fn empty() -> Self {
+    pub(crate) fn new(
+        client: ClientHandle,
+        updates: Vec<tl::enums::Update>,
+        entities: EntitySet,
+    ) -> Self {
         Self {
-            updates: VecDeque::new(),
-            entities: EntitySet::empty(),
-        }
-    }
-
-    fn new(updates: Vec<tl::enums::Update>, entities: EntitySet) -> Self {
-        Self {
+            client,
             updates: updates.into(),
-            entities,
+            _entities: entities,
         }
-    }
-
-    fn merge(mut self, other: UpdateIter) -> Self {
-        self.updates.extend(other.updates);
-        self.entities = self.entities.merge(other.entities);
-        self
     }
 }
 
 impl Iterator for UpdateIter {
-    type Item = tl::enums::Update;
+    type Item = Update;
 
     fn next(&mut self) -> Option<Self::Item> {
-        self.updates.pop_front()
+        while let Some(update) = self.updates.pop_front() {
+            if let Some(update) = Update::new(&self.client, update) {
+                return Some(update);
+            }
+        }
+
+        None
     }
 }
 
@@ -64,30 +63,42 @@ impl Client {
             };
 
             if !updates.is_empty() {
-                break Some(
-                    updates
-                        .into_iter()
-                        .map(|update| self.adapt_updates(update))
-                        .fold(UpdateIter::empty(), UpdateIter::merge),
-                );
+                let (updates, users, chats) = updates
+                    .into_iter()
+                    .map(|update| self.adapt_updates(update))
+                    .fold((vec![], vec![], vec![]), |mut old, new| {
+                        old.0.extend(new.0);
+                        old.1.extend(new.1);
+                        old.2.extend(new.2);
+                        old
+                    });
+
+                break Some(UpdateIter::new(
+                    self.handle(),
+                    updates,
+                    EntitySet::new(users, chats),
+                ));
             }
         })
     }
 
-    fn adapt_updates(&self, updates: tl::enums::Updates) -> UpdateIter {
+    fn adapt_updates(
+        &self,
+        updates: tl::enums::Updates,
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
         use tl::enums::Updates::*;
 
         match updates {
-            UpdateShort(update) => UpdateIter::new(vec![update.update], EntitySet::empty()),
-            Combined(update) => {
-                UpdateIter::new(update.updates, EntitySet::new(update.users, update.chats))
-            }
-            Updates(update) => {
-                UpdateIter::new(update.updates, EntitySet::new(update.users, update.chats))
-            }
+            UpdateShort(u) => (vec![u.update], vec![], vec![]),
+            Combined(u) => (u.updates, u.users, u.chats),
+            Updates(u) => (u.updates, u.users, u.chats),
             // We need to know our self identifier by now or this will fail.
             // These updates will only happen after we logged in so that's fine.
-            UpdateShortMessage(update) => UpdateIter::new(
+            UpdateShortMessage(update) => (
                 vec![tl::enums::Update::NewMessage(tl::types::UpdateNewMessage {
                     message: tl::enums::Message::Message(tl::types::Message {
                         out: update.out,
@@ -135,9 +146,10 @@ impl Client {
                     pts: update.pts,
                     pts_count: update.pts_count,
                 })],
-                EntitySet::empty(),
+                vec![],
+                vec![],
             ),
-            UpdateShortChatMessage(update) => UpdateIter::new(
+            UpdateShortChatMessage(update) => (
                 vec![tl::enums::Update::NewMessage(tl::types::UpdateNewMessage {
                     message: tl::enums::Message::Message(tl::types::Message {
                         out: update.out,
@@ -175,7 +187,8 @@ impl Client {
                     pts: update.pts,
                     pts_count: update.pts_count,
                 })],
-                EntitySet::empty(),
+                vec![],
+                vec![],
             ),
             // These shouldn't really occur unless triggered via a request
             TooLong => panic!("should not receive updatesTooLong via passive updates"),

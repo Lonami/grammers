@@ -8,8 +8,6 @@
 //! Extension traits to make dealing with Telegram types more pleasant.
 mod files;
 mod peers;
-mod updates;
 
 pub use files::{InputFileExt, MessageMediaExt};
 pub use peers::{InputPeerExt, UserExt};
-pub use updates::UpdateExt;

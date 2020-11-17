@@ -5,24 +5,26 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::Message;
+use crate::ClientHandle;
 use grammers_tl_types as tl;
 
-/// Extensions for making working with updates easier.
-pub trait UpdateExt {
-    /// Extract the message contained in this update, if any.
-    fn message(self) -> Option<tl::enums::Message>;
+#[non_exhaustive]
+pub enum Update {
+    /// Occurs whenever a new text message or a message with media is produced.
+    NewMessage(Message),
 }
 
-impl UpdateExt for tl::enums::Update {
-    fn message(self) -> Option<tl::enums::Message> {
-        match self {
+impl Update {
+    pub(crate) fn new(client: &ClientHandle, update: tl::enums::Update) -> Option<Self> {
+        match update {
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {
-                Some(message)
+                Message::new(client, message).map(Self::NewMessage)
             }
             tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
                 message,
                 ..
-            }) => Some(message),
+            }) => Message::new(client, message).map(Self::NewMessage),
             _ => None,
         }
     }

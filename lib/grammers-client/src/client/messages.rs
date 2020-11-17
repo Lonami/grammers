@@ -8,7 +8,7 @@
 
 //! Methods related to sending messages.
 
-use crate::ext::{InputPeerExt, UpdateExt};
+use crate::ext::InputPeerExt;
 use crate::types::{IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ClientHandle, EntitySet};
@@ -37,9 +37,21 @@ fn map_random_ids_to_messages(
                 })
                 .collect::<HashMap<_, _>>();
 
+            // TODO ideally this would use the same UpdateIter mechanism to make sure we don't
+            //      accidentally miss variants
             let mut id_to_msg = updates
                 .into_iter()
-                .filter_map(|update| update.message().and_then(|m| Message::new(client, m)))
+                .filter_map(|update| match update {
+                    tl::enums::Update::NewMessage(tl::types::UpdateNewMessage {
+                        message, ..
+                    }) => Some(message),
+                    tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
+                        message,
+                        ..
+                    }) => Some(message),
+                    _ => None,
+                })
+                .filter_map(|message| Message::new(client, message))
                 .map(|message| (message.msg.id, message))
                 .collect::<HashMap<_, _>>();
 
