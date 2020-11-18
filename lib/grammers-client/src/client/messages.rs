@@ -528,21 +528,6 @@ impl ClientHandle {
             .filter(|m| !filter_req || m.msg.peer_id == message.msg.peer_id))
     }
 
-    // TODO don't keep this, it should be implicit
-    pub async fn input_peer_for_username(
-        &mut self,
-        username: &str,
-    ) -> Result<tl::enums::InputPeer, InvocationError> {
-        if username.eq_ignore_ascii_case("me") {
-            Ok(tl::enums::InputPeer::PeerSelf)
-        } else if let Some(user) = self.resolve_username(username).await? {
-            Ok(user.input_peer())
-        } else {
-            // TODO same rationale as IntoInput<tl::enums::InputPeer> for tl::types::User
-            todo!("user without username not handled")
-        }
-    }
-
     /// Iterate over the message history of a chat, from most recent to oldest.
     pub fn iter_messages(&self, chat: tl::enums::InputPeer) -> MessageIter {
         MessageIter::new(self, chat)
