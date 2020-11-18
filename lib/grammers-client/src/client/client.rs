@@ -5,10 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-//! Contains definitions for the [`Client`] and [`ClientHandle`] structures, along with required
-//! structures to initialize them such as [`Config`].
-
 pub use super::updates::UpdateIter;
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
@@ -63,6 +59,14 @@ pub(crate) enum Request {
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
+///
+/// This structure is the "entry point" of the library, from which you can start using the rest.
+///
+/// This structure owns all the necessary connections to Telegram, and has implementations for the
+/// most basic methods, such as connecting, signing in, or processing network events.
+///
+/// To invoke multiple requests concurrently, [`ClientHandle`] must be used instead, and this
+/// structure will coordinate all of them.
 pub struct Client {
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
     pub(crate) config: Config,
@@ -70,6 +74,11 @@ pub struct Client {
     pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
 }
 
+/// A client handle which can be freely cloned and moved around tasks to invoke requests
+/// concurrently.
+///
+/// This structure has implementations for most of the methods you will use, such as sending
+/// messages, fetching users, answering bot callbacks, and so on.
 #[derive(Clone)]
 pub struct ClientHandle {
     pub(crate) tx: mpsc::UnboundedSender<Request>,

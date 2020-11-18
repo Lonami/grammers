@@ -114,8 +114,22 @@ impl DialogIter {
     }
 }
 
+/// Method implementations related to open conversations.
 impl ClientHandle {
     /// Returns a new iterator over the dialogs.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut dialogs = client.iter_dialogs();
+    ///
+    /// while let Some(dialog) = dialogs.next().await? {
+    ///     println!("{} ({})", dialog.title(), dialog.id());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn iter_dialogs(&self) -> DialogIter {
         DialogIter::new(self)
     }
@@ -128,6 +142,16 @@ impl ClientHandle {
     ///
     /// For groups and channels, this is the same as leaving said chat. This method does **not**
     /// delete the chat itself (the chat still exists and the other members will remain inside).
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Consider making a backup before, you will lose access to the messages in chat!
+    /// client.delete_dialog(&chat).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete_dialog(
         &mut self,
         chat: &tl::enums::InputPeer,
@@ -168,7 +192,16 @@ impl ClientHandle {
     /// Mark a chat as read.
     ///
     /// If you want to get rid of all the mentions (for example, a voice note that you have not
-    /// listened to yet), you need to also use `clear_mentions`.
+    /// listened to yet), you need to also use [`ClientHandle::clear_mentions`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.mark_as_read(&chat).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn mark_as_read(
         &mut self,
         chat: &tl::enums::InputPeer,
@@ -188,6 +221,15 @@ impl ClientHandle {
     }
 
     /// Clears all pending mentions from a chat, marking them as read.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.clear_mentions(&chat).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn clear_mentions(
         &mut self,
         chat: &tl::enums::InputPeer,

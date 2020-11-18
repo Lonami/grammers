@@ -29,10 +29,6 @@ pub struct Builder {
 /// (encrypted) messages.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.or);
-/// [`enqueue_request`]: #method.enqueue_request
-/// [`serialize_encrypted_messages`]: #method.serialize_encrypted_messages
-/// [`process_encrypted_response`]: #method.process_encrypted_response
-/// [`poll_response`]: #method.poll_response
 pub struct Encrypted {
     /// The authorization key to use to encrypt payload.
     auth_key: AuthKey,

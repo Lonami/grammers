@@ -345,7 +345,7 @@ impl ProfilePhotoIter {
         } else {
             Self::Chat(
                 client
-                    .search_messages(chat.clone())
+                    .search_messages(chat)
                     .filter(tl::enums::MessagesFilter::InputMessagesFilterChatPhotos),
             )
         }
@@ -445,8 +445,22 @@ impl Client {
     }
 }
 
+/// Method implementations related to dealing with chats or other users.
 impl ClientHandle {
     /// Resolves a username into the user that owns it, if any.
+    ///
+    /// Note that this method is expensive to call, and can quickly cause long flood waits.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// if let Some(entity) = client.resolve_username("username").await? {
+    ///     println!("Found entity!: {:?}", entity);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn resolve_username(
         &mut self,
         username: &str,
@@ -486,6 +500,18 @@ impl ClientHandle {
     }
 
     /// Fetch full information about the currently logged-in user.
+    ///
+    /// Although this method is cheap to call, you might want to cache the results somewhere.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// println!("Displaying full user information of the logged-in user:");
+    /// dbg!(client.get_me().await?);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_me(&mut self) -> Result<tl::types::User, InvocationError> {
         let mut res = self
             .invoke(&tl::functions::users::GetUsers {
@@ -508,6 +534,19 @@ impl ClientHandle {
     /// The participants are returned in no particular order.
     ///
     /// When used to iterate the participants of "user", the iterator won't produce values.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut participants = client.iter_participants(&chat);
+    ///
+    /// while let Some(participant) = participants.next().await? {
+    ///     println!("{} has role {:?}", participant.user.first_name.unwrap(), participant.role);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn iter_participants(&self, chat: &tl::enums::InputPeer) -> ParticipantIter {
         ParticipantIter::new(self, chat)
     }
@@ -522,6 +561,18 @@ impl ClientHandle {
     /// after as well (effectively unbanning them).
     ///
     /// When used to kick users from "user" chat, nothing will be done.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// match client.kick_participant(&chat, &user).await {
+    ///     Ok(_) => println!("user is no more >:D"),
+    ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn kick_participant(
         &mut self,
         chat: &tl::enums::InputPeer,
@@ -595,6 +646,22 @@ impl ClientHandle {
     /// Note that the current photo might not be present in the history, and to avoid doing more
     /// work when it's generally not needed (the photo history tends to be complete but in some
     /// cases it might not be), it's up to you to fetch this photo from the full channel.
+    ///
+    /// Note that you cannot use these photos to send them as messages directly. They must be
+    /// downloaded first, then uploaded, and finally sent.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut photos = client.iter_profile_photos(&chat);
+    ///
+    /// while let Some(photo) = photos.next().await? {
+    ///     println!("Did you know chat has a photo with ID {}?", photo.id);
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn iter_profile_photos(&self, chat: &tl::enums::InputPeer) -> ProfilePhotoIter {
         ProfilePhotoIter::new(self, chat)
     }

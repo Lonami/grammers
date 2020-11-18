@@ -26,7 +26,7 @@ async fn handle_update(mut client: ClientHandle, updates: UpdateIter) -> Result 
                 let chat = message.chat().expect("Telegram did not send chat info");
                 println!("Responding to {}", chat.name());
                 client
-                    .send_message(chat.input_peer(), message.text().into())
+                    .send_message(&chat.input_peer(), message.text().into())
                     .await?;
             }
             _ => {}

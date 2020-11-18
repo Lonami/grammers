@@ -95,8 +95,25 @@ impl DownloadIter {
     }
 }
 
+/// Method implementations related to uploading or downloading files.
 impl ClientHandle {
     /// Returns a new iterator over the contents of a media document that will be downloaded.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(file: grammers_tl_types::enums::InputFileLocation, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let mut file_bytes = Vec::new();
+    /// let mut download = client.iter_download(file);
+    ///
+    /// while let Some(chunk) = download.next().await? {
+    ///     file_bytes.extend(chunk);
+    /// }
+    ///
+    /// // The file is now downloaded in-memory, inside `file_bytes`!
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn iter_download(&self, file: tl::enums::InputFileLocation) -> DownloadIter {
         DownloadIter::new(self, file)
     }
@@ -105,8 +122,17 @@ impl ClientHandle {
     ///
     /// If the file already exists, it will be overwritten.
     ///
-    /// This is a small wrapper around `iter_download` for the common case of wanting to save the
-    /// file locally.
+    /// This is a small wrapper around [`ClientHandle::iter_download`] for the common case of
+    /// wanting to save the file locally.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(file: grammers_tl_types::enums::InputFileLocation, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.download_media(file, "/home/username/photos/holidays.jpg").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn download_media<P: AsRef<Path>>(
         &mut self,
         media: tl::enums::InputFileLocation,
@@ -129,7 +155,24 @@ impl ClientHandle {
     /// Uploads a local file to Telegram servers.
     ///
     /// The file is not sent to any chat, but can be used as media when sending messages for a
-    /// certain period of time (less than a day).
+    /// certain period of time (less than a day). You can use this uploaded file multiple times.
+    ///
+    /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::InputMessage;
+    ///
+    /// let uploaded_file = client.upload_file("/home/username/photos/holidays.jpg").await?;
+    ///
+    /// client.send_message(&chat, InputMessage::text("Check this out!").photo(uploaded_file)).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// [`InputMessage`]: crate::InputMessage
     pub async fn upload_file<P: AsRef<Path>>(
         &mut self,
         path: P,

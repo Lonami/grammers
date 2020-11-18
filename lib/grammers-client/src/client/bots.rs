@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
 use super::ClientHandle;
 use crate::types::IterBuffer;
 use crate::utils::generate_random_id;
@@ -50,6 +49,16 @@ impl InlineResult {
         match &self.result {
             Result(r) => &r.id,
             BotInlineMediaResult(r) => &r.id,
+        }
+    }
+
+    /// The title for this result, if any.
+    pub fn title(&self) -> Option<&String> {
+        use tl::enums::BotInlineResult::*;
+
+        match &self.result {
+            Result(r) => r.title.as_ref(),
+            BotInlineMediaResult(r) => r.title.as_ref(),
         }
     }
 }
@@ -112,12 +121,27 @@ impl InlineResultIter {
     }
 }
 
+/// Method implementations related to dealing with bots.
 impl ClientHandle {
     /// Perform an inline query to the specified bot.
     ///
     /// The query text may be empty.
     ///
     /// The return value is used like any other async iterator, by repeatedly calling `next`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(bot: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // This is equivalent to writing `@bot inline query` in a Telegram app.
+    /// let mut inline_results = client.inline_query(&bot, "inline query");
+    ///
+    /// while let Some(result) = inline_results.next().await? {
+    ///     println!("{}", result.title().unwrap());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn inline_query(&self, bot: &tl::enums::InputUser, query: &str) -> InlineResultIter {
         InlineResultIter::new(self, bot, query)
     }

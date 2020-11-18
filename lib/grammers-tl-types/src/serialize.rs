@@ -21,7 +21,7 @@ pub trait Serializable {
 
     /// Convenience function to serialize the object into a new buffer
     /// and return its bytes. It is more efficient to reuse a existing
-    /// buffer with [`serialize`].
+    /// buffer with [`Serializable::serialize`].
     fn to_bytes(&self) -> Vec<u8> {
         let mut buffer = Vec::new();
         self.serialize(&mut buffer);

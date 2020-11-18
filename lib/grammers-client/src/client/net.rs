@@ -5,9 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-//! Methods directly related to the network on the [`Client`] and [`ClientHandle`].
-
 pub use super::updates::UpdateIter;
 use super::{Client, ClientHandle, Config, Request, Step};
 use futures::future::FutureExt as _;
@@ -86,6 +83,7 @@ pub(crate) async fn connect_sender(
     Ok(sender)
 }
 
+/// Method implementations directly related with network connectivity.
 impl Client {
     /// Creates and returns a new client instance upon successful connection to Telegram.
     ///
@@ -93,6 +91,28 @@ impl Client {
     /// will be created and the session will be saved with it.
     ///
     /// The connection will be initialized with the data from the input configuration.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use grammers_client::{Client, Config};
+    /// use grammers_session::Session;
+    ///
+    /// // Note: these are example values and are not actually valid.
+    /// //       Obtain your own with the developer's phone at https://my.telegram.org.
+    /// const API_ID: i32 = 932939;
+    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
+    ///
+    /// # async fn f(mut client: Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let client = Client::connect(Config {
+    ///     session: Session::load_or_create("hello-world.session")?,
+    ///     api_id: API_ID,
+    ///     api_hash: API_HASH.to_string(),
+    ///     params: Default::default(),
+    /// }).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         let sender = connect_sender(config.session.user_dc.unwrap_or(0), &mut config).await?;
 
@@ -106,7 +126,30 @@ impl Client {
         })
     }
 
-    /// Invoke a raw API call without the need to use `handle` or `step`.
+    /// Invoke a raw API call without the need to use a [`Client::handle`] or having to repeatedly
+    /// call [`Client::step`]. This directly sends the request to Telegram's servers.
+    ///
+    /// Using function definitions corresponding to a different layer is likely to cause the
+    /// responses to the request to not be understood.
+    ///
+    /// <div class="stab unstable">
+    ///
+    /// **Warning**: this method is **not** part of the stability guarantees of semantic
+    /// versioning. It **may** break during *minor* version changes (but not on patch version
+    /// changes). Use with care.
+    ///
+    /// </div>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_tl_types as tl;
+    ///
+    /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn invoke<R: tl::RemoteCall>(
         &mut self,
         request: &R,
@@ -114,7 +157,29 @@ impl Client {
         self.sender.invoke(request).await
     }
 
-    /// Return a new `ClientHandle` that can be used to invoke remote procedure calls.
+    /// Return a new [`ClientHandle`] that can be used to invoke remote procedure calls.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use tokio::task;
+    ///
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Obtain a handle. After this you can obtain more by using `client_handle.clone()`.
+    /// let mut client_handle = client.handle();
+    ///
+    /// // Run the network loop. This is necessary, or no network events will be processed!
+    /// let network_handle = task::spawn(async move { client.run_until_disconnected().await });
+    ///
+    /// // Use the `client_handle` to your heart's content, maybe you just want to disconnect:
+    /// client_handle.disconnect().await;
+    ///
+    /// // Joining on the spawned task lets us access the result from `run_until_disconnected`,
+    /// // so we can verify everything went fine. You could also just drop this though.
+    /// network_handle.await?;
+    /// # Ok(())
+    /// # }
+    ///
     pub fn handle(&self) -> ClientHandle {
         ClientHandle {
             tx: self.handle_tx.clone(),
@@ -123,8 +188,31 @@ impl Client {
 
     /// Perform a single network step or processing of incoming requests via handles.
     ///
-    /// If a server message is received, requests enqueued via the `handle`'s may have their
-    /// result delivered via a channel, and a (possibly empty) list of updates will be returned.
+    /// If a server message is received, requests enqueued via the [`ClientHandle`]s may have
+    /// their result delivered via a channel, and a (possibly empty) list of updates will be
+    /// returned.
+    ///
+    /// The other return values are graceful disconnection, or a read error.
+    ///
+    /// Most commonly, you will want to use the higher-level abstraction [`Client::next_updates`]
+    /// instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::NetworkStep;
+    ///
+    /// loop {
+    ///     // Process network events forever until we gracefully disconnect or get an error.
+    ///     match client.step().await? {
+    ///         NetworkStep::Connected { .. } => continue,
+    ///         NetworkStep::Disconnected => break,
+    ///     }
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn step(&mut self) -> Result<Step, sender::ReadError> {
         let (network, request) = {
             let network = self.sender.step();
@@ -167,8 +255,18 @@ impl Client {
         })
     }
 
-    /// Run the client by repeatedly `step`ping the client until a graceful disconnection occurs,
-    /// or a network error occurs. Incoming updates are ignored and simply dropped.
+    /// Run the client by repeatedly calling [`Client::step`] until a graceful disconnection
+    /// occurs, or a network error occurs. Incoming updates are ignored and simply dropped.
+    /// instead.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.run_until_disconnected().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn run_until_disconnected(mut self) -> Result<(), sender::ReadError> {
         loop {
             match self.step().await? {
@@ -179,8 +277,31 @@ impl Client {
     }
 }
 
+/// Method implementations directly related with network connectivity.
 impl ClientHandle {
     /// Invoke a raw API call.
+    ///
+    /// Using function definitions corresponding to a different layer is likely to cause the
+    /// responses to the request to not be understood.
+    ///
+    /// <div class="stab unstable">
+    ///
+    /// **Warning**: this method is **not** part of the stability guarantees of semantic
+    /// versioning. It **may** break during *minor* version changes (but not on patch version
+    /// changes). Use with care.
+    ///
+    /// </div>
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_tl_types as tl;
+    ///
+    /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn invoke<R: tl::RemoteCall>(
         &mut self,
         request: &R,
@@ -202,7 +323,18 @@ impl ClientHandle {
             .map(|body| R::Return::from_bytes(&body).unwrap())
     }
 
-    /// Gracefully tell the `Client` to disconnect and stop receiving things from the network.
+    /// Gracefully tell the [`Client`] that created this handle to disconnect and stop receiving
+    /// things from the network.
+    ///
+    /// If the client has already been dropped (and thus disconnected), this method does nothing.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) {
+    /// client.disconnect().await;
+    /// # }
+    /// ```
     pub async fn disconnect(&mut self) {
         let (response, rx) = oneshot::channel();
 

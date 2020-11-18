@@ -294,7 +294,7 @@ impl Message {
     pub async fn get_reply(&mut self) -> Result<Option<Self>, InvocationError> {
         self.client
             .clone() // TODO don't clone
-            .get_reply_to_message(self.input_chat(), self)
+            .get_reply_to_message(self)
             .await
     }
 
@@ -303,7 +303,7 @@ impl Message {
     ///
     /// Shorthand for `ClientHandle::send_message`.
     pub async fn respond(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
-        self.client.send_message(self.input_chat(), message).await
+        self.client.send_message(&self.input_chat(), message).await
     }
 
     /// Directly reply to this message by sending a new message in the same chat that replies to
@@ -312,7 +312,7 @@ impl Message {
     /// Shorthand for `ClientHandle::send_message`.
     pub async fn reply(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
         self.client
-            .send_message(self.input_chat(), message.reply_to(Some(self.msg.id)))
+            .send_message(&self.input_chat(), message.reply_to(Some(self.msg.id)))
             .await
     }
 
@@ -338,7 +338,7 @@ impl Message {
     /// Shorthand for `ClientHandle::edit_message`.
     pub async fn edit(&mut self, new_message: types::InputMessage) -> Result<(), InvocationError> {
         self.client
-            .edit_message(self.input_chat(), self.msg.id, new_message)
+            .edit_message(&self.input_chat(), self.msg.id, new_message)
             .await
     }
 

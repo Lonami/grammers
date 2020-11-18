@@ -18,15 +18,32 @@
 //! Once that's ready, connect a new [`Client`] and start making API calls. You may also want to
 //! import some [extension traits] to make the experience less bitter.
 //!
+//! When a method is said to be "expensive", this often means that calling it too much in a
+//! certain period of time will result in the API returning "flood wait" errors, meaning that
+//! the method cannot be called again for a certain amount of seconds (trying to do so will
+//! continue to return the flood wait error for that duration).
+//!
+//! On the other hand, a "cheap" method can be called a lot and is unlikely to result in a flood
+//! wait error. However, all methods can potentially cause a flood wait, so some care is still
+//! required.
+//!
+//! There is nothing wrong with causing the API to return flood wait errors, but it might be a
+//! good idea to try and not hit them.
+//!
+//! A flood wait error is different from a peer flood error. A peer flood error means the flood
+//! limitation is applied account-wide, and its duration is undefined. This often means that the
+//! account spammed, or a young account tried to contact too many peers.
+//!
 //! [Telegram's API]: https://core.telegram.org/#telegram-api
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
-//! [`Client`]: struct.Client.html
-//! [extension traits]: ext/index.html
+//! [extension traits]: crate::ext
 mod client;
 pub mod ext;
 pub mod types;
 pub(crate) mod utils;
 
-pub use client::{Client, ClientHandle, Config, InitParams, SignInError, UpdateIter};
-pub use types::{EntitySet, Update};
+pub use client::{
+    Client, ClientHandle, Config, InitParams, SignInError, Step as NetworkStep, UpdateIter,
+};
+pub use types::{EntitySet, InputMessage, Update};

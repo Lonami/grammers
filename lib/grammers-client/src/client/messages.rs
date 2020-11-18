@@ -132,13 +132,13 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
 impl MessageIter {
-    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
+    fn new(client: &ClientHandle, peer: &tl::enums::InputPeer) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
             MAX_LIMIT,
             tl::functions::messages::GetHistory {
-                peer,
+                peer: peer.clone(),
                 offset_id: 0,
                 offset_date: 0,
                 add_offset: 0,
@@ -184,13 +184,13 @@ impl MessageIter {
 pub type SearchIter = IterBuffer<tl::functions::messages::Search, Message>;
 
 impl SearchIter {
-    fn new(client: &ClientHandle, peer: tl::enums::InputPeer) -> Self {
+    fn new(client: &ClientHandle, peer: &tl::enums::InputPeer) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
             MAX_LIMIT,
             tl::functions::messages::Search {
-                peer,
+                peer: peer.clone(),
                 q: String::new(),
                 from_id: None,
                 top_msg_id: None,
@@ -322,13 +322,39 @@ impl GlobalSearchIter {
     }
 }
 
+/// Method implementations related to sending, modifying or getting messages.
 impl ClientHandle {
-    /// Sends a text message to the desired chat.
+    /// Sends a message to the desired chat.
+    ///
+    /// This method can also be used to send media such as photos, videos, documents, polls, etc.
+    ///
+    /// If you want to send a local file as media, you will need to use
+    /// [`ClientHandle::upload_file`] first.
+    ///
+    /// Refer to [`InputMessage`] to learn more formatting options, such as using markdown or
+    /// adding buttons under your message (if you're logged in as a bot).
+    ///
+    /// See also: [`Message::respond`], [`Message::reply`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.send_message(&chat, "Boring text message :-(".into()).await?;
+    ///
+    /// use grammers_client::InputMessage;
+    ///
+    /// client.send_message(&chat, InputMessage::text("Sneaky message").silent(true)).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// [`InputMessage`]: crate::InputMessage
     // TODO don't require nasty InputPeer
     // TODO return Message
     pub async fn send_message(
         &mut self,
-        chat: tl::enums::InputPeer,
+        chat: &tl::enums::InputPeer,
         message: types::InputMessage,
     ) -> Result<(), InvocationError> {
         if let Some(media) = message.media {
@@ -336,7 +362,7 @@ impl ClientHandle {
                 silent: message.silent,
                 background: message.background,
                 clear_draft: message.clear_draft,
-                peer: chat,
+                peer: chat.clone(),
                 reply_to_msg_id: message.reply_to,
                 media,
                 message: message.text,
@@ -357,7 +383,7 @@ impl ClientHandle {
                 silent: message.silent,
                 background: message.background,
                 clear_draft: message.clear_draft,
-                peer: chat,
+                peer: chat.clone(),
                 reply_to_msg_id: message.reply_to,
                 message: message.text,
                 random_id: generate_random_id(),
@@ -374,18 +400,35 @@ impl ClientHandle {
         }
     }
 
-    /// Edits an existing text message
+    /// Edits an existing message.
+    ///
+    /// Similar to [`ClientHandle::send_message`], advanced formatting can be achieved with the
+    /// options offered by [`InputMessage`].
+    ///
+    /// See also: [`Message::edit`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let old_message_id = 123;
+    /// client.edit_message(&chat, old_message_id, "New text message".into()).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// [`InputMessage`]: crate::InputMessage
     // TODO don't require nasty InputPeer
     // TODO Media
     pub async fn edit_message(
         &mut self,
-        chat: tl::enums::InputPeer,
+        chat: &tl::enums::InputPeer,
         message_id: i32,
         new_message: types::InputMessage,
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
-            peer: chat,
+            peer: chat.clone(),
             id: message_id,
             message: Some(new_message.text),
             media: None,
@@ -409,6 +452,20 @@ impl ClientHandle {
     /// message IDs if some of them were already missing). It is not possible to find out which
     /// messages were actually deleted, but if the request succeeds, none of the specified message
     /// IDs will appear in the message history from that point on.
+    ///
+    /// See also: [`Message::delete`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: Option<&grammers_tl_types::enums::InputChannel>, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_ids = [123, 456, 789];
+    ///
+    /// // Careful, these messages will be gone after the method succeeds!
+    /// client.delete_messages(chat, &message_ids).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn delete_messages(
         &mut self,
         chat: Option<&tl::enums::InputChannel>,
@@ -440,6 +497,21 @@ impl ClientHandle {
     /// will be `None`. The length of the resulting list is the same as the length of the input
     /// message IDs, and the indices from the list of IDs map to the indices in the result so
     /// you can find which messages were forwarded and which message they became.
+    ///
+    /// See also: [`Message::forward_to`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(destination: grammers_tl_types::enums::InputPeer, source: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_ids = [123, 456, 789];
+    ///
+    /// let messages = client.forward_messages(&destination, &message_ids, &source).await?;
+    /// let fwd_count = messages.into_iter().filter(Option::is_some).count();
+    /// println!("Forwarded {} out of {} messages!", fwd_count, message_ids.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn forward_messages(
         &mut self,
         destination: &tl::enums::InputPeer,
@@ -461,12 +533,22 @@ impl ClientHandle {
         Ok(map_random_ids_to_messages(self, &request.random_id, result))
     }
 
-    /// Gets the reply to message of a message
-    /// Throws NotFound error if there's no reply to message
-    // TODO don't require nasty InputPeer
+    /// Gets the [`Message`] to which the input message is replying to.
+    ///
+    /// See also: [`Message::get_reply`].
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(message: grammers_client::types::Message, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// if let Some(reply) = client.get_reply_to_message(&message).await? {
+    ///     println!("The reply said: {}", reply.text());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_reply_to_message(
         &mut self,
-        chat: tl::enums::InputPeer,
         message: &Message,
     ) -> Result<Option<Message>, InvocationError> {
         /// Helper method to fetch a single message by its input message.
@@ -491,6 +573,8 @@ impl ClientHandle {
             }
         }
 
+        // TODO shouldn't this method take in a message id anyway?
+        let chat = message.input_chat();
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -529,14 +613,42 @@ impl ClientHandle {
     }
 
     /// Iterate over the message history of a chat, from most recent to oldest.
-    pub fn iter_messages(&self, chat: tl::enums::InputPeer) -> MessageIter {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in chat!
+    /// let mut messages = client.iter_messages(&chat).limit(100);
+    ///
+    /// while let Some(message) = messages.next().await? {
+    ///     println!("{}", message.text());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn iter_messages(&self, chat: &tl::enums::InputPeer) -> MessageIter {
         MessageIter::new(self, chat)
     }
 
     /// Iterate over the messages that match certain search criteria.
     ///
     /// This allows you to search by text within a chat or filter by media among other things.
-    pub fn search_messages(&self, chat: tl::enums::InputPeer) -> SearchIter {
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Let's print all the people who think grammers is cool.
+    /// let mut messages = client.search_messages(&chat).query("grammers is cool");
+    ///
+    /// while let Some(message) = messages.next().await? {
+    ///     println!("{}", message.sender().unwrap().name());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn search_messages(&self, chat: &tl::enums::InputPeer) -> SearchIter {
         SearchIter::new(self, chat)
     }
 
@@ -544,6 +656,20 @@ impl ClientHandle {
     /// searching in a specific chat. The downside is that this global search supports less filters.
     ///
     /// This allows you to search by text within a chat or filter by media among other things.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Let's print all the chats were people think grammers is cool.
+    /// let mut messages = client.search_all_messages().query("grammers is cool");
+    ///
+    /// while let Some(message) = messages.next().await? {
+    ///     println!("{}", message.chat().unwrap().name());
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn search_all_messages(&self) -> GlobalSearchIter {
         GlobalSearchIter::new(self)
     }
@@ -557,6 +683,19 @@ impl ClientHandle {
     /// will be `None`. The length of the resulting list is the same as the length of the input
     /// message IDs, and the indices from the list of IDs map to the indices in the result so
     /// you can map them into the new list.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_ids = [123, 456, 789];
+    ///
+    /// let messages = client.get_messages_by_id(None, &message_ids).await?;
+    /// let count = messages.into_iter().filter(Option::is_some).count();
+    /// println!("{} out of {} messages were deleted!", message_ids.len() - count, message_ids.len());
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_messages_by_id(
         &mut self,
         chat: Option<&tl::enums::InputChannel>,
@@ -601,10 +740,24 @@ impl ClientHandle {
     ///
     /// The `chat` must only be specified when fetching messages from a broadcast channel or
     /// megagroup, not when fetching from small group chats or private conversations.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// if let Some(message) = client.get_pinned_message(None).await? {
+    ///     println!("You have a message pinned in your chat");
+    /// } else {
+    ///     println!("You don't have any message pinned in your personal chat...");
+    /// }
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_pinned_message(
         &mut self,
         chat: Option<&tl::enums::InputChannel>,
     ) -> Result<Option<tl::enums::Message>, InvocationError> {
+        // TODO return types::Message and print its text in the example
         let id = vec![tl::enums::InputMessage::Pinned];
 
         let result = if let Some(chat) = chat {
@@ -631,6 +784,16 @@ impl ClientHandle {
     }
 
     /// Pin a message in the chat. This will not notify any users.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_id = 123;
+    /// client.pin_message(&chat, message_id).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     // TODO return produced Option<service message>
     pub async fn pin_message(
         &mut self,
@@ -641,6 +804,16 @@ impl ClientHandle {
     }
 
     /// Unpin a message from the chat.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_id = 123;
+    /// client.unpin_message(&chat, message_id).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn unpin_message(
         &mut self,
         chat: &tl::enums::InputPeer,
@@ -649,7 +822,7 @@ impl ClientHandle {
         self.update_pinned(chat, message_id, false).await
     }
 
-    pub async fn update_pinned(
+    async fn update_pinned(
         &mut self,
         chat: &tl::enums::InputPeer,
         id: i32,
@@ -667,6 +840,15 @@ impl ClientHandle {
     }
 
     /// Unpin all currently-pinned messages from the chat.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.unpin_all_messages(&chat).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn unpin_all_messages(
         &mut self,
         chat: &tl::enums::InputPeer,
