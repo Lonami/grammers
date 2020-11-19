@@ -378,11 +378,19 @@ impl Message {
     }
 
     pub(crate) fn input_chat(&self) -> tl::enums::InputPeer {
-        todo!()
+        self.chat().unwrap().input_peer()
     }
 
     pub(crate) fn input_channel(&self) -> Option<tl::enums::InputChannel> {
-        todo!()
+        match self.chat()?.input_peer() {
+            tl::enums::InputPeer::Channel(c) => Some(
+                tl::types::InputChannel {
+                    channel_id: c.channel_id,
+                    access_hash: c.access_hash
+                }.into()
+            ),
+            _ => None
+        }
     }
 
     /// Pin this message in the chat.

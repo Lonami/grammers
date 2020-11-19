@@ -15,11 +15,12 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
+const PERMA_BAN_DURATION: i32 = 86400 * 367; // >366 days
 
 fn full_rights() -> tl::types::ChatAdminRights {
     tl::types::ChatAdminRights {
@@ -588,18 +589,18 @@ impl ClientHandle {
                     .await
                     .map(drop),
                 User(_) | FromMessage(_) => {
-                    // TODO this should account for the server time instead (via sender's offset)
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("system time is before epoch")
-                        .as_secs() as i32;
+                    self.ban_participant(
+                        &channel,
+                        user,
+                        Some(Duration::from_secs(KICK_BAN_DURATION as u64)),
+                    )
+                    .await?;
 
-                    // ChatBannedRights fields indicate "which right to take away".
-                    let mut request = tl::functions::channels::EditBanned {
-                        channel,
+                    let request = tl::functions::channels::EditBanned {
+                        channel: channel.clone(),
                         user_id: user.clone(),
                         banned_rights: tl::types::ChatBannedRights {
-                            view_messages: true,
+                            view_messages: false,
                             send_messages: false,
                             send_media: false,
                             send_stickers: false,
@@ -611,22 +612,11 @@ impl ClientHandle {
                             change_info: false,
                             invite_users: false,
                             pin_messages: false,
-                            until_date: now + KICK_BAN_DURATION,
+                            until_date: 0,
                         }
                         .into(),
                     };
-
-                    // This will fail if the user represents ourself, but either verifying
-                    // beforehand that the user is in fact ourselves or checking it after
-                    // an error occurs is not really worth it.
-                    self.invoke(&request).await?;
-                    match &mut request.banned_rights {
-                        tl::enums::ChatBannedRights::Rights(rights) => {
-                            rights.view_messages = false;
-                            rights.until_date = 0;
-                        }
-                    }
-                    self.invoke(&request).await.map(drop)
+                    self.invoke(&request).await.map(drop)      
                 }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
@@ -638,6 +628,57 @@ impl ClientHandle {
             .map(drop)
         } else {
             Ok(())
+        }
+    }
+
+    pub async fn ban_participant(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser,
+        duration: Option<Duration>,
+    ) -> Result<(), InvocationError> {
+        use tl::enums::InputUser::*;
+
+        match user {
+            Empty => Ok(()),
+            UserSelf => Ok(()), // Can't ban thyself
+            User(_) | FromMessage(_) => {
+                // TODO this should account for the server time instead (via sender's offset)
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system time is before epoch")
+                    .as_secs() as i32;
+
+                // ChatBannedRights fields indicate "which right to take away".
+                let request = tl::functions::channels::EditBanned {
+                    channel: channel.clone(),
+                    user_id: user.clone(),
+                    banned_rights: tl::types::ChatBannedRights {
+                        view_messages: true,
+                        send_messages: false,
+                        send_media: false,
+                        send_stickers: false,
+                        send_gifs: false,
+                        send_games: false,
+                        send_inline: false,
+                        embed_links: false,
+                        send_polls: false,
+                        change_info: false,
+                        invite_users: false,
+                        pin_messages: false,
+                        until_date: now
+                            + duration
+                                .map(|d| d.as_secs() as i32)
+                                .unwrap_or(PERMA_BAN_DURATION),
+                    }
+                    .into(),
+                };
+
+                // This will fail if the user represents ourself, but either verifying
+                // beforehand that the user is in fact ourselves or checking it after
+                // an error occurs is not really worth it.
+                self.invoke(&request).await.map(drop)
+           }
         }
     }
 
