@@ -1,4 +1,4 @@
-//! Example to echo user text messages. Updates are handled concurrently.
+//! Example to print the ID and title of all the dialogs.
 //!
 //! The `TG_ID` and `TG_HASH` environment variables must be set (learn how to do it for
 //! [Windows](https://ss64.com/nt/set.html) or [Linux](https://ss64.com/bash/export.html))

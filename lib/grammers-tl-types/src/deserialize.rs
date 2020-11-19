@@ -423,21 +423,3 @@ impl Deserializable for Vec<u8> {
         Ok(result)
     }
 }
-
-#[cfg(test)]
-mod tests {
-    #[cfg(feature = "tl-api")]
-    use super::*;
-
-    #[test]
-    #[cfg(feature = "tl-api")]
-    fn ensure_generic_reads_blob() {
-        let blob = [103, 64, 11, 51, 72];
-        assert_eq!(
-            <crate::functions::InvokeWithLayer as crate::RemoteCall>::Return::from_bytes(&blob)
-                .unwrap()
-                .0,
-            blob
-        );
-    }
-}
