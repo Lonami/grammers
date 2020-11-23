@@ -596,28 +596,11 @@ impl ClientHandle {
                     )
                     .await?;
 
-                    let request = tl::functions::channels::EditBanned {
-                        channel: channel.clone(),
-                        user_id: user.clone(),
-                        banned_rights: tl::types::ChatBannedRights {
-                            view_messages: false,
-                            send_messages: false,
-                            send_media: false,
-                            send_stickers: false,
-                            send_gifs: false,
-                            send_games: false,
-                            send_inline: false,
-                            embed_links: false,
-                            send_polls: false,
-                            change_info: false,
-                            invite_users: false,
-                            pin_messages: false,
-                            until_date: 0,
-                        }
-                        .into(),
-                    };
-                    self.invoke(&request).await.map(drop)      
-                }
+                    self.unban_participant(
+                        &channel,
+                        user
+                    ).await
+               }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
@@ -631,6 +614,29 @@ impl ClientHandle {
         }
     }
 
+    /// Bans the participant from the chat.
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// You may ban the participant permanently or temporarily
+    ///
+    /// Can only ban in channels.
+    ///
+    /// Passing `None` to duration parameter assumes permanent ban.
+    ///
+    /// # Examples
+    ///
+    /// Bans a user for an hour
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let duration = std::time::Duration::from_secs(60 * 60);
+    /// match client.ban_participant(&chat, &user, Some(duration)).await {
+    ///     Ok(_) => println!("user is no more >:D"),
+    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn ban_participant(
         &mut self,
         channel: &tl::enums::InputChannel,
@@ -679,6 +685,60 @@ impl ClientHandle {
                 // an error occurs is not really worth it.
                 self.invoke(&request).await.map(drop)
            }
+        }
+    }
+
+    /// Unbans the participant from the chat.
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// Can only unban from channels.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// match client.unban_participant(&chat, &user).await {
+    ///     Ok(_) => println!("user has been unbanned >:D"),
+    ///     Err(_) => println!("Unban failed! Are you sure you're admin?"),
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn unban_participant(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser,
+    ) -> Result<(), InvocationError> {
+        use tl::enums::InputUser::*;
+
+        match user {
+            Empty => Ok(()),
+            UserSelf => Ok(()),
+            User(_) | FromMessage(_) => {
+                    let request = tl::functions::channels::EditBanned {
+                    channel: channel.clone(),
+                    user_id: user.clone(),
+                    banned_rights: tl::types::ChatBannedRights {
+                        view_messages: false,
+                        send_messages: false,
+                        send_media: false,
+                        send_stickers: false,
+                        send_gifs: false,
+                        send_games: false,
+                        send_inline: false,
+                        embed_links: false,
+                        send_polls: false,
+                        change_info: false,
+                        invite_users: false,
+                        pin_messages: false,
+                        until_date: 0,
+                    }
+                    .into(),
+                };
+
+                self.invoke(&request).await.map(drop) 
+            }
         }
     }
 
