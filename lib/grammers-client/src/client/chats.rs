@@ -816,7 +816,22 @@ impl ClientHandle {
         }
     }
 
-    /// Wrapper for [`EditAdminRightsBuilder::new`]
+    /// Creates a new [`EditAdminRightsBuilder`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let res = client.edit_admin_rights(&chat, &user).
+    ///             load_current()
+    ///             .await?
+    ///             .pin_messages(true)
+    ///             .invite_users(true)
+    ///             .ban_users(true)
+    ///             .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn edit_admin_rights(
         &mut self,
         channel: &tl::enums::InputChannel,

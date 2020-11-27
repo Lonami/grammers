@@ -14,34 +14,12 @@ use std::{
 
 /// Builder for Editing the Admin Rights of a User in a Channel or SuperGroup
 ///
-/// # Example
-///
-/// ```
-/// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-/// let res = client.edit_admin_rights(&chat, &user).
-///             load_current()
-///             .await?
-///             .pin_messages(true)
-///             .invite_users(true)
-///             .ban_users(true)
-///             .await?;
-/// # Ok(())
-/// # }
-/// ```
-///
+/// See [`ClientHandle::edit_admin_rights`] for an example
 pub struct EditAdminRightsBuilder {
     client: ClientHandle,
     channel: tl::enums::InputChannel,
     user: tl::enums::InputUser,
-    anonymous: bool,
-    change_info: bool,
-    post_messages: bool,
-    edit_messages: bool,
-    delete_messages: bool,
-    ban_users: bool,
-    invite_users: bool,
-    pin_messages: bool,
-    add_admins: bool,
+    rights: tl::types::ChatAdminRights,
     rank: String,
     fut: Option<Pin<Box<dyn Future<Output = Result<(), InvocationError>> + Send>>>
 }
@@ -53,19 +31,7 @@ impl Future for EditAdminRightsBuilder {
             let call = tl::functions::channels::EditAdmin {
                 channel: self.channel.clone(),
                 user_id: self.user.clone(),
-                admin_rights: tl::enums::ChatAdminRights::Rights(
-                    tl::types::ChatAdminRights {
-                        anonymous: self.anonymous,
-                        change_info: self.change_info,
-                        post_messages: self.post_messages,
-                        edit_messages: self.edit_messages,
-                        delete_messages: self.delete_messages,
-                        ban_users: self.ban_users,
-                        invite_users: self.invite_users,
-                        pin_messages: self.pin_messages,
-                        add_admins: self.add_admins,
-                    }
-                ),
+                admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),                
                 rank: self.rank.clone()
             };
             let mut c = self.client.clone();
@@ -78,7 +44,7 @@ impl Future for EditAdminRightsBuilder {
 }
 
 impl EditAdminRightsBuilder {
-    pub fn new(
+    pub(crate) fn new(
         client: ClientHandle,
         channel: tl::enums::InputChannel,
         user: tl::enums::InputUser
@@ -87,16 +53,18 @@ impl EditAdminRightsBuilder {
             client,
             channel,
             user,
-            anonymous: false,
-            change_info: false,
-            post_messages: false,
-            edit_messages: false,
-            delete_messages: false,
-            ban_users: false,
-            invite_users: false,
-            pin_messages: false,
-            add_admins: false,
             rank: "".into(),
+            rights: tl::types::ChatAdminRights {
+                anonymous: false,
+                change_info: false,
+                post_messages: false,
+                edit_messages: false,
+                delete_messages: false,
+                ban_users: false,
+                invite_users: false,
+                pin_messages: false,
+                add_admins: false,
+            },
             fut: None
         }
     }
@@ -111,27 +79,27 @@ impl EditAdminRightsBuilder {
         ).await?;
         match user.participant {
             tl::enums::ChannelParticipant::Creator(c) => {
-                self.change_info = true;
-                self.post_messages = true;
-                self.edit_messages = true;
-                self.delete_messages = true;
-                self.ban_users = true;
-                self.invite_users = true;
-                self.pin_messages = true;
-                self.add_admins = true;
-                self.rank = c.rank.unwrap_or("owner".to_string())
+                self.rights.change_info = true;
+                self.rights.post_messages = true;
+                self.rights.edit_messages = true;
+                self.rights.delete_messages = true;
+                self.rights.ban_users = true;
+                self.rights.invite_users = true;
+                self.rights.pin_messages = true;
+                self.rights.add_admins = true;
+                self.rank = c.rank.unwrap_or("".to_string())
             },
             tl::enums::ChannelParticipant::Admin(admin) => {
                 let tl::enums::ChatAdminRights::Rights(rights) = admin.admin_rights;
-                self.change_info = rights.change_info;
-                self.post_messages = rights.post_messages;
-                self.edit_messages = rights.edit_messages;
-                self.delete_messages = rights.delete_messages;
-                self.ban_users = rights.ban_users;
-                self.invite_users = rights.invite_users;
-                self.pin_messages = rights.pin_messages;
-                self.add_admins = rights.add_admins;
-                self.rank = admin.rank.unwrap_or("admin".to_string())
+                self.rights.change_info = rights.change_info;
+                self.rights.post_messages = rights.post_messages;
+                self.rights.edit_messages = rights.edit_messages;
+                self.rights.delete_messages = rights.delete_messages;
+                self.rights.ban_users = rights.ban_users;
+                self.rights.invite_users = rights.invite_users;
+                self.rights.pin_messages = rights.pin_messages;
+                self.rights.add_admins = rights.add_admins;
+                self.rank = admin.rank.unwrap_or("".to_string())
             },
             _ => ()
         }
@@ -141,46 +109,46 @@ impl EditAdminRightsBuilder {
 
     /// Allow admin to be anonymous
     pub fn anonymous(&mut self, val: bool) -> &mut Self {
-        self.post_messages = val;
+        self.rights.post_messages = val;
         self
     }
 
     /// Allow admin to post messages (Channel specific)
     pub fn post_messages(&mut self, val: bool) -> &mut Self {
-        self.post_messages = val;
+        self.rights.post_messages = val;
         self
     }
 
     /// Allow admin to edit messages (Channel specific)
     pub fn edit_messages(&mut self, val: bool) -> &mut Self {
-        self.edit_messages = val;
+        self.rights.edit_messages = val;
         self
     }
 
     /// Allow admin to delete messages of other users
     pub fn delete_messages(&mut self, val: bool) -> &mut Self {
-        self.delete_messages = val;
+        self.rights.delete_messages = val;
         self
     }
 
     pub fn ban_users(&mut self, val: bool) -> &mut Self {
-        self.ban_users = val;
+        self.rights.ban_users = val;
         self
     }
 
     pub fn invite_users(&mut self, val: bool) -> &mut Self {
-        self.invite_users = val;
+        self.rights.invite_users = val;
         self
     }
 
     pub fn pin_messages(&mut self, val: bool) -> &mut Self {
-        self.pin_messages = val;
+        self.rights.pin_messages = val;
         self
     }
 
     /// Allow admin to add other admins
     pub fn add_admins(&mut self, val: bool) -> &mut Self {
-        self.add_admins = val;
+        self.rights.add_admins = val;
         self
     }
 
