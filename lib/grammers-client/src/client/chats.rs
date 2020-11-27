@@ -742,6 +742,80 @@ impl ClientHandle {
         }
     }
 
+    /// Mutes the participant from the chat.
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// You may ban the participant permanently or temporarily
+    ///
+    /// Can only mute in channels.
+    ///
+    /// To unmute, use unban_participant method
+    ///
+    /// Passing `None` to duration parameter assumes permanent mute.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// match client.ban_participant(&chat, &user, None).await {
+    ///     Ok(_) => println!("user is no more >:D"),
+    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn mute_participant(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser,
+        duration: Option<Duration>,
+    ) -> Result<(), InvocationError> {
+        use tl::enums::InputUser::*;
+
+        match user {
+            Empty => Ok(()),
+            UserSelf => Ok(()), // Can't ban thyself
+            User(_) | FromMessage(_) => {
+                // TODO this should account for the server time instead (via sender's offset)
+                let now = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .expect("system time is before epoch")
+                    .as_secs() as i32;
+
+                // ChatBannedRights fields indicate "which right to take away".
+                let request = tl::functions::channels::EditBanned {
+                    channel: channel.clone(),
+                    user_id: user.clone(),
+                    banned_rights: tl::types::ChatBannedRights {
+                        view_messages: false,
+                        send_messages: true,
+                        send_media: true,
+                        send_stickers: true,
+                        send_gifs: true,
+                        send_games: true,
+                        send_inline: true,
+                        embed_links: true,
+                        send_polls: true,
+                        change_info: true,
+                        invite_users: true,
+                        pin_messages: true,
+                        until_date: now
+                            + duration
+                                .map(|d| d.as_secs() as i32)
+                                .unwrap_or(PERMA_BAN_DURATION),
+                    }
+                    .into(),
+                };
+
+                // This will fail if the user represents ourself, but either verifying
+                // beforehand that the user is in fact ourselves or checking it after
+                // an error occurs is not really worth it.
+                self.invoke(&request).await.map(drop)
+           }
+        }
+    }
+
     /// Iterate over the history of profile photos for the given user or chat.
     ///
     /// Note that the current photo might not be present in the history, and to avoid doing more
