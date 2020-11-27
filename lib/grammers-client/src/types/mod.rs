@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
+mod chats;
 mod dialog;
 mod entity;
 mod entity_set;
@@ -24,3 +25,4 @@ pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
 pub use update::Update;
+pub use chats::EditAdminRightsBuilder;

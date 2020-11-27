@@ -10,7 +10,7 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{Entity, IterBuffer, Message};
+use crate::types::{EditAdminRightsBuilder, Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -814,6 +814,15 @@ impl ClientHandle {
                 self.invoke(&request).await.map(drop)
            }
         }
+    }
+
+    /// Wrapper for [`EditAdminRightsBuilder::new`]
+    pub fn edit_admin_rights(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser
+    ) -> EditAdminRightsBuilder {
+        EditAdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
