@@ -17,6 +17,7 @@ mod login_token;
 mod message;
 mod update;
 
+pub use chats::{EditAdminRightsBuilder, EditBannedRightsBuilder};
 pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;
@@ -25,4 +26,3 @@ pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
 pub use update::Update;
-pub use chats::{EditAdminRightsBuilder, EditBannedRightsBuilder};

@@ -3,13 +3,12 @@ use futures::FutureExt;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::{
-    mem::drop,
     future::Future,
+    mem::drop,
+    pin::Pin,
     task::{Context, Poll},
-    time::{SystemTime, Duration, UNIX_EPOCH},
-    pin::Pin
+    time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
 
 type FutOutput = Result<(), InvocationError>;
 type FutStore = Pin<Box<dyn Future<Output = FutOutput> + Send>>;
@@ -23,7 +22,7 @@ pub struct EditAdminRightsBuilder {
     user: tl::enums::InputUser,
     rights: tl::types::ChatAdminRights,
     rank: String,
-    fut: Option<FutStore>
+    fut: Option<FutStore>,
 }
 
 impl Future for EditAdminRightsBuilder {
@@ -33,8 +32,8 @@ impl Future for EditAdminRightsBuilder {
             let call = tl::functions::channels::EditAdmin {
                 channel: self.channel.clone(),
                 user_id: self.user.clone(),
-                admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),                
-                rank: self.rank.clone()
+                admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),
+                rank: self.rank.clone(),
             };
             let mut c = self.client.clone();
             self.fut = Some(Box::pin(async move {
@@ -49,7 +48,7 @@ impl EditAdminRightsBuilder {
     pub(crate) fn new(
         client: ClientHandle,
         channel: tl::enums::InputChannel,
-        user: tl::enums::InputUser
+        user: tl::enums::InputUser,
     ) -> Self {
         Self {
             client,
@@ -67,18 +66,19 @@ impl EditAdminRightsBuilder {
                 pin_messages: false,
                 add_admins: false,
             },
-            fut: None
+            fut: None,
         }
     }
 
     /// Load current rights of the user
     pub async fn load_current(&mut self) -> Result<&mut Self, InvocationError> {
-        let tl::enums::channels::ChannelParticipant::Participant(user) = self.client.invoke(
-            &tl::functions::channels::GetParticipant {
+        let tl::enums::channels::ChannelParticipant::Participant(user) = self
+            .client
+            .invoke(&tl::functions::channels::GetParticipant {
                 channel: self.channel.clone(),
-                user_id: self.user.clone()
-            }
-        ).await?;
+                user_id: self.user.clone(),
+            })
+            .await?;
         match user.participant {
             tl::enums::ChannelParticipant::Creator(c) => {
                 self.rights.change_info = true;
@@ -90,13 +90,13 @@ impl EditAdminRightsBuilder {
                 self.rights.pin_messages = true;
                 self.rights.add_admins = true;
                 self.rank = c.rank.unwrap_or("".to_string())
-            },
+            }
             tl::enums::ChannelParticipant::Admin(admin) => {
                 let tl::enums::ChatAdminRights::Rights(rights) = admin.admin_rights;
                 self.rights = rights;
                 self.rank = admin.rank.unwrap_or("".to_string())
-            },
-            _ => ()
+            }
+            _ => (),
         }
 
         Ok(self)
@@ -162,7 +162,7 @@ pub struct EditBannedRightsBuilder {
     channel: tl::enums::InputChannel,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
-    fut: Option<FutStore>
+    fut: Option<FutStore>,
 }
 
 impl Future for EditBannedRightsBuilder {
@@ -187,9 +187,9 @@ impl EditBannedRightsBuilder {
     pub(crate) fn new(
         client: ClientHandle,
         channel: tl::enums::InputChannel,
-        user: tl::enums::InputUser
+        user: tl::enums::InputUser,
     ) -> Self {
-       Self {
+        Self {
             client,
             channel,
             user,
@@ -206,26 +206,27 @@ impl EditBannedRightsBuilder {
                 change_info: false,
                 invite_users: false,
                 pin_messages: false,
-                until_date: 0
+                until_date: 0,
             },
-            fut: None
+            fut: None,
         }
     }
 
     /// Load the default banned rights of current user in the channel
     pub async fn load_current(&mut self) -> Result<&mut Self, InvocationError> {
-        let tl::enums::channels::ChannelParticipant::Participant(user) = self.client.invoke(
-            &tl::functions::channels::GetParticipant {
+        let tl::enums::channels::ChannelParticipant::Participant(user) = self
+            .client
+            .invoke(&tl::functions::channels::GetParticipant {
                 channel: self.channel.clone(),
-                user_id: self.user.clone()
-            }
-        ).await?;
+                user_id: self.user.clone(),
+            })
+            .await?;
         match user.participant {
             tl::enums::ChannelParticipant::Banned(u) => {
                 let tl::enums::ChatBannedRights::Rights(rights) = u.banned_rights;
                 self.rights = rights;
             }
-            _ => ()
+            _ => (),
         }
 
         Ok(self)

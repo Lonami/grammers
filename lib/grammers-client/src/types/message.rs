@@ -386,10 +386,11 @@ impl Message {
             tl::enums::InputPeer::Channel(c) => Some(
                 tl::types::InputChannel {
                     channel_id: c.channel_id,
-                    access_hash: c.access_hash
-                }.into()
+                    access_hash: c.access_hash,
+                }
+                .into(),
             ),
-            _ => None
+            _ => None,
         }
     }
 

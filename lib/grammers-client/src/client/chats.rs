@@ -10,13 +10,7 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{
-    EditAdminRightsBuilder,
-    EditBannedRightsBuilder,
-    Entity,
-    IterBuffer,
-    Message
-};
+use crate::types::{EditAdminRightsBuilder, EditBannedRightsBuilder, Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -595,12 +589,12 @@ impl ClientHandle {
                     .map(drop),
                 User(_) | FromMessage(_) => {
                     self.edit_banned_rights(&channel, user)
-                    .view_messages(false)
-                    .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
-                    .await?;
+                        .view_messages(false)
+                        .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
+                        .await?;
 
                     self.edit_banned_rights(&channel, user).await
-               }
+                }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
@@ -636,14 +630,14 @@ impl ClientHandle {
     ///     Ok(_) => println!("user is banned >:D"),
     ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
     /// };
- 
+
     /// # Ok(())
     /// # }
     /// ```
     pub fn edit_banned_rights(
         &mut self,
         channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser
+        user: &tl::enums::InputUser,
     ) -> EditBannedRightsBuilder {
         EditBannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
@@ -671,7 +665,7 @@ impl ClientHandle {
     pub fn edit_admin_rights(
         &mut self,
         channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser
+        user: &tl::enums::InputUser,
     ) -> EditAdminRightsBuilder {
         EditAdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
