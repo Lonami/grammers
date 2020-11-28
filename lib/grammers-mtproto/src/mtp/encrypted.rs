@@ -166,11 +166,10 @@ impl Encrypted {
     /// it should be for a content-related query or not.
     fn get_seq_no(&mut self, content_related: bool) -> i32 {
         if content_related {
-            let result = self.sequence * 2 + 1;
-            self.sequence += 1;
-            result
+            self.sequence += 2;
+            self.sequence - 1
         } else {
-            self.sequence * 2
+            self.sequence
         }
     }
 
