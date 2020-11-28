@@ -10,17 +10,22 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{EditAdminRightsBuilder, Entity, IterBuffer, Message};
+use crate::types::{
+    EditAdminRightsBuilder,
+    EditBannedRightsBuilder,
+    Entity,
+    IterBuffer,
+    Message
+};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
-use std::time::{Duration, SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
-const PERMA_BAN_DURATION: i32 = 86400 * 367; // >366 days
 
 fn full_rights() -> tl::types::ChatAdminRights {
     tl::types::ChatAdminRights {
@@ -589,17 +594,12 @@ impl ClientHandle {
                     .await
                     .map(drop),
                 User(_) | FromMessage(_) => {
-                    self.ban_participant(
-                        &channel,
-                        user,
-                        Some(Duration::from_secs(KICK_BAN_DURATION as u64)),
-                    )
+                    self.edit_banned_rights(&channel, user)
+                    .view_messages(false)
+                    .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
                     .await?;
 
-                    self.unban_participant(
-                        &channel,
-                        user
-                    ).await
+                    self.edit_banned_rights(&channel, user).await
                }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
@@ -614,216 +614,52 @@ impl ClientHandle {
         }
     }
 
-    /// Bans the participant from the chat.
-    ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
-    ///
-    /// You may ban the participant permanently or temporarily
-    ///
-    /// Can only ban in channels.
-    ///
-    /// Passing `None` to duration parameter assumes permanent ban.
-    ///
-    /// # Examples
-    ///
-    /// Bans a user for an hour
-    /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// let duration = std::time::Duration::from_secs(60 * 60);
-    /// match client.ban_participant(&chat, &user, Some(duration)).await {
-    ///     Ok(_) => println!("user is no more >:D"),
-    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
-    /// };
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn ban_participant(
-        &mut self,
-        channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser,
-        duration: Option<Duration>,
-    ) -> Result<(), InvocationError> {
-        use tl::enums::InputUser::*;
-
-        match user {
-            Empty => Ok(()),
-            UserSelf => Ok(()), // Can't ban thyself
-            User(_) | FromMessage(_) => {
-                // TODO this should account for the server time instead (via sender's offset)
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("system time is before epoch")
-                    .as_secs() as i32;
-
-                // ChatBannedRights fields indicate "which right to take away".
-                let request = tl::functions::channels::EditBanned {
-                    channel: channel.clone(),
-                    user_id: user.clone(),
-                    banned_rights: tl::types::ChatBannedRights {
-                        view_messages: true,
-                        send_messages: false,
-                        send_media: false,
-                        send_stickers: false,
-                        send_gifs: false,
-                        send_games: false,
-                        send_inline: false,
-                        embed_links: false,
-                        send_polls: false,
-                        change_info: false,
-                        invite_users: false,
-                        pin_messages: false,
-                        until_date: now
-                            + duration
-                                .map(|d| d.as_secs() as i32)
-                                .unwrap_or(PERMA_BAN_DURATION),
-                    }
-                    .into(),
-                };
-
-                // This will fail if the user represents ourself, but either verifying
-                // beforehand that the user is in fact ourselves or checking it after
-                // an error occurs is not really worth it.
-                self.invoke(&request).await.map(drop)
-           }
-        }
-    }
-
-    /// Unbans the participant from the chat.
-    ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
-    ///
-    /// Can only unban from channels.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// match client.unban_participant(&chat, &user).await {
-    ///     Ok(_) => println!("user has been unbanned >:D"),
-    ///     Err(_) => println!("Unban failed! Are you sure you're admin?"),
-    /// };
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn unban_participant(
-        &mut self,
-        channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser,
-    ) -> Result<(), InvocationError> {
-        use tl::enums::InputUser::*;
-
-        match user {
-            Empty => Ok(()),
-            UserSelf => Ok(()),
-            User(_) | FromMessage(_) => {
-                    let request = tl::functions::channels::EditBanned {
-                    channel: channel.clone(),
-                    user_id: user.clone(),
-                    banned_rights: tl::types::ChatBannedRights {
-                        view_messages: false,
-                        send_messages: false,
-                        send_media: false,
-                        send_stickers: false,
-                        send_gifs: false,
-                        send_games: false,
-                        send_inline: false,
-                        embed_links: false,
-                        send_polls: false,
-                        change_info: false,
-                        invite_users: false,
-                        pin_messages: false,
-                        until_date: 0,
-                    }
-                    .into(),
-                };
-
-                self.invoke(&request).await.map(drop) 
-            }
-        }
-    }
-
-    /// Mutes the participant from the chat.
-    ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
-    ///
-    /// You may ban the participant permanently or temporarily
-    ///
-    /// Can only mute in channels.
-    ///
-    /// To unmute, use unban_participant method
-    ///
-    /// Passing `None` to duration parameter assumes permanent mute.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// match client.ban_participant(&chat, &user, None).await {
-    ///     Ok(_) => println!("user is no more >:D"),
-    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
-    /// };
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn mute_participant(
-        &mut self,
-        channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser,
-        duration: Option<Duration>,
-    ) -> Result<(), InvocationError> {
-        use tl::enums::InputUser::*;
-
-        match user {
-            Empty => Ok(()),
-            UserSelf => Ok(()), // Can't ban thyself
-            User(_) | FromMessage(_) => {
-                // TODO this should account for the server time instead (via sender's offset)
-                let now = SystemTime::now()
-                    .duration_since(UNIX_EPOCH)
-                    .expect("system time is before epoch")
-                    .as_secs() as i32;
-
-                // ChatBannedRights fields indicate "which right to take away".
-                let request = tl::functions::channels::EditBanned {
-                    channel: channel.clone(),
-                    user_id: user.clone(),
-                    banned_rights: tl::types::ChatBannedRights {
-                        view_messages: false,
-                        send_messages: true,
-                        send_media: true,
-                        send_stickers: true,
-                        send_gifs: true,
-                        send_games: true,
-                        send_inline: true,
-                        embed_links: true,
-                        send_polls: true,
-                        change_info: true,
-                        invite_users: true,
-                        pin_messages: true,
-                        until_date: now
-                            + duration
-                                .map(|d| d.as_secs() as i32)
-                                .unwrap_or(PERMA_BAN_DURATION),
-                    }
-                    .into(),
-                };
-
-                // This will fail if the user represents ourself, but either verifying
-                // beforehand that the user is in fact ourselves or checking it after
-                // an error occurs is not really worth it.
-                self.invoke(&request).await.map(drop)
-           }
-        }
-    }
-
     /// Creates a new [`EditAdminRightsBuilder`]
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// all fields are 'allowed' by default(unban)
+    ///
+    /// true is 'allow', false is 'disallow'
+    ///
+    /// Default group rights are respected
     ///
     /// # Example
     ///
     /// ```
     /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// let res = client.edit_admin_rights(&chat, &user).
-    ///             load_current()
+    /// let res = client.edit_banned_rights(&chat, &user)
+    ///             .view_messages(false)
+    ///             .await;
+    ///
+    /// match res {
+    ///     Ok(_) => println!("user is banned >:D"),
+    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
+    /// };
+ 
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn edit_banned_rights(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser
+    ) -> EditBannedRightsBuilder {
+        EditBannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    }
+
+    /// Creates a new [`EditAdminRightsBuilder`]
+    ///
+    /// This will fail if you do not have sufficient permissions to perform said operation.
+    ///
+    /// all fields are false by default
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let res = client.edit_admin_rights(&chat, &user)
+    ///             .load_current()
     ///             .await?
     ///             .pin_messages(true)
     ///             .invite_users(true)
