@@ -9,6 +9,8 @@ pub mod aes;
 pub mod auth_key;
 pub mod factorize;
 pub mod rsa;
+pub mod two_factor_auth;
+
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use sha1::Sha1;

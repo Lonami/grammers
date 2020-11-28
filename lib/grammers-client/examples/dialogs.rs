@@ -18,6 +18,9 @@ use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::{runtime, task};
 
+use grammers_client::SignInError;
+use grammers_tl_types::Serializable;
+
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 fn prompt(message: &str) -> Result<String> {
@@ -58,7 +61,19 @@ async fn async_main() -> Result<()> {
         let phone = prompt("Enter your phone number (international format): ")?;
         let token = client.request_login_code(&phone, api_id, &api_hash).await?;
         let code = prompt("Enter the code you received: ")?;
-        client.sign_in(&token, &code).await?;
+        let signed_in = client.sign_in(&token, &code).await;
+        match signed_in {
+            Ok(_) => (),
+            Err(SignInError::PasswordRequired) => {
+                let password = prompt("Enter the password: ")?.to_bytes();
+
+                // Clean extra symbols (no idea where they come from)
+                let password = password[1..(password.len() - 2)].to_vec();
+
+                client.two_factor_auth(password).await?;
+            }
+            Err(e) => panic!(e),
+        };
         println!("Signed in!");
     }
 
