@@ -235,9 +235,11 @@ impl Client {
             let request = request.expect("mpsc returned None");
             match request {
                 Request::Rpc { request, response } => {
+                    // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
                     drop(response.send(self.sender.enqueue_body(request)));
                 }
                 Request::Disconnect { response } => {
+                    // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
                     drop(response.send(()));
                     return Ok(Step::Disconnected);
                 }
@@ -308,19 +310,31 @@ impl ClientHandle {
     ) -> Result<R::Return, InvocationError> {
         let (response, rx) = oneshot::channel();
 
-        drop(self.tx.send(Request::Rpc {
+        // TODO add a test this (using handle with client dropped)
+        if let Err(_) = self.tx.send(Request::Rpc {
             request: request.to_bytes(),
             response,
-        }));
+        }) {
+            // `Client` was dropped, can no longer send requests
+            return Err(InvocationError::Dropped);
+        }
 
         // First receive the `oneshot::Receiver` with from the `Client`,
-        // then `await` on that to receive the response to the request.
-        // TODO remove a few some unwraps (same for the drop above)…
-        rx.await
-            .unwrap()
-            .await
-            .unwrap()
-            .map(|body| R::Return::from_bytes(&body).unwrap())
+        // then `await` on that to receive the response body for the request.
+        if let Ok(response) = rx.await {
+            if let Ok(result) = response.await {
+                match result {
+                    Ok(body) => R::Return::from_bytes(&body).map_err(|e| e.into()),
+                    Err(e) => Err(e),
+                }
+            } else {
+                // `Sender` dropped, won't be receiving a response for this
+                Err(InvocationError::Dropped)
+            }
+        } else {
+            // `Client` dropped, won't be receiving a response for this
+            Err(InvocationError::Dropped)
+        }
     }
 
     /// Gracefully tell the [`Client`] that created this handle to disconnect and stop receiving
@@ -338,8 +352,11 @@ impl ClientHandle {
     pub async fn disconnect(&mut self) {
         let (response, rx) = oneshot::channel();
 
-        // TODO handle errors and not just drop them
-        drop(self.tx.send(Request::Disconnect { response }));
-        rx.await.unwrap();
+        if let Ok(_) = self.tx.send(Request::Disconnect { response }) {
+            // It's fine to drop errors here, it means the channel was dropped by the `Client`.
+            drop(rx.await);
+        } else {
+            // `Client` is already dropped, no need to disconnect again.
+        }
     }
 }
