@@ -14,16 +14,14 @@ use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;
 
-use grammers_crypto::two_factor_auth::calculate_2fa;
+use grammers_crypto::two_factor_auth::{calculate_2fa, VerificationError};
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
 pub enum SignInError {
-    SignUpRequired {
-        terms_of_service: Option<tl::types::help::TermsOfService>,
-    },
     InvalidCode,
-    PasswordRequired,
+    IncorrectParameters(VerificationError),
+    IncorrectPassword,
     Other(InvocationError),
 }
 
@@ -31,12 +29,36 @@ impl fmt::Display for SignInError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use SignInError::*;
         match self {
+            InvalidCode => write!(f, "sign in error: invalid code"),
+            IncorrectParameters(_e) => write!(f, "Incorrect parameters for password verification received by telegram. Please request them again."),
+            IncorrectPassword => write!(f, "Incorrect password"),
+            Other(e) => write!(f, "sign in error: {}", e),
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum SignInResult {
+    SignedIn(tl::types::User),
+    PasswordRequired {
+        password_information: tl::types::account::Password,
+    },
+    SignUpRequired {
+        terms_of_service: Option<tl::types::help::TermsOfService>,
+    },
+}
+
+impl fmt::Display for SignInResult {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        use SignInResult::*;
+        match self {
+            SignedIn(_user) => write!(f, "Signed in"),
+            PasswordRequired {
+                password_information: _password,
+            } => write!(f, "2fa password required"),
             SignUpRequired {
                 terms_of_service: tos,
             } => write!(f, "sign in error: sign up required: {:?}", tos),
-            InvalidCode => write!(f, "sign in error: invalid code"),
-            PasswordRequired => write!(f, "2fa password required"),
-            Other(e) => write!(f, "sign in error: {}", e),
         }
     }
 }
@@ -217,7 +239,9 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use grammers_client::SignInResult;
+    ///
+    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
@@ -229,7 +253,9 @@ impl Client {
     /// let code = ask_code_to_user();
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(user) => user,
+    ///     Ok(SignInResult::SignedIn(user)) => user,
+    ///     Ok(SignInResult::PasswordRequired { password_information }) => panic!("Please provide a password"),
+    ///     Ok(SignInResult::SignUpRequired { terms_of_service: tos }) => panic!("Sign up required"),
     ///     Err(err) => {
     ///         println!("Failed to sign in as a user :(\n{}", err);
     ///         return Err(err.into());
@@ -244,7 +270,7 @@ impl Client {
         &mut self,
         token: &LoginToken,
         code: &str,
-    ) -> Result<tl::types::User, SignInError> {
+    ) -> Result<SignInResult, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
@@ -255,29 +281,33 @@ impl Client {
         {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(x.user.try_into().unwrap())
+                Ok(SignInResult::SignedIn(x.user.try_into().unwrap()))
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
-                Err(SignInError::SignUpRequired {
+                Ok(SignInResult::SignUpRequired {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
+                })
+            }
+            Err(InvocationError::Rpc(RpcError { name, .. }))
+                if name == "SESSION_PASSWORD_NEEDED" =>
+            {
+                let password_information = self.get_password_information().await?;
+                Ok(SignInResult::PasswordRequired {
+                    password_information,
                 })
             }
             Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
             }
-            Err(InvocationError::Rpc(RpcError { name, .. }))
-                if name.starts_with("SESSION_PASSWORD_NEEDED") =>
-            {
-                Err(SignInError::PasswordRequired)
-            }
             Err(error) => Err(SignInError::Other(error)),
         }
     }
 
-    pub async fn two_factor_auth(
+    /// Extract information needed for the two-factor authentication
+    /// It's called automatically when we get SESSION_PASSWORD_NEEDED error during sign in.
+    pub async fn get_password_information(
         &mut self,
-        password: Vec<u8>,
-    ) -> Result<tl::types::User, SignInError> {
+    ) -> Result<tl::types::account::Password, SignInError> {
         let request = tl::functions::account::GetPassword {};
 
         let data: tl::enums::account::Password = match self.invoke(&request).await {
@@ -289,6 +319,56 @@ impl Client {
             tl::enums::account::Password::Password(pass) => pass,
         };
 
+        Ok(password_information)
+    }
+
+    /// Sign in using two-factor authentication (user password)
+    ///
+    /// [`password_information`] can be obtained from [SignInError::PasswordRequired] error after
+    /// [`sign_in`] method.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use grammers_client::{SignInError, SignInResult};
+    ///
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # const API_ID: i32 = 0;
+    /// # const API_HASH: &str = "";
+    /// # const PHONE: &str = "";
+    /// fn get_user_password(hint: &String) -> Vec<u8> {
+    ///     unimplemented!()
+    /// }
+    ///
+    /// # let token = client.request_login_code(PHONE, API_ID, API_HASH).await?;
+    /// # let code = "";
+    ///
+    /// // ... enter phone number, request login code ...
+    ///
+    /// let user = match client.sign_in(&token, &code).await {
+    ///     Ok(SignInResult::PasswordRequired {
+    ///          password_information,
+    ///     }) => {
+    ///         let mut password = get_user_password(password_information.hint.as_ref().unwrap());
+    ///
+    ///         client
+    ///             .two_factor_auth(password, password_information)
+    ///             .await.unwrap()
+    ///     }
+    ///     Ok(SignInResult::SignedIn(user)) => user,
+    ///     Ok(_) => panic!("Sign in required"),
+    ///     Err(err) => {
+    ///         panic!("Failed to sign in as a user :(\n{}");
+    ///     }
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn two_factor_auth(
+        &mut self,
+        password: Vec<u8>,
+        password_information: tl::types::account::Password,
+    ) -> Result<tl::types::User, SignInError> {
         let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match password_information.current_algo.unwrap() {
             tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
             tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
@@ -297,7 +377,10 @@ impl Client {
         let g_b = password_information.srp_b.unwrap();
         let a: Vec<u8> = password_information.secure_random;
 
-        let (m1, g_a) = calculate_2fa(salt1, salt2, g, p, g_b, a, password);
+        let (m1, g_a) = match calculate_2fa(salt1, salt2, g, p, g_b, a, password) {
+            Ok(data) => data,
+            Err(e) => return Err(SignInError::IncorrectParameters(e)),
+        };
 
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
@@ -312,10 +395,9 @@ impl Client {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
                 Ok(x.user.try_into().unwrap())
             }
-            Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
-                Err(SignInError::SignUpRequired {
-                    terms_of_service: x.terms_of_service.map(|tos| tos.into()),
-                })
+            Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
+            Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
+                Err(SignInError::IncorrectPassword)
             }
             Err(error) => Err(SignInError::Other(error)),
         }
@@ -330,25 +412,30 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # use grammers_client::SignInResult;
+    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # let token = client.request_login_code("", 0, "").await?;
     /// # let code = "".to_string();
     ///
     /// use grammers_client::SignInError;
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(_user) => {
+    ///     Ok(SignInResult::SignedIn(_user)) => {
     ///         println!("Can't create a new account because one already existed!");
     ///         return Err("account already exists".into());
-    ///     },
-    ///     Err(SignInError::SignUpRequired { terms_of_service }) => {
+    ///     }
+    ///     Ok(SignInResult::PasswordRequired { password_information }) => {
+    ///         println!("Can't create a new account because one already existed!");
+    ///         return Err("account already exists".into());
+    ///     }
+    ///     Ok(SignInResult::SignUpRequired { terms_of_service }) => {
     ///         println!("Signing up! You must agree to these TOS: {:?}", terms_of_service);
     ///         client.sign_up(&token, "My first name", "(optional last name)").await?
     ///     }
     ///     Err(err) => {
     ///         println!("Something else went wrong... {}", err);
     ///         return Err(err.into());
-    ///     },
+    ///     }
     /// };
     ///
     /// println!("Signed up as {}!", user.first_name.unwrap());

@@ -18,8 +18,7 @@ use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::{runtime, task};
 
-use grammers_client::SignInError;
-use grammers_tl_types::Serializable;
+use grammers_client::SignInResult;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -63,15 +62,25 @@ async fn async_main() -> Result<()> {
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
-            Ok(_) => (),
-            Err(SignInError::PasswordRequired) => {
-                let password = prompt("Enter the password: ")?.to_bytes();
+            Ok(SignInResult::PasswordRequired {
+                password_information,
+            }) => {
+                // Note: this `prompt` method will echo the password in the console.
+                //       Real code might want to use a better way to handle this.
+                let hint = password_information.hint.as_ref().unwrap();
+                let prompt_message = format!("Enter the password (hint {}): ", &hint);
+                let mut password = prompt(prompt_message.as_str())?.into_bytes();
 
-                // Clean extra symbols (no idea where they come from)
-                let password = password[1..(password.len() - 2)].to_vec();
+                // Remove \n symbol if any
+                if password.len() > 0 && password.last().unwrap() == &10u8 {
+                    password.remove(password.len() - 1);
+                }
 
-                client.two_factor_auth(password).await?;
+                client
+                    .two_factor_auth(password, password_information)
+                    .await?;
             }
+            Ok(_) => (),
             Err(e) => panic!(e),
         };
         println!("Signed in!");
