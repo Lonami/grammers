@@ -54,7 +54,7 @@ pub fn calculate_2fa(
     p: Vec<u8>,
     g_b: Vec<u8>,
     a: Vec<u8>,
-    password: Vec<u8>,
+    password: impl AsRef<[u8]>,
 ) -> Result<(Vec<u8>, Vec<u8>), VerificationError> {
     // Prepare our parameters
     let big_p = BigUint::from_bytes_be(&p);
@@ -133,13 +133,13 @@ fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Output<Sha256> {
 }
 
 // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
-fn ph1(password: &Vec<u8>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
+fn ph1(password: impl AsRef<[u8]>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
     sh(&sh(password, salt1), salt2)
 }
 
 // PH2(password, salt1, salt2)
 //                      := SH(pbkdf2(sha512, PH1(password, salt1, salt2), salt1, 100000), salt2)
-fn ph2(password: &Vec<u8>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
+fn ph2(password: impl AsRef<[u8]>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
     let hash1 = ph1(password, salt1, salt2);
 
     // 512-bit derived key

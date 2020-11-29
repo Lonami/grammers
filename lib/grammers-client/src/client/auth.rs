@@ -357,7 +357,7 @@ impl Client {
     pub async fn two_factor_auth(
         &mut self,
         password_token: PasswordToken,
-        password: Vec<u8>,
+        password: impl AsRef<[u8]>,
     ) -> Result<tl::types::User, SignInError> {
         let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match password_token.password.current_algo.unwrap() {
             tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),

@@ -67,15 +67,10 @@ async fn async_main() -> Result<()> {
                 //       Real code might want to use a better way to handle this.
                 let hint = password_token.hint().unwrap();
                 let prompt_message = format!("Enter the password (hint {}): ", &hint);
-                let mut password = prompt(prompt_message.as_str())?.into_bytes();
-
-                // Remove \n symbol if any
-                if password.len() > 0 && password.last().unwrap() == &10u8 {
-                    password.remove(password.len() - 1);
-                }
+                let password = prompt(prompt_message.as_str())?;
 
                 client
-                    .two_factor_auth(password_token, password)
+                    .two_factor_auth(password_token, password.trim())
                     .await?;
             }
             Ok(_) => (),
