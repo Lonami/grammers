@@ -68,7 +68,7 @@ async fn async_main() -> Result<()> {
                 let password = prompt(prompt_message.as_str())?;
 
                 client
-                    .two_factor_auth(password_token, password.trim())
+                    .check_password(password_token, password.trim())
                     .await?;
             }
             Ok(_) => (),

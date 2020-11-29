@@ -293,12 +293,14 @@ impl Client {
 
         let mut password: tl::types::account::Password = self.invoke(&request).await?.into();
 
-        let (_, _, g, p) = Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
+        let (_, _, g, p) =
+            Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
 
         // Telegram sent us incorrect parameters, trying to get them again
         if !check_p_and_g(p, g) {
             password = self.invoke(&request).await?.into();
-            let (_, _, g, p) = Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
+            let (_, _, g, p) =
+                Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
             if !check_p_and_g(p, g) {
                 panic!("Cannot get correct password information from telegram")
             }
@@ -335,7 +337,7 @@ impl Client {
     ///         let mut password = get_user_password(password_token.hint().unwrap());
     ///
     ///         client
-    ///             .two_factor_auth(password_token, password)
+    ///             .check_password(password_token, password)
     ///             .await.unwrap()
     ///     }
     ///     Ok(user) => user,
@@ -347,7 +349,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn two_factor_auth(
+    pub async fn check_password(
         &mut self,
         password_token: PasswordToken,
         password: impl AsRef<[u8]>,
