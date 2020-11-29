@@ -300,7 +300,7 @@ impl Client {
             let (_, _, g, p) =
                 Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
             if !check_p_and_g(p, g) {
-                panic!("Cannot get correct password information from telegram")
+                panic!("Failed to get correct password information from Telegram")
             }
         }
 
