@@ -14,7 +14,7 @@ use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;
 
-use grammers_crypto::two_factor_auth::{calculate_2fa, VerificationError};
+use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -24,7 +24,7 @@ pub enum SignInError {
     },
     PasswordRequired(PasswordToken),
     InvalidCode,
-    InvalidParameters(VerificationError),
+    InvalidParameters,
     InvalidPassword,
     Other(InvocationError),
 }
@@ -38,7 +38,7 @@ impl fmt::Display for SignInError {
             } => write!(f, "sign in error: sign up required: {:?}", tos),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
-            InvalidParameters(_e) => write!(f, "invalid parameters for password verification received by telegram. Please request them again."),
+            InvalidParameters => write!(f, "invalid parameters for password verification received by telegram. Please request them again."),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
         }
@@ -273,8 +273,11 @@ impl Client {
             Err(InvocationError::Rpc(RpcError { name, .. }))
                 if name == "SESSION_PASSWORD_NEEDED" =>
             {
-                let password_token = self.get_password_information().await?;
-                Err(SignInError::PasswordRequired(password_token))
+                let password_token = self.get_password_information().await;
+                match password_token {
+                    Ok(token) => Err(SignInError::PasswordRequired(token)),
+                    Err(e) => Err(SignInError::Other(e)),
+                }
             }
             Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
@@ -285,19 +288,23 @@ impl Client {
 
     /// Extract information needed for the two-factor authentication
     /// It's called automatically when we get SESSION_PASSWORD_NEEDED error during sign in.
-    pub async fn get_password_information(&mut self) -> Result<PasswordToken, SignInError> {
+    async fn get_password_information(&mut self) -> Result<PasswordToken, InvocationError> {
         let request = tl::functions::account::GetPassword {};
 
-        let data: tl::enums::account::Password = match self.invoke(&request).await {
-            Ok(x) => x.into(),
-            Err(error) => return Err(SignInError::Other(error)),
-        };
+        let mut password: tl::types::account::Password = self.invoke(&request).await?.into();
 
-        let password_information: tl::types::account::Password = match data {
-            tl::enums::account::Password::Password(pass) => pass,
-        };
+        let (_, _, g, p) = Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
 
-        Ok(PasswordToken::new(password_information))
+        // Telegram sent us incorrect parameters, trying to get them again
+        if !check_p_and_g(p, g) {
+            password = self.invoke(&request).await?.into();
+            let (_, _, g, p) = Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
+            if !check_p_and_g(p, g) {
+                panic!("Cannot get correct password information from telegram")
+            }
+        }
+
+        Ok(PasswordToken::new(password))
     }
 
     /// Sign in using two-factor authentication (user password)
@@ -345,18 +352,13 @@ impl Client {
         password_token: PasswordToken,
         password: impl AsRef<[u8]>,
     ) -> Result<tl::types::User, SignInError> {
-        let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match password_token.password.current_algo.unwrap() {
-            tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
-            tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
-        };
+        let current_algo = password_token.password.current_algo.unwrap();
+        let (salt1, salt2, g, p) = Client::extract_password_parameters(&current_algo);
 
         let g_b = password_token.password.srp_b.unwrap();
         let a: Vec<u8> = password_token.password.secure_random;
 
-        let (m1, g_a) = match calculate_2fa(salt1, salt2, g, p, g_b, a, password) {
-            Ok(data) => data,
-            Err(e) => return Err(SignInError::InvalidParameters(e)),
-        };
+        let (m1, g_a) = calculate_2fa(salt1, salt2, g, p, g_b, a, password);
 
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
@@ -377,6 +379,16 @@ impl Client {
             }
             Err(error) => Err(SignInError::Other(error)),
         }
+    }
+
+    fn extract_password_parameters(
+        current_algo: &tl::enums::PasswordKdfAlgo,
+    ) -> (&Vec<u8>, &Vec<u8>, &i32, &Vec<u8>) {
+        let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match current_algo {
+            tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
+            tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
+        };
+        (salt1, salt2, g, p)
     }
 
     /// Signs up a new user account to Telegram.

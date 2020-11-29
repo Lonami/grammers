@@ -5,8 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::two_factor_auth::VerificationError::{IncorrectPOrGParameters, UnexpectedPSize};
-use core::fmt;
 use glass_pumpkin::safe_prime;
 use hmac::Hmac;
 use num_bigint::BigUint;
@@ -26,56 +24,32 @@ macro_rules! h {
     };
 }
 
-#[derive(Debug)]
-pub enum VerificationError {
-    UnexpectedPSize(usize),
-    IncorrectPOrGParameters,
-}
-
-impl fmt::Display for VerificationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use VerificationError::*;
-        match self {
-            UnexpectedPSize(len) => write!(f, "Unexpected p size: {}", len),
-            IncorrectPOrGParameters => write!(f, "Incorrect g or p parameter"),
-        }
-    }
-}
-
 /// Prepare the password for sending to telegram for verification.
 /// The method returns M1 and g_a parameters that should be sent to the telegram
 ///   (without a raw password)
 ///
 /// The algorithm is described here: https://core.telegram.org/api/srp
 pub fn calculate_2fa(
-    salt1: Vec<u8>,
-    salt2: Vec<u8>,
-    g: i32,
-    p: Vec<u8>,
+    salt1: &Vec<u8>,
+    salt2: &Vec<u8>,
+    g: &i32,
+    p: &Vec<u8>,
     g_b: Vec<u8>,
     a: Vec<u8>,
     password: impl AsRef<[u8]>,
-) -> Result<(Vec<u8>, Vec<u8>), VerificationError> {
+) -> (Vec<u8>, Vec<u8>) {
     // Prepare our parameters
     let big_p = BigUint::from_bytes_be(&p);
-
-    // Validate p and g parameters
-    if p.len() != 256 {
-        return Err(UnexpectedPSize(p.len()));
-    }
-    if !check_p_and_g(&big_p, &g) {
-        return Err(IncorrectPOrGParameters);
-    }
 
     let g_b = pad_to_256(&g_b);
     let a = pad_to_256(&a);
 
-    let g_for_hash = vec![g as u8];
+    let g_for_hash = vec![*g as u8];
     let g_for_hash = pad_to_256(&g_for_hash);
 
     let big_g_b = BigUint::from_bytes_be(&g_b);
 
-    let big_g = BigUint::from(g as u32);
+    let big_g = BigUint::from(*g as u32);
     let big_a = BigUint::from_bytes_be(&a);
 
     // k := H(p | g)
@@ -124,7 +98,51 @@ pub fn calculate_2fa(
 
     let m1 = h!(&p_xor_g, &h!(&salt1), &h!(&salt2), &g_a, &g_b, &k_a).to_vec();
 
-    Ok((m1, g_a))
+    (m1, g_a)
+}
+
+/// Validation for parameters required for two-factor authentication
+pub fn check_p_and_g(p: &Vec<u8>, g: &i32) -> bool {
+    if !check_p_len(p) {
+        return false;
+    }
+
+    check_p_prime_and_subgroup(p, g)
+}
+
+fn check_p_prime_and_subgroup(p: &Vec<u8>, g: &i32) -> bool {
+    let p = &BigUint::from_bytes_be(p);
+
+    if !safe_prime::check(p) {
+        return false;
+    }
+
+    let is_subgroup = match g {
+        2 => p % 8u8 == BigUint::from(7u8),
+        3 => p % 3u8 == BigUint::from(2u8),
+        4 => true,
+        5 => {
+            let mod_value = p % 5u8;
+            mod_value == BigUint::from(1u8) || mod_value == BigUint::from(4u8)
+        }
+        6 => {
+            let mod_value = p % 24u8;
+            mod_value == BigUint::from(19u8) || mod_value == BigUint::from(23u8)
+        }
+        7 => {
+            let mod_value = p % 7u8;
+            mod_value == BigUint::from(3u8)
+                || mod_value == BigUint::from(5u8)
+                || mod_value == BigUint::from(6u8)
+        }
+        _ => panic!("Unexpected g parameter"),
+    };
+
+    is_subgroup
+}
+
+fn check_p_len(p: &Vec<u8>) -> bool {
+    p.len() == 256
 }
 
 // SH(data, salt) := H(salt | data | salt)
@@ -163,35 +181,6 @@ fn pad_to_256(data: &Vec<u8>) -> Vec<u8> {
     new_vec
 }
 
-fn check_p_and_g(p: &BigUint, g: &i32) -> bool {
-    if !safe_prime::check(p) {
-        return false;
-    }
-
-    let is_subgroup = match g {
-        2 => p % 8u8 == BigUint::from(7u8),
-        3 => p % 3u8 == BigUint::from(2u8),
-        4 => true,
-        5 => {
-            let mod_value = p % 5u8;
-            mod_value == BigUint::from(1u8) || mod_value == BigUint::from(4u8)
-        }
-        6 => {
-            let mod_value = p % 24u8;
-            mod_value == BigUint::from(19u8) || mod_value == BigUint::from(23u8)
-        }
-        7 => {
-            let mod_value = p % 7u8;
-            mod_value == BigUint::from(3u8)
-                || mod_value == BigUint::from(5u8)
-                || mod_value == BigUint::from(6u8)
-        }
-        _ => panic!("Unexpected g parameter"),
-    };
-
-    is_subgroup
-}
-
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -206,7 +195,7 @@ mod tests {
         let a = vec![6];
         let password = vec![7];
 
-        let (m1, g_a) = calculate_2fa(salt1, salt2, g, p, g_b, a, password).unwrap();
+        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &g, &p, g_b, a, password);
 
         let expected_m1 = vec![
             157, 131, 196, 103, 0, 184, 116, 232, 7, 196, 85, 231, 17, 36, 30, 222, 158, 234, 98,
@@ -303,7 +292,7 @@ mod tests {
         ];
         let password = vec![50, 51, 52, 53, 54, 55];
 
-        let (m1, g_a) = calculate_2fa(salt1, salt2, g, p, g_b, a, password).unwrap();
+        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &g, &p, g_b, a, password);
 
         let expected_m1 = vec![
             77, 122, 244, 18, 197, 162, 231, 177, 84, 103, 55, 107, 209, 24, 184, 83, 96, 78, 104,
@@ -358,11 +347,11 @@ mod tests {
         assert_correct_pg(503, 7);
     }
 
-    fn assert_incorrect_pg(p: i32, g: i32) {
-        assert!(!check_p_and_g(&BigUint::from(p as u64), &g))
+    fn assert_incorrect_pg(p: u32, g: i32) {
+        assert!(!check_p_prime_and_subgroup(&p.to_be_bytes().to_vec(), &g))
     }
 
-    fn assert_correct_pg(p: i32, g: i32) {
-        assert!(check_p_and_g(&BigUint::from(p as u64), &g))
+    fn assert_correct_pg(p: u32, g: i32) {
+        assert!(check_p_prime_and_subgroup(&p.to_be_bytes().to_vec(), &g))
     }
 }
