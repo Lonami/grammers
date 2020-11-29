@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
+mod chats;
 mod dialog;
 mod entity;
 mod entity_set;
@@ -16,6 +17,7 @@ mod login_token;
 mod message;
 mod update;
 
+pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;

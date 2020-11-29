@@ -10,12 +10,12 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{Entity, IterBuffer, Message};
+use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
 use std::convert::TryInto;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::Duration;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
@@ -588,45 +588,15 @@ impl ClientHandle {
                     .await
                     .map(drop),
                 User(_) | FromMessage(_) => {
-                    // TODO this should account for the server time instead (via sender's offset)
-                    let now = SystemTime::now()
-                        .duration_since(UNIX_EPOCH)
-                        .expect("system time is before epoch")
-                        .as_secs() as i32;
-
-                    // ChatBannedRights fields indicate "which right to take away".
-                    let mut request = tl::functions::channels::EditBanned {
-                        channel,
-                        user_id: user.clone(),
-                        banned_rights: tl::types::ChatBannedRights {
-                            view_messages: true,
-                            send_messages: false,
-                            send_media: false,
-                            send_stickers: false,
-                            send_gifs: false,
-                            send_games: false,
-                            send_inline: false,
-                            embed_links: false,
-                            send_polls: false,
-                            change_info: false,
-                            invite_users: false,
-                            pin_messages: false,
-                            until_date: now + KICK_BAN_DURATION,
-                        }
-                        .into(),
-                    };
-
                     // This will fail if the user represents ourself, but either verifying
                     // beforehand that the user is in fact ourselves or checking it after
                     // an error occurs is not really worth it.
-                    self.invoke(&request).await?;
-                    match &mut request.banned_rights {
-                        tl::enums::ChatBannedRights::Rights(rights) => {
-                            rights.view_messages = false;
-                            rights.until_date = 0;
-                        }
-                    }
-                    self.invoke(&request).await.map(drop)
+                    self.set_banned_rights(&channel, user)
+                        .view_messages(false)
+                        .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
+                        .await?;
+
+                    self.set_banned_rights(&channel, user).await
                 }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
@@ -639,6 +609,85 @@ impl ClientHandle {
         } else {
             Ok(())
         }
+    }
+
+    /// Set the banned rights for a specific user.
+    ///
+    /// Returns a new [`BannedRightsBuilder`] instance. Check out the documentation for that type
+    /// to learn more about what restrictions can be applied.
+    ///
+    /// Nothing is done until the returned instance is awaited, at which point it might result in
+    /// error if you do not have sufficient permissions to ban the user in the input chat.
+    ///
+    /// By default, the user has all rights, and you need to revoke those you want to take away
+    /// from the user by setting the permissions to `false`. This means that not taking away any
+    /// permissions will effectively unban someone, granting them all default user permissions.
+    ///
+    /// By default, the ban is applied forever, but this can be changed to a shorter duration.
+    ///
+    /// The default group rights are respected, despite individual restrictions.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // This user keeps spamming pepe stickers, take the sticker permission away from them
+    /// let res = client
+    ///     .set_banned_rights(&chat, &user)
+    ///     .send_stickers(false)
+    ///     .await;
+    ///
+    /// match res {
+    ///     Ok(_) => println!("No more sticker spam!"),
+    ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
+    /// };
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_banned_rights(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser,
+    ) -> BannedRightsBuilder {
+        BannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    }
+
+    /// Set the administrator rights for a specific user.
+    ///
+    /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
+    /// type to learn more about what rights can be given to administrators.
+    ///
+    /// Nothing is done until the returned instance is awaited, at which point it might result in
+    /// error if you do not have sufficient permissions to grant those rights to the other user.
+    ///
+    /// By default, no permissions are granted, and you need to specify those you want to grant by
+    /// setting the permissions to `true`. This means that not granting any permission will turn
+    /// the user into a normal user again, and they will no longer be an administrator.
+    ///
+    /// The change is applied forever and there is no way to set a specific duration. If the user
+    /// should only be an administrator for a set period of time, the administrator permissions
+    /// must be manually revoked at a later point in time.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Let the user pin messages and ban other people
+    /// let res = client.set_admin_rights(&chat, &user)
+    ///     .load_current()
+    ///     .await?
+    ///     .pin_messages(true)
+    ///     .ban_users(true)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn set_admin_rights(
+        &mut self,
+        channel: &tl::enums::InputChannel,
+        user: &tl::enums::InputUser,
+    ) -> AdminRightsBuilder {
+        AdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
