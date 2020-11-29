@@ -7,7 +7,7 @@
 // except according to those terms.
 use super::net::connect_sender;
 use super::Client;
-use crate::types::LoginToken;
+use crate::types::{LoginToken, PasswordToken};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -40,9 +40,7 @@ impl fmt::Display for SignInError {
 #[derive(Debug)]
 pub enum SignInResult {
     SignedIn(tl::types::User),
-    PasswordRequired {
-        password_information: tl::types::account::Password,
-    },
+    PasswordRequired(PasswordToken),
     SignUpRequired {
         terms_of_service: Option<tl::types::help::TermsOfService>,
     },
@@ -53,9 +51,7 @@ impl fmt::Display for SignInResult {
         use SignInResult::*;
         match self {
             SignedIn(_user) => write!(f, "Signed in"),
-            PasswordRequired {
-                password_information: _password,
-            } => write!(f, "2fa password required"),
+            PasswordRequired(_password) => write!(f, "2fa password required"),
             SignUpRequired {
                 terms_of_service: tos,
             } => write!(f, "sign in error: sign up required: {:?}", tos),
@@ -254,7 +250,7 @@ impl Client {
     ///
     /// let user = match client.sign_in(&token, &code).await {
     ///     Ok(SignInResult::SignedIn(user)) => user,
-    ///     Ok(SignInResult::PasswordRequired { password_information }) => panic!("Please provide a password"),
+    ///     Ok(SignInResult::PasswordRequired(_token)) => panic!("Please provide a password"),
     ///     Ok(SignInResult::SignUpRequired { terms_of_service: tos }) => panic!("Sign up required"),
     ///     Err(err) => {
     ///         println!("Failed to sign in as a user :(\n{}", err);
@@ -291,10 +287,8 @@ impl Client {
             Err(InvocationError::Rpc(RpcError { name, .. }))
                 if name == "SESSION_PASSWORD_NEEDED" =>
             {
-                let password_information = self.get_password_information().await?;
-                Ok(SignInResult::PasswordRequired {
-                    password_information,
-                })
+                let password_token = self.get_password_information().await?;
+                Ok(SignInResult::PasswordRequired(password_token))
             }
             Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
@@ -305,9 +299,7 @@ impl Client {
 
     /// Extract information needed for the two-factor authentication
     /// It's called automatically when we get SESSION_PASSWORD_NEEDED error during sign in.
-    pub async fn get_password_information(
-        &mut self,
-    ) -> Result<tl::types::account::Password, SignInError> {
+    pub async fn get_password_information(&mut self) -> Result<PasswordToken, SignInError> {
         let request = tl::functions::account::GetPassword {};
 
         let data: tl::enums::account::Password = match self.invoke(&request).await {
@@ -319,7 +311,7 @@ impl Client {
             tl::enums::account::Password::Password(pass) => pass,
         };
 
-        Ok(password_information)
+        Ok(PasswordToken::new(password_information))
     }
 
     /// Sign in using two-factor authentication (user password)
@@ -336,7 +328,7 @@ impl Client {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
-    /// fn get_user_password(hint: &String) -> Vec<u8> {
+    /// fn get_user_password(hint: &str) -> Vec<u8> {
     ///     unimplemented!()
     /// }
     ///
@@ -346,13 +338,11 @@ impl Client {
     /// // ... enter phone number, request login code ...
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(SignInResult::PasswordRequired {
-    ///          password_information,
-    ///     }) => {
-    ///         let mut password = get_user_password(password_information.hint.as_ref().unwrap());
+    ///     Ok(SignInResult::PasswordRequired(password_token) ) => {
+    ///         let mut password = get_user_password(password_token.hint().unwrap());
     ///
     ///         client
-    ///             .two_factor_auth(password, password_information)
+    ///             .two_factor_auth(password_token, password)
     ///             .await.unwrap()
     ///     }
     ///     Ok(SignInResult::SignedIn(user)) => user,
@@ -366,16 +356,16 @@ impl Client {
     /// ```
     pub async fn two_factor_auth(
         &mut self,
+        password_token: PasswordToken,
         password: Vec<u8>,
-        password_information: tl::types::account::Password,
     ) -> Result<tl::types::User, SignInError> {
-        let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match password_information.current_algo.unwrap() {
+        let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match password_token.password.current_algo.unwrap() {
             tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
             tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
         };
 
-        let g_b = password_information.srp_b.unwrap();
-        let a: Vec<u8> = password_information.secure_random;
+        let g_b = password_token.password.srp_b.unwrap();
+        let a: Vec<u8> = password_token.password.secure_random;
 
         let (m1, g_a) = match calculate_2fa(salt1, salt2, g, p, g_b, a, password) {
             Ok(data) => data,
@@ -384,7 +374,7 @@ impl Client {
 
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
-                srp_id: password_information.srp_id.unwrap(),
+                srp_id: password_token.password.srp_id.unwrap(),
                 a: g_a,
                 m1,
             }),
@@ -424,7 +414,7 @@ impl Client {
     ///         println!("Can't create a new account because one already existed!");
     ///         return Err("account already exists".into());
     ///     }
-    ///     Ok(SignInResult::PasswordRequired { password_information }) => {
+    ///     Ok(SignInResult::PasswordRequired(_password_information)) => {
     ///         println!("Can't create a new account because one already existed!");
     ///         return Err("account already exists".into());
     ///     }

@@ -62,12 +62,10 @@ async fn async_main() -> Result<()> {
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
-            Ok(SignInResult::PasswordRequired {
-                password_information,
-            }) => {
+            Ok(SignInResult::PasswordRequired(password_token)) => {
                 // Note: this `prompt` method will echo the password in the console.
                 //       Real code might want to use a better way to handle this.
-                let hint = password_information.hint.as_ref().unwrap();
+                let hint = password_token.hint().unwrap();
                 let prompt_message = format!("Enter the password (hint {}): ", &hint);
                 let mut password = prompt(prompt_message.as_str())?.into_bytes();
 
@@ -77,7 +75,7 @@ async fn async_main() -> Result<()> {
                 }
 
                 client
-                    .two_factor_auth(password, password_information)
+                    .two_factor_auth(password_token, password)
                     .await?;
             }
             Ok(_) => (),
