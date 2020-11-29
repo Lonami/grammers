@@ -89,20 +89,12 @@ impl EditAdminRightsBuilder {
             .await?;
         match user.participant {
             tl::enums::ChannelParticipant::Creator(c) => {
-                self.rights.change_info = true;
-                self.rights.post_messages = true;
-                self.rights.edit_messages = true;
-                self.rights.delete_messages = true;
-                self.rights.ban_users = true;
-                self.rights.invite_users = true;
-                self.rights.pin_messages = true;
-                self.rights.add_admins = true;
-                self.rank = c.rank.unwrap_or("".to_string())
+                self.rights = c.admin_rights.into();
+                self.rank = c.rank.unwrap_or_else(String::new);
             }
-            tl::enums::ChannelParticipant::Admin(admin) => {
-                let tl::enums::ChatAdminRights::Rights(rights) = admin.admin_rights;
-                self.rights = rights;
-                self.rank = admin.rank.unwrap_or("".to_string())
+            tl::enums::ChannelParticipant::Admin(a) => {
+                self.rights = a.admin_rights.into();
+                self.rank = a.rank.unwrap_or_else(String::new);
             }
             _ => (),
         }
@@ -251,8 +243,7 @@ impl EditBannedRightsBuilder {
             .await?;
         match user.participant {
             tl::enums::ChannelParticipant::Banned(u) => {
-                let tl::enums::ChatBannedRights::Rights(rights) = u.banned_rights;
-                self.rights = rights;
+                self.rights = u.banned_rights.into();
             }
             _ => (),
         }
