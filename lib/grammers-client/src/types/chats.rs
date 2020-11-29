@@ -113,7 +113,14 @@ impl AdminRightsBuilder {
     /// For example, if multiple anonymous admins share the same title, users won't be able to
     /// distinguish them.
     pub fn anonymous(&mut self, val: bool) -> &mut Self {
-        self.rights.post_messages = val;
+        self.rights.anonymous = val;
+        self
+    }
+
+    /// Whether the user is able to change information about the chat such as group description or
+    /// not.
+    pub fn change_info(&mut self, val: bool) -> &mut Self {
+        self.rights.change_info = val;
         self
     }
 
