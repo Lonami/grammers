@@ -20,8 +20,8 @@ use grammers_crypto::two_factor_auth::{calculate_2fa, VerificationError};
 #[derive(Debug)]
 pub enum SignInError {
     InvalidCode,
-    IncorrectParameters(VerificationError),
-    IncorrectPassword,
+    InvalidParameters(VerificationError),
+    InvalidPassword,
     Other(InvocationError),
 }
 
@@ -30,8 +30,8 @@ impl fmt::Display for SignInError {
         use SignInError::*;
         match self {
             InvalidCode => write!(f, "sign in error: invalid code"),
-            IncorrectParameters(_e) => write!(f, "Incorrect parameters for password verification received by telegram. Please request them again."),
-            IncorrectPassword => write!(f, "Incorrect password"),
+            InvalidParameters(_e) => write!(f, "invalid parameters for password verification received by telegram. Please request them again."),
+            InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
         }
     }
@@ -369,7 +369,7 @@ impl Client {
 
         let (m1, g_a) = match calculate_2fa(salt1, salt2, g, p, g_b, a, password) {
             Ok(data) => data,
-            Err(e) => return Err(SignInError::IncorrectParameters(e)),
+            Err(e) => return Err(SignInError::InvalidParameters(e)),
         };
 
         let check_password = tl::functions::auth::CheckPassword {
@@ -387,7 +387,7 @@ impl Client {
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
-                Err(SignInError::IncorrectPassword)
+                Err(SignInError::InvalidPassword)
             }
             Err(error) => Err(SignInError::Other(error)),
         }
