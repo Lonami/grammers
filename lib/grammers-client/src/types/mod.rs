@@ -17,7 +17,7 @@ mod login_token;
 mod message;
 mod update;
 
-pub use chats::{EditAdminRightsBuilder, EditBannedRightsBuilder};
+pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;

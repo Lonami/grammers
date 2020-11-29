@@ -22,8 +22,8 @@ type FutStore = Pin<Box<dyn Future<Output = FutOutput> + Send>>;
 
 /// Builder for editing the administrator rights of a user in a specific channel.
 ///
-/// Use [`ClientHandle::edit_admin_rights`] to retrieve an instance of this type.
-pub struct EditAdminRightsBuilder {
+/// Use [`ClientHandle::set_admin_rights`] to retrieve an instance of this type.
+pub struct AdminRightsBuilder {
     client: ClientHandle,
     channel: tl::enums::InputChannel,
     user: tl::enums::InputUser,
@@ -32,8 +32,9 @@ pub struct EditAdminRightsBuilder {
     fut: Option<FutStore>,
 }
 
-impl Future for EditAdminRightsBuilder {
+impl Future for AdminRightsBuilder {
     type Output = FutOutput;
+
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<FutOutput> {
         if self.fut.is_none() {
             let call = tl::functions::channels::EditAdmin {
@@ -51,7 +52,7 @@ impl Future for EditAdminRightsBuilder {
     }
 }
 
-impl EditAdminRightsBuilder {
+impl AdminRightsBuilder {
     pub(crate) fn new(
         client: ClientHandle,
         channel: tl::enums::InputChannel,
@@ -175,8 +176,8 @@ impl EditAdminRightsBuilder {
 
 /// Builder for editing the rights of a non-admin user in a specific channel.
 ///
-/// Use [`ClientHandle::edit_banned_rights`] to retrieve an instance of this type.
-pub struct EditBannedRightsBuilder {
+/// Use [`ClientHandle::set_banned_rights`] to retrieve an instance of this type.
+pub struct BannedRightsBuilder {
     client: ClientHandle,
     channel: tl::enums::InputChannel,
     user: tl::enums::InputUser,
@@ -184,8 +185,9 @@ pub struct EditBannedRightsBuilder {
     fut: Option<FutStore>,
 }
 
-impl Future for EditBannedRightsBuilder {
+impl Future for BannedRightsBuilder {
     type Output = FutOutput;
+
     fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<FutOutput> {
         if self.fut.is_none() {
             let call = tl::functions::channels::EditBanned {
@@ -202,7 +204,7 @@ impl Future for EditBannedRightsBuilder {
     }
 }
 
-impl EditBannedRightsBuilder {
+impl BannedRightsBuilder {
     pub(crate) fn new(
         client: ClientHandle,
         channel: tl::enums::InputChannel,

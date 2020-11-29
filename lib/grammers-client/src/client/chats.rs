@@ -10,7 +10,7 @@
 
 use super::{Client, ClientHandle};
 use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{EditAdminRightsBuilder, EditBannedRightsBuilder, Entity, IterBuffer, Message};
+use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -591,12 +591,12 @@ impl ClientHandle {
                     // This will fail if the user represents ourself, but either verifying
                     // beforehand that the user is in fact ourselves or checking it after
                     // an error occurs is not really worth it.
-                    self.edit_banned_rights(&channel, user)
+                    self.set_banned_rights(&channel, user)
                         .view_messages(false)
                         .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
                         .await?;
 
-                    self.edit_banned_rights(&channel, user).await
+                    self.set_banned_rights(&channel, user).await
                 }
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
@@ -611,8 +611,10 @@ impl ClientHandle {
         }
     }
 
-    /// Returns a new [`EditAdminRightsBuilder`] instance. Check out the documentation for that
-    /// type to learn more about what restrictions can be applied.
+    /// Set the banned rights for a specific user.
+    ///
+    /// Returns a new [`BannedRightsBuilder`] instance. Check out the documentation for that type
+    /// to learn more about what restrictions can be applied.
     ///
     /// Nothing is done until the returned instance is awaited, at which point it might result in
     /// error if you do not have sufficient permissions to ban the user in the input chat.
@@ -631,7 +633,7 @@ impl ClientHandle {
     /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // This user keeps spamming pepe stickers, take the sticker permission away from them
     /// let res = client
-    ///     .edit_banned_rights(&chat, &user)
+    ///     .set_banned_rights(&chat, &user)
     ///     .send_stickers(false)
     ///     .await;
     ///
@@ -642,15 +644,17 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn edit_banned_rights(
+    pub fn set_banned_rights(
         &mut self,
         channel: &tl::enums::InputChannel,
         user: &tl::enums::InputUser,
-    ) -> EditBannedRightsBuilder {
-        EditBannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    ) -> BannedRightsBuilder {
+        BannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
 
-    /// Returns a new [`EditAdminRightsBuilder`] instance. Check out the documentation for that
+    /// Set the administrator rights for a specific user.
+    ///
+    /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
     /// type to learn more about what rights can be given to administrators.
     ///
     /// Nothing is done until the returned instance is awaited, at which point it might result in
@@ -669,7 +673,7 @@ impl ClientHandle {
     /// ```
     /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let the user pin messages and ban other people
-    /// let res = client.edit_admin_rights(&chat, &user)
+    /// let res = client.set_admin_rights(&chat, &user)
     ///     .load_current()
     ///     .await?
     ///     .pin_messages(true)
@@ -678,12 +682,12 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn edit_admin_rights(
+    pub fn set_admin_rights(
         &mut self,
         channel: &tl::enums::InputChannel,
         user: &tl::enums::InputUser,
-    ) -> EditAdminRightsBuilder {
-        EditAdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    ) -> AdminRightsBuilder {
+        AdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
