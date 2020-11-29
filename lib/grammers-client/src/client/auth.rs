@@ -19,6 +19,10 @@ use grammers_crypto::two_factor_auth::{calculate_2fa, VerificationError};
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
 pub enum SignInError {
+    SignUpRequired {
+        terms_of_service: Option<tl::types::help::TermsOfService>,
+    },
+    PasswordRequired(PasswordToken),
     InvalidCode,
     InvalidParameters(VerificationError),
     InvalidPassword,
@@ -29,32 +33,14 @@ impl fmt::Display for SignInError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use SignInError::*;
         match self {
+            SignUpRequired {
+                terms_of_service: tos,
+            } => write!(f, "sign in error: sign up required: {:?}", tos),
+            PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidParameters(_e) => write!(f, "invalid parameters for password verification received by telegram. Please request them again."),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
-        }
-    }
-}
-
-#[derive(Debug)]
-pub enum SignInResult {
-    SignedIn(tl::types::User),
-    PasswordRequired(PasswordToken),
-    SignUpRequired {
-        terms_of_service: Option<tl::types::help::TermsOfService>,
-    },
-}
-
-impl fmt::Display for SignInResult {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        use SignInResult::*;
-        match self {
-            SignedIn(_user) => write!(f, "Signed in"),
-            PasswordRequired(_password) => write!(f, "2fa password required"),
-            SignUpRequired {
-                terms_of_service: tos,
-            } => write!(f, "sign in error: sign up required: {:?}", tos),
         }
     }
 }
@@ -235,7 +221,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # use grammers_client::SignInResult;
+    /// # use grammers_client::SignInError;
     ///
     ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
@@ -249,9 +235,9 @@ impl Client {
     /// let code = ask_code_to_user();
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(SignInResult::SignedIn(user)) => user,
-    ///     Ok(SignInResult::PasswordRequired(_token)) => panic!("Please provide a password"),
-    ///     Ok(SignInResult::SignUpRequired { terms_of_service: tos }) => panic!("Sign up required"),
+    ///     Ok(user) => user,
+    ///     Err(SignInError::PasswordRequired(_token)) => panic!("Please provide a password"),
+    ///     Err(SignInError::SignUpRequired { terms_of_service: tos }) => panic!("Sign up required"),
     ///     Err(err) => {
     ///         println!("Failed to sign in as a user :(\n{}", err);
     ///         return Err(err.into());
@@ -266,7 +252,7 @@ impl Client {
         &mut self,
         token: &LoginToken,
         code: &str,
-    ) -> Result<SignInResult, SignInError> {
+    ) -> Result<tl::types::User, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
@@ -277,10 +263,10 @@ impl Client {
         {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(SignInResult::SignedIn(x.user.try_into().unwrap()))
+                Ok(x.user.try_into().unwrap())
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
-                Ok(SignInResult::SignUpRequired {
+                Err(SignInError::SignUpRequired {
                     terms_of_service: x.terms_of_service.map(|tos| tos.into()),
                 })
             }
@@ -288,7 +274,7 @@ impl Client {
                 if name == "SESSION_PASSWORD_NEEDED" =>
             {
                 let password_token = self.get_password_information().await?;
-                Ok(SignInResult::PasswordRequired(password_token))
+                Err(SignInError::PasswordRequired(password_token))
             }
             Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
                 Err(SignInError::InvalidCode)
@@ -322,7 +308,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// use grammers_client::{SignInError, SignInResult};
+    /// use grammers_client::SignInError;
     ///
     /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
@@ -338,14 +324,14 @@ impl Client {
     /// // ... enter phone number, request login code ...
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(SignInResult::PasswordRequired(password_token) ) => {
+    ///     Err(SignInError::PasswordRequired(password_token) ) => {
     ///         let mut password = get_user_password(password_token.hint().unwrap());
     ///
     ///         client
     ///             .two_factor_auth(password_token, password)
     ///             .await.unwrap()
     ///     }
-    ///     Ok(SignInResult::SignedIn(user)) => user,
+    ///     Ok(user) => user,
     ///     Ok(_) => panic!("Sign in required"),
     ///     Err(err) => {
     ///         panic!("Failed to sign in as a user :(\n{}");
@@ -402,7 +388,6 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # use grammers_client::SignInResult;
     ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # let token = client.request_login_code("", 0, "").await?;
     /// # let code = "".to_string();
@@ -410,15 +395,15 @@ impl Client {
     /// use grammers_client::SignInError;
     ///
     /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(SignInResult::SignedIn(_user)) => {
+    ///     Ok(_user) => {
     ///         println!("Can't create a new account because one already existed!");
     ///         return Err("account already exists".into());
     ///     }
-    ///     Ok(SignInResult::PasswordRequired(_password_information)) => {
+    ///     Err(SignInError::PasswordRequired(_password_information)) => {
     ///         println!("Can't create a new account because one already existed!");
     ///         return Err("account already exists".into());
     ///     }
-    ///     Ok(SignInResult::SignUpRequired { terms_of_service }) => {
+    ///     Err(SignInError::SignUpRequired { terms_of_service }) => {
     ///         println!("Signing up! You must agree to these TOS: {:?}", terms_of_service);
     ///         client.sign_up(&token, "My first name", "(optional last name)").await?
     ///     }

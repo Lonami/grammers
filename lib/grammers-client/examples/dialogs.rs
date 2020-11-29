@@ -10,15 +10,13 @@
 //! cargo run --example dialogs
 //! ```
 
-use grammers_client::{Client, Config};
+use grammers_client::{Client, Config, SignInError};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::{runtime, task};
-
-use grammers_client::SignInResult;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -62,7 +60,7 @@ async fn async_main() -> Result<()> {
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
-            Ok(SignInResult::PasswordRequired(password_token)) => {
+            Err(SignInError::PasswordRequired(password_token)) => {
                 // Note: this `prompt` method will echo the password in the console.
                 //       Real code might want to use a better way to handle this.
                 let hint = password_token.hint().unwrap();
