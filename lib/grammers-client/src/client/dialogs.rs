@@ -11,6 +11,7 @@ use crate::types::{Dialog, EntitySet, IterBuffer, Message};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use std::collections::HashMap;
 
 const MAX_LIMIT: usize = 100;
 
@@ -83,16 +84,16 @@ impl DialogIter {
         };
 
         let entities = EntitySet::new(users, chats);
-        let messages = messages
+        let mut messages = messages
             .into_iter()
             .flat_map(|m| Message::new(&self.client, m, &entities))
-            .collect::<Vec<_>>();
-        // TODO MessageSet
+            .map(|m| ((&m.msg.peer_id).into(), m))
+            .collect::<HashMap<_, _>>();
 
         self.buffer.extend(
             dialogs
                 .into_iter()
-                .map(|dialog| Dialog::new(dialog, &messages, &entities)),
+                .map(|dialog| Dialog::new(dialog, &mut messages, &entities)),
         );
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.

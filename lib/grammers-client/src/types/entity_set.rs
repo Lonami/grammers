@@ -12,14 +12,14 @@ use std::sync::Arc;
 
 /// Hashable `Peer`.
 #[derive(Hash, PartialEq, Eq)]
-enum Peer {
+pub(crate) enum Peer {
     User(i32),
     Chat(i32),
     Channel(i32),
 }
 
-impl From<tl::enums::Peer> for Peer {
-    fn from(peer: tl::enums::Peer) -> Self {
+impl From<&tl::enums::Peer> for Peer {
+    fn from(peer: &tl::enums::Peer) -> Self {
         use tl::enums::Peer::*;
 
         match peer {
@@ -60,7 +60,7 @@ impl EntitySet {
                     // TODO *Forbidden have some info which may be relevant at times
                     // currently ignored for simplicity
                 }))
-                .map(|entity| (entity.peer().into(), entity))
+                .map(|entity| ((&entity.peer()).into(), entity))
                 .collect(),
         })
     }
@@ -74,6 +74,6 @@ impl EntitySet {
 
     /// Retrieve the full `Entity` object given its `Peer`.
     pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Entity> {
-        self.map.get(&peer.clone().into())
+        self.map.get(&peer.into())
     }
 }

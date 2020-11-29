@@ -21,6 +21,7 @@ pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
 pub use entity::Entity;
 pub use entity_set::EntitySet;
+pub(crate) use entity_set::Peer;
 pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
