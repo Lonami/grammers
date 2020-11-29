@@ -588,6 +588,9 @@ impl ClientHandle {
                     .await
                     .map(drop),
                 User(_) | FromMessage(_) => {
+                    // This will fail if the user represents ourself, but either verifying
+                    // beforehand that the user is in fact ourselves or checking it after
+                    // an error occurs is not really worth it.
                     self.edit_banned_rights(&channel, user)
                         .view_messages(false)
                         .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
@@ -608,29 +611,34 @@ impl ClientHandle {
         }
     }
 
-    /// Creates a new [`EditAdminRightsBuilder`]
+    /// Returns a new [`EditAdminRightsBuilder`] instance. Check out the documentation for that
+    /// type to learn more about what restrictions can be applied.
     ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
+    /// Nothing is done until the returned instance is awaited, at which point it might result in
+    /// error if you do not have sufficient permissions to ban the user in the input chat.
     ///
-    /// all fields are 'allowed' by default(unban)
+    /// By default, the user has all rights, and you need to revoke those you want to take away
+    /// from the user by setting the permissions to `false`. This means that not taking away any
+    /// permissions will effectively unban someone, granting them all default user permissions.
     ///
-    /// true is 'allow', false is 'disallow'
+    /// By default, the ban is applied forever, but this can be changed to a shorter duration.
     ///
-    /// Default group rights are respected
+    /// The default group rights are respected, despite individual restrictions.
     ///
     /// # Example
     ///
     /// ```
     /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// let res = client.edit_banned_rights(&chat, &user)
-    ///             .view_messages(false)
-    ///             .await;
+    /// // This user keeps spamming pepe stickers, take the sticker permission away from them
+    /// let res = client
+    ///     .edit_banned_rights(&chat, &user)
+    ///     .send_stickers(false)
+    ///     .await;
     ///
     /// match res {
-    ///     Ok(_) => println!("user is banned >:D"),
+    ///     Ok(_) => println!("No more sticker spam!"),
     ///     Err(_) => println!("Ban failed! Are you sure you're admin?"),
     /// };
-
     /// # Ok(())
     /// # }
     /// ```
@@ -642,23 +650,31 @@ impl ClientHandle {
         EditBannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
     }
 
-    /// Creates a new [`EditAdminRightsBuilder`]
+    /// Returns a new [`EditAdminRightsBuilder`] instance. Check out the documentation for that
+    /// type to learn more about what rights can be given to administrators.
     ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
+    /// Nothing is done until the returned instance is awaited, at which point it might result in
+    /// error if you do not have sufficient permissions to grant those rights to the other user.
     ///
-    /// all fields are false by default
+    /// By default, no permissions are granted, and you need to specify those you want to grant by
+    /// setting the permissions to `true`. This means that not granting any permission will turn
+    /// the user into a normal user again, and they will no longer be an administrator.
+    ///
+    /// The change is applied forever and there is no way to set a specific duration. If the user
+    /// should only be an administrator for a set period of time, the administrator permissions
+    /// must be manually revoked at a later point in time.
     ///
     /// # Example
     ///
     /// ```
     /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Let the user pin messages and ban other people
     /// let res = client.edit_admin_rights(&chat, &user)
-    ///             .load_current()
-    ///             .await?
-    ///             .pin_messages(true)
-    ///             .invite_users(true)
-    ///             .ban_users(true)
-    ///             .await?;
+    ///     .load_current()
+    ///     .await?
+    ///     .pin_messages(true)
+    ///     .ban_users(true)
+    ///     .await?;
     /// # Ok(())
     /// # }
     /// ```
