@@ -24,7 +24,6 @@ pub enum SignInError {
     },
     PasswordRequired(PasswordToken),
     InvalidCode,
-    InvalidParameters,
     InvalidPassword,
     Other(InvocationError),
 }
@@ -38,7 +37,6 @@ impl fmt::Display for SignInError {
             } => write!(f, "sign in error: sign up required: {:?}", tos),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
-            InvalidParameters => write!(f, "invalid parameters for password verification received by telegram. Please request them again."),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
         }
