@@ -10,7 +10,7 @@
 //! cargo run --example dialogs
 //! ```
 
-use grammers_client::{Client, Config};
+use grammers_client::{Client, Config, SignInError};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
@@ -58,7 +58,22 @@ async fn async_main() -> Result<()> {
         let phone = prompt("Enter your phone number (international format): ")?;
         let token = client.request_login_code(&phone, api_id, &api_hash).await?;
         let code = prompt("Enter the code you received: ")?;
-        client.sign_in(&token, &code).await?;
+        let signed_in = client.sign_in(&token, &code).await;
+        match signed_in {
+            Err(SignInError::PasswordRequired(password_token)) => {
+                // Note: this `prompt` method will echo the password in the console.
+                //       Real code might want to use a better way to handle this.
+                let hint = password_token.hint().unwrap();
+                let prompt_message = format!("Enter the password (hint {}): ", &hint);
+                let password = prompt(prompt_message.as_str())?;
+
+                client
+                    .check_password(password_token, password.trim())
+                    .await?;
+            }
+            Ok(_) => (),
+            Err(e) => panic!(e),
+        };
         println!("Signed in!");
     }
 

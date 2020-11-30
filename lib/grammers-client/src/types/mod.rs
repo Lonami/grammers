@@ -15,6 +15,7 @@ mod input_message;
 mod iter_buffer;
 mod login_token;
 mod message;
+mod password_token;
 mod update;
 
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
@@ -26,4 +27,5 @@ pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
+pub use password_token::PasswordToken;
 pub use update::Update;

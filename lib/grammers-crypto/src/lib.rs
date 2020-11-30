@@ -9,6 +9,8 @@ pub mod aes;
 pub mod auth_key;
 pub mod factorize;
 pub mod rsa;
+pub mod two_factor_auth;
+
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
 use sha1::Sha1;
@@ -64,17 +66,17 @@ fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u
     // sha256_a = SHA256 (msg_key + substr (auth_key, x, 36));
     let sha256_a = {
         let mut hasher = Sha256::new();
-        hasher.input(msg_key);
-        hasher.input(&auth_key.data[x..x + 36]);
-        hasher.result()
+        hasher.update(msg_key);
+        hasher.update(&auth_key.data[x..x + 36]);
+        hasher.finalize()
     };
 
     // sha256_b = SHA256 (substr (auth_key, 40+x, 36) + msg_key);
     let sha256_b = {
         let mut hasher = Sha256::new();
-        hasher.input(&auth_key.data[40 + x..40 + x + 36]);
-        hasher.input(msg_key);
-        hasher.result()
+        hasher.update(&auth_key.data[40 + x..40 + x + 36]);
+        hasher.update(msg_key);
+        hasher.finalize()
     };
 
     // aes_key = substr (sha256_a, 0, 8) + substr (sha256_b, 8, 16) + substr (sha256_a, 24, 8);
@@ -126,9 +128,9 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
     // msg_key_large = SHA256 (substr (auth_key, 88+x, 32) + plaintext + random_padding);
     let msg_key_large = {
         let mut hasher = Sha256::new();
-        hasher.input(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.input(&padded_plaintext);
-        hasher.result()
+        hasher.update(&auth_key.data[88 + x..88 + x + 32]);
+        hasher.update(&padded_plaintext);
+        hasher.finalize()
     };
 
     // msg_key = substr (msg_key_large, 8, 16);
@@ -194,9 +196,9 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
     // https://core.telegram.org/mtproto/security_guidelines#mtproto-encrypted-messages
     let our_key = {
         let mut hasher = Sha256::new();
-        hasher.input(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.input(&plaintext);
-        hasher.result()
+        hasher.update(&auth_key.data[88 + x..88 + x + 32]);
+        hasher.update(&plaintext);
+        hasher.finalize()
     };
 
     if msg_key != our_key[8..8 + 16] {
