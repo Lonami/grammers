@@ -289,20 +289,7 @@ impl Client {
     async fn get_password_information(&mut self) -> Result<PasswordToken, InvocationError> {
         let request = tl::functions::account::GetPassword {};
 
-        let mut password: tl::types::account::Password = self.invoke(&request).await?.into();
-
-        let (_, _, g, p) =
-            Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
-
-        // Telegram sent us incorrect parameters, trying to get them again
-        if !check_p_and_g(p, g) {
-            password = self.invoke(&request).await?.into();
-            let (_, _, g, p) =
-                Client::extract_password_parameters(password.current_algo.as_ref().unwrap());
-            if !check_p_and_g(p, g) {
-                panic!("Failed to get correct password information from Telegram")
-            }
-        }
+        let password: tl::types::account::Password = self.invoke(&request).await?.into();
 
         Ok(PasswordToken::new(password))
     }
@@ -352,17 +339,34 @@ impl Client {
         password_token: PasswordToken,
         password: impl AsRef<[u8]>,
     ) -> Result<tl::types::User, SignInError> {
-        let current_algo = password_token.password.current_algo.unwrap();
-        let (salt1, salt2, g, p) = Client::extract_password_parameters(&current_algo);
+        let mut password_info = password_token.password;
+        let current_algo = password_info.current_algo.unwrap();
+        let mut params = Client::extract_password_parameters(&current_algo);
 
-        let g_b = password_token.password.srp_b.unwrap();
-        let a: Vec<u8> = password_token.password.secure_random;
+        // Telegram sent us incorrect parameters, trying to get them again
+        if !check_p_and_g(params.2, params.3) {
+            password_info = self
+                .get_password_information()
+                .await
+                .map_err(SignInError::Other)?
+                .password;
+            params =
+                Client::extract_password_parameters(password_info.current_algo.as_ref().unwrap());
+            if !check_p_and_g(params.2, params.3) {
+                panic!("Failed to get correct password information from Telegram")
+            }
+        }
+
+        let (salt1, salt2, g, p) = params;
+
+        let g_b = password_info.srp_b.unwrap();
+        let a: Vec<u8> = password_info.secure_random;
 
         let (m1, g_a) = calculate_2fa(salt1, salt2, g, p, g_b, a, password);
 
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
-                srp_id: password_token.password.srp_id.unwrap(),
+                srp_id: password_info.srp_id.unwrap(),
                 a: g_a,
                 m1,
             }),

@@ -102,7 +102,7 @@ pub fn calculate_2fa(
 }
 
 /// Validation for parameters required for two-factor authentication
-pub fn check_p_and_g(p: &Vec<u8>, g: &i32) -> bool {
+pub fn check_p_and_g(g: &i32, p: &Vec<u8>) -> bool {
     if !check_p_len(p) {
         return false;
     }
