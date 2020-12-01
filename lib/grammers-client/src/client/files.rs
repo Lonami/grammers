@@ -12,6 +12,7 @@ use grammers_tl_types as tl;
 use std::fs;
 use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
 use std::path::Path;
+use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _};
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
@@ -150,6 +151,105 @@ impl ClientHandle {
         }
 
         Ok(())
+    }
+
+    /// Uploads an async buffer to Telegram servers.
+    ///
+    /// The file is not sent to any chat, but can be used as media when sending messages for a
+    /// certain period of time (less than a day). You can use this uploaded file multiple times.
+    ///
+    /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle, stream: &mut std::io::Cursor<Vec<u8>>) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::InputMessage;
+    ///
+    /// let uploaded_file = client.upload_stream(stream, Some("sleep.jpg".to_string())).await?;
+    ///
+    /// client.send_message(&chat, InputMessage::text("Check this out!").photo(uploaded_file)).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// [`InputMessage`]: crate::InputMessage
+
+    pub async fn upload_stream<S: AsyncRead + AsyncSeek + Unpin>(
+        // Do we want Sized instead of AsyncSeek?
+        &mut self,
+        stream: &mut S,
+        name: Option<String>, // Cries about type hint if None is passed if we use Into<String> instead
+    ) -> Result<tl::enums::InputFile, io::Error> {
+        let file_id = generate_random_file_id();
+        let name: String = name.unwrap_or("a".to_string());
+
+        let sz = stream.seek(SeekFrom::End(0)).await? as usize;
+        let big_file = sz > BIG_FILE_SIZE;
+        let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
+        let total_parts = ((sz + buffer.len() - 1) / buffer.len()) as i32;
+        let mut md5 = md5::Context::new();
+
+        stream.seek(SeekFrom::Start(0)).await?;
+        for part in 0..total_parts {
+            let mut read = 0;
+            while read != buffer.len() {
+                let n = stream.read(&mut buffer[read..]).await?;
+                if n == 0 {
+                    if part == total_parts - 1 {
+                        break;
+                    } else {
+                        return Err(io::Error::new(
+                            io::ErrorKind::UnexpectedEof,
+                            "reached EOF before reaching the last file part",
+                        ));
+                    }
+                }
+                read += n;
+            }
+            let bytes = buffer[..read].to_vec();
+
+            let ok = if big_file {
+                self.invoke(&tl::functions::upload::SaveBigFilePart {
+                    file_id,
+                    file_part: part,
+                    file_total_parts: total_parts,
+                    bytes,
+                })
+                .await
+            } else {
+                md5.consume(&bytes);
+                self.invoke(&tl::functions::upload::SaveFilePart {
+                    file_id,
+                    file_part: part,
+                    bytes,
+                })
+                .await
+            }
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+            if !ok {
+                return Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    "server failed to store uploaded data",
+                ));
+            }
+        }
+
+        Ok(if big_file {
+            tl::enums::InputFile::Big(tl::types::InputFileBig {
+                id: file_id,
+                parts: total_parts,
+                name,
+            })
+        } else {
+            tl::enums::InputFile::File(tl::types::InputFile {
+                id: file_id,
+                parts: total_parts,
+                name,
+                md5_checksum: format!("{:x}", md5.compute()),
+            })
+        })
     }
 
     /// Uploads a local file to Telegram servers.
