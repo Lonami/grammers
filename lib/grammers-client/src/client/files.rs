@@ -13,7 +13,7 @@ use std::io::SeekFrom;
 use std::path::Path;
 use tokio::{
     fs,
-    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _, AsyncWriteExt as _},
+    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
 };
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
@@ -165,30 +165,31 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle, stream: &mut std::io::Cursor<Vec<u8>>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
-    /// let uploaded_file = client.upload_stream(stream, Some("sleep.jpg".to_string())).await?;
+    /// let sz = some_vec.len();
+    /// let mut stream = std::io::Cursor::new(some_vec);
+    /// let uploaded_file = client.upload_stream(&mut stream, sz, Some("sleep.jpg".to_string())).await?;
     ///
     /// client.send_message(&chat, InputMessage::text("Check this out!").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn upload_stream<S: AsyncRead + AsyncSeek + Unpin>(
+    pub async fn upload_stream<S: AsyncRead + Unpin>(
         &mut self,
         stream: &mut S,
+        sz: usize,
         name: Option<String>,
     ) -> Result<tl::enums::InputFile, io::Error> {
         let file_id = generate_random_file_id();
         let name: String = name.unwrap_or("a".into());
 
-        let sz = stream.seek(SeekFrom::End(0)).await? as usize;
         let big_file = sz > BIG_FILE_SIZE;
         let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
         let total_parts = ((sz + buffer.len() - 1) / buffer.len()) as i32;
         let mut md5 = md5::Context::new();
 
-        stream.seek(SeekFrom::Start(0)).await?;
         for part in 0..total_parts {
             let mut read = 0;
             while read != buffer.len() {
@@ -278,6 +279,10 @@ impl ClientHandle {
         let path = path.as_ref();
         let name = path.file_name().map(|n| n.to_string_lossy().to_string());
         let mut file = fs::File::open(path).await?;
-        self.upload_stream(&mut file, name).await
+
+        let sz = file.seek(SeekFrom::End(0)).await? as usize;
+        file.seek(SeekFrom::Start(0)).await?;
+
+        self.upload_stream(&mut file, sz, name).await
     }
 }
