@@ -28,7 +28,7 @@ locate-locale = "0.1.0"
 futures = { version = "0.3" }
 pulldown-cmark = { version = "0.7.0", default-features = false, optional = true }
 html5ever = { version = "0.25.1", optional = true }
-tokio = { version = "0.3", features = ["sync"] }
+tokio = { version = "0.3", features = ["sync", "fs"] }
 log = "0.4.8"
 getrandom = "0.2"
 md5 = "0.7.0"

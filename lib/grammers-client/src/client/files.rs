@@ -9,10 +9,12 @@
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use std::fs;
-use std::io::{self, Read as _, Seek as _, SeekFrom, Write as _};
+use std::io::SeekFrom;
 use std::path::Path;
-use tokio::io::{AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _};
+use tokio::{
+    fs,
+    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeek, AsyncSeekExt as _, AsyncWriteExt as _},
+};
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
@@ -139,7 +141,7 @@ impl ClientHandle {
         media: tl::enums::InputFileLocation,
         path: P,
     ) -> Result<(), io::Error> {
-        let mut file = fs::File::create(path)?;
+        let mut file = fs::File::create(path).await?;
         let mut download = self.iter_download(media);
 
         while let Some(chunk) = download
@@ -147,7 +149,7 @@ impl ClientHandle {
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         {
-            file.write_all(&chunk)?;
+            file.write_all(&chunk).await?;
         }
 
         Ok(())
@@ -172,17 +174,13 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// [`InputMessage`]: crate::InputMessage
-
     pub async fn upload_stream<S: AsyncRead + AsyncSeek + Unpin>(
-        // Do we want Sized instead of AsyncSeek?
         &mut self,
         stream: &mut S,
-        name: Option<String>, // Cries about type hint if None is passed if we use Into<String> instead
+        name: Option<String>,
     ) -> Result<tl::enums::InputFile, io::Error> {
         let file_id = generate_random_file_id();
-        let name: String = name.unwrap_or("a".to_string());
+        let name: String = name.unwrap_or("a".into());
 
         let sz = stream.seek(SeekFrom::End(0)).await? as usize;
         let big_file = sz > BIG_FILE_SIZE;
@@ -277,79 +275,9 @@ impl ClientHandle {
         &mut self,
         path: P,
     ) -> Result<tl::enums::InputFile, io::Error> {
-        let file_id = generate_random_file_id();
-        let name = if let Some(name) = path.as_ref().file_name() {
-            name.to_string_lossy().into_owned()
-        } else {
-            "a".to_string()
-        };
-
-        let mut file = fs::File::open(path)?;
-        let file_size = file.seek(SeekFrom::End(0))? as usize;
-        let big_file = file_size > BIG_FILE_SIZE;
-        let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
-        let file_total_parts = ((file_size + buffer.len() - 1) / buffer.len()) as i32;
-        let mut md5 = md5::Context::new();
-
-        file.seek(SeekFrom::Start(0))?;
-        for file_part in 0..file_total_parts {
-            let mut read = 0;
-            while read != buffer.len() {
-                let n = file.read(&mut buffer[read..])?;
-                if n == 0 {
-                    if file_part == file_total_parts - 1 {
-                        break;
-                    } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::UnexpectedEof,
-                            "reached EOF before reaching the last file part",
-                        ));
-                    }
-                }
-                read += n;
-            }
-            let bytes = buffer[..read].to_vec();
-
-            let ok = if big_file {
-                self.invoke(&tl::functions::upload::SaveBigFilePart {
-                    file_id,
-                    file_part,
-                    file_total_parts,
-                    bytes,
-                })
-                .await
-            } else {
-                md5.consume(&bytes);
-                self.invoke(&tl::functions::upload::SaveFilePart {
-                    file_id,
-                    file_part,
-                    bytes,
-                })
-                .await
-            }
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            if !ok {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "server failed to store uploaded data",
-                ));
-            }
-        }
-
-        Ok(if big_file {
-            tl::enums::InputFile::Big(tl::types::InputFileBig {
-                id: file_id,
-                parts: file_total_parts,
-                name,
-            })
-        } else {
-            tl::enums::InputFile::File(tl::types::InputFile {
-                id: file_id,
-                parts: file_total_parts,
-                name,
-                md5_checksum: format!("{:x}", md5.compute()),
-            })
-        })
+        let path = path.as_ref();
+        let name = path.file_name().map(|n| n.to_string_lossy().to_string());
+        let mut file = fs::File::open(path).await?;
+        self.upload_stream(&mut file, name).await
     }
 }
