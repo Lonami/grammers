@@ -155,7 +155,7 @@ impl ClientHandle {
         Ok(())
     }
 
-    /// Uploads an async buffer to Telegram servers.
+    /// Uploads an async stream to Telegram servers.
     ///
     /// The file is not sent to any chat, but can be used as media when sending messages for a
     /// certain period of time (less than a day). You can use this uploaded file multiple times.
