@@ -156,32 +156,51 @@ impl ClientHandle {
     ///
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
     ///
+    /// The stream size must be known beforehand. If this is not possible, you might need to
+    /// process the entire async stream to determine its size, and then use the size and the
+    /// downloaded buffer.
+    ///
+    /// The stream size may be less or equal to the actual length of the stream, but not more.
+    /// If it's less, you may continue to read from the stream after the method returns.
+    /// If it's more, the method will fail because it does not have enough data to read.
+    ///
+    /// Note that Telegram uses the file name in certain methods, for example, to make sure the
+    /// file is an image when trying to use send the file as photo media, so it is important that
+    /// the file name at least uses the right extension, even if the name is a dummy value.
+    /// If the input file name is empty, the non-empty dummy value "a" will be used instead.
+    /// Because it has no extension, you may not be able to use the file in certain methods.
+    ///
     /// # Examples
     ///
     /// ```
     /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
-    /// let sz = some_vec.len();
+    /// // In-memory `Vec<u8>` buffers can be used as async streams
+    /// let size = some_vec.len();
     /// let mut stream = std::io::Cursor::new(some_vec);
-    /// let uploaded_file = client.upload_stream(&mut stream, sz, Some("sleep.jpg".to_string())).await?;
+    /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
     ///
-    /// client.send_message(&chat, InputMessage::text("Check this out!").photo(uploaded_file)).await?;
+    /// client.send_message(&chat, InputMessage::text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn upload_stream<S: AsyncRead + Unpin>(
         &mut self,
         stream: &mut S,
-        sz: usize,
-        name: Option<String>,
+        size: usize,
+        name: String,
     ) -> Result<tl::enums::InputFile, io::Error> {
         let file_id = generate_random_id();
-        let name: String = name.unwrap_or("a".into());
+        let name = if name.is_empty() {
+            "a".to_string()
+        } else {
+            name
+        };
 
-        let big_file = sz > BIG_FILE_SIZE;
+        let big_file = size > BIG_FILE_SIZE;
         let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
-        let total_parts = ((sz + buffer.len() - 1) / buffer.len()) as i32;
+        let total_parts = ((size + buffer.len() - 1) / buffer.len()) as i32;
         let mut md5 = md5::Context::new();
 
         for part in 0..total_parts {
@@ -252,6 +271,9 @@ impl ClientHandle {
     ///
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
     ///
+    /// If you need more control over the uploaded data, such as performing only a partial upload
+    /// or with a different name, use [`Client::upload_stream`] instead.
+    ///
     /// # Examples
     ///
     /// ```
@@ -271,12 +293,15 @@ impl ClientHandle {
         path: P,
     ) -> Result<tl::enums::InputFile, io::Error> {
         let path = path.as_ref();
-        let name = path.file_name().map(|n| n.to_string_lossy().to_string());
-        let mut file = fs::File::open(path).await?;
 
-        let sz = file.seek(SeekFrom::End(0)).await? as usize;
+        let mut file = fs::File::open(path).await?;
+        let size = file.seek(SeekFrom::End(0)).await? as usize;
         file.seek(SeekFrom::Start(0)).await?;
 
-        self.upload_stream(&mut file, sz, name).await
+        // File name will only be `None` for `..` path, and directories cannot be uploaded as
+        // files, so it's fine to unwrap.
+        let name = path.file_name().unwrap().to_string_lossy().to_string();
+
+        self.upload_stream(&mut file, size, name).await
     }
 }
