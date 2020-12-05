@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::utils::generate_random_id;
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -19,13 +20,6 @@ use tokio::{
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
-
-/// Generate a random file ID suitable for `upload_file`.
-fn generate_random_file_id() -> i64 {
-    let mut buffer = [0; 8];
-    getrandom::getrandom(&mut buffer).expect("failed to generate random file id");
-    i64::from_le_bytes(buffer)
-}
 
 pub struct DownloadIter {
     client: ClientHandle,
@@ -182,7 +176,7 @@ impl ClientHandle {
         sz: usize,
         name: Option<String>,
     ) -> Result<tl::enums::InputFile, io::Error> {
-        let file_id = generate_random_file_id();
+        let file_id = generate_random_id();
         let name: String = name.unwrap_or("a".into());
 
         let big_file = sz > BIG_FILE_SIZE;

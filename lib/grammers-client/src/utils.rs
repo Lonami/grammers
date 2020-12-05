@@ -6,14 +6,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/// Generate a random ID suitable for sending messages or media.
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::SystemTime;
+
+// This atomic isn't for anything critical, just to generate unique IDs without locks.
+// The worst that can happen if the load and store orderings are wrong is that the IDs
+// are not actually unique which could confuse some of the API results.
+static LAST_ID: AtomicI64 = AtomicI64::new(0);
+
+/// Generate a "random" ID suitable for sending messages or media.
 pub(crate) fn generate_random_id() -> i64 {
-    let mut buffer = [0; 8];
-    getrandom::getrandom(&mut buffer).expect("failed to generate random message id");
-    i64::from_le_bytes(buffer)
+    if LAST_ID.load(Ordering::SeqCst) == 0 {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("system time is before epoch")
+            .as_nanos() as i64;
+
+        LAST_ID.compare_and_swap(0, now, Ordering::SeqCst);
+    }
+
+    LAST_ID.fetch_add(1, Ordering::SeqCst)
 }
 
 pub(crate) fn generate_random_ids(n: usize) -> Vec<i64> {
-    let start = generate_random_id();
-    (0..n as i64).map(|i| start.wrapping_add(i)).collect()
+    (0..n).map(|_| generate_random_id()).collect()
 }
