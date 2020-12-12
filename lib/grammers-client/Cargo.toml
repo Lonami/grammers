@@ -25,10 +25,9 @@ grammers-session = { path = "../grammers-session", version = "0.2.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0", features = ["tl-mtproto"] }
 os_info = { version = "2.0.0", default_features = false }
 locate-locale = "0.1.0"
-futures = { version = "0.3" }
 pulldown-cmark = { version = "0.7.0", default-features = false, optional = true }
 html5ever = { version = "0.25.1", optional = true }
-tokio = { version = "0.3", features = ["sync", "fs"] }
+tokio = { version = "0.3", features = ["sync", "fs", "macros"] }
 log = "0.4.8"
 md5 = "0.7.0"
 mime_guess = "2.0.3"
