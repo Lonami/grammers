@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::ClientHandle;
-use futures::FutureExt;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::{
@@ -44,9 +43,7 @@ impl Future for AdminRightsBuilder {
                 rank: self.rank.clone(),
             };
             let mut c = self.client.clone();
-            self.fut = Some(Box::pin(async move {
-                c.invoke(&call).map(|f| f.map(drop)).await
-            }));
+            self.fut = Some(Box::pin(async move { c.invoke(&call).await.map(drop) }));
         }
         Future::poll(self.fut.as_mut().unwrap().as_mut(), cx)
     }
@@ -203,9 +200,7 @@ impl Future for BannedRightsBuilder {
                 banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
             };
             let mut c = self.client.clone();
-            self.fut = Some(Box::pin(async move {
-                c.invoke(&call).map(|f| f.map(drop)).await
-            }));
+            self.fut = Some(Box::pin(async move { c.invoke(&call).await.map(drop) }));
         }
         Future::poll(self.fut.as_mut().unwrap().as_mut(), cx)
     }

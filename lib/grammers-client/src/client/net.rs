@@ -7,8 +7,6 @@
 // except according to those terms.
 pub use super::updates::UpdateIter;
 use super::{Client, ClientHandle, Config, Request, Step};
-use futures::future::FutureExt as _;
-use futures::{future, pin_mut};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_tl_types::{self as tl, Deserializable};
@@ -215,19 +213,9 @@ impl Client {
     /// ```
     pub async fn step(&mut self) -> Result<Step, sender::ReadError> {
         let (network, request) = {
-            let network = self.sender.step();
-            let request = self.handle_rx.recv();
-            pin_mut!(network);
-            pin_mut!(request);
-            match future::select(network, request).await {
-                future::Either::Left((network, request)) => {
-                    let request = request.now_or_never();
-                    (Some(network), request)
-                }
-                future::Either::Right((request, network)) => {
-                    let network = network.now_or_never();
-                    (network, Some(request))
-                }
+            tokio::select! {
+                network = self.sender.step() => (Some(network), None),
+                request = self.handle_rx.recv() => (None, Some(request)),
             }
         };
 

@@ -9,8 +9,6 @@ mod errors;
 
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
-use futures::future::FutureExt as _;
-use futures::{future, pin_mut};
 use grammers_crypto::AuthKey;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
@@ -162,28 +160,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 "reading bytes and sending up to {} bytes via network",
                 write_len
             );
-            let read = reader.read_buf(&mut self.read_buffer);
-            let write = writer.write(&self.write_buffer[self.write_index..]);
-            pin_mut!(read);
-            pin_mut!(write);
-            match future::select(read, write).await {
-                future::Either::Left((n, write)) => {
-                    let n_write = write.now_or_never();
-
-                    if let Some(n) = n_write {
-                        self.on_net_write(n?);
-                    }
+            tokio::select! {
+                n = reader.read_buf(&mut self.read_buffer) => {
                     self.on_net_read(n?)
                 }
-                future::Either::Right((n, read)) => {
-                    let n_read = read.now_or_never();
-
+                n = writer.write(&self.write_buffer[self.write_index..]) => {
                     self.on_net_write(n?);
-                    if let Some(n) = n_read {
-                        self.on_net_read(n?)
-                    } else {
-                        Ok(Vec::new())
-                    }
+                    Ok(Vec::new())
                 }
             }
         }
