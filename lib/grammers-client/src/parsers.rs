@@ -105,7 +105,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             push_entity!(MessageEntityBold(offset) => entities);
         }
         Event::End(Tag::Strong) => {
-            update_entity_len!(MessageEntityBold(offset) => entities);
+            update_entity_len!(Bold(offset) => entities);
         }
 
         // *italic text*
@@ -113,7 +113,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             push_entity!(MessageEntityItalic(offset) => entities);
         }
         Event::End(Tag::Emphasis) => {
-            update_entity_len!(MessageEntityItalic(offset) => entities);
+            update_entity_len!(Italic(offset) => entities);
         }
 
         // [text link](https://example.com)
@@ -121,7 +121,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
         }
         Event::End(Tag::Link(_kindd, _url, _title)) => {
-            update_entity_len!(MessageEntityTextUrl(offset) => entities);
+            update_entity_len!(TextUrl(offset) => entities);
         }
 
         // ```lang\npre```
@@ -135,7 +135,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             push_entity!(MessageEntityPre(offset, language = lang) => entities);
         }
         Event::End(Tag::CodeBlock(_kind)) => {
-            update_entity_len!(MessageEntityPre(offset) => entities);
+            update_entity_len!(Pre(offset) => entities);
         }
 
         _ => {}
@@ -200,9 +200,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         match self.entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't add `<code>`;
                             // we most likely want to indicate `class="language-foo"`.
-                            Some(tl::enums::MessageEntity::Pre(e))
-                                if e.length == 0 =>
-                            {
+                            Some(tl::enums::MessageEntity::Pre(e)) if e.length == 0 => {
                                 e.language = attrs
                                     .into_iter()
                                     .find(|a| {
@@ -240,36 +238,35 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     attrs: _,
                 }) => match name {
                     n if n == TAG_B || n == TAG_STRONG => {
-                        update_entity_len!(MessageEntityBold(self.offset) => self.entities);
+                        update_entity_len!(Bold(self.offset) => self.entities);
                     }
                     n if n == TAG_I || n == TAG_EM => {
-                        update_entity_len!(MessageEntityItalic(self.offset) => self.entities);
+                        update_entity_len!(Italic(self.offset) => self.entities);
                     }
                     n if n == TAG_S || n == TAG_DEL => {
-                        update_entity_len!(MessageEntityStrike(self.offset) => self.entities);
+                        update_entity_len!(Strike(self.offset) => self.entities);
                     }
                     TAG_U => {
-                        update_entity_len!(MessageEntityUnderline(self.offset) => self.entities);
+                        update_entity_len!(Underline(self.offset) => self.entities);
                     }
                     TAG_BLOCKQUOTE => {
-                        update_entity_len!(MessageEntityBlockquote(self.offset) => self.entities);
+                        update_entity_len!(Blockquote(self.offset) => self.entities);
                     }
                     TAG_CODE => {
                         match self.entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't update `<code>` len;
                             // we most likely want to indicate `class="language-foo"`.
-                            Some(tl::enums::MessageEntity::Pre(e))
-                                if e.length == 0 => {}
+                            Some(tl::enums::MessageEntity::Pre(e)) if e.length == 0 => {}
                             _ => {
-                                update_entity_len!(MessageEntityCode(self.offset) => self.entities);
+                                update_entity_len!(Code(self.offset) => self.entities);
                             }
                         }
                     }
                     TAG_PRE => {
-                        update_entity_len!(MessageEntityPre(self.offset) => self.entities);
+                        update_entity_len!(Pre(self.offset) => self.entities);
                     }
                     TAG_A => {
-                        update_entity_len!(MessageEntityTextUrl(self.offset) => self.entities);
+                        update_entity_len!(TextUrl(self.offset) => self.entities);
                     }
                     _ => {}
                 },
