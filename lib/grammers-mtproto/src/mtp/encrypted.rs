@@ -862,6 +862,7 @@ impl Encrypted {
         &mut self,
         message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
+        // TODO notify upper layers about the need to use getDifference
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
             tl::enums::NewSession::Created(x) => {
@@ -1022,6 +1023,7 @@ impl Encrypted {
     /// Since we handle all the possible service messages, we can
     /// safely treat whatever message body we received as `Updates`.
     fn handle_update(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
+        // TODO if this `Updates` cannot be deserialized, `getDifference` should be used
         self.updates.push(message.body);
         Ok(())
     }

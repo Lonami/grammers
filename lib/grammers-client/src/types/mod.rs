@@ -15,6 +15,7 @@ mod input_message;
 mod iter_buffer;
 mod login_token;
 mod message;
+mod message_box;
 mod password_token;
 mod update;
 
@@ -27,5 +28,6 @@ pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
+pub(crate) use message_box::MessageBox;
 pub use password_token::PasswordToken;
 pub use update::Update;

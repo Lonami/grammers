@@ -57,13 +57,19 @@ impl Client {
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
     pub async fn next_updates(&mut self) -> Result<Option<UpdateIter>, ReadError> {
+        // "to start receiving updates the client needs to init connection and call API method, e.g. to fetch current state."
+        // https://core.telegram.org/api/updates
+
+        // "In order to apply all updates in precise order and to guarantee that no update is missed or applied twice there is seq attribute in Updates constructors, and pts (with pts_count) or qts attributes in Update constructors. The client must use those attributes values in combination with locally stored state to correctly apply incoming updates."
         Ok(loop {
+            // TODO call getDifference if there were no updates for ~15 minutes
             let updates = match self.step().await? {
                 Step::Connected { updates } => updates,
                 Step::Disconnected => break None,
             };
 
             if !updates.is_empty() {
+                // TODO if we're missing users or chats, skip update and call getDifference
                 let (updates, users, chats) = updates
                     .into_iter()
                     .map(|update| self.adapt_updates(update))
@@ -91,6 +97,17 @@ impl Client {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
+        // `seq` indicates the remote `Updates` state *after* the generation of the `Updates`
+        // `seq_start` indicates the remote `Updates` state *after the first* of the `Updates` in the packet.
+        // If `seq_start` is missing, it is assumed to be equal to `seq`.
+        // See https://core.telegram.org/api/updates#updates-sequence.
+
+        // There is an account-wide message box, and each channel has its own. Each has its own `pts`, a unique
+        // auto-incremented number identifying events related to a message box.
+        //
+        // `pts_count` indicates the number of events contained in the received update, and exceptionally assumed 0.
+        // See https://core.telegram.org/api/updates#message-related-event-sequences.
+
         use tl::enums::Updates::*;
 
         match updates {
@@ -192,6 +209,7 @@ impl Client {
                 vec![],
             ),
             // These shouldn't really occur unless triggered via a request
+            // TODO call getDifference on tooLong / updateChannelTooLong
             TooLong => panic!("should not receive updatesTooLong via passive updates"),
             UpdateShortSentMessage(_) => {
                 panic!("should not receive updateShortSentMessage via passive updates")
