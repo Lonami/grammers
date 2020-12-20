@@ -14,7 +14,7 @@ For more documentation, please refer to <https://docs.rs/grammers-client/>.
 
 ## Libraries
 
-The following libraries can be used to work with Telegram in some way:
+The following libraries under [`lib/`] can be used to work with Telegram in some way:
 
 * **[grammers-client]**: high-level API.
 * **[grammers-crypto]**: cryptography-related methods.
@@ -25,9 +25,15 @@ The following libraries can be used to work with Telegram in some way:
 * **[grammers-tl-parser]**: a [Type Language] parser.
 * **[grammers-tl-types]**: generated Rust types for a certain layer.
 
+## Binaries
+
+The following auxiliary CLI tools are available in the [`bin/`] folder:
+
+* **[scrape-docs]**: scrape Telegram's website to obtain raw API documentation.
+
 ## License
 
-All the libraries contained in this repository are licensed under either of
+All the libraries and binaries contained in this repository are licensed under either of
 
 * Apache License, Version 2.0 ([LICENSE-APACHE] or
   http://www.apache.org/licenses/LICENSE-2.0)
@@ -45,6 +51,7 @@ dual licensed as above, without any additional terms or conditions.
 [client examples]: lib/grammers-client/examples
 [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 [Type Language]: https://core.telegram.org/mtproto/TL
+[`lib/`]: lib/
 [grammers-client]: lib/grammers-client/
 [grammers-crypto]: lib/grammers-crypto/
 [grammers-mtproto]: lib/grammers-mtproto/
@@ -53,5 +60,7 @@ dual licensed as above, without any additional terms or conditions.
 [grammers-tl-gen]: lib/grammers-tl-gen/
 [grammers-tl-parser]: lib/grammers-tl-parser/
 [grammers-tl-types]: lib/grammers-tl-types/
+[`bin/`]: bin/
+[scrape-docs]: bin/scrape-docs/
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT

@@ -8,7 +8,8 @@ members = [
     "lib/grammers-session",
     "lib/grammers-tl-gen",
     "lib/grammers-tl-parser",
-    "lib/grammers-tl-types"
+    "lib/grammers-tl-types",
+    "bin/scrape-docs",
 ]
 
 [patch.crates-io]
