@@ -40,6 +40,7 @@
 //! [extension traits]: crate::ext
 mod client;
 pub mod ext;
+mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
