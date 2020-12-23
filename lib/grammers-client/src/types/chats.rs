@@ -70,6 +70,7 @@ impl AdminRightsBuilder {
                 invite_users: false,
                 pin_messages: false,
                 add_admins: false,
+                manage_call: false,
             },
             fut: None,
         }
@@ -111,6 +112,12 @@ impl AdminRightsBuilder {
     /// distinguish them.
     pub fn anonymous(&mut self, val: bool) -> &mut Self {
         self.rights.anonymous = val;
+        self
+    }
+
+    /// Whether the user is able to manage calls in the group.
+    pub fn manage_call(&mut self, val: bool) -> &mut Self {
+        self.rights.manage_call = val;
         self
     }
 

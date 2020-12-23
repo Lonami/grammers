@@ -32,6 +32,7 @@ fn full_rights() -> tl::types::ChatAdminRights {
         pin_messages: true,
         add_admins: true,
         anonymous: true,
+        manage_call: true,
     }
 }
 
