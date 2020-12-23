@@ -16,10 +16,13 @@ use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::SystemTime;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
+use tokio::time::{sleep_until, Duration, Instant};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -32,6 +35,34 @@ use tokio::sync::oneshot::error::TryRecvError;
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
 
+/// Every how often are pings sent?
+const PING_DELAY: Duration = Duration::from_secs(60);
+
+/// After how many seconds should the server close the connection when we send a ping?
+///
+/// What this value essentially means is that we have `NO_PING_DISCONNECT - PING_DELAY` seconds
+/// to keep sending pings, or the server will close the connection.
+///
+/// Pings ensure the connection is kept active, and the delayed disconnect ensures the messages
+/// are getting through consistently enough.
+const NO_PING_DISCONNECT: i32 = 75;
+
+/// Generate a "random" ping ID.
+pub(crate) fn generate_random_id() -> i64 {
+    static LAST_ID: AtomicI64 = AtomicI64::new(0);
+
+    if LAST_ID.load(Ordering::SeqCst) == 0 {
+        let now = SystemTime::now()
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .expect("system time is before epoch")
+            .as_nanos() as i64;
+
+        LAST_ID.compare_and_swap(0, now, Ordering::SeqCst);
+    }
+
+    LAST_ID.fetch_add(1, Ordering::SeqCst)
+}
+
 // Manages enqueuing requests, matching them to their response, and IO.
 pub struct Sender<T: Transport, M: Mtp> {
     stream: TcpStream,
@@ -40,6 +71,7 @@ pub struct Sender<T: Transport, M: Mtp> {
     mtp_buffer: BytesMut,
 
     requests: Vec<Request>,
+    next_ping: Instant,
 
     // Transport-level buffers and positions
     read_buffer: BytesMut,
@@ -71,6 +103,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
 
             requests: vec![],
+            next_ping: Instant::now() + PING_DELAY,
 
             read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
             write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
@@ -152,9 +185,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             // Note that this mutably borrows `self`, so the caller can't `enqueue` other requests
             // while reading from the network, which means there's no need to handle that case.
             trace!("reading bytes from the network");
-            let n = reader.read_buf(&mut self.read_buffer).await?;
-
-            self.on_net_read(n)
+            tokio::select!(
+                n = reader.read_buf(&mut self.read_buffer) => {
+                    self.on_net_read(n?)
+                },
+                _ = sleep_until(self.next_ping) => {
+                    self.on_ping_timeout();
+                    Ok(Vec::new())
+                }
+            )
         } else {
             trace!(
                 "reading bytes and sending up to {} bytes via network",
@@ -166,6 +205,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
                 n = writer.write(&self.write_buffer[self.write_index..]) => {
                     self.on_net_write(n?);
+                    Ok(Vec::new())
+                }
+                _ = sleep_until(self.next_ping) => {
+                    self.on_ping_timeout();
                     Ok(Vec::new())
                 }
             }
@@ -278,6 +321,17 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
     }
 
+    /// Handle a ping timeout, meaning we need to enqueue a new ping request.
+    fn on_ping_timeout(&mut self) {
+        let ping_id = generate_random_id();
+        debug!("enqueueing keepalive ping {}", ping_id);
+        drop(self.enqueue(&tl::functions::PingDelayDisconnect {
+            ping_id,
+            disconnect_delay: NO_PING_DISCONNECT,
+        }));
+        self.next_ping = Instant::now() + PING_DELAY;
+    }
+
     /// Process the `mtp_buffer` contents and dispatch the results and errors.
     fn process_mtp_buffer(
         &mut self,
@@ -384,6 +438,7 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
             .finish(auth_key),
         mtp_buffer: sender.mtp_buffer,
         requests: sender.requests,
+        next_ping: Instant::now() + PING_DELAY,
         read_buffer: sender.read_buffer,
         write_buffer: sender.write_buffer,
         write_index: sender.write_index,
