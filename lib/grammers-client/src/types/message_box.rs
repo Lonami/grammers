@@ -180,6 +180,20 @@ fn handle_update_short_chat_message(
     })
 }
 
+fn handle_update_short_sent_message(
+    short: tl::types::UpdateShortSentMessage,
+) -> tl::types::UpdatesCombined {
+    handle_update_short(tl::types::UpdateShort {
+        update: tl::types::UpdateNewMessage {
+            message: tl::types::MessageEmpty { id: short.id }.into(),
+            pts: short.pts,
+            pts_count: short.pts_count,
+        }
+        .into(),
+        date: short.date,
+    })
+}
+
 pub(crate) struct Gap;
 
 impl MessageBox {
@@ -338,17 +352,26 @@ impl MessageBox {
 
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
-        let tl::types::UpdatesCombined { date, seq_start, seq, updates, users, chats } = match updates {
+        let tl::types::UpdatesCombined {
+            date,
+            seq_start,
+            seq,
+            updates,
+            users,
+            chats,
+        } = match updates {
             // > `updatesTooLong` indicates that there are too many events pending to be pushed
             // > to the client, so one needs to fetch them manually.
             tl::enums::Updates::TooLong => {
                 self.getting_diff = true;
                 return Err(Gap);
-            },
+            }
             // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
             // > should be transformed to `updateShort` upon receiving.
             tl::enums::Updates::UpdateShortMessage(short) => handle_update_short_message(short),
-            tl::enums::Updates::UpdateShortChatMessage(short) => handle_update_short_chat_message(short),
+            tl::enums::Updates::UpdateShortChatMessage(short) => {
+                handle_update_short_chat_message(short)
+            }
             // > `updateShort` […] have lower priority and are broadcast to a large number of users.
             tl::enums::Updates::UpdateShort(short) => handle_update_short(short),
             // > [the] `seq` attribute, which indicates the remote `Updates` state after the
@@ -358,9 +381,11 @@ impl MessageBox {
             // > [the] `seq_start` attribute is omitted, because it is assumed that it is always
             // > equal to `seq`.
             tl::enums::Updates::Updates(updates) => handle_updates(updates),
-            // Without the request `updateShortSentMessage` actually lacks fields like `message`,
-            // which means it cannot be constructed on our own.
-            tl::enums::Updates::UpdateShortSentMessage(_) => panic!("updateShortSentMessage can only be converted into updateShort by the caller of the request"),
+            // Even though we lack fields like the message text, it still needs to be handled, so
+            // that the `pts` can be kept consistent.
+            tl::enums::Updates::UpdateShortSentMessage(short) => {
+                handle_update_short_sent_message(short)
+            }
         };
 
         // > For all the other [not `updates` or `updatesCombined`] `Updates` type constructors
@@ -396,7 +421,7 @@ impl MessageBox {
 
         let mut result = Vec::with_capacity(updates.len());
         for update in updates {
-            if let Some(pts) = dbg!(PtsInfo::from_update(&update)) {
+            if let Some(pts) = PtsInfo::from_update(&update) {
                 if let Some(local_pts) = self.pts_map.get(&pts.entry) {
                     match (local_pts + pts.pts_count).cmp(&pts.pts) {
                         // Apply
