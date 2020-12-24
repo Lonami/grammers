@@ -13,6 +13,15 @@ use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serial
 use std::mem;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+static UPDATE_IDS: [u32; 6] = [
+    tl::types::UpdateShortMessage::CONSTRUCTOR_ID,
+    tl::types::UpdateShortChatMessage::CONSTRUCTOR_ID,
+    tl::types::UpdateShort::CONSTRUCTOR_ID,
+    tl::types::UpdatesCombined::CONSTRUCTOR_ID,
+    tl::types::Updates::CONSTRUCTOR_ID,
+    tl::types::UpdateShortSentMessage::CONSTRUCTOR_ID,
+];
+
 /// A builder to configure [`Mtp`] instances.
 ///
 /// Use the [`Encrypted::build`] method to create builder instances.
@@ -410,23 +419,45 @@ impl Encrypted {
             // would probably outweight the benefits) so we don't check
             // that the decompressed payload is an error or answer drop.
             manual_tl::GzipPacked::CONSTRUCTOR_ID => {
-                self.rpc_results.push((
-                    msg_id,
-                    match manual_tl::GzipPacked::from_bytes(&result) {
-                        Ok(gzip) => match gzip.decompress() {
-                            Ok(x) => Ok(x),
-                            Err(e) => Err(e.into()),
-                        },
+                let body = match manual_tl::GzipPacked::from_bytes(&result) {
+                    Ok(gzip) => match gzip.decompress() {
+                        Ok(x) => {
+                            self.store_own_updates(&x);
+                            Ok(x)
+                        }
                         Err(e) => Err(e.into()),
                     },
-                ));
+                    Err(e) => Err(e.into()),
+                };
+                self.rpc_results.push((msg_id, body));
             }
             _ => {
+                self.store_own_updates(&result);
                 self.rpc_results.push((msg_id, Ok(result)));
             }
         }
 
         Ok(())
+    }
+
+    /// Updates produced by `rpc_result` must be considered as any other updates, since they can
+    /// change the `pts`. If this wasn't done, eventually higher levels would find gaps.
+    ///
+    /// Users may also be interested in handling updates produced by the client as if they were
+    /// like any other.
+    fn store_own_updates(&mut self, body: &[u8]) {
+        match u32::from_bytes(body) {
+            Ok(body_id) => {
+                if UPDATE_IDS.iter().any(|&id| body_id == id) {
+                    // TODO somehow signal that this updates is our own, to avoid getting into nasty loops
+                    self.updates.push(body.to_vec());
+                }
+            }
+            Err(_) => {
+                // Failing is fine, it likely means the update was bad and eventually there will
+                // be a gap to fill.
+            }
+        }
     }
 
     /// **[Acknowledgment of Receipt]**
