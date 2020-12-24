@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use log::{debug, info, trace};
 use std::cmp::Ordering;
 use std::collections::HashMap;
 use tokio::time::{Duration, Instant};
@@ -23,7 +24,7 @@ const NO_SEQ: i32 = 0;
 const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// A [`MessageBox`] entry key.
-#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Entry {
     /// Account-wide `pts`.
     AccountWide,
@@ -45,6 +46,7 @@ pub(crate) struct MessageBox {
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
+#[derive(Debug)]
 struct PtsInfo {
     pts: i32,
     pts_count: i32,
@@ -189,7 +191,7 @@ impl MessageBox {
         MessageBox {
             getting_diff: false,
             deadline: next_updates_deadline(),
-            date: 0,
+            date: 1,
             seq: 0,
             pts_map: entries_pts.iter().copied().collect(),
         }
@@ -220,8 +222,13 @@ impl MessageBox {
     ) {
         self.deadline = next_updates_deadline();
 
+        // TODO if any of the `other_updates` is `updateChannelTooLong`, `getDifference` for it
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
+                debug!(
+                    "handling empty difference (date = {}, seq = {}); no longer getting diff",
+                    diff.date, diff.seq
+                );
                 self.date = diff.date;
                 self.seq = diff.seq;
                 self.getting_diff = false;
@@ -235,6 +242,10 @@ impl MessageBox {
                 users,
                 state: tl::enums::updates::State::State(state),
             }) => {
+                debug!(
+                    "handling full difference {:?}; no longer getting diff",
+                    state
+                );
                 self.pts_map.insert(Entry::AccountWide, state.pts);
                 self.pts_map.insert(Entry::SecretChats, state.qts);
                 self.date = state.date;
@@ -271,6 +282,7 @@ impl MessageBox {
                 users,
                 intermediate_state: tl::enums::updates::State::State(state),
             }) => {
+                debug!("handling partial difference {:?}", state);
                 self.pts_map.insert(Entry::AccountWide, state.pts);
                 self.pts_map.insert(Entry::SecretChats, state.qts);
                 self.date = state.date;
@@ -299,6 +311,10 @@ impl MessageBox {
                 (updates, users, chats)
             }
             tl::enums::updates::Difference::TooLong(diff) => {
+                debug!(
+                    "handling too-long difference (pts = {}); no longer getting diff",
+                    diff.pts
+                );
                 self.pts_map.insert(Entry::AccountWide, diff.pts);
                 self.getting_diff = false;
                 (Vec::new(), Vec::new(), Vec::new())
@@ -354,8 +370,18 @@ impl MessageBox {
                 // Apply
                 Ordering::Equal => {}
                 // Ignore
-                Ordering::Greater => return Ok((Vec::new(), users, chats)),
+                Ordering::Greater => {
+                    debug!(
+                        "skipping updates that were already handled at seq = {}",
+                        self.seq
+                    );
+                    return Ok((Vec::new(), users, chats));
+                }
                 Ordering::Less => {
+                    info!(
+                        "gap detected (local seq {}, remote seq {})",
+                        self.seq, seq_start
+                    );
                     self.getting_diff = true;
                     return Err(Gap);
                 }
@@ -364,19 +390,27 @@ impl MessageBox {
             self.date = date;
             if seq != NO_SEQ {
                 self.seq = seq;
+                trace!("updated date = {}, seq = {}", date, seq);
             }
         }
 
         let mut result = Vec::with_capacity(updates.len());
         for update in updates {
-            if let Some(pts) = PtsInfo::from_update(&update) {
+            if let Some(pts) = dbg!(PtsInfo::from_update(&update)) {
                 if let Some(local_pts) = self.pts_map.get(&pts.entry) {
                     match (local_pts + pts.pts_count).cmp(&pts.pts) {
                         // Apply
                         Ordering::Equal => {}
                         // Ignore
-                        Ordering::Greater => continue,
+                        Ordering::Greater => {
+                            debug!(
+                                "skipping update for {:?} that was already handled at pts = {}",
+                                pts.entry, local_pts
+                            );
+                            continue;
+                        }
                         Ordering::Less => {
+                            info!("gap detected (local pts {}, remote {:?})", local_pts, pts);
                             self.getting_diff = true;
                             return Err(Gap);
                         }
@@ -386,6 +420,7 @@ impl MessageBox {
                 // First time (no previous `pts`) or update that we have to apply, both change the
                 // local `pts`.
                 self.pts_map.insert(pts.entry, pts.pts);
+                trace!("updated pts map with {:?}", pts);
             }
 
             result.push(update);
