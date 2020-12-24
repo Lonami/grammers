@@ -194,6 +194,8 @@ fn handle_update_short_chat_message(
     })
 }
 
+pub(crate) struct Gap;
+
 impl MessageBox {
     pub(crate) fn new() -> Self {
         Self::from_pts(&[])
@@ -210,14 +212,24 @@ impl MessageBox {
     }
 
     /// Process an update and return what should be done with it.
-    pub(crate) fn process_updates(&mut self, updates: tl::enums::Updates) {
+    pub(crate) fn process_updates(
+        &mut self,
+        updates: tl::enums::Updates,
+    ) -> Result<
+        (
+            Vec<tl::enums::Update>,
+            Vec<tl::enums::User>,
+            Vec<tl::enums::Chat>,
+        ),
+        Gap,
+    > {
         self.deadline = next_updates_deadline();
 
         // > Implementations [have] to postpone updates received via the socket while filling
         // > gaps in the event and `Update` sequences, as well as avoid filling gaps in the same
         // > sequence.
         if self.getting_diff {
-            return;
+            return Err(Gap);
         }
 
         // Top level, when handling received `updates` and `updatesCombined`.
@@ -227,7 +239,7 @@ impl MessageBox {
             // > to the client, so one needs to fetch them manually.
             tl::enums::Updates::TooLong => {
                 self.getting_diff = true;
-                return;
+                return Err(Gap);
             },
             // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
             // > should be transformed to `updateShort` upon receiving.
@@ -254,10 +266,10 @@ impl MessageBox {
                 // Apply
                 Ordering::Equal => {}
                 // Ignore
-                Ordering::Greater => return,
+                Ordering::Greater => return Ok((Vec::new(), users, chats)),
                 Ordering::Less => {
                     self.getting_diff = true;
-                    return;
+                    return Err(Gap);
                 }
             }
 
@@ -267,17 +279,18 @@ impl MessageBox {
             }
         }
 
+        let mut result = Vec::with_capacity(updates.len());
         for update in updates {
             if let Some(pts) = PtsInfo::from_update(&update) {
-                if let Some(local_pts) = self.pts_map.get(pts.entry) {
-                    match (local_pts + pts.pts_count).cmp(pts.pts) {
+                if let Some(local_pts) = self.pts_map.get(&pts.entry) {
+                    match (local_pts + pts.pts_count).cmp(&pts.pts) {
                         // Apply
                         Ordering::Equal => {}
                         // Ignore
                         Ordering::Greater => continue,
                         Ordering::Less => {
                             self.getting_diff = true;
-                            return;
+                            return Err(Gap);
                         }
                     }
                 }
@@ -287,8 +300,10 @@ impl MessageBox {
                 self.pts_map.insert(pts.entry, pts.pts);
             }
 
-            todo!("hand update to user");
+            result.push(update);
         }
+
+        Ok((result, users, chats))
     }
 
     /// Return the next deadline when receiving updates should timeout.
