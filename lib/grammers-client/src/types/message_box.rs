@@ -10,8 +10,8 @@ use std::cmp::Ordering;
 use std::collections::HashMap;
 use tokio::time::{Duration, Instant};
 
-/// Special made-up value to represent "there is no sequence" in `updatesCombined`.
-const NO_SEQ: i32 = -1;
+/// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
+const NO_SEQ: i32 = 0;
 
 /// After how long without updates the client will "timeout".
 ///
