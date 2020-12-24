@@ -211,6 +211,21 @@ impl MessageBox {
         }
     }
 
+    /// Return the request that needs to be made to get the difference, if any.
+    pub(crate) fn get_difference(&self) -> Option<tl::functions::updates::GetDifference> {
+        if self.getting_diff || Instant::now() > self.deadline {
+            Some(tl::functions::updates::GetDifference {
+                // TODO we probably need to be initialized with getState always
+                pts: self.pts_map.get(&Entry::AccountWide).copied().unwrap_or(0),
+                pts_total_limit: None,
+                date: self.date,
+                qts: self.pts_map.get(&Entry::SecretChats).copied().unwrap_or(0),
+            })
+        } else {
+            None
+        }
+    }
+
     /// Process an update and return what should be done with it.
     pub(crate) fn process_updates(
         &mut self,
@@ -224,13 +239,6 @@ impl MessageBox {
         Gap,
     > {
         self.deadline = next_updates_deadline();
-
-        // > Implementations [have] to postpone updates received via the socket while filling
-        // > gaps in the event and `Update` sequences, as well as avoid filling gaps in the same
-        // > sequence.
-        if self.getting_diff {
-            return Err(Gap);
-        }
 
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
