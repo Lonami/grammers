@@ -210,6 +210,102 @@ impl MessageBox {
         }
     }
 
+    pub(crate) fn apply_difference(
+        &mut self,
+        difference: tl::enums::updates::Difference,
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
+        self.deadline = next_updates_deadline();
+
+        match difference {
+            tl::enums::updates::Difference::Empty(diff) => {
+                self.date = diff.date;
+                self.seq = diff.seq;
+                self.getting_diff = false;
+                (Vec::new(), Vec::new(), Vec::new())
+            }
+            tl::enums::updates::Difference::Difference(tl::types::updates::Difference {
+                new_messages,
+                new_encrypted_messages,
+                other_updates: mut updates,
+                chats,
+                users,
+                state: tl::enums::updates::State::State(state),
+            }) => {
+                self.pts_map.insert(Entry::AccountWide, state.pts);
+                self.pts_map.insert(Entry::SecretChats, state.qts);
+                self.date = state.date;
+                self.seq = state.seq;
+                self.getting_diff = false;
+
+                updates.extend(
+                    new_messages
+                        .into_iter()
+                        .map(|message| {
+                            tl::types::UpdateNewMessage {
+                                message,
+                                pts: NO_SEQ,
+                                pts_count: NO_SEQ,
+                            }
+                            .into()
+                        })
+                        .chain(new_encrypted_messages.into_iter().map(|message| {
+                            tl::types::UpdateNewEncryptedMessage {
+                                message,
+                                qts: NO_SEQ,
+                            }
+                            .into()
+                        })),
+                );
+
+                (updates, users, chats)
+            }
+            tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
+                new_messages,
+                new_encrypted_messages,
+                other_updates: mut updates,
+                chats,
+                users,
+                intermediate_state: tl::enums::updates::State::State(state),
+            }) => {
+                self.pts_map.insert(Entry::AccountWide, state.pts);
+                self.pts_map.insert(Entry::SecretChats, state.qts);
+                self.date = state.date;
+                self.seq = state.seq;
+
+                updates.extend(
+                    new_messages
+                        .into_iter()
+                        .map(|message| {
+                            tl::types::UpdateNewMessage {
+                                message,
+                                pts: NO_SEQ,
+                                pts_count: NO_SEQ,
+                            }
+                            .into()
+                        })
+                        .chain(new_encrypted_messages.into_iter().map(|message| {
+                            tl::types::UpdateNewEncryptedMessage {
+                                message,
+                                qts: NO_SEQ,
+                            }
+                            .into()
+                        })),
+                );
+
+                (updates, users, chats)
+            }
+            tl::enums::updates::Difference::TooLong(diff) => {
+                self.pts_map.insert(Entry::AccountWide, diff.pts);
+                self.getting_diff = false;
+                (Vec::new(), Vec::new(), Vec::new())
+            }
+        }
+    }
+
     /// Process an update and return what should be done with it.
     pub(crate) fn process_updates(
         &mut self,

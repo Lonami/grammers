@@ -10,7 +10,6 @@
 
 use super::{Client, ClientHandle, Step};
 use crate::types::{EntitySet, Update};
-use grammers_mtsender::ReadError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
@@ -57,14 +56,21 @@ impl Client {
     ///
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
-    pub async fn next_updates(&mut self) -> Result<Option<UpdateIter>, ReadError> {
+    pub async fn next_updates(&mut self) -> Result<Option<UpdateIter>, InvocationError> {
         loop {
-            if let Some(_request) = self.message_box.get_difference() {
-                todo!("use request");
+            if let Some(request) = self.message_box.get_difference() {
+                let response = self.invoke(&request).await?;
+                let (updates, users, chats) = self.message_box.apply_difference(response);
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
                 // > gaps in the same sequence.
-                //continue;
+                //
+                // Basically, don't `step`, simply repeatedly get difference until we're done.
+                return Ok(Some(UpdateIter::new(
+                    self.handle(),
+                    updates,
+                    EntitySet::new(users, chats),
+                )));
             }
 
             let deadline = self.message_box.timeout_deadline();
