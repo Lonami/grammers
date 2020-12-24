@@ -15,7 +15,7 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::sync::Arc;
-use tokio::time::{sleep_until, Duration, Instant};
+use tokio::time::sleep_until;
 
 pub struct UpdateIter {
     client: ClientHandle,
@@ -59,11 +59,12 @@ impl Client {
     /// are available (e.g. a disconnection occurred).
     pub async fn next_updates(&mut self) -> Result<Option<UpdateIter>, ReadError> {
         loop {
-            if let Some(request) = self.message_box.get_difference() {
+            if let Some(_request) = self.message_box.get_difference() {
+                todo!("use request");
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
                 // > gaps in the same sequence.
-                continue;
+                //continue;
             }
 
             let deadline = self.message_box.timeout_deadline();

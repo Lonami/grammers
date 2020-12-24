@@ -7,9 +7,7 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 use std::cmp::Ordering;
-use std::cmp::Reverse;
-use std::collections::BinaryHeap;
-use std::collections::{HashMap, HashSet};
+use std::collections::HashMap;
 use tokio::time::{Duration, Instant};
 
 /// Special made-up value to represent "there is no sequence" in `updatesCombined`.
@@ -33,20 +31,6 @@ pub(crate) enum Entry {
     SecretChats,
     /// Channel-specific `pts`.
     Channel(i32),
-}
-
-/// Represents an action for how a certain update should be handled.
-///
-/// See https://core.telegram.org/api/updates#update-handling.
-pub(crate) enum Action {
-    /// This update should be applied (given to the client).
-    Apply(tl::enums::Update),
-    /// This update was already given to the client and should be skipped.
-    Ignore,
-    /// Some updates not received and there is a gap between the last known update and this one.
-    /// The difference from the previously-known state and the current one should be fetched.
-    GetDifference,
-    // TODO handle all cases https://core.telegram.org/api/updates#recovering-gaps
 }
 
 /// Represents a "message box" (event `pts` for a specific entry).
@@ -330,6 +314,20 @@ fn message_peer(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
     }
 }
 
+fn message_channel_id(message: &tl::enums::Message) -> Option<i32> {
+    match message {
+        tl::enums::Message::Empty(_) => None,
+        tl::enums::Message::Message(m) => match &m.peer_id {
+            tl::enums::Peer::Channel(c) => Some(c.channel_id),
+            _ => None,
+        },
+        tl::enums::Message::Service(m) => match &m.peer_id {
+            tl::enums::Peer::Channel(c) => Some(c.channel_id),
+            _ => None,
+        },
+    }
+}
+
 impl PtsInfo {
     fn from_update(update: &tl::enums::Update) -> Option<Self> {
         use tl::enums::Update::*;
@@ -342,7 +340,7 @@ impl PtsInfo {
                 Some(Self {
                     pts: u.pts,
                     pts_count: u.pts_count,
-                    entry: todo!(),
+                    entry: Entry::AccountWide,
                 })
             }
             MessageId(_) => None,
@@ -404,10 +402,15 @@ impl PtsInfo {
                 entry: Entry::Channel(u.channel_id),
             }),
             Channel(_) => None,
-            NewChannelMessage(u) => Some(Self {
+            // Telegram actually sends `updateNewChannelMessage(messageEmpty(…))`, and because
+            // there's no way to tell which channel ID this `pts` belongs to, the best we can
+            // do is ignore it.
+            //
+            // Future messages should trigger a gap that we need to recover from.
+            NewChannelMessage(u) => message_channel_id(&u.message).map(|channel_id| Self {
                 pts: u.pts,
                 pts_count: u.pts_count,
-                entry: todo!(),
+                entry: Entry::Channel(channel_id),
             }),
             ReadChannelInbox(u) => Some(Self {
                 pts: u.pts,
@@ -427,10 +430,10 @@ impl PtsInfo {
             SavedGifs => None,
             BotInlineQuery(_) => None,
             BotInlineSend(_) => None,
-            EditChannelMessage(u) => Some(Self {
+            EditChannelMessage(u) => message_channel_id(&u.message).map(|channel_id| Self {
                 pts: u.pts,
                 pts_count: u.pts_count,
-                entry: todo!(),
+                entry: Entry::Channel(channel_id),
             }),
             BotCallbackQuery(_) => None,
             EditMessage(u) => {
