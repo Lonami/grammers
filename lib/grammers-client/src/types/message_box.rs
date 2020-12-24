@@ -211,6 +211,15 @@ impl MessageBox {
 
     /// Process an update and return what should be done with it.
     pub(crate) fn process_updates(&mut self, updates: tl::enums::Updates) {
+        self.deadline = next_updates_deadline();
+
+        // > Implementations [have] to postpone updates received via the socket while filling
+        // > gaps in the event and `Update` sequences, as well as avoid filling gaps in the same
+        // > sequence.
+        if self.getting_diff {
+            return;
+        }
+
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
         let tl::types::UpdatesCombined { date, seq_start, seq, updates, users, chats } = match updates {
@@ -258,7 +267,28 @@ impl MessageBox {
             }
         }
 
-        todo!("continue checking updates")
+        for update in updates {
+            if let Some(pts) = PtsInfo::from_update(&update) {
+                if let Some(local_pts) = self.pts_map.get(pts.entry) {
+                    match (local_pts + pts.pts_count).cmp(pts.pts) {
+                        // Apply
+                        Ordering::Equal => {}
+                        // Ignore
+                        Ordering::Greater => continue,
+                        Ordering::Less => {
+                            self.getting_diff = true;
+                            return;
+                        }
+                    }
+                }
+
+                // First time (no previous `pts`) or update that we have to apply, both change the
+                // local `pts`.
+                self.pts_map.insert(pts.entry, pts.pts);
+            }
+
+            todo!("hand update to user");
+        }
     }
 
     /// Return the next deadline when receiving updates should timeout.
