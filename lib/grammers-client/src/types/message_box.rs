@@ -53,10 +53,18 @@ pub(crate) enum Action {
 ///
 /// See https://core.telegram.org/api/updates#message-related-event-sequences.
 pub(crate) struct MessageBox {
+    getting_diff: bool,
     deadline: Instant,
     date: i32,
     seq: i32,
     pts_map: HashMap<Entry, i32>,
+}
+
+/// Represents the information needed to correctly handle a specific `tl::enums::Update`.
+struct PtsInfo {
+    pts: i32,
+    pts_count: i32,
+    entry: Entry,
 }
 
 fn next_updates_deadline() -> Instant {
@@ -193,6 +201,7 @@ impl MessageBox {
 
     pub(crate) fn from_pts(entries_pts: &[(Entry, i32)]) -> Self {
         MessageBox {
+            getting_diff: false,
             deadline: next_updates_deadline(),
             date: 0,
             seq: 0,
@@ -201,13 +210,16 @@ impl MessageBox {
     }
 
     /// Process an update and return what should be done with it.
-    pub(crate) fn process_updates(&mut self, updates: tl::enums::Updates) -> Action {
+    pub(crate) fn process_updates(&mut self, updates: tl::enums::Updates) {
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
         let tl::types::UpdatesCombined { date, seq_start, seq, updates, users, chats } = match updates {
             // > `updatesTooLong` indicates that there are too many events pending to be pushed
             // > to the client, so one needs to fetch them manually.
-            tl::enums::Updates::TooLong => return Action::GetDifference,
+            tl::enums::Updates::TooLong => {
+                self.getting_diff = true;
+                return;
+            },
             // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
             // > should be transformed to `updateShort` upon receiving.
             tl::enums::Updates::UpdateShortMessage(short) => handle_update_short_message(short),
@@ -230,9 +242,14 @@ impl MessageBox {
         // > there is no need to check `seq` or change a local state.
         if seq_start != NO_SEQ {
             match (self.seq + 1).cmp(&seq_start) {
-                Ordering::Equal => { /* apply */ }
-                Ordering::Greater => return Action::Ignore,
-                Ordering::Less => return Action::GetDifference,
+                // Apply
+                Ordering::Equal => {}
+                // Ignore
+                Ordering::Greater => return,
+                Ordering::Less => {
+                    self.getting_diff = true;
+                    return;
+                }
             }
 
             self.date = date;
@@ -249,5 +266,199 @@ impl MessageBox {
     /// When this deadline is met, it means that get difference needs to be called.
     pub(crate) fn timeout_deadline(&self) -> Instant {
         self.deadline
+    }
+}
+
+fn message_peer(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
+    match message {
+        tl::enums::Message::Empty(_) => None,
+        tl::enums::Message::Message(m) => Some(m.peer_id.clone()),
+        tl::enums::Message::Service(m) => Some(m.peer_id.clone()),
+    }
+}
+
+impl PtsInfo {
+    fn from_update(update: &tl::enums::Update) -> Option<Self> {
+        use tl::enums::Update::*;
+        match update {
+            NewMessage(u) => {
+                assert!(!matches!(
+                    message_peer(&u.message),
+                    Some(tl::enums::Peer::Channel(_))
+                ));
+                Some(Self {
+                    pts: u.pts,
+                    pts_count: u.pts_count,
+                    entry: todo!(),
+                })
+            }
+            MessageId(_) => None,
+            DeleteMessages(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::AccountWide,
+            }),
+            UserTyping(_) => None,
+            ChatUserTyping(_) => None,
+            ChatParticipants(_) => None,
+            UserStatus(_) => None,
+            UserName(_) => None,
+            UserPhoto(_) => None,
+            NewEncryptedMessage(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 1,
+                entry: Entry::SecretChats,
+            }),
+            EncryptedChatTyping(_) => None,
+            Encryption(_) => None,
+            EncryptedMessagesRead(_) => None,
+            ChatParticipantAdd(_) => None,
+            ChatParticipantDelete(_) => None,
+            DcOptions(_) => None,
+            NotifySettings(_) => None,
+            ServiceNotification(_) => None,
+            Privacy(_) => None,
+            UserPhone(_) => None,
+            ReadHistoryInbox(u) => {
+                assert!(!matches!(u.peer, tl::enums::Peer::Channel(_)));
+                Some(Self {
+                    pts: u.pts,
+                    pts_count: u.pts_count,
+                    entry: Entry::AccountWide,
+                })
+            }
+            ReadHistoryOutbox(u) => {
+                assert!(!matches!(u.peer, tl::enums::Peer::Channel(_)));
+                Some(Self {
+                    pts: u.pts,
+                    pts_count: u.pts_count,
+                    entry: Entry::AccountWide,
+                })
+            }
+            WebPage(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::AccountWide,
+            }),
+            ReadMessagesContents(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::AccountWide,
+            }),
+            ChannelTooLong(u) => u.pts.map(|pts| Self {
+                pts,
+                pts_count: 1,
+                entry: Entry::Channel(u.channel_id),
+            }),
+            Channel(_) => None,
+            NewChannelMessage(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: todo!(),
+            }),
+            ReadChannelInbox(u) => Some(Self {
+                pts: u.pts,
+                pts_count: 1,
+                entry: Entry::Channel(u.channel_id),
+            }),
+            DeleteChannelMessages(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::Channel(u.channel_id),
+            }),
+            ChannelMessageViews(_) => None,
+            ChatParticipantAdmin(_) => None,
+            NewStickerSet(_) => None,
+            StickerSetsOrder(_) => None,
+            StickerSets => None,
+            SavedGifs => None,
+            BotInlineQuery(_) => None,
+            BotInlineSend(_) => None,
+            EditChannelMessage(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: todo!(),
+            }),
+            BotCallbackQuery(_) => None,
+            EditMessage(u) => {
+                assert!(!matches!(
+                    message_peer(&u.message),
+                    Some(tl::enums::Peer::Channel(_))
+                ));
+                Some(Self {
+                    pts: u.pts,
+                    pts_count: u.pts_count,
+                    entry: Entry::AccountWide,
+                })
+            }
+            InlineBotCallbackQuery(_) => None,
+            ReadChannelOutbox(_) => None,
+            DraftMessage(_) => None,
+            ReadFeaturedStickers => None,
+            RecentStickers => None,
+            Config => None,
+            PtsChanged => None,
+            ChannelWebPage(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::Channel(u.channel_id),
+            }),
+            DialogPinned(_) => None,
+            PinnedDialogs(_) => None,
+            BotWebhookJson(_) => None,
+            BotWebhookJsonquery(_) => None,
+            BotShippingQuery(_) => None,
+            BotPrecheckoutQuery(_) => None,
+            PhoneCall(_) => None,
+            LangPackTooLong(_) => None,
+            LangPack(_) => None,
+            FavedStickers => None,
+            ChannelReadMessagesContents(_) => None,
+            ContactsReset => None,
+            ChannelAvailableMessages(_) => None,
+            DialogUnreadMark(_) => None,
+            MessagePoll(_) => None,
+            ChatDefaultBannedRights(_) => None,
+            FolderPeers(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::AccountWide,
+            }),
+            PeerSettings(_) => None,
+            PeerLocated(_) => None,
+            NewScheduledMessage(_) => None,
+            DeleteScheduledMessages(_) => None,
+            Theme(_) => None,
+            GeoLiveViewed(_) => None,
+            LoginToken => None,
+            MessagePollVote(_) => None,
+            DialogFilter(_) => None,
+            DialogFilterOrder(_) => None,
+            DialogFilters => None,
+            PhoneCallSignalingData(_) => None,
+            ChannelParticipant(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 1,
+                entry: Entry::SecretChats,
+            }),
+            ChannelMessageForwards(_) => None,
+            ReadChannelDiscussionInbox(_) => None,
+            ReadChannelDiscussionOutbox(_) => None,
+            PeerBlocked(_) => None,
+            ChannelUserTyping(_) => None,
+            PinnedMessages(u) => {
+                assert!(!matches!(u.peer, tl::enums::Peer::Channel(_)));
+                Some(Self {
+                    pts: u.pts,
+                    pts_count: u.pts_count,
+                    entry: Entry::AccountWide,
+                })
+            }
+            PinnedChannelMessages(u) => Some(Self {
+                pts: u.pts,
+                pts_count: u.pts_count,
+                entry: Entry::Channel(u.channel_id),
+            }),
+        }
     }
 }
