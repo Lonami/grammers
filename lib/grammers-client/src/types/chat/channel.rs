@@ -37,4 +37,14 @@ impl Channel {
         }
         .into()
     }
+
+    /// Return the unique identifier for this channel.
+    pub fn id(&self) -> i32 {
+        self.0.id
+    }
+
+    /// Return the title of this channel.
+    pub fn title(&self) -> &str {
+        self.0.title.as_str()
+    }
 }

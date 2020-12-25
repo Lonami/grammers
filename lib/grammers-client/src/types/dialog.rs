@@ -39,11 +39,11 @@ impl Dialog {
     }
 
     pub fn title(&self) -> &str {
-        todo!()
+        self.chat.name()
     }
 
     pub fn id(&self) -> i32 {
-        todo!()
+        self.chat.id()
     }
 
     pub fn peer(&self) -> tl::enums::Peer {

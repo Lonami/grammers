@@ -18,6 +18,8 @@ use grammers_tl_types as tl;
 #[derive(Clone)]
 pub struct Group(tl::enums::Chat);
 
+// TODO it might be desirable to manually merge all the properties of the chat to avoid endless matching
+
 impl Group {
     pub(crate) fn from_raw(_chat: tl::enums::Chat) -> Self {
         todo!()
@@ -43,5 +45,36 @@ impl Group {
 
     pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
         todo!()
+    }
+
+    /// Return the unique identifier for this group.
+    ///
+    /// Note that if this group is migrated to a megagroup, both this group and the new one will
+    /// exist as separate chats, with different identifiers.
+    pub fn id(&self) -> i32 {
+        use tl::enums::Chat;
+
+        match &self.0 {
+            Chat::Empty(chat) => chat.id,
+            Chat::Chat(chat) => chat.id,
+            Chat::Forbidden(chat) => chat.id,
+            Chat::Channel(chat) => chat.id,
+            Chat::ChannelForbidden(chat) => chat.id,
+        }
+    }
+
+    /// Return the title of this group.
+    ///
+    /// The title may be the empty string if the group is not accessible.
+    pub fn title(&self) -> &str {
+        use tl::enums::Chat;
+
+        match &self.0 {
+            Chat::Empty(_) => "",
+            Chat::Chat(chat) => chat.title.as_str(),
+            Chat::Forbidden(chat) => chat.title.as_str(),
+            Chat::Channel(chat) => chat.title.as_str(),
+            Chat::ChannelForbidden(chat) => chat.title.as_str(),
+        }
     }
 }

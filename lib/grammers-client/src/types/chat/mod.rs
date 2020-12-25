@@ -76,4 +76,34 @@ impl Chat {
             Self::Channel(channel) => channel.to_input_peer(),
         }
     }
+
+    /// Return the unique identifier for this chat.
+    ///
+    /// Every account will see the same identifier for the same chat.
+    ///
+    /// This identifier will never change. However, small group chats may be migrated to
+    /// megagroups. If this happens, both the old small group chat and the new megagroup
+    /// exist as separate chats with different identifiers, but they are linked with a
+    /// property.
+    pub fn id(&self) -> i32 {
+        match self {
+            Self::User(user) => user.id(),
+            Self::Group(group) => group.id(),
+            Self::Channel(channel) => channel.id(),
+        }
+    }
+
+    /// Return the name of this chat.
+    ///
+    /// For private conversations (users), this is their first name. For groups and channels,
+    /// this is their title.
+    ///
+    /// The name may be empty if the chat is inaccessible or if the account was deleted.
+    pub fn name(&self) -> &str {
+        match self {
+            Self::User(user) => user.first_name(),
+            Self::Group(group) => group.title(),
+            Self::Channel(channel) => channel.title(),
+        }
+    }
 }

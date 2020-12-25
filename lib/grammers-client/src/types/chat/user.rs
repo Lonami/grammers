@@ -68,4 +68,41 @@ impl User {
         }
         .into()
     }
+
+    /// Return the unique identifier for this user.
+    pub fn id(&self) -> i32 {
+        self.0.id
+    }
+
+    /// Return the first name of this user.
+    ///
+    /// If the account was deleted, the returned string will be empty.
+    pub fn first_name(&self) -> &str {
+        self.0.first_name.as_deref().unwrap_or("")
+    }
+
+    /// Return the last name of this user, if any.
+    pub fn last_name(&self) -> Option<&str> {
+        self.0
+            .last_name
+            .as_deref()
+            .and_then(|name| if name.is_empty() { None } else { Some(name) })
+    }
+
+    /// Return the full name of this user.
+    ///
+    /// This is equal to the user's first name concatenated with the user's last name, if this
+    /// is not empty. Otherwise, it equals the user's first name.
+    pub fn full_name(&self) -> String {
+        let first_name = self.first_name();
+        if let Some(last_name) = self.last_name() {
+            let mut name = String::with_capacity(first_name.len() + 1 + last_name.len());
+            name.push_str(first_name);
+            name.push(' ');
+            name.push_str(last_name);
+            name
+        } else {
+            first_name.to_string()
+        }
+    }
 }
