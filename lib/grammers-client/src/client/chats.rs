@@ -9,8 +9,8 @@
 //! Methods related to chats and entities.
 
 use super::ClientHandle;
-use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Entity, IterBuffer, Message};
+use crate::ext::{ChatExt, InputPeerExt, UserExt};
+use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Chat, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -441,7 +441,7 @@ impl ProfilePhotoIter {
 
 /// Method implementations related to dealing with chats or other users.
 impl ClientHandle {
-    /// Resolves a username into the user that owns it, if any.
+    /// Resolves a username into the chat that owns it, if any.
     ///
     /// Note that this method is expensive to call, and can quickly cause long flood waits.
     ///
@@ -449,8 +449,8 @@ impl ClientHandle {
     ///
     /// ```
     /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// if let Some(entity) = client.resolve_username("username").await? {
-    ///     println!("Found entity!: {:?}", entity);
+    /// if let Some(chat) = client.resolve_username("username").await? {
+    ///     println!("Found chat!: {:?}", chat);
     /// }
     /// # Ok(())
     /// # }
@@ -458,7 +458,7 @@ impl ClientHandle {
     pub async fn resolve_username(
         &mut self,
         username: &str,
-    ) -> Result<Option<Entity>, InvocationError> {
+    ) -> Result<Option<Chat>, InvocationError> {
         let tl::enums::contacts::ResolvedPeer::Peer(tl::types::contacts::ResolvedPeer {
             peer,
             users,
@@ -471,25 +471,24 @@ impl ClientHandle {
 
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
-                users.into_iter().find_map(|user| match user {
-                    tl::enums::User::User(user) if user.id == user_id => Some(Entity::User(user)),
-                    tl::enums::User::User(_) | tl::enums::User::Empty(_) => None,
-                })
-            }
-            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => {
-                chats.into_iter().find_map(|chat| match chat {
-                    tl::enums::Chat::Chat(c) if c.id == chat_id => Some(Entity::Chat(c)),
-                    _ => None,
-                })
-            }
-            tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => {
-                chats.into_iter().find_map(|chan| match chan {
-                    tl::enums::Chat::Channel(ch) if ch.id == channel_id => {
-                        Some(Entity::Channel(ch))
+                users.into_iter().find_map(|user| {
+                    if user.id() == user_id {
+                        Some(Chat::from_user(user))
+                    } else {
+                        None
                     }
-                    _ => None,
                 })
             }
+            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id })
+            | tl::enums::Peer::Channel(tl::types::PeerChannel {
+                channel_id: chat_id,
+            }) => chats.into_iter().find_map(|chat| {
+                if chat.id() == chat_id {
+                    Some(Chat::from_chat(chat))
+                } else {
+                    None
+                }
+            }),
         })
     }
 

@@ -153,7 +153,7 @@ impl Message {
     }
 
     /// The sender of this message, if any.
-    pub fn sender(&self) -> Option<types::Entity> {
+    pub fn sender(&self) -> Option<types::Chat> {
         self.msg
             .from_id
             .as_ref()
@@ -167,7 +167,7 @@ impl Message {
     /// channel where the message was sent.
     ///
     /// This value will be `None` if no information about the chat is present.
-    pub fn chat(&self) -> Option<types::Entity> {
+    pub fn chat(&self) -> Option<types::Chat> {
         self.entities.get(&self.msg.peer_id).map(|e| e.clone())
     }
 
@@ -378,11 +378,11 @@ impl Message {
     }
 
     pub(crate) fn input_chat(&self) -> tl::enums::InputPeer {
-        self.chat().unwrap().input_peer()
+        self.chat().unwrap().to_input_peer()
     }
 
     pub(crate) fn input_channel(&self) -> Option<tl::enums::InputChannel> {
-        match self.chat()?.input_peer() {
+        match self.chat()?.to_input_peer() {
             tl::enums::InputPeer::Channel(c) => Some(
                 tl::types::InputChannel {
                     channel_id: c.channel_id,

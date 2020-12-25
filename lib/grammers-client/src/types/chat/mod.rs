@@ -22,6 +22,7 @@ pub use user::User;
 /// * Private conversations with other people are treated as the chat of the user itself.
 /// * Conversations in a group, whether it's private or public, are simply known as groups.
 /// * Conversations where only administrators broadcast messages are known as channels.
+#[derive(Clone)]
 pub enum Chat {
     /// A [`User`].
     User(User),
@@ -57,6 +58,22 @@ impl Chat {
                     Self::Group(Group::from_raw(chat))
                 }
             }
+        }
+    }
+
+    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
+        match self {
+            Self::User(user) => user.to_peer(),
+            Self::Group(group) => group.to_peer(),
+            Self::Channel(channel) => channel.to_peer(),
+        }
+    }
+
+    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
+        match self {
+            Self::User(user) => user.to_input_peer(),
+            Self::Group(group) => group.to_input_peer(),
+            Self::Channel(channel) => channel.to_input_peer(),
         }
     }
 }

@@ -6,13 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{Entity, EntitySet, Message, Peer};
+use super::{Chat, EntitySet, Message, Peer};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
 pub struct Dialog {
     pub dialog: tl::enums::Dialog,
-    pub entity: Entity,
+    pub chat: Chat,
     pub last_message: Option<Message>,
 }
 
@@ -29,7 +29,7 @@ impl Dialog {
         };
 
         Self {
-            entity: entities
+            chat: entities
                 .get(peer)
                 .expect("dialogs use an unknown peer")
                 .clone(),
@@ -39,18 +39,18 @@ impl Dialog {
     }
 
     pub fn title(&self) -> &str {
-        self.entity.name()
+        todo!()
     }
 
     pub fn id(&self) -> i32 {
-        self.entity.id()
+        todo!()
     }
 
     pub fn peer(&self) -> tl::enums::Peer {
-        self.entity.peer()
+        self.chat.to_peer()
     }
 
     pub fn input_peer(&self) -> tl::enums::InputPeer {
-        self.entity.input_peer()
+        self.chat.to_input_peer()
     }
 }

@@ -19,6 +19,7 @@ use grammers_tl_types as tl;
 /// automatically reacts to them, like translating messages).
 ///
 /// [@BotFather]: https://t.me/BotFather
+#[derive(Clone)]
 pub struct User(tl::types::User);
 
 impl User {
@@ -54,5 +55,17 @@ impl User {
             },
             tl::enums::User::User(user) => user,
         })
+    }
+
+    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
+        tl::types::PeerUser { user_id: self.0.id }.into()
+    }
+
+    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
+        tl::types::InputPeerUser {
+            user_id: self.0.id,
+            access_hash: self.0.access_hash.unwrap_or(0),
+        }
+        .into()
     }
 }
