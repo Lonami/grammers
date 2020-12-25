@@ -241,7 +241,12 @@ impl MessageBox {
         entities: &EntityCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
         let channel_id = *self.getting_channel_diff.iter().next()?;
-        let channel = entities.get_input_channel(channel_id)?;
+        let channel = if let Some(channel) = entities.get_input_channel(channel_id) {
+            channel
+        } else {
+            self.getting_channel_diff.remove(&channel_id);
+            return None;
+        };
 
         if let Some(&pts) = self.pts_map.get(&Entry::Channel(channel_id)) {
             Some(tl::functions::updates::GetChannelDifference {
@@ -256,7 +261,7 @@ impl MessageBox {
                 },
             })
         } else {
-            self.pts_map.remove(&Entry::Channel(channel_id));
+            self.getting_channel_diff.remove(&channel_id);
             None
         }
     }
