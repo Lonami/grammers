@@ -498,12 +498,31 @@ impl MessageBox {
             // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
             // > should be transformed to `updateShort` upon receiving.
             tl::enums::Updates::UpdateShortMessage(short) => {
+                // > Incomplete update: the client is missing data about a chat/user from one of
+                // > the shortened constructors, such as `updateShortChatMessage`, etc.
+                //
+                // This only needs to be done for "short messages", to get the private chat (user)
+                // where the message occured. Anywhere else, Telegram should send information
+                // about the chat so that [min constructors][0] can be used.
+                //
+                // [0]: https://core.telegram.org/api/min
+                if !entities.contains_user(short.user_id) {
+                    info!("no hash for user {} known, treating as gap", short.user_id);
+                    return Err(Gap);
+                }
                 handle_update_short_message(short, entities.self_id())
             }
             tl::enums::Updates::UpdateShortChatMessage(short) => {
+                // No need to check for entities here. Chats do not require an access hash, and
+                // min constructors can be used to access the user.
                 handle_update_short_chat_message(short)
             }
             // > `updateShort` […] have lower priority and are broadcast to a large number of users.
+            //
+            // There *shouldn't* be updates mentioning peers we're unaware of here.
+            //
+            // If later it turns out these can happen, the code will need to be updated to
+            // consider entities missing here a gap as well.
             tl::enums::Updates::UpdateShort(short) => handle_update_short(short),
             // > [the] `seq` attribute, which indicates the remote `Updates` state after the
             // > generation of the `Updates`, and `seq_start` indicates the remote `Updates` state

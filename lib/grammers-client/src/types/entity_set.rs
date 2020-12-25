@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#![allow(dead_code)]
 use crate::types::Entity;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -106,34 +105,8 @@ impl EntityCache {
         self.self_bot
     }
 
-    pub(crate) fn contains(&self, peer: tl::enums::Peer) -> bool {
-        match peer {
-            tl::enums::Peer::User(u) => self.users.contains_key(&u.user_id),
-            tl::enums::Peer::Chat(_) => true,
-            tl::enums::Peer::Channel(c) => self.channels.contains_key(&c.channel_id),
-        }
-    }
-
-    pub(crate) fn get_input(&self, peer: tl::enums::Peer) -> Option<tl::enums::InputPeer> {
-        match peer {
-            tl::enums::Peer::User(u) => self.users.get(&u.user_id).map(|&access_hash| {
-                tl::types::InputPeerUser {
-                    user_id: u.user_id,
-                    access_hash,
-                }
-                .into()
-            }),
-            tl::enums::Peer::Chat(c) => {
-                Some(tl::types::InputPeerChat { chat_id: c.chat_id }.into())
-            }
-            tl::enums::Peer::Channel(c) => self.channels.get(&c.channel_id).map(|&access_hash| {
-                tl::types::InputPeerChannel {
-                    channel_id: c.channel_id,
-                    access_hash,
-                }
-                .into()
-            }),
-        }
+    pub(crate) fn contains_user(&self, user_id: i32) -> bool {
+        self.users.contains_key(&user_id)
     }
 
     pub(crate) fn get_input_channel(&self, channel_id: i32) -> Option<tl::enums::InputChannel> {
