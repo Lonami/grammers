@@ -5,9 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-use crate::ext::InputPeerExt;
-use crate::types::{Dialog, EntitySet, IterBuffer, Message};
+use crate::types::{Chat, Dialog, EntitySet, IterBuffer, Message};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -147,46 +145,35 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in chat!
     /// client.delete_dialog(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog(
-        &mut self,
-        chat: &tl::enums::InputPeer,
-    ) -> Result<(), InvocationError> {
-        use tl::enums::InputPeer::*;
-
-        match chat {
-            Empty => Ok(()),
-            PeerSelf | User(_) | UserFromMessage(_) => {
-                // TODO only do this if we're not a bot
-                self.invoke(&tl::functions::messages::DeleteHistory {
-                    just_clear: false,
-                    revoke: false,
-                    peer: chat.clone(),
-                    max_id: 0,
-                })
+    pub async fn delete_dialog(&mut self, chat: &Chat) -> Result<(), InvocationError> {
+        if let Some(channel) = chat.to_input_channel() {
+            self.invoke(&tl::functions::channels::LeaveChannel { channel })
                 .await
                 .map(drop)
-            }
-            Chat(chat) => {
-                // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
-                self.invoke(&tl::functions::messages::DeleteChatUser {
-                    chat_id: chat.chat_id,
-                    user_id: tl::enums::InputUser::UserSelf,
-                })
-                .await
-                .map(drop)
-            }
-            Channel(_) | ChannelFromMessage(_) => self
-                .invoke(&tl::functions::channels::LeaveChannel {
-                    channel: chat.to_input_channel().unwrap(),
-                })
-                .await
-                .map(drop),
+        } else if let Some(chat_id) = chat.to_chat_id() {
+            // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
+            self.invoke(&tl::functions::messages::DeleteChatUser {
+                chat_id: chat_id,
+                user_id: tl::enums::InputUser::UserSelf,
+            })
+            .await
+            .map(drop)
+        } else {
+            // TODO only do this if we're not a bot
+            self.invoke(&tl::functions::messages::DeleteHistory {
+                just_clear: false,
+                revoke: false,
+                peer: chat.to_input_peer(),
+                max_id: 0,
+            })
+            .await
+            .map(drop)
         }
     }
 
@@ -198,22 +185,19 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// client.mark_as_read(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read(
-        &mut self,
-        chat: &tl::enums::InputPeer,
-    ) -> Result<(), InvocationError> {
+    pub async fn mark_as_read(&mut self, chat: &Chat) -> Result<(), InvocationError> {
         if let Some(channel) = chat.to_input_channel() {
             self.invoke(&tl::functions::channels::ReadHistory { channel, max_id: 0 })
                 .await
                 .map(drop)
         } else {
             self.invoke(&tl::functions::messages::ReadHistory {
-                peer: chat.clone(),
+                peer: chat.to_input_peer(),
                 max_id: 0,
             })
             .await
@@ -226,17 +210,16 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// client.clear_mentions(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn clear_mentions(
-        &mut self,
-        chat: &tl::enums::InputPeer,
-    ) -> Result<(), InvocationError> {
-        self.invoke(&tl::functions::messages::ReadMentions { peer: chat.clone() })
-            .await
-            .map(drop)
+    pub async fn clear_mentions(&mut self, chat: &Chat) -> Result<(), InvocationError> {
+        self.invoke(&tl::functions::messages::ReadMentions {
+            peer: chat.to_input_peer(),
+        })
+        .await
+        .map(drop)
     }
 }

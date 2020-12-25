@@ -38,6 +38,14 @@ impl Channel {
         .into()
     }
 
+    pub(crate) fn to_input(&self) -> tl::enums::InputChannel {
+        tl::types::InputChannel {
+            channel_id: self.0.id,
+            access_hash: self.0.access_hash.unwrap_or(0),
+        }
+        .into()
+    }
+
     /// Return the unique identifier for this channel.
     pub fn id(&self) -> i32 {
         self.0.id

@@ -47,6 +47,14 @@ impl Group {
         todo!()
     }
 
+    pub(crate) fn to_input_channel(&self) -> Option<tl::enums::InputChannel> {
+        todo!()
+    }
+
+    pub(crate) fn to_chat_id(&self) -> Option<i32> {
+        todo!()
+    }
+
     /// Return the unique identifier for this group.
     ///
     /// Note that if this group is migrated to a megagroup, both this group and the new one will

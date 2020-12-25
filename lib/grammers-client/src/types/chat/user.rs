@@ -69,6 +69,14 @@ impl User {
         .into()
     }
 
+    pub(crate) fn to_input(&self) -> tl::enums::InputUser {
+        tl::types::InputUser {
+            user_id: self.0.id,
+            access_hash: self.0.access_hash.unwrap_or(0),
+        }
+        .into()
+    }
+
     /// Return the unique identifier for this user.
     pub fn id(&self) -> i32 {
         self.0.id
@@ -104,5 +112,11 @@ impl User {
         } else {
             first_name.to_string()
         }
+    }
+
+    /// Does this user represent the account that's currently logged in?
+    pub fn is_self(&self) -> bool {
+        // TODO if is_self is false, check in entity cache if id == ourself
+        self.0.is_self
     }
 }

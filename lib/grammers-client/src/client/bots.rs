@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::ClientHandle;
-use crate::types::IterBuffer;
+use crate::types::{Chat, IterBuffer, User};
 use crate::utils::generate_random_id;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -24,14 +24,14 @@ pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResu
 impl InlineResult {
     /// Send this inline result to the specified chat.
     // TODO return the produced message
-    pub async fn send(&mut self, chat: &tl::enums::InputPeer) -> Result<(), InvocationError> {
+    pub async fn send(&mut self, chat: &Chat) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SendInlineBotResult {
                 silent: false,
                 background: false,
                 clear_draft: false,
                 hide_via: false,
-                peer: chat.clone(),
+                peer: chat.to_input_peer(),
                 reply_to_msg_id: None,
                 random_id: generate_random_id(),
                 query_id: self.query_id,
@@ -64,12 +64,12 @@ impl InlineResult {
 }
 
 impl InlineResultIter {
-    fn new(client: &ClientHandle, bot: &tl::enums::InputUser, query: &str) -> Self {
+    fn new(client: &ClientHandle, bot: &User, query: &str) -> Self {
         Self::from_request(
             client,
             MAX_LIMIT,
             tl::functions::messages::GetInlineBotResults {
-                bot: bot.clone(),
+                bot: bot.to_input(),
                 peer: tl::enums::InputPeer::Empty,
                 geo_point: None,
                 query: query.to_string(),
@@ -82,8 +82,8 @@ impl InlineResultIter {
     ///
     /// Some bots use this information to return different results depending on the type of the
     /// chat, and some even "need" it to give useful results.
-    pub fn chat(mut self, chat: &tl::enums::InputPeer) -> Self {
-        self.request.peer = chat.clone();
+    pub fn chat(mut self, chat: &Chat) -> Self {
+        self.request.peer = chat.to_input_peer();
         self
     }
 
@@ -142,7 +142,7 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn inline_query(&self, bot: &tl::enums::InputUser, query: &str) -> InlineResultIter {
+    pub fn inline_query(&self, bot: &User, query: &str) -> InlineResultIter {
         InlineResultIter::new(self, bot, query)
     }
 }
