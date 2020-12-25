@@ -8,7 +8,7 @@
 
 //! Methods related to chats and entities.
 
-use super::{Client, ClientHandle};
+use super::ClientHandle;
 use crate::ext::{InputPeerExt, UserExt};
 use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Entity, IterBuffer, Message};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
@@ -436,13 +436,6 @@ impl ProfilePhotoIter {
             Self::User(iter) => Ok(iter.pop_item()),
             Self::Chat(_) => Ok(None),
         }
-    }
-}
-
-impl Client {
-    pub(crate) fn user_id(&self) -> Option<i32> {
-        // TODO actually use the user id saved in the session from login
-        Some(0)
     }
 }
 
