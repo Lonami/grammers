@@ -312,7 +312,7 @@ impl GlobalSearchIter {
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = last.input_chat();
+            self.request.offset_peer = last.chat().to_input_peer();
             self.request.offset_id = last.msg.id;
         }
 
@@ -572,7 +572,7 @@ impl ClientHandle {
         }
 
         // TODO shouldn't this method take in a message id anyway?
-        let chat = message.chat().unwrap();
+        let chat = message.chat();
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
