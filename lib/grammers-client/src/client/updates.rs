@@ -73,6 +73,17 @@ impl Client {
                 )));
             }
 
+            if let Some(request) = self.message_box.get_channel_difference() {
+                let response = self.invoke(&request).await?;
+                let (updates, users, chats) =
+                    self.message_box.apply_channel_difference(request, response);
+                return Ok(Some(UpdateIter::new(
+                    self.handle(),
+                    updates,
+                    EntitySet::new(users, chats),
+                )));
+            }
+
             let deadline = self.message_box.timeout_deadline();
             tokio::select! {
                 step = self.step() => {

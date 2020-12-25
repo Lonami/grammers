@@ -8,7 +8,7 @@
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 use tokio::time::{Duration, Instant};
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
@@ -39,6 +39,7 @@ pub(crate) enum Entry {
 /// See https://core.telegram.org/api/updates#message-related-event-sequences.
 pub(crate) struct MessageBox {
     getting_diff: bool,
+    getting_channel_diff: HashSet<i32>,
     deadline: Instant,
     date: i32,
     seq: i32,
@@ -204,6 +205,7 @@ impl MessageBox {
     pub(crate) fn from_pts(entries_pts: &[(Entry, i32)]) -> Self {
         MessageBox {
             getting_diff: false,
+            getting_channel_diff: HashSet::new(),
             deadline: next_updates_deadline(),
             date: 1,
             seq: 0,
@@ -226,6 +228,32 @@ impl MessageBox {
         }
     }
 
+    /// Return the request that needs to be made to get a channel's difference, if any.
+    pub(crate) fn get_channel_difference(
+        &mut self,
+    ) -> Option<tl::functions::updates::GetChannelDifference> {
+        let channel_id = *self.getting_channel_diff.iter().next()?;
+
+        if let Some(&pts) = self.pts_map.get(&Entry::Channel(channel_id)) {
+            // TODO use higher limit (100000) for bots https://core.telegram.org/method/updates.getChannelDifference
+            // TODO can't actually get difference unless we have the channel's access hash
+            Some(tl::functions::updates::GetChannelDifference {
+                force: false,
+                channel: tl::types::InputChannel {
+                    channel_id,
+                    access_hash: 0,
+                }
+                .into(),
+                filter: tl::enums::ChannelMessagesFilter::Empty,
+                pts,
+                limit: 100,
+            })
+        } else {
+            self.pts_map.remove(&Entry::Channel(channel_id));
+            None
+        }
+    }
+
     pub(crate) fn apply_difference(
         &mut self,
         difference: tl::enums::updates::Difference,
@@ -236,7 +264,6 @@ impl MessageBox {
     ) {
         self.deadline = next_updates_deadline();
 
-        // TODO if any of the `other_updates` is `updateChannelTooLong`, `getDifference` for it
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
                 debug!(
@@ -306,6 +333,14 @@ impl MessageBox {
         self.date = state.date;
         self.seq = state.seq;
 
+        updates.iter().for_each(|u| match u {
+            tl::enums::Update::ChannelTooLong(c) => {
+                // `c.pts`, if any, is the channel's current `pts`; we do not need this.
+                self.getting_channel_diff.insert(c.channel_id);
+            }
+            _ => {}
+        });
+
         updates.extend(
             new_messages
                 .into_iter()
@@ -327,6 +362,94 @@ impl MessageBox {
         );
 
         (updates, users, chats)
+    }
+
+    pub(crate) fn apply_channel_difference(
+        &mut self,
+        request: tl::functions::updates::GetChannelDifference,
+        difference: tl::enums::updates::ChannelDifference,
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
+        self.deadline = next_updates_deadline();
+
+        let channel_id = match request.channel {
+            tl::enums::InputChannel::Channel(c) => c.channel_id,
+            _ => panic!("request had wrong input channel"),
+        };
+
+        // TODO refetch updates after timeout
+        match difference {
+            tl::enums::updates::ChannelDifference::Empty(diff) => {
+                assert!(!diff.r#final);
+                debug!(
+                    "handling empty channel {} difference (pts = {}); no longer getting diff",
+                    channel_id, diff.pts
+                );
+                self.getting_channel_diff.remove(&channel_id);
+                self.pts_map.insert(Entry::Channel(channel_id), diff.pts);
+                (Vec::new(), Vec::new(), Vec::new())
+            }
+            tl::enums::updates::ChannelDifference::TooLong(diff) => {
+                assert!(!diff.r#final);
+                info!(
+                    "handling too long channel {} difference; no longer getting diff",
+                    channel_id
+                );
+                match diff.dialog {
+                    tl::enums::Dialog::Dialog(d) => {
+                        self.pts_map.insert(
+                            Entry::Channel(channel_id),
+                            d.pts.expect(
+                                "channelDifferenceTooLong dialog did not actually contain a pts",
+                            ),
+                        );
+                    }
+                    tl::enums::Dialog::Folder(_) => {
+                        panic!("received a folder on channelDifferenceTooLong")
+                    }
+                }
+                // This `diff` has the "latest messages and corresponding entities", but it would
+                // be strange to give the user only partial changes of these when they would
+                // expect all updates to be fetched. Instead, nothing is returned.
+                (Vec::new(), Vec::new(), Vec::new())
+            }
+            tl::enums::updates::ChannelDifference::Difference(
+                tl::types::updates::ChannelDifference {
+                    r#final,
+                    pts,
+                    timeout: _,
+                    new_messages,
+                    other_updates: mut updates,
+                    chats,
+                    users,
+                },
+            ) => {
+                if r#final {
+                    debug!(
+                        "handling channel {} difference; no longer getting diff",
+                        channel_id
+                    );
+                    self.getting_channel_diff.remove(&channel_id);
+                } else {
+                    debug!("handling channel {} difference", channel_id);
+                }
+
+                self.pts_map.insert(Entry::Channel(channel_id), pts);
+                updates.extend(new_messages.into_iter().map(|message| {
+                    tl::types::UpdateNewMessage {
+                        message,
+                        pts: NO_SEQ,
+                        pts_count: NO_SEQ,
+                    }
+                    .into()
+                }));
+
+                (updates, users, chats)
+            }
+        }
     }
 
     /// Process an update and return what should be done with it.
