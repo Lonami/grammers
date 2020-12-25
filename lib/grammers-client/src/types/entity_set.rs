@@ -39,6 +39,14 @@ pub struct EntitySet {
     map: HashMap<Peer, Entity>,
 }
 
+/// In-memory entity cache, mapping peers to their respective access hashes.
+pub(crate) struct EntityCache {
+    users: HashMap<i32, i64>,
+    channels: HashMap<i32, i64>,
+    self_id: Option<i32>,
+    self_bot: bool,
+}
+
 impl EntitySet {
     /// Create a new entity set.
     pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
@@ -75,5 +83,55 @@ impl EntitySet {
     /// Retrieve the full `Entity` object given its `Peer`.
     pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Entity> {
         self.map.get(&peer.into())
+    }
+}
+
+impl EntityCache {
+    pub(crate) fn new() -> Self {
+        Self {
+            users: HashMap::new(),
+            channels: HashMap::new(),
+            self_id: None,
+            self_bot: false,
+        }
+    }
+
+    pub(crate) fn self_id(&self) -> i32 {
+        self.self_id
+            .expect("tried to query self_id before it's known")
+    }
+
+    pub(crate) fn is_self_bot(&self) -> bool {
+        self.self_bot
+    }
+
+    pub(crate) fn contains(&self, peer: tl::enums::Peer) -> bool {
+        match peer {
+            tl::enums::Peer::User(u) => self.users.contains_key(&u.user_id),
+            tl::enums::Peer::Chat(_) => true,
+            tl::enums::Peer::Channel(c) => self.channels.contains_key(&c.channel_id),
+        }
+    }
+
+    pub(crate) fn get_input(&self, peer: tl::enums::Peer) -> Option<tl::enums::InputPeer> {
+        match peer {
+            tl::enums::Peer::User(u) => self.users.get(&u.user_id).map(|&access_hash| {
+                tl::types::InputPeerUser {
+                    user_id: u.user_id,
+                    access_hash,
+                }
+                .into()
+            }),
+            tl::enums::Peer::Chat(c) => {
+                Some(tl::types::InputPeerChat { chat_id: c.chat_id }.into())
+            }
+            tl::enums::Peer::Channel(c) => self.channels.get(&c.channel_id).map(|&access_hash| {
+                tl::types::InputPeerChannel {
+                    channel_id: c.channel_id,
+                    access_hash,
+                }
+                .into()
+            }),
+        }
     }
 }
