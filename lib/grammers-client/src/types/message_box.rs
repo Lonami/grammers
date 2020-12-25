@@ -248,81 +248,31 @@ impl MessageBox {
                 self.getting_diff = false;
                 (Vec::new(), Vec::new(), Vec::new())
             }
-            tl::enums::updates::Difference::Difference(tl::types::updates::Difference {
-                new_messages,
-                new_encrypted_messages,
-                other_updates: mut updates,
-                chats,
-                users,
-                state: tl::enums::updates::State::State(state),
-            }) => {
+            tl::enums::updates::Difference::Difference(diff) => {
                 debug!(
                     "handling full difference {:?}; no longer getting diff",
-                    state
+                    diff.state
                 );
-                self.pts_map.insert(Entry::AccountWide, state.pts);
-                self.pts_map.insert(Entry::SecretChats, state.qts);
-                self.date = state.date;
-                self.seq = state.seq;
                 self.getting_diff = false;
-
-                updates.extend(
-                    new_messages
-                        .into_iter()
-                        .map(|message| {
-                            tl::types::UpdateNewMessage {
-                                message,
-                                pts: NO_SEQ,
-                                pts_count: NO_SEQ,
-                            }
-                            .into()
-                        })
-                        .chain(new_encrypted_messages.into_iter().map(|message| {
-                            tl::types::UpdateNewEncryptedMessage {
-                                message,
-                                qts: NO_SEQ,
-                            }
-                            .into()
-                        })),
-                );
-
-                (updates, users, chats)
+                self.apply_difference_type(diff)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
                 new_messages,
                 new_encrypted_messages,
-                other_updates: mut updates,
+                other_updates,
                 chats,
                 users,
-                intermediate_state: tl::enums::updates::State::State(state),
+                intermediate_state: state,
             }) => {
                 debug!("handling partial difference {:?}", state);
-                self.pts_map.insert(Entry::AccountWide, state.pts);
-                self.pts_map.insert(Entry::SecretChats, state.qts);
-                self.date = state.date;
-                self.seq = state.seq;
-
-                updates.extend(
-                    new_messages
-                        .into_iter()
-                        .map(|message| {
-                            tl::types::UpdateNewMessage {
-                                message,
-                                pts: NO_SEQ,
-                                pts_count: NO_SEQ,
-                            }
-                            .into()
-                        })
-                        .chain(new_encrypted_messages.into_iter().map(|message| {
-                            tl::types::UpdateNewEncryptedMessage {
-                                message,
-                                qts: NO_SEQ,
-                            }
-                            .into()
-                        })),
-                );
-
-                (updates, users, chats)
+                self.apply_difference_type(tl::types::updates::Difference {
+                    new_messages,
+                    new_encrypted_messages,
+                    other_updates,
+                    chats,
+                    users,
+                    state,
+                })
             }
             tl::enums::updates::Difference::TooLong(diff) => {
                 debug!(
@@ -334,6 +284,49 @@ impl MessageBox {
                 (Vec::new(), Vec::new(), Vec::new())
             }
         }
+    }
+
+    fn apply_difference_type(
+        &mut self,
+        tl::types::updates::Difference {
+            new_messages,
+            new_encrypted_messages,
+            other_updates: mut updates,
+            chats,
+            users,
+            state: tl::enums::updates::State::State(state),
+        }: tl::types::updates::Difference,
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
+        self.pts_map.insert(Entry::AccountWide, state.pts);
+        self.pts_map.insert(Entry::SecretChats, state.qts);
+        self.date = state.date;
+        self.seq = state.seq;
+
+        updates.extend(
+            new_messages
+                .into_iter()
+                .map(|message| {
+                    tl::types::UpdateNewMessage {
+                        message,
+                        pts: NO_SEQ,
+                        pts_count: NO_SEQ,
+                    }
+                    .into()
+                })
+                .chain(new_encrypted_messages.into_iter().map(|message| {
+                    tl::types::UpdateNewEncryptedMessage {
+                        message,
+                        qts: NO_SEQ,
+                    }
+                    .into()
+                })),
+        );
+
+        (updates, users, chats)
     }
 
     /// Process an update and return what should be done with it.
