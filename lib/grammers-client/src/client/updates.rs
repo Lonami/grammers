@@ -73,7 +73,7 @@ impl Client {
                 )));
             }
 
-            if let Some(request) = self.message_box.get_channel_difference() {
+            if let Some(request) = self.message_box.get_channel_difference(&self.entities) {
                 let response = self.invoke(&request).await?;
                 let (updates, users, chats) =
                     self.message_box.apply_channel_difference(request, response);
@@ -106,7 +106,7 @@ impl Client {
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         for updates in all_updates {
-            match self.message_box.process_updates(updates) {
+            match self.message_box.process_updates(updates, &self.entities) {
                 Ok(tuple) => {
                     result.0.extend(tuple.0);
                     result.1.extend(tuple.1);

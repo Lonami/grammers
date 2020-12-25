@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::EntityCache;
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
@@ -13,6 +14,10 @@ use tokio::time::{Duration, Instant};
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 const NO_SEQ: i32 = 0;
+
+// See https://core.telegram.org/method/updates.getChannelDifference.
+const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
+const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
 
 /// After how long without updates the client will "timeout".
 ///
@@ -80,7 +85,10 @@ fn handle_update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesCombi
     }
 }
 
-fn handle_update_short_message(short: tl::types::UpdateShortMessage) -> tl::types::UpdatesCombined {
+fn handle_update_short_message(
+    short: tl::types::UpdateShortMessage,
+    self_id: i32,
+) -> tl::types::UpdatesCombined {
     handle_update_short(tl::types::UpdateShort {
         update: tl::types::UpdateNewMessage {
             message: tl::types::Message {
@@ -96,11 +104,10 @@ fn handle_update_short_message(short: tl::types::UpdateShortMessage) -> tl::type
                 id: short.id,
                 from_id: Some(
                     tl::types::PeerUser {
-                        user_id: short.user_id,
+                        user_id: if short.out { self_id } else { short.user_id },
                     }
                     .into(),
                 ),
-                // TODO this is wrong, it has to be ourself if it's outgoing
                 peer_id: tl::types::PeerChat {
                     chat_id: short.user_id,
                 }
@@ -231,22 +238,22 @@ impl MessageBox {
     /// Return the request that needs to be made to get a channel's difference, if any.
     pub(crate) fn get_channel_difference(
         &mut self,
+        entities: &EntityCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
         let channel_id = *self.getting_channel_diff.iter().next()?;
+        let channel = entities.get_input_channel(channel_id)?;
 
         if let Some(&pts) = self.pts_map.get(&Entry::Channel(channel_id)) {
-            // TODO use higher limit (100000) for bots https://core.telegram.org/method/updates.getChannelDifference
-            // TODO can't actually get difference unless we have the channel's access hash
             Some(tl::functions::updates::GetChannelDifference {
                 force: false,
-                channel: tl::types::InputChannel {
-                    channel_id,
-                    access_hash: 0,
-                }
-                .into(),
+                channel,
                 filter: tl::enums::ChannelMessagesFilter::Empty,
                 pts,
-                limit: 100,
+                limit: if entities.is_self_bot() {
+                    BOT_CHANNEL_DIFF_LIMIT
+                } else {
+                    USER_CHANNEL_DIFF_LIMIT
+                },
             })
         } else {
             self.pts_map.remove(&Entry::Channel(channel_id));
@@ -456,6 +463,7 @@ impl MessageBox {
     pub(crate) fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
+        entities: &EntityCache,
     ) -> Result<
         (
             Vec<tl::enums::Update>,
@@ -484,7 +492,9 @@ impl MessageBox {
             }
             // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
             // > should be transformed to `updateShort` upon receiving.
-            tl::enums::Updates::UpdateShortMessage(short) => handle_update_short_message(short),
+            tl::enums::Updates::UpdateShortMessage(short) => {
+                handle_update_short_message(short, entities.self_id())
+            }
             tl::enums::Updates::UpdateShortChatMessage(short) => {
                 handle_update_short_chat_message(short)
             }

@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#![allow(dead_code)]
 use crate::types::Entity;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -133,5 +134,15 @@ impl EntityCache {
                 .into()
             }),
         }
+    }
+
+    pub(crate) fn get_input_channel(&self, channel_id: i32) -> Option<tl::enums::InputChannel> {
+        self.channels.get(&channel_id).map(|&access_hash| {
+            tl::types::InputChannel {
+                channel_id,
+                access_hash,
+            }
+            .into()
+        })
     }
 }
