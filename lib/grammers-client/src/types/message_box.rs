@@ -206,37 +206,35 @@ pub(crate) struct Gap;
 
 impl MessageBox {
     pub(crate) fn new() -> Self {
-        Self::from_pts(&[])
-    }
-
-    pub(crate) fn from_pts(entries_pts: &[(Entry, i32)]) -> Self {
         MessageBox {
             getting_diff: false,
             getting_channel_diff: HashSet::new(),
             deadline: next_updates_deadline(),
             date: 1,
             seq: 0,
-            pts_map: entries_pts.iter().copied().collect(),
+            pts_map: HashMap::new(),
         }
     }
 
+    // Note: calling this method is **really** important, or we'll start fetching updates from
+    // scratch.
+    pub(crate) fn set_state(&mut self, state: tl::enums::updates::State) {
+        let state: tl::types::updates::State = state.into();
+        self.date = state.date;
+        self.seq = state.seq;
+        self.pts_map.insert(Entry::AccountWide, state.pts);
+        self.pts_map.insert(Entry::SecretChats, state.qts);
+    }
+
     /// Return the request that needs to be made to get the difference, if any.
-    pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
+    pub(crate) fn get_difference(&self) -> Option<tl::functions::updates::GetDifference> {
         if self.getting_diff || Instant::now() > self.deadline {
-            // There might be a `seq` gap without us having any previous `pts` at all, which would
-            // fail with "PERSISTENT_TIMESTAMP_EMPTY".
-            if let Some(&pts) = self.pts_map.get(&Entry::AccountWide) {
-                Some(tl::functions::updates::GetDifference {
-                    // TODO we probably need to be initialized with getState always
-                    pts,
-                    pts_total_limit: None,
-                    date: self.date,
-                    qts: self.pts_map.get(&Entry::SecretChats).copied().unwrap_or(0),
-                })
-            } else {
-                self.getting_diff = false;
-                None
-            }
+            Some(tl::functions::updates::GetDifference {
+                pts: self.pts_map.get(&Entry::AccountWide).copied().unwrap_or(1),
+                pts_total_limit: None,
+                date: self.date,
+                qts: self.pts_map.get(&Entry::SecretChats).copied().unwrap_or(1),
+            })
         } else {
             None
         }

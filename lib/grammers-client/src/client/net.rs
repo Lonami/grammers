@@ -117,14 +117,25 @@ impl Client {
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
-        Ok(Self {
+        let mut client = Self {
             sender,
             config,
             handle_tx,
             handle_rx,
             message_box: MessageBox::new(),
             entities: EntityCache::new(),
-        })
+        };
+
+        // TODO use data saved in session instead
+        // TODO maybe the session should have a `.without_update_state()`, otherwise we'll detect
+        //      gaps and catch up which users may not want
+        // TODO if this fails we know we're not logged in, use that knowledge (or from the session)
+        match client.invoke(&tl::functions::updates::GetState {}).await {
+            Ok(state) => client.message_box.set_state(state),
+            Err(_) => {}
+        }
+
+        Ok(client)
     }
 
     /// Invoke a raw API call without the need to use a [`Client::handle`] or having to repeatedly
