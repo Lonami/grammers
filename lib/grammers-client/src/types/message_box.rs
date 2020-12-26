@@ -221,15 +221,22 @@ impl MessageBox {
     }
 
     /// Return the request that needs to be made to get the difference, if any.
-    pub(crate) fn get_difference(&self) -> Option<tl::functions::updates::GetDifference> {
+    pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
         if self.getting_diff || Instant::now() > self.deadline {
-            Some(tl::functions::updates::GetDifference {
-                // TODO we probably need to be initialized with getState always
-                pts: self.pts_map.get(&Entry::AccountWide).copied().unwrap_or(0),
-                pts_total_limit: None,
-                date: self.date,
-                qts: self.pts_map.get(&Entry::SecretChats).copied().unwrap_or(0),
-            })
+            // There might be a `seq` gap without us having any previous `pts` at all, which would
+            // fail with "PERSISTENT_TIMESTAMP_EMPTY".
+            if let Some(&pts) = self.pts_map.get(&Entry::AccountWide) {
+                Some(tl::functions::updates::GetDifference {
+                    // TODO we probably need to be initialized with getState always
+                    pts,
+                    pts_total_limit: None,
+                    date: self.date,
+                    qts: self.pts_map.get(&Entry::SecretChats).copied().unwrap_or(0),
+                })
+            } else {
+                self.getting_diff = false;
+                None
+            }
         } else {
             None
         }
