@@ -22,7 +22,7 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 async fn handle_update(mut client: ClientHandle, updates: UpdateIter) -> Result {
     for update in updates {
         match update {
-            Update::NewMessage(message) => {
+            Update::NewMessage(message) if !message.outgoing() => {
                 let chat = message.chat().expect("Telegram did not send chat info");
                 println!("Responding to {}", chat.name());
                 client
