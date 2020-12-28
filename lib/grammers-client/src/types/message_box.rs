@@ -42,6 +42,7 @@ pub(crate) enum Entry {
 /// Represents a "message box" (event `pts` for a specific entry).
 ///
 /// See https://core.telegram.org/api/updates#message-related-event-sequences.
+#[derive(Debug)]
 pub(crate) struct MessageBox {
     getting_diff: bool,
     getting_channel_diff: HashSet<i32>,
@@ -577,30 +578,50 @@ impl MessageBox {
         let mut result = Vec::with_capacity(updates.len());
         for update in updates {
             if let Some(pts) = PtsInfo::from_update(&update) {
-                if let Some(local_pts) = self.pts_map.get(&pts.entry) {
+                let local_pts = if let Some(&local_pts) = self.pts_map.get(&pts.entry) {
                     match (local_pts + pts.pts_count).cmp(&pts.pts) {
                         // Apply
-                        Ordering::Equal => {}
+                        Ordering::Equal => {
+                            trace!(
+                                "applying update for {:?} (local {:?}, count {:?}, remote {:?})",
+                                pts.entry,
+                                local_pts,
+                                pts.pts_count,
+                                pts.pts
+                            );
+                            local_pts
+                        }
                         // Ignore
                         Ordering::Greater => {
                             debug!(
-                                "skipping update for {:?} that was already handled at pts = {}",
-                                pts.entry, local_pts
+                                "skipping update for {:?} (local {:?}, count {:?}, remote {:?})",
+                                pts.entry, local_pts, pts.pts_count, pts.pts
                             );
                             continue;
                         }
                         Ordering::Less => {
-                            info!("gap detected (local pts {}, remote {:?})", local_pts, pts);
+                            info!(
+                                "gap on update for {:?} (local {:?}, count {:?}, remote {:?})",
+                                pts.entry, local_pts, pts.pts_count, pts.pts
+                            );
                             self.getting_diff = true;
                             return Err(Gap);
                         }
                     }
-                }
+                } else {
+                    // No previous `pts` known, and because this update has to be "right" (it's the first one) our
+                    // `local_pts` must be one less.
+                    pts.pts - 1
+                };
 
-                // First time (no previous `pts`) or update that we have to apply, both change the
-                // local `pts`.
-                self.pts_map.insert(pts.entry, pts.pts);
-                trace!("updated pts map with {:?}", pts);
+                // For example, when we're in a channel, we immediately receive:
+                // * ReadChannelInbox (pts = X)
+                // * NewChannelMessage (pts = X, pts_count = 1)
+                //
+                // Notice how both `pts` are the same. If we stored the one from the first, then the second one would
+                // be considered "already handled" and ignored, which is not desirable. Instead, advance local `pts`
+                // by `pts_count` (which is 0 for updates not directly related to messages, like reading inbox).
+                self.pts_map.insert(pts.entry, local_pts + pts.pts_count);
             }
 
             result.push(update);
@@ -709,7 +730,7 @@ impl PtsInfo {
             }),
             ChannelTooLong(u) => u.pts.map(|pts| Self {
                 pts,
-                pts_count: 1,
+                pts_count: 0,
                 entry: Entry::Channel(u.channel_id),
             }),
             Channel(_) => None,
@@ -725,7 +746,7 @@ impl PtsInfo {
             }),
             ReadChannelInbox(u) => Some(Self {
                 pts: u.pts,
-                pts_count: 1,
+                pts_count: 0,
                 entry: Entry::Channel(u.channel_id),
             }),
             DeleteChannelMessages(u) => Some(Self {
@@ -805,7 +826,7 @@ impl PtsInfo {
             PhoneCallSignalingData(_) => None,
             ChannelParticipant(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 1,
+                pts_count: 0,
                 entry: Entry::SecretChats,
             }),
             ChannelMessageForwards(_) => None,
