@@ -19,6 +19,9 @@ const NO_SEQ: i32 = 0;
 const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
 const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
 
+// > It may be useful to wait up to 0.5 seconds
+const POSSIBLE_GAP_TIMEOUT: Duration = Duration::from_millis(500);
+
 /// After how long without updates the client will "timeout".
 ///
 /// When this timeout occurs, the client will attempt to fetch updates by itself, ignoring all the
@@ -50,6 +53,17 @@ pub(crate) struct MessageBox {
     date: i32,
     seq: i32,
     pts_map: HashMap<Entry, i32>,
+
+    // > ### Recovering gaps
+    // > […] Manually obtaining updates is also required in the following situations:
+    // > • Loss of sync: a gap was found in `seq` / `pts` / `qts` (as described above).
+    // >   It may be useful to wait up to 0.5 seconds in this situation and abort the sync in case a new update
+    // >   arrives, that fills the gap.
+    //
+    // This is really easy to trigger by spamming messages in a channel (with as little as 3 members works), because
+    // the updates produced by the RPC request take a while to arrive (whereas the read update comes faster alone).
+    possible_gap: HashMap<Entry, Vec<tl::enums::Update>>,
+    possible_gap_deadline: Option<Instant>,
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
@@ -214,6 +228,8 @@ impl MessageBox {
             date: 1,
             seq: 0,
             pts_map: HashMap::new(),
+            possible_gap: HashMap::new(),
+            possible_gap_deadline: None,
         }
     }
 
@@ -228,8 +244,17 @@ impl MessageBox {
     }
 
     /// Return the request that needs to be made to get the difference, if any.
-    pub(crate) fn get_difference(&self) -> Option<tl::functions::updates::GetDifference> {
-        if self.getting_diff || Instant::now() > self.deadline {
+    pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
+        if self.getting_diff || Instant::now() > self.possible_gap_deadline.unwrap_or(self.deadline)
+        {
+            if self.possible_gap_deadline.is_some() {
+                info!("gap was not resolved after waiting");
+                self.getting_diff = true;
+                self.possible_gap_deadline = None;
+                // TODO shouldn't this do getChannelDifference?
+                self.possible_gap.clear();
+            }
+
             Some(tl::functions::updates::GetDifference {
                 pts: self.pts_map.get(&Entry::AccountWide).copied().unwrap_or(1),
                 pts_total_limit: None,
@@ -559,7 +584,7 @@ impl MessageBox {
                     return Ok((Vec::new(), users, chats));
                 }
                 Ordering::Less => {
-                    info!(
+                    debug!(
                         "gap detected (local seq {}, remote seq {})",
                         self.seq, seq_start
                     );
@@ -575,66 +600,97 @@ impl MessageBox {
             }
         }
 
-        let mut result = Vec::with_capacity(updates.len());
-        for update in updates {
-            if let Some(pts) = PtsInfo::from_update(&update) {
-                let local_pts = if let Some(&local_pts) = self.pts_map.get(&pts.entry) {
-                    match (local_pts + pts.pts_count).cmp(&pts.pts) {
-                        // Apply
-                        Ordering::Equal => {
-                            trace!(
-                                "applying update for {:?} (local {:?}, count {:?}, remote {:?})",
-                                pts.entry,
-                                local_pts,
-                                pts.pts_count,
-                                pts.pts
-                            );
-                            local_pts
-                        }
-                        // Ignore
-                        Ordering::Greater => {
-                            debug!(
-                                "skipping update for {:?} (local {:?}, count {:?}, remote {:?})",
-                                pts.entry, local_pts, pts.pts_count, pts.pts
-                            );
-                            continue;
-                        }
-                        Ordering::Less => {
-                            info!(
-                                "gap on update for {:?} (local {:?}, count {:?}, remote {:?})",
-                                pts.entry, local_pts, pts.pts_count, pts.pts
-                            );
-                            self.getting_diff = true;
-                            return Err(Gap);
-                        }
-                    }
-                } else {
-                    // No previous `pts` known, and because this update has to be "right" (it's the first one) our
-                    // `local_pts` must be one less.
-                    pts.pts - 1
-                };
+        let mut result = updates
+            .into_iter()
+            .filter_map(|u| self.apply_pts_info(u))
+            .collect::<Vec<_>>();
 
-                // For example, when we're in a channel, we immediately receive:
-                // * ReadChannelInbox (pts = X)
-                // * NewChannelMessage (pts = X, pts_count = 1)
-                //
-                // Notice how both `pts` are the same. If we stored the one from the first, then the second one would
-                // be considered "already handled" and ignored, which is not desirable. Instead, advance local `pts`
-                // by `pts_count` (which is 0 for updates not directly related to messages, like reading inbox).
-                self.pts_map.insert(pts.entry, local_pts + pts.pts_count);
+        // For each update in possible gaps, see if the gap has been resolved already.
+        // Borrow checker doesn't know that `possible_gap` won't be changed by `apply_pts_info`.
+        let keys = self.possible_gap.keys().copied().collect::<Vec<_>>();
+        for key in keys {
+            for _ in 0..self.possible_gap.get(&key).unwrap().len() {
+                let update = self.possible_gap.get_mut(&key).unwrap().remove(0);
+                // If this fails to apply, it will get re-inserted at the end.
+                // All should fail, so the order will be preserved (it would've cycled once).
+                if let Some(update) = self.apply_pts_info(update) {
+                    result.push(update);
+                }
             }
+        }
 
-            result.push(update);
+        // Clear now-empty gaps. If all are cleared, also clear the gap deadline.
+        self.possible_gap.retain(|_, v| !v.is_empty());
+        if self.possible_gap.is_empty() {
+            debug!("successfully resolved gap by waiting");
+            self.possible_gap_deadline = None;
         }
 
         Ok((result, users, chats))
+    }
+
+    fn apply_pts_info(&mut self, update: tl::enums::Update) -> Option<tl::enums::Update> {
+        let pts = match PtsInfo::from_update(&update) {
+            Some(pts) => pts,
+            None => return Some(update),
+        };
+
+        let local_pts = if let Some(&local_pts) = self.pts_map.get(&pts.entry) {
+            match (local_pts + pts.pts_count).cmp(&pts.pts) {
+                // Apply
+                Ordering::Equal => {
+                    trace!(
+                        "applying update for {:?} (local {:?}, count {:?}, remote {:?})",
+                        pts.entry,
+                        local_pts,
+                        pts.pts_count,
+                        pts.pts
+                    );
+                    local_pts
+                }
+                // Ignore
+                Ordering::Greater => {
+                    debug!(
+                        "skipping update for {:?} (local {:?}, count {:?}, remote {:?})",
+                        pts.entry, local_pts, pts.pts_count, pts.pts
+                    );
+                    return None;
+                }
+                Ordering::Less => {
+                    info!(
+                        "gap on update for {:?} (local {:?}, count {:?}, remote {:?})",
+                        pts.entry, local_pts, pts.pts_count, pts.pts
+                    );
+                    if self.possible_gap_deadline.is_none() {
+                        // TODO store entities too?
+                        self.possible_gap.entry(pts.entry).or_default().push(update);
+                        self.possible_gap_deadline = Some(Instant::now() + POSSIBLE_GAP_TIMEOUT);
+                    }
+                    return None;
+                }
+            }
+        } else {
+            // No previous `pts` known, and because this update has to be "right" (it's the first one) our
+            // `local_pts` must be one less.
+            pts.pts - 1
+        };
+
+        // For example, when we're in a channel, we immediately receive:
+        // * ReadChannelInbox (pts = X)
+        // * NewChannelMessage (pts = X, pts_count = 1)
+        //
+        // Notice how both `pts` are the same. If we stored the one from the first, then the second one would
+        // be considered "already handled" and ignored, which is not desirable. Instead, advance local `pts`
+        // by `pts_count` (which is 0 for updates not directly related to messages, like reading inbox).
+        self.pts_map.insert(pts.entry, local_pts + pts.pts_count);
+        Some(update)
     }
 
     /// Return the next deadline when receiving updates should timeout.
     ///
     /// When this deadline is met, it means that get difference needs to be called.
     pub(crate) fn timeout_deadline(&self) -> Instant {
-        self.deadline
+        self.possible_gap_deadline.unwrap_or(self.deadline)
     }
 }
 
