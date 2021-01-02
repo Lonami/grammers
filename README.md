@@ -30,6 +30,8 @@ The following libraries under [`lib/`] can be used to work with Telegram in some
 The following auxiliary CLI tools are available in the [`bin/`] folder:
 
 * **[scrape-docs]**: scrape Telegram's website to obtain raw API documentation.
+* **[tl-to-json]**: tool to read `.tl` and output `.json`, equivalent to
+  [Telegram's JSON schema][tl-json].
 
 ## License
 
@@ -62,5 +64,7 @@ dual licensed as above, without any additional terms or conditions.
 [grammers-tl-types]: lib/grammers-tl-types/
 [`bin/`]: bin/
 [scrape-docs]: bin/scrape-docs/
+[tl-to-json]: bin/tl-to-json/
+[tl-json]: https://core.telegram.org/schema/json
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT
