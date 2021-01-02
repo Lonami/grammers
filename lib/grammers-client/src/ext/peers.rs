@@ -17,6 +17,10 @@ pub trait UserExt {
     fn id(&self) -> i32;
 }
 
+pub trait ChatExt {
+    fn id(&self) -> i32;
+}
+
 impl InputPeerExt for tl::enums::InputPeer {
     fn to_chat_id(&self) -> Option<i32> {
         use tl::enums::InputPeer::*;
@@ -91,6 +95,20 @@ impl UserExt for tl::enums::User {
         match self {
             Empty(user) => user.id,
             User(user) => user.id,
+        }
+    }
+}
+
+impl ChatExt for tl::enums::Chat {
+    fn id(&self) -> i32 {
+        use tl::enums::Chat;
+
+        match self {
+            Chat::Empty(chat) => chat.id,
+            Chat::Chat(chat) => chat.id,
+            Chat::Forbidden(chat) => chat.id,
+            Chat::Channel(chat) => chat.id,
+            Chat::ChannelForbidden(chat) => chat.id,
         }
     }
 }

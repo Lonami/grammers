@@ -9,8 +9,8 @@
 //! Methods related to chats and entities.
 
 use super::ClientHandle;
-use crate::ext::{InputPeerExt, UserExt};
-use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Entity, IterBuffer, Message};
+use crate::ext::{ChatExt, UserExt};
+use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Chat, IterBuffer, Message, User};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::{HashMap, VecDeque};
@@ -81,7 +81,7 @@ pub enum ParticipantIter {
 }
 
 impl ParticipantIter {
-    fn new(client: &ClientHandle, chat: &tl::enums::InputPeer) -> Self {
+    fn new(client: &ClientHandle, chat: &Chat) -> Self {
         if let Some(channel) = chat.to_input_channel() {
             Self::Channel(IterBuffer::from_request(
                 client,
@@ -331,7 +331,7 @@ pub enum ProfilePhotoIter {
 }
 
 impl ProfilePhotoIter {
-    fn new(client: &ClientHandle, chat: &tl::enums::InputPeer) -> Self {
+    fn new(client: &ClientHandle, chat: &Chat) -> Self {
         if let Some(user_id) = chat.to_input_user() {
             Self::User(IterBuffer::from_request(
                 client,
@@ -441,7 +441,7 @@ impl ProfilePhotoIter {
 
 /// Method implementations related to dealing with chats or other users.
 impl ClientHandle {
-    /// Resolves a username into the user that owns it, if any.
+    /// Resolves a username into the chat that owns it, if any.
     ///
     /// Note that this method is expensive to call, and can quickly cause long flood waits.
     ///
@@ -449,8 +449,8 @@ impl ClientHandle {
     ///
     /// ```
     /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// if let Some(entity) = client.resolve_username("username").await? {
-    ///     println!("Found entity!: {:?}", entity);
+    /// if let Some(chat) = client.resolve_username("username").await? {
+    ///     println!("Found chat!: {:?}", chat);
     /// }
     /// # Ok(())
     /// # }
@@ -458,7 +458,7 @@ impl ClientHandle {
     pub async fn resolve_username(
         &mut self,
         username: &str,
-    ) -> Result<Option<Entity>, InvocationError> {
+    ) -> Result<Option<Chat>, InvocationError> {
         let tl::enums::contacts::ResolvedPeer::Peer(tl::types::contacts::ResolvedPeer {
             peer,
             users,
@@ -471,25 +471,24 @@ impl ClientHandle {
 
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
-                users.into_iter().find_map(|user| match user {
-                    tl::enums::User::User(user) if user.id == user_id => Some(Entity::User(user)),
-                    tl::enums::User::User(_) | tl::enums::User::Empty(_) => None,
-                })
-            }
-            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => {
-                chats.into_iter().find_map(|chat| match chat {
-                    tl::enums::Chat::Chat(c) if c.id == chat_id => Some(Entity::Chat(c)),
-                    _ => None,
-                })
-            }
-            tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => {
-                chats.into_iter().find_map(|chan| match chan {
-                    tl::enums::Chat::Channel(ch) if ch.id == channel_id => {
-                        Some(Entity::Channel(ch))
+                users.into_iter().find_map(|user| {
+                    if user.id() == user_id {
+                        Some(Chat::from_user(user))
+                    } else {
+                        None
                     }
-                    _ => None,
                 })
             }
+            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id })
+            | tl::enums::Peer::Channel(tl::types::PeerChannel {
+                channel_id: chat_id,
+            }) => chats.into_iter().find_map(|chat| {
+                if chat.id() == chat_id {
+                    Some(Chat::from_chat(chat))
+                } else {
+                    None
+                }
+            }),
         })
     }
 
@@ -532,7 +531,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut participants = client.iter_participants(&chat);
     ///
     /// while let Some(participant) = participants.next().await? {
@@ -541,7 +540,7 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_participants(&self, chat: &tl::enums::InputPeer) -> ParticipantIter {
+    pub fn iter_participants(&self, chat: &Chat) -> ParticipantIter {
         ParticipantIter::new(self, chat)
     }
 
@@ -559,7 +558,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// match client.kick_participant(&chat, &user).await {
     ///     Ok(_) => println!("user is no more >:D"),
     ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
@@ -569,34 +568,26 @@ impl ClientHandle {
     /// ```
     pub async fn kick_participant(
         &mut self,
-        chat: &tl::enums::InputPeer,
-        user: &tl::enums::InputUser,
+        chat: &Chat,
+        user: &User,
     ) -> Result<(), InvocationError> {
         if let Some(channel) = chat.to_input_channel() {
-            use tl::enums::InputUser::*;
-
-            match user {
-                Empty => Ok(()),
-                UserSelf => self
-                    .invoke(&tl::functions::channels::LeaveChannel { channel })
+            if user.is_self() {
+                self.invoke(&tl::functions::channels::LeaveChannel { channel })
                     .await
-                    .map(drop),
-                User(_) | FromMessage(_) => {
-                    // This will fail if the user represents ourself, but either verifying
-                    // beforehand that the user is in fact ourselves or checking it after
-                    // an error occurs is not really worth it.
-                    self.set_banned_rights(&channel, user)
-                        .view_messages(false)
-                        .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
-                        .await?;
+                    .map(drop)
+            } else {
+                self.set_banned_rights(chat, user)
+                    .view_messages(false)
+                    .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
+                    .await?;
 
-                    self.set_banned_rights(&channel, user).await
-                }
+                self.set_banned_rights(chat, user).await
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id,
-                user_id: user.clone(),
+                user_id: user.to_input(),
             })
             .await
             .map(drop)
@@ -638,12 +629,8 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_banned_rights(
-        &mut self,
-        channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser,
-    ) -> BannedRightsBuilder {
-        BannedRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    pub fn set_banned_rights(&mut self, channel: &Chat, user: &User) -> BannedRightsBuilder {
+        BannedRightsBuilder::new(self.clone(), channel, user)
     }
 
     /// Set the administrator rights for a specific user.
@@ -676,12 +663,8 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_admin_rights(
-        &mut self,
-        channel: &tl::enums::InputChannel,
-        user: &tl::enums::InputUser,
-    ) -> AdminRightsBuilder {
-        AdminRightsBuilder::new(self.clone(), channel.clone(), user.clone())
+    pub fn set_admin_rights(&mut self, channel: &Chat, user: &User) -> AdminRightsBuilder {
+        AdminRightsBuilder::new(self.clone(), channel, user)
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
@@ -696,7 +679,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputPeer, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut photos = client.iter_profile_photos(&chat);
     ///
     /// while let Some(photo) = photos.next().await? {
@@ -705,7 +688,7 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_profile_photos(&self, chat: &tl::enums::InputPeer) -> ProfilePhotoIter {
+    pub fn iter_profile_photos(&self, chat: &Chat) -> ProfilePhotoIter {
         ProfilePhotoIter::new(self, chat)
     }
 }

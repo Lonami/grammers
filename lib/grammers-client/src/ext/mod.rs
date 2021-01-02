@@ -10,4 +10,4 @@ mod files;
 mod peers;
 
 pub use files::{InputFileExt, MessageMediaExt};
-pub use peers::{InputPeerExt, UserExt};
+pub use peers::{ChatExt, InputPeerExt, UserExt};

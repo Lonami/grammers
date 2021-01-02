@@ -15,10 +15,44 @@ use grammers_tl_types as tl;
 /// Broadcast channels and megagroups both are treated as "channels" by Telegram's API, but
 /// this variant will always represent a broadcast channel. The only difference between a
 /// broadcast channel and a megagroup are the permissions (default, and available).
+#[derive(Clone)]
 pub struct Channel(tl::types::Channel);
 
 impl Channel {
-    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
+    pub(crate) fn from_raw(_chat: tl::enums::Chat) -> Self {
         todo!()
+    }
+
+    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
+        tl::types::PeerChannel {
+            channel_id: self.0.id,
+        }
+        .into()
+    }
+
+    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
+        tl::types::InputPeerChannel {
+            channel_id: self.0.id,
+            access_hash: self.0.access_hash.unwrap_or(0),
+        }
+        .into()
+    }
+
+    pub(crate) fn to_input(&self) -> tl::enums::InputChannel {
+        tl::types::InputChannel {
+            channel_id: self.0.id,
+            access_hash: self.0.access_hash.unwrap_or(0),
+        }
+        .into()
+    }
+
+    /// Return the unique identifier for this channel.
+    pub fn id(&self) -> i32 {
+        self.0.id
+    }
+
+    /// Return the title of this channel.
+    pub fn title(&self) -> &str {
+        self.0.title.as_str()
     }
 }

@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::Entity;
+use crate::types::Chat;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -36,7 +36,7 @@ impl From<&tl::enums::Peer> for Peer {
 /// and chats, making it annoying to extract a specific entity. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
 pub struct EntitySet {
-    map: HashMap<Peer, Entity>,
+    map: HashMap<Peer, Chat>,
 }
 
 /// In-memory entity cache, mapping peers to their respective access hashes.
@@ -50,25 +50,12 @@ pub(crate) struct EntityCache {
 impl EntitySet {
     /// Create a new entity set.
     pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
-        use tl::enums::{Chat, User};
-
         Arc::new(Self {
             map: users
                 .into_iter()
-                .filter_map(|user| match user {
-                    User::User(user) => Some(Entity::User(user)),
-                    User::Empty(_) => None,
-                })
-                .chain(chats.into_iter().filter_map(|chat| match chat {
-                    Chat::Empty(_) => None,
-                    Chat::Chat(chat) => Some(Entity::Chat(chat)),
-                    Chat::Forbidden(_) => None,
-                    Chat::Channel(channel) => Some(Entity::Channel(channel)),
-                    Chat::ChannelForbidden(_) => None,
-                    // TODO *Forbidden have some info which may be relevant at times
-                    // currently ignored for simplicity
-                }))
-                .map(|entity| ((&entity.peer()).into(), entity))
+                .map(|user| Chat::from_user(user))
+                .chain(chats.into_iter().map(|chat| Chat::from_chat(chat)))
+                .map(|chat| ((&chat.to_peer()).into(), chat))
                 .collect(),
         })
     }
@@ -80,8 +67,8 @@ impl EntitySet {
         })
     }
 
-    /// Retrieve the full `Entity` object given its `Peer`.
-    pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Entity> {
+    /// Retrieve the full `Chat` object given its `Peer`.
+    pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Chat> {
         self.map.get(&peer.into())
     }
 }

@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::types::{Chat, User};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -50,15 +51,11 @@ impl Future for AdminRightsBuilder {
 }
 
 impl AdminRightsBuilder {
-    pub(crate) fn new(
-        client: ClientHandle,
-        channel: tl::enums::InputChannel,
-        user: tl::enums::InputUser,
-    ) -> Self {
+    pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            channel,
-            user,
+            channel: chat.to_input_channel().unwrap(),
+            user: user.to_input(),
             rank: "".into(),
             rights: tl::types::ChatAdminRights {
                 anonymous: false,
@@ -214,15 +211,11 @@ impl Future for BannedRightsBuilder {
 }
 
 impl BannedRightsBuilder {
-    pub(crate) fn new(
-        client: ClientHandle,
-        channel: tl::enums::InputChannel,
-        user: tl::enums::InputUser,
-    ) -> Self {
+    pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            channel,
-            user,
+            channel: chat.to_input_channel().unwrap(),
+            user: user.to_input(),
             rights: tl::types::ChatBannedRights {
                 view_messages: false,
                 send_messages: false,

@@ -13,6 +13,7 @@ use grammers_tl_types as tl;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
+use types::Chat;
 
 /// Represents a Telegram message, which includes text messages, messages with media, and service
 /// messages.
@@ -153,7 +154,7 @@ impl Message {
     }
 
     /// The sender of this message, if any.
-    pub fn sender(&self) -> Option<types::Entity> {
+    pub fn sender(&self) -> Option<types::Chat> {
         self.msg
             .from_id
             .as_ref()
@@ -165,10 +166,11 @@ impl Message {
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    ///
-    /// This value will be `None` if no information about the chat is present.
-    pub fn chat(&self) -> Option<types::Entity> {
-        self.entities.get(&self.msg.peer_id).map(|e| e.clone())
+    pub fn chat(&self) -> types::Chat {
+        self.entities
+            .get(&self.msg.peer_id)
+            .map(|e| e.clone())
+            .unwrap()
     }
 
     /// If this message was forwarded from a previous message, return the header with information
@@ -303,7 +305,7 @@ impl Message {
     ///
     /// Shorthand for `ClientHandle::send_message`.
     pub async fn respond(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
-        self.client.send_message(&self.input_chat(), message).await
+        self.client.send_message(&self.chat(), message).await
     }
 
     /// Directly reply to this message by sending a new message in the same chat that replies to
@@ -312,7 +314,7 @@ impl Message {
     /// Shorthand for `ClientHandle::send_message`.
     pub async fn reply(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
         self.client
-            .send_message(&self.input_chat(), message.reply_to(Some(self.msg.id)))
+            .send_message(&self.chat(), message.reply_to(Some(self.msg.id)))
             .await
     }
 
@@ -320,15 +322,12 @@ impl Message {
     ///
     /// Shorthand for `ClientHandle::forward_messages`. If you need to forward multiple messages
     /// at once, consider using that method instead.
-    pub async fn forward_to(
-        &mut self,
-        chat: &tl::enums::InputPeer,
-    ) -> Result<Self, InvocationError> {
+    pub async fn forward_to(&mut self, chat: &Chat) -> Result<Self, InvocationError> {
         // TODO return `Message`
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
         self.client
-            .forward_messages(chat, &[self.msg.id], &self.input_chat())
+            .forward_messages(chat, &[self.msg.id], &self.chat())
             .await
             .map(|mut msgs| msgs.pop().unwrap().unwrap())
     }
@@ -338,7 +337,7 @@ impl Message {
     /// Shorthand for `ClientHandle::edit_message`.
     pub async fn edit(&mut self, new_message: types::InputMessage) -> Result<(), InvocationError> {
         self.client
-            .edit_message(&self.input_chat(), self.msg.id, new_message)
+            .edit_message(&self.chat(), self.msg.id, new_message)
             .await
     }
 
@@ -348,7 +347,7 @@ impl Message {
     /// at once, consider using that method instead.
     pub async fn delete(&mut self) -> Result<(), InvocationError> {
         self.client
-            .delete_messages(self.input_channel().as_ref(), &[self.msg.id])
+            .delete_messages(Some(&self.chat()), &[self.msg.id])
             .await
             .map(drop)
     }
@@ -358,7 +357,7 @@ impl Message {
     /// Unlike `ClientHandle::mark_as_read`, this method only will mark the chat as read up to
     /// this message, not the entire chat.
     pub async fn mark_as_read(&mut self) -> Result<(), InvocationError> {
-        if let Some(channel) = self.input_channel() {
+        if let Some(channel) = self.chat().to_input_channel() {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
                     channel,
@@ -369,7 +368,7 @@ impl Message {
         } else {
             self.client
                 .invoke(&tl::functions::messages::ReadHistory {
-                    peer: self.input_chat(),
+                    peer: self.chat().to_input_peer(),
                     max_id: self.msg.id,
                 })
                 .await
@@ -377,39 +376,18 @@ impl Message {
         }
     }
 
-    pub(crate) fn input_chat(&self) -> tl::enums::InputPeer {
-        self.chat().unwrap().input_peer()
-    }
-
-    pub(crate) fn input_channel(&self) -> Option<tl::enums::InputChannel> {
-        match self.chat()?.input_peer() {
-            tl::enums::InputPeer::Channel(c) => Some(
-                tl::types::InputChannel {
-                    channel_id: c.channel_id,
-                    access_hash: c.access_hash,
-                }
-                .into(),
-            ),
-            _ => None,
-        }
-    }
-
     /// Pin this message in the chat.
     ///
     /// Shorthand for `ClientHandle::pin_message`.
     pub async fn pin(&mut self) -> Result<(), InvocationError> {
-        self.client
-            .pin_message(&self.input_chat(), self.msg.id)
-            .await
+        self.client.pin_message(&self.chat(), self.msg.id).await
     }
 
     /// Unpin this message from the chat.
     ///
     /// Shorthand for `ClientHandle::unpin_message`.
     pub async fn unpin(&mut self) -> Result<(), InvocationError> {
-        self.client
-            .unpin_message(&self.input_chat(), self.msg.id)
-            .await
+        self.client.unpin_message(&self.chat(), self.msg.id).await
     }
 
     /// Refetch this message, mutating all of its properties in-place.
@@ -421,7 +399,7 @@ impl Message {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
-            .get_messages_by_id(self.input_channel().as_ref(), &[self.msg.id])
+            .get_messages_by_id(Some(&self.chat()), &[self.msg.id])
             .await?
             .pop()
             .unwrap()
