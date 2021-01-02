@@ -663,7 +663,7 @@ impl ClientHandle {
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
-    ///     println!("{}", message.chat().unwrap().name());
+    ///     println!("{}", message.chat().name());
     /// }
     /// # Ok(())
     /// # }

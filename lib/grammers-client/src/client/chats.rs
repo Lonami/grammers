@@ -450,7 +450,7 @@ impl ClientHandle {
     /// ```
     /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(chat) = client.resolve_username("username").await? {
-    ///     println!("Found chat!: {:?}", chat);
+    ///     println!("Found chat!: {:?}", chat.name());
     /// }
     /// # Ok(())
     /// # }
@@ -558,7 +558,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// match client.kick_participant(&chat, &user).await {
     ///     Ok(_) => println!("user is no more >:D"),
     ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
@@ -615,7 +615,7 @@ impl ClientHandle {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // This user keeps spamming pepe stickers, take the sticker permission away from them
     /// let res = client
     ///     .set_banned_rights(&chat, &user)
@@ -652,7 +652,7 @@ impl ClientHandle {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_tl_types::enums::InputChannel, user: grammers_tl_types::enums::InputUser, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let the user pin messages and ban other people
     /// let res = client.set_admin_rights(&chat, &user)
     ///     .load_current()
