@@ -5,12 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use futures::stream::{self, StreamExt};
 use html5ever::tendril::StrTendril;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer,
 };
 use std::collections::HashMap;
 use std::mem;
+
+const CONCURRENCY: usize = 16;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -149,15 +152,18 @@ async fn real_main() -> Result<()> {
         documentation: Documentation,
     }
 
-    async fn process_item(name: String, url_path: String) -> std::result::Result<Item, String> {
+    async fn process_item(tuple: (String, String)) -> std::result::Result<Item, (String, String)> {
+        let (name, url_path) = tuple.clone();
+
         let mut url = "https://core.telegram.org".to_string();
         url.push_str(&url_path);
+
         let body = reqwest::get(&url)
             .await
-            .map_err(|_| url_path.clone())?
+            .map_err(|_| tuple.clone())?
             .text()
             .await
-            .map_err(|_| url_path.clone())?;
+            .map_err(|_| tuple.clone())?;
 
         #[derive(Debug, PartialEq, Eq)]
         enum State {
@@ -351,20 +357,48 @@ async fn real_main() -> Result<()> {
         })
     }
 
-    // TODO probably use FuturesUnordered (but we want a limit or the server doesn't like it)
-    // TODO ideally we want the output of this to be deterministic (https://stackoverflow.com/a/42723390/)
+    let mut i = 0usize;
     let total = names_to_url.len();
-    let mut items = Vec::with_capacity(total);
-    for (i, (name, url_path)) in names_to_url.into_iter().enumerate() {
-        match process_item(name, url_path).await {
+    let mut items: Vec<Item> = Vec::with_capacity(total);
+    let mut retry = Vec::new();
+
+    let mut buffered =
+        stream::iter(names_to_url.into_iter().map(process_item)).buffer_unordered(CONCURRENCY);
+
+    while let Some(result) = buffered.next().await {
+        i += 1;
+        match result {
             Ok(item) => {
-                eprintln!("[{:04}/{:04}] OK: {}", i + 1, total, item.url_path);
+                eprintln!("[{:04}/{:04}] OK: {}", i, total, item.url_path);
                 items.push(item);
             }
-            Err(url) => eprintln!("[{:04}/{:04}] ERROR: {}", i + 1, total, url),
+            Err(tuple) => {
+                eprintln!("[{:04}/{:04}] ERROR: {}", i, total, tuple.1);
+                retry.push(tuple);
+            }
         }
     }
 
+    // Retry the requests that failed when running concurrently, but one by one this time.
+    if !retry.is_empty() {
+        let mut i = 0usize;
+        let total = retry.len();
+        eprintln!("Retrying {} failed URLs...", total);
+        for tuple in retry {
+            i += 1;
+            match process_item(tuple).await {
+                Ok(item) => {
+                    eprintln!("[{:04}/{:04}] OK: {}", i, total, item.url_path);
+                    items.push(item);
+                }
+                Err(tuple) => {
+                    eprintln!("[{:04}/{:04}] ERROR: {}", i, total, tuple.1);
+                }
+            }
+        }
+    }
+
+    // TODO ideally we want the output of this to be deterministic (https://stackoverflow.com/a/42723390/)
     println!("{}", serde_json::to_string(&items)?);
     Ok(())
 }
