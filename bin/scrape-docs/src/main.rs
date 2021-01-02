@@ -10,7 +10,7 @@ use html5ever::tendril::StrTendril;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer,
 };
-use std::collections::HashMap;
+use std::collections::BTreeMap;
 use std::mem;
 
 const CONCURRENCY: usize = 16;
@@ -61,7 +61,7 @@ async fn real_main() -> Result<()> {
         active: bool,
         current_url: Option<String>,
         current_text: Option<String>,
-        results: HashMap<String, String>,
+        results: BTreeMap<String, String>,
     }
 
     impl TokenSink for Sink {
@@ -127,7 +127,7 @@ async fn real_main() -> Result<()> {
             active: false,
             current_url: None,
             current_text: None,
-            results: HashMap::new(),
+            results: BTreeMap::new(),
         },
     )
     .results;
@@ -141,8 +141,8 @@ async fn real_main() -> Result<()> {
     #[derive(Debug, serde::Serialize)]
     struct Documentation {
         description: String,
-        parameters: HashMap<String, String>,
-        errors: HashMap<String, TlError>,
+        parameters: BTreeMap<String, String>,
+        errors: BTreeMap<String, TlError>,
     }
 
     #[derive(Debug, serde::Serialize)]
@@ -343,8 +343,8 @@ async fn real_main() -> Result<()> {
                 state: State::Wait,
                 result: Documentation {
                     description: String::new(),
-                    parameters: HashMap::new(),
-                    errors: HashMap::new(),
+                    parameters: BTreeMap::new(),
+                    errors: BTreeMap::new(),
                 },
             },
         )
@@ -398,7 +398,6 @@ async fn real_main() -> Result<()> {
         }
     }
 
-    // TODO ideally we want the output of this to be deterministic (https://stackoverflow.com/a/42723390/)
     println!("{}", serde_json::to_string(&items)?);
     Ok(())
 }
