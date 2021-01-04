@@ -164,6 +164,7 @@ async fn real_main() -> Result<()> {
         }
     }
 
+    items.sort_by_key(|item| item.url_path.clone());
     println!("{}", serde_json::to_string(&items)?);
     Ok(())
 }
