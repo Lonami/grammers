@@ -459,15 +459,18 @@ impl ClientHandle {
         &mut self,
         username: &str,
     ) -> Result<Option<Chat>, InvocationError> {
-        let tl::enums::contacts::ResolvedPeer::Peer(tl::types::contacts::ResolvedPeer {
-            peer,
-            users,
-            chats,
-        }) = self
+        let tl::types::contacts::ResolvedPeer { peer, users, chats } = match self
             .invoke(&tl::functions::contacts::ResolveUsername {
                 username: username.into(),
             })
-            .await?;
+            .await
+        {
+            Ok(tl::enums::contacts::ResolvedPeer::Peer(p)) => p,
+            Err(InvocationError::Rpc(err)) if err.name == "USERNAME_NOT_OCCUPIED" => {
+                return Ok(None)
+            }
+            Err(err) => return Err(err),
+        };
 
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
