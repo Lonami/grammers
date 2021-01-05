@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use std::fmt;
 
 /// A user.
 ///
@@ -21,6 +22,12 @@ use grammers_tl_types as tl;
 /// [@BotFather]: https://t.me/BotFather
 #[derive(Clone)]
 pub struct User(tl::types::User);
+
+impl fmt::Debug for User {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl User {
     pub(crate) fn from_raw(user: tl::enums::User) -> Self {

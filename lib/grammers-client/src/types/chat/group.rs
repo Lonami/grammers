@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use std::fmt;
 
 /// A group chat.
 ///
@@ -17,6 +18,12 @@ use grammers_tl_types as tl;
 /// silently upgrade the chat to a megagroup.
 #[derive(Clone)]
 pub struct Group(tl::enums::Chat);
+
+impl fmt::Debug for Group {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 // TODO it might be desirable to manually merge all the properties of the chat to avoid endless matching
 

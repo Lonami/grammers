@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use std::fmt;
 
 /// A broadcast channel.
 ///
@@ -17,6 +18,12 @@ use grammers_tl_types as tl;
 /// broadcast channel and a megagroup are the permissions (default, and available).
 #[derive(Clone)]
 pub struct Channel(tl::types::Channel);
+
+impl fmt::Debug for Channel {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.0.fmt(f)
+    }
+}
 
 impl Channel {
     pub(crate) fn from_raw(_chat: tl::enums::Chat) -> Self {

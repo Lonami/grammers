@@ -22,7 +22,7 @@ pub use user::User;
 /// * Private conversations with other people are treated as the chat of the user itself.
 /// * Conversations in a group, whether it's private or public, are simply known as groups.
 /// * Conversations where only administrators broadcast messages are known as channels.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Chat {
     /// A [`User`].
     User(User),
