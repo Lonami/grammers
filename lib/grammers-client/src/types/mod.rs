@@ -17,6 +17,7 @@ mod login_token;
 mod message;
 mod message_box;
 mod password_token;
+mod terms_of_service;
 mod update;
 
 pub use chat::{Channel, Chat, Group, User};
@@ -30,4 +31,5 @@ pub use login_token::LoginToken;
 pub use message::Message;
 pub(crate) use message_box::MessageBox;
 pub use password_token::PasswordToken;
+pub use terms_of_service::TermsOfService;
 pub use update::Update;

@@ -7,11 +7,10 @@
 // except according to those terms.
 use super::net::connect_sender;
 use super::Client;
-use crate::types::{LoginToken, PasswordToken};
+use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
-use std::convert::TryInto;
 use std::fmt;
 
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
@@ -20,7 +19,7 @@ use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 #[derive(Debug)]
 pub enum SignInError {
     SignUpRequired {
-        terms_of_service: Option<tl::types::help::TermsOfService>,
+        terms_of_service: Option<TermsOfService>,
     },
     PasswordRequired(PasswordToken),
     InvalidCode,
@@ -111,7 +110,7 @@ impl Client {
         token: &str,
         api_id: i32,
         api_hash: &str,
-    ) -> Result<tl::types::User, AuthorizationError> {
+    ) -> Result<User, AuthorizationError> {
         // TODO api id and hash are in the config yet we ask them here again (and other sign in methods)
         //      use the values from config instead
         let request = tl::functions::auth::ImportBotAuthorization {
@@ -132,10 +131,7 @@ impl Client {
         };
 
         match result {
-            tl::enums::auth::Authorization::Authorization(x) => {
-                // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(x.user.try_into().unwrap())
-            }
+            tl::enums::auth::Authorization::Authorization(x) => Ok(User::from_raw(x.user)),
             tl::enums::auth::Authorization::SignUpRequired(_) => {
                 panic!("API returned SignUpRequired even though we're logging in as a bot");
             }
@@ -246,11 +242,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn sign_in(
-        &mut self,
-        token: &LoginToken,
-        code: &str,
-    ) -> Result<tl::types::User, SignInError> {
+    pub async fn sign_in(&mut self, token: &LoginToken, code: &str) -> Result<User, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
@@ -259,13 +251,10 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(x.user.try_into().unwrap())
-            }
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
                 Err(SignInError::SignUpRequired {
-                    terms_of_service: x.terms_of_service.map(|tos| tos.into()),
+                    terms_of_service: x.terms_of_service.map(TermsOfService::from_raw),
                 })
             }
             Err(InvocationError::Rpc(RpcError { name, .. }))
@@ -338,7 +327,7 @@ impl Client {
         &mut self,
         password_token: PasswordToken,
         password: impl AsRef<[u8]>,
-    ) -> Result<tl::types::User, SignInError> {
+    ) -> Result<User, SignInError> {
         let mut password_info = password_token.password;
         let current_algo = password_info.current_algo.unwrap();
         let mut params = Client::extract_password_parameters(&current_algo);
@@ -373,10 +362,7 @@ impl Client {
         };
 
         match self.invoke(&check_password).await {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(x.user.try_into().unwrap())
-            }
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
                 Err(SignInError::InvalidPassword)
@@ -438,8 +424,8 @@ impl Client {
         token: &LoginToken,
         first_name: &str,
         last_name: &str,
-    ) -> Result<tl::types::User, InvocationError> {
-        // TODO accept tos?
+    ) -> Result<User, InvocationError> {
+        // TODO accept tos? maybe accept method in the tos object?
         match self
             .invoke(&tl::functions::auth::SignUp {
                 phone_number: token.phone.clone(),
@@ -449,10 +435,7 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                // Safe to unwrap, Telegram won't send `UserEmpty` here.
-                Ok(x.user.try_into().unwrap())
-            }
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
             Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
                 panic!("API returned SignUpRequired even though we just invoked SignUp");
             }
