@@ -38,19 +38,7 @@ impl Dialog {
         }
     }
 
-    pub fn title(&self) -> &str {
-        self.chat.name()
-    }
-
-    pub fn id(&self) -> i32 {
-        self.chat.id()
-    }
-
-    pub fn peer(&self) -> tl::enums::Peer {
-        self.chat.to_peer()
-    }
-
-    pub fn input_peer(&self) -> tl::enums::InputPeer {
-        self.chat.to_input_peer()
+    pub fn chat(&self) -> &Chat {
+        &self.chat
     }
 }
