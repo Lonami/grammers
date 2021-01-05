@@ -121,6 +121,16 @@ impl User {
         }
     }
 
+    /// Return the public @username of this user, if any.
+    ///
+    /// The returned username does not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of Telegram's URLs, such
+    /// as https://t.me/username.
+    pub fn username(&self) -> Option<&str> {
+        self.0.last_name.as_deref()
+    }
+
     /// Does this user represent the account that's currently logged in?
     pub fn is_self(&self) -> bool {
         // TODO if is_self is false, check in chat cache if id == ourself

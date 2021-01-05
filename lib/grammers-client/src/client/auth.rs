@@ -101,7 +101,7 @@ impl Client {
     ///     }
     /// };
     ///
-    /// println!("Signed in as {}!", user.username.unwrap());
+    /// println!("Signed in as {}!", user.first_name());
     /// # Ok(())
     /// # }
     /// ```
@@ -238,7 +238,7 @@ impl Client {
     ///     }
     /// };
     ///
-    /// println!("Signed in as {}!", user.first_name.unwrap());
+    /// println!("Signed in as {}!", user.first_name());
     /// # Ok(())
     /// # }
     /// ```
@@ -415,7 +415,7 @@ impl Client {
     ///     }
     /// };
     ///
-    /// println!("Signed up as {}!", user.first_name.unwrap());
+    /// println!("Signed up as {}!", user.first_name());
     /// # Ok(())
     /// # }
     /// ```

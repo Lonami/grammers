@@ -688,10 +688,10 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
-    /// let messages = client.get_messages_by_id(None, &message_ids).await?;
+    /// let messages = client.get_messages_by_id(&chat, &message_ids).await?;
     /// let count = messages.into_iter().filter(Option::is_some).count();
     /// println!("{} out of {} messages were deleted!", message_ids.len() - count, message_ids.len());
     /// # Ok(())
@@ -740,11 +740,11 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// if let Some(message) = client.get_pinned_message(None).await? {
-    ///     println!("You have a message pinned in your chat");
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// if let Some(_message) = client.get_pinned_message(&chat).await? {
+    ///     println!("There is a message pinned in {}", chat.name());
     /// } else {
-    ///     println!("You don't have any message pinned in your personal chat...");
+    ///     println!("There are no messages pinned in {}", chat.name());
     /// }
     /// # Ok(())
     /// # }

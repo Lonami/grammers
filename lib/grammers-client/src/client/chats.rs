@@ -539,7 +539,7 @@ impl ClientHandle {
     /// let mut participants = client.iter_participants(&chat);
     ///
     /// while let Some(participant) = participants.next().await? {
-    ///     println!("{} has role {:?}", participant.user.first_name.unwrap(), participant.role);
+    ///     println!("{} has role {:?}", participant.user.first_name(), participant.role);
     /// }
     /// # Ok(())
     /// # }

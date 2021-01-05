@@ -124,7 +124,8 @@ impl ClientHandle {
     /// let mut dialogs = client.iter_dialogs();
     ///
     /// while let Some(dialog) = dialogs.next().await? {
-    ///     println!("{} ({})", dialog.title(), dialog.id());
+    ///     let chat = dialog.chat();
+    ///     println!("{} ({})", chat.name(), chat.id());
     /// }
     /// # Ok(())
     /// # }

@@ -132,7 +132,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(bot: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(bot: grammers_client::types::User, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// // This is equivalent to writing `@bot inline query` in a Telegram app.
     /// let mut inline_results = client.inline_query(&bot, "inline query");
     ///
