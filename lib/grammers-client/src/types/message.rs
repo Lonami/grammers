@@ -149,6 +149,11 @@ impl Message {
     /// identifiers for the same message in a private conversation or small group chat. This also
     /// implies that the message identifier alone is enough to uniquely identify the message,
     /// without the need to know the chat ID.
+    ///
+    /// **You cannot use the message ID of User A when running as User B**, unless this message
+    /// belongs to a megagroup or broadcast channel. Beware of this when using methods like
+    /// [`ClientHandle::delete_messages`], which **cannot** validate the chat where the message
+    /// should be deleted for those cases.
     pub fn id(&self) -> i32 {
         self.msg.id
     }
@@ -347,7 +352,7 @@ impl Message {
     /// at once, consider using that method instead.
     pub async fn delete(&mut self) -> Result<(), InvocationError> {
         self.client
-            .delete_messages(Some(&self.chat()), &[self.msg.id])
+            .delete_messages(&self.chat(), &[self.msg.id])
             .await
             .map(drop)
     }
@@ -399,7 +404,7 @@ impl Message {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
-            .get_messages_by_id(Some(&self.chat()), &[self.msg.id])
+            .get_messages_by_id(&self.chat(), &[self.msg.id])
             .await?
             .pop()
             .unwrap()

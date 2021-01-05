@@ -441,8 +441,13 @@ impl ClientHandle {
 
     /// Deletes up to 100 messages in a chat.
     ///
-    /// The `chat` must only be specified when deleting messages from a broadcast channel or
-    /// megagroup, not when deleting from small group chats or private conversations.
+    /// <div class="stab unstable">
+    ///
+    /// **Warning**: when deleting messages from small group chats or private conversations, this
+    /// method cannot validate that the provided message IDs actually belong to the input chat due
+    /// to the way Telegram's API works. Make sure to pass correct [`Message::id`]'s.
+    ///
+    /// </div>
     ///
     /// The messages are deleted for both ends.
     ///
@@ -456,32 +461,33 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: Option<&grammers_tl_types::enums::InputChannel>, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// // Careful, these messages will be gone after the method succeeds!
-    /// client.delete_messages(chat, &message_ids).await?;
+    /// client.delete_messages(&chat, &message_ids).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn delete_messages(
         &mut self,
-        chat: Option<&Chat>,
+        chat: &Chat,
         message_ids: &[i32],
     ) -> Result<usize, InvocationError> {
-        let tl::enums::messages::AffectedMessages::Messages(affected) = if let Some(chat) = chat {
-            self.invoke(&tl::functions::channels::DeleteMessages {
-                channel: chat.to_input_channel().unwrap(),
-                id: message_ids.to_vec(),
-            })
-            .await
-        } else {
-            self.invoke(&tl::functions::messages::DeleteMessages {
-                revoke: true,
-                id: message_ids.to_vec(),
-            })
-            .await
-        }?;
+        let tl::enums::messages::AffectedMessages::Messages(affected) =
+            if let Some(channel) = chat.to_input_channel() {
+                self.invoke(&tl::functions::channels::DeleteMessages {
+                    channel,
+                    id: message_ids.to_vec(),
+                })
+                .await
+            } else {
+                self.invoke(&tl::functions::messages::DeleteMessages {
+                    revoke: true,
+                    id: message_ids.to_vec(),
+                })
+                .await
+            }?;
 
         Ok(affected.pts_count as usize)
     }
@@ -674,13 +680,10 @@ impl ClientHandle {
 
     /// Get up to 100 messages using their ID.
     ///
-    /// The `chat` must only be specified when fetching messages from a broadcast channel or
-    /// megagroup, not when fetching from small group chats or private conversations.
-    ///
     /// Returns the new retrieved messages in a list. Those messages that could not be retrieved
-    /// will be `None`. The length of the resulting list is the same as the length of the input
-    /// message IDs, and the indices from the list of IDs map to the indices in the result so
-    /// you can map them into the new list.
+    /// or do not belong to the input chat will be `None`. The length of the resulting list is the
+    /// same as the length of the input message IDs, and the indices from the list of IDs map to
+    /// the indices in the result so you can map them into the new list.
     ///
     /// # Examples
     ///
@@ -696,7 +699,7 @@ impl ClientHandle {
     /// ```
     pub async fn get_messages_by_id(
         &mut self,
-        chat: Option<&Chat>,
+        chat: &Chat,
         message_ids: &[i32],
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         let id = message_ids
@@ -704,12 +707,9 @@ impl ClientHandle {
             .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
             .collect();
 
-        let result = if let Some(chat) = chat {
-            self.invoke(&tl::functions::channels::GetMessages {
-                channel: chat.to_input_channel().unwrap(),
-                id,
-            })
-            .await
+        let result = if let Some(channel) = chat.to_input_channel() {
+            self.invoke(&tl::functions::channels::GetMessages { channel, id })
+                .await
         } else {
             self.invoke(&tl::functions::messages::GetMessages { id })
                 .await
@@ -728,6 +728,7 @@ impl ClientHandle {
         let mut map = messages
             .into_iter()
             .flat_map(|m| Message::new(self, m, &chats))
+            .filter(|m| m.chat().to_peer() == chat.to_peer())
             .map(|m| (m.msg.id, m))
             .collect::<HashMap<_, _>>();
 
@@ -735,9 +736,6 @@ impl ClientHandle {
     }
 
     /// Get the latest pin from a chat.
-    ///
-    /// The `chat` must only be specified when fetching messages from a broadcast channel or
-    /// megagroup, not when fetching from small group chats or private conversations.
     ///
     /// # Examples
     ///
@@ -753,17 +751,14 @@ impl ClientHandle {
     /// ```
     pub async fn get_pinned_message(
         &mut self,
-        chat: Option<&Chat>,
+        chat: &Chat,
     ) -> Result<Option<tl::enums::Message>, InvocationError> {
         // TODO return types::Message and print its text in the example
         let id = vec![tl::enums::InputMessage::Pinned];
 
-        let result = if let Some(chat) = chat {
-            self.invoke(&tl::functions::channels::GetMessages {
-                channel: chat.to_input_channel().unwrap(),
-                id,
-            })
-            .await
+        let result = if let Some(channel) = chat.to_input_channel() {
+            self.invoke(&tl::functions::channels::GetMessages { channel, id })
+                .await
         } else {
             self.invoke(&tl::functions::messages::GetMessages { id })
                 .await
@@ -778,6 +773,7 @@ impl ClientHandle {
             }
         };
 
+        // TODO filter chat
         Ok(messages.pop())
     }
 
