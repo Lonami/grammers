@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Methods related to chats and entities.
+//! Methods related to users, groups and channels.
 
 use super::ClientHandle;
 use crate::ext::{ChatExt, UserExt};

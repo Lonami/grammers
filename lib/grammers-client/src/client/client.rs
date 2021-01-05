@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub use super::updates::UpdateIter;
-use crate::types::{EntityCache, MessageBox};
+use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
@@ -74,7 +74,7 @@ pub struct Client {
     pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
     pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
     pub(crate) message_box: MessageBox,
-    pub(crate) entities: EntityCache,
+    pub(crate) chat_hashes: ChatHashCache,
 }
 
 /// A client handle which can be freely cloned and moved around tasks to invoke requests

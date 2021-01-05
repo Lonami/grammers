@@ -7,7 +7,7 @@
 // except according to those terms.
 pub use super::updates::UpdateIter;
 use super::{Client, ClientHandle, Config, Request, Step};
-use crate::types::{EntityCache, MessageBox};
+use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_tl_types::{self as tl, Deserializable};
@@ -123,7 +123,7 @@ impl Client {
             handle_tx,
             handle_rx,
             message_box: MessageBox::new(),
-            entities: EntityCache::new(),
+            chat_hashes: ChatHashCache::new(),
         };
 
         // TODO use data saved in session instead

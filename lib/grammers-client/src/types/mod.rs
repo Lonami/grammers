@@ -8,9 +8,9 @@
 
 //! Custom types extending those provided by Telegram.
 mod chat;
+mod chat_map;
 mod chats;
 mod dialog;
-mod entity_set;
 mod input_message;
 mod iter_buffer;
 mod login_token;
@@ -20,10 +20,10 @@ mod password_token;
 mod update;
 
 pub use chat::{Channel, Chat, Group, User};
+pub use chat_map::ChatMap;
+pub(crate) use chat_map::{ChatHashCache, Peer};
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
-pub use entity_set::EntitySet;
-pub(crate) use entity_set::{EntityCache, Peer};
 pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;

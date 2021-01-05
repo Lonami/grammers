@@ -47,4 +47,4 @@ pub(crate) mod utils;
 pub use client::{
     Client, ClientHandle, Config, InitParams, SignInError, Step as NetworkStep, UpdateIter,
 };
-pub use types::{EntitySet, InputMessage, Update};
+pub use types::{ChatMap, InputMessage, Update};

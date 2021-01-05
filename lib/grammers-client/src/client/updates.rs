@@ -9,7 +9,7 @@
 //! Methods to deal with and offer access to updates.
 
 use super::{Client, ClientHandle, Step};
-use crate::types::{EntitySet, Update};
+use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
@@ -19,19 +19,19 @@ use tokio::time::sleep_until;
 pub struct UpdateIter {
     client: ClientHandle,
     updates: VecDeque<tl::enums::Update>,
-    entities: Arc<EntitySet>,
+    chat_hashes: Arc<ChatMap>,
 }
 
 impl UpdateIter {
     pub(crate) fn new(
         client: ClientHandle,
         updates: Vec<tl::enums::Update>,
-        entities: Arc<EntitySet>,
+        chat_hashes: Arc<ChatMap>,
     ) -> Self {
         Self {
             client,
             updates: updates.into(),
-            entities,
+            chat_hashes,
         }
     }
 }
@@ -41,7 +41,7 @@ impl Iterator for UpdateIter {
 
     fn next(&mut self) -> Option<Self::Item> {
         while let Some(update) = self.updates.pop_front() {
-            if let Some(update) = Update::new(&self.client, update, &self.entities) {
+            if let Some(update) = Update::new(&self.client, update, &self.chat_hashes) {
                 return Some(update);
             }
         }
@@ -51,8 +51,8 @@ impl Iterator for UpdateIter {
 }
 
 impl Client {
-    /// Returns an iterator with the last updates and some of the entities used in them
-    /// in a set for easy access.
+    /// Returns an iterator with the last updates and some of the chats used in them
+    /// in a map for easy access.
     ///
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
@@ -69,18 +69,18 @@ impl Client {
                 return Ok(Some(UpdateIter::new(
                     self.handle(),
                     updates,
-                    EntitySet::new(users, chats),
+                    ChatMap::new(users, chats),
                 )));
             }
 
-            if let Some(request) = self.message_box.get_channel_difference(&self.entities) {
+            if let Some(request) = self.message_box.get_channel_difference(&self.chat_hashes) {
                 let response = self.invoke(&request).await?;
                 let (updates, users, chats) =
                     self.message_box.apply_channel_difference(request, response);
                 return Ok(Some(UpdateIter::new(
                     self.handle(),
                     updates,
-                    EntitySet::new(users, chats),
+                    ChatMap::new(users, chats),
                 )));
             }
 
@@ -106,7 +106,7 @@ impl Client {
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         for updates in all_updates {
-            match self.message_box.process_updates(updates, &self.entities) {
+            match self.message_box.process_updates(updates, &self.chat_hashes) {
                 Ok(tuple) => {
                     result.0.extend(tuple.0);
                     result.1.extend(tuple.1);
@@ -120,7 +120,7 @@ impl Client {
         Some(UpdateIter::new(
             self.handle(),
             updates,
-            EntitySet::new(users, chats),
+            ChatMap::new(users, chats),
         ))
     }
 }

@@ -9,7 +9,7 @@
 //! Methods related to sending messages.
 use crate::types::{Chat, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{types, ClientHandle, EntitySet};
+use crate::{types, ChatMap, ClientHandle};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -27,7 +27,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let entities = EntitySet::new(users, chats);
+            let chats = ChatMap::new(users, chats);
 
             let rnd_to_id = updates
                 .iter()
@@ -51,7 +51,7 @@ fn map_random_ids_to_messages(
                     }) => Some(message),
                     _ => None,
                 })
-                .filter_map(|message| Message::new(client, message, &entities))
+                .filter_map(|message| Message::new(client, message, &chats))
                 .map(|message| (message.msg.id, message))
                 .collect::<HashMap<_, _>>();
 
@@ -114,13 +114,13 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let entities = EntitySet::new(users, chats);
+        let chats = ChatMap::new(users, chats);
 
         let client = self.client.clone();
         self.buffer.extend(
             messages
                 .into_iter()
-                .flat_map(|message| Message::new(&client, message, &entities)),
+                .flat_map(|message| Message::new(&client, message, &chats)),
         );
 
         Ok(rate)
@@ -602,10 +602,10 @@ impl ClientHandle {
             }
         };
 
-        let entities = EntitySet::new(users, chats);
+        let chats = ChatMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .flat_map(|m| Message::new(self, m, &entities))
+            .flat_map(|m| Message::new(self, m, &chats))
             .next()
             .filter(|m| !filter_req || m.msg.peer_id == message.msg.peer_id))
     }
@@ -724,10 +724,10 @@ impl ClientHandle {
             }
         };
 
-        let entities = EntitySet::new(users, chats);
+        let chats = ChatMap::new(users, chats);
         let mut map = messages
             .into_iter()
-            .flat_map(|m| Message::new(self, m, &entities))
+            .flat_map(|m| Message::new(self, m, &chats))
             .map(|m| (m.msg.id, m))
             .collect::<HashMap<_, _>>();
 

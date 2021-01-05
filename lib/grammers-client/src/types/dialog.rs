@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{Chat, EntitySet, Message, Peer};
+use super::{Chat, ChatMap, Message, Peer};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
@@ -20,7 +20,7 @@ impl Dialog {
     pub(crate) fn new(
         dialog: tl::enums::Dialog,
         messages: &mut HashMap<Peer, Message>,
-        entities: &EntitySet,
+        chats: &ChatMap,
     ) -> Self {
         // TODO helper utils (ext trait?) to extract data from dialogs or messages
         let peer = match dialog {
@@ -29,7 +29,7 @@ impl Dialog {
         };
 
         Self {
-            chat: entities
+            chat: chats
                 .get(peer)
                 .expect("dialogs use an unknown peer")
                 .clone(),

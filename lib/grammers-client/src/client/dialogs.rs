@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Chat, Dialog, EntitySet, IterBuffer, Message};
+use crate::types::{Chat, ChatMap, Dialog, IterBuffer, Message};
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -81,17 +81,17 @@ impl DialogIter {
             }
         };
 
-        let entities = EntitySet::new(users, chats);
+        let chats = ChatMap::new(users, chats);
         let mut messages = messages
             .into_iter()
-            .flat_map(|m| Message::new(&self.client, m, &entities))
+            .flat_map(|m| Message::new(&self.client, m, &chats))
             .map(|m| ((&m.msg.peer_id).into(), m))
             .collect::<HashMap<_, _>>();
 
         self.buffer.extend(
             dialogs
                 .into_iter()
-                .map(|dialog| Dialog::new(dialog, &mut messages, &entities)),
+                .map(|dialog| Dialog::new(dialog, &mut messages, &chats)),
         );
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.

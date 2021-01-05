@@ -30,25 +30,25 @@ impl From<&tl::enums::Peer> for Peer {
     }
 }
 
-/// Helper structure to efficiently retrieve entities via their peer.
+/// Helper structure to efficiently retrieve chats via their peer.
 ///
-/// A lot of responses include the entities related to them in the form of a list of users
-/// and chats, making it annoying to extract a specific entity. This structure lets you
+/// A lot of responses include the chats related to them in the form of a list of users
+/// and chats, making it annoying to extract a specific chat. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
-pub struct EntitySet {
+pub struct ChatMap {
     map: HashMap<Peer, Chat>,
 }
 
-/// In-memory entity cache, mapping peers to their respective access hashes.
-pub(crate) struct EntityCache {
+/// In-memory chat cache, mapping peers to their respective access hashes.
+pub(crate) struct ChatHashCache {
     users: HashMap<i32, i64>,
     channels: HashMap<i32, i64>,
     self_id: Option<i32>,
     self_bot: bool,
 }
 
-impl EntitySet {
-    /// Create a new entity set.
+impl ChatMap {
+    /// Create a new chat set.
     pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
         Arc::new(Self {
             map: users
@@ -60,7 +60,7 @@ impl EntitySet {
         })
     }
 
-    /// Create a new empty entity set.
+    /// Create a new empty chat set.
     pub fn empty() -> Arc<Self> {
         Arc::new(Self {
             map: HashMap::new(),
@@ -73,7 +73,7 @@ impl EntitySet {
     }
 }
 
-impl EntityCache {
+impl ChatHashCache {
     pub(crate) fn new() -> Self {
         Self {
             users: HashMap::new(),

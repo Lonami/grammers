@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{EntitySet, Message};
+use super::{ChatMap, Message};
 use crate::ClientHandle;
 use grammers_tl_types as tl;
 use std::sync::Arc;
@@ -20,16 +20,16 @@ impl Update {
     pub(crate) fn new(
         client: &ClientHandle,
         update: tl::enums::Update,
-        entities: &Arc<EntitySet>,
+        chats: &Arc<ChatMap>,
     ) -> Option<Self> {
         match update {
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {
-                Message::new(client, message, entities).map(Self::NewMessage)
+                Message::new(client, message, chats).map(Self::NewMessage)
             }
             tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
                 message,
                 ..
-            }) => Message::new(client, message, entities).map(Self::NewMessage),
+            }) => Message::new(client, message, chats).map(Self::NewMessage),
             _ => None,
         }
     }

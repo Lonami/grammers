@@ -29,18 +29,18 @@ pub struct Message {
     pub(crate) msg: tl::types::Message,
     pub(crate) action: Option<tl::enums::MessageAction>,
     pub(crate) client: ClientHandle,
-    // When fetching messages or receiving updates, a set of entities will be present. A single
-    // server response contains a lot of entities, and some might be related to deep layers of
+    // When fetching messages or receiving updates, a set of chats will be present. A single
+    // server response contains a lot of chats, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
-    // and moves, and saves us from worrying about picking out all the entities we care about.
-    pub(crate) entities: Arc<types::EntitySet>,
+    // and moves, and saves us from worrying about picking out all the chats we care about.
+    pub(crate) chats: Arc<types::ChatMap>,
 }
 
 impl Message {
     pub(crate) fn new(
         client: &ClientHandle,
         message: tl::enums::Message,
-        entities: &Arc<types::EntitySet>,
+        chats: &Arc<types::ChatMap>,
     ) -> Option<Self> {
         match message {
             // Don't even bother to expose empty messages to the user, even if they have an ID.
@@ -49,7 +49,7 @@ impl Message {
                 msg,
                 action: None,
                 client: client.clone(),
-                entities: Arc::clone(entities),
+                chats: Arc::clone(chats),
             }),
             tl::enums::Message::Service(msg) => Some(Message {
                 msg: tl::types::Message {
@@ -83,7 +83,7 @@ impl Message {
                 },
                 action: Some(msg.action),
                 client: client.clone(),
-                entities: Arc::clone(entities),
+                chats: Arc::clone(chats),
             }),
         }
     }
@@ -158,7 +158,7 @@ impl Message {
         self.msg
             .from_id
             .as_ref()
-            .and_then(|from| self.entities.get(from))
+            .and_then(|from| self.chats.get(from))
             .map(|e| e.clone())
     }
 
@@ -167,7 +167,7 @@ impl Message {
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
     pub fn chat(&self) -> types::Chat {
-        self.entities
+        self.chats
             .get(&self.msg.peer_id)
             .map(|e| e.clone())
             .unwrap()
@@ -220,9 +220,9 @@ impl Message {
         self.msg.reply_markup.clone()
     }
 
-    /// The "entities" used to format this message, such as bold, italic, with their offsets and
-    /// lengths.
-    pub fn formatting_entities(&self) -> Option<&Vec<tl::enums::MessageEntity>> {
+    /// The formatting entities used to format this message, such as bold, italic, with their
+    /// offsets and lengths.
+    pub fn fmt_entities(&self) -> Option<&Vec<tl::enums::MessageEntity>> {
         // TODO correct the offsets and lengths to match the byte offsets
         self.msg.entities.as_ref()
     }

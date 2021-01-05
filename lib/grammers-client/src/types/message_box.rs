@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::EntityCache;
+use super::ChatHashCache;
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
@@ -269,10 +269,10 @@ impl MessageBox {
     /// Return the request that needs to be made to get a channel's difference, if any.
     pub(crate) fn get_channel_difference(
         &mut self,
-        entities: &EntityCache,
+        chat_hashes: &ChatHashCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
         let channel_id = *self.getting_channel_diff.iter().next()?;
-        let channel = if let Some(channel) = entities.get_input_channel(channel_id) {
+        let channel = if let Some(channel) = chat_hashes.get_input_channel(channel_id) {
             channel
         } else {
             self.getting_channel_diff.remove(&channel_id);
@@ -285,7 +285,7 @@ impl MessageBox {
                 channel,
                 filter: tl::enums::ChannelMessagesFilter::Empty,
                 pts,
-                limit: if entities.is_self_bot() {
+                limit: if chat_hashes.is_self_bot() {
                     BOT_CHANNEL_DIFF_LIMIT
                 } else {
                     USER_CHANNEL_DIFF_LIMIT
@@ -454,7 +454,7 @@ impl MessageBox {
                         panic!("received a folder on channelDifferenceTooLong")
                     }
                 }
-                // This `diff` has the "latest messages and corresponding entities", but it would
+                // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
                 // expect all updates to be fetched. Instead, nothing is returned.
                 (Vec::new(), Vec::new(), Vec::new())
@@ -499,7 +499,7 @@ impl MessageBox {
     pub(crate) fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
-        entities: &EntityCache,
+        chat_hashes: &ChatHashCache,
     ) -> Result<
         (
             Vec<tl::enums::Update>,
@@ -537,15 +537,15 @@ impl MessageBox {
                 // about the chat so that [min constructors][0] can be used.
                 //
                 // [0]: https://core.telegram.org/api/min
-                if !entities.contains_user(short.user_id) {
+                if !chat_hashes.contains_user(short.user_id) {
                     info!("no hash for user {} known, treating as gap", short.user_id);
                     return Err(Gap);
                 }
-                handle_update_short_message(short, entities.self_id())
+                handle_update_short_message(short, chat_hashes.self_id())
             }
             tl::enums::Updates::UpdateShortChatMessage(short) => {
-                // No need to check for entities here. Chats do not require an access hash, and
-                // min constructors can be used to access the user.
+                // No need to check for chats here. Small group chats do not require an access
+                // hash, and min constructors can be used to access the user.
                 handle_update_short_chat_message(short)
             }
             // > `updateShort` […] have lower priority and are broadcast to a large number of users.
@@ -553,7 +553,7 @@ impl MessageBox {
             // There *shouldn't* be updates mentioning peers we're unaware of here.
             //
             // If later it turns out these can happen, the code will need to be updated to
-            // consider entities missing here a gap as well.
+            // consider chats missing here a gap as well.
             tl::enums::Updates::UpdateShort(short) => handle_update_short(short),
             // > [the] `seq` attribute, which indicates the remote `Updates` state after the
             // > generation of the `Updates`, and `seq_start` indicates the remote `Updates` state
@@ -662,7 +662,7 @@ impl MessageBox {
                         pts.entry, local_pts, pts.pts_count, pts.pts
                     );
                     if self.possible_gap_deadline.is_none() {
-                        // TODO store entities too?
+                        // TODO store chats too?
                         self.possible_gap.entry(pts.entry).or_default().push(update);
                         self.possible_gap_deadline = Some(Instant::now() + POSSIBLE_GAP_TIMEOUT);
                     }

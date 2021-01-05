@@ -44,8 +44,8 @@ impl InputMessage {
         self
     }
 
-    /// The entities within the message (such as bold, italics, etc.).
-    pub fn entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
+    /// The formatting entities within the message (such as bold, italics, etc.).
+    pub fn fmt_entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
         self.entities = entities;
         self
     }

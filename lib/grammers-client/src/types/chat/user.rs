@@ -123,7 +123,7 @@ impl User {
 
     /// Does this user represent the account that's currently logged in?
     pub fn is_self(&self) -> bool {
-        // TODO if is_self is false, check in entity cache if id == ourself
+        // TODO if is_self is false, check in chat cache if id == ourself
         self.0.is_self
     }
 }
