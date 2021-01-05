@@ -71,6 +71,11 @@ impl ChatMap {
     pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Chat> {
         self.map.get(&peer.into())
     }
+
+    /// Take the full `Chat` object given its `Peer` and remove it from the map.
+    pub fn remove(&mut self, peer: &tl::enums::Peer) -> Option<Chat> {
+        self.map.remove(&peer.into())
+    }
 }
 
 impl ChatHashCache {

@@ -9,12 +9,14 @@
 //! Methods related to users, groups and channels.
 
 use super::ClientHandle;
-use crate::ext::{ChatExt, UserExt};
-use crate::types::{AdminRightsBuilder, BannedRightsBuilder, Chat, IterBuffer, Message, User};
+use crate::types::{
+    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, User,
+};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::convert::TryInto;
+use std::sync::Arc;
 use std::time::Duration;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
@@ -65,7 +67,7 @@ pub enum Role {
 
 #[derive(Clone, Debug)]
 pub struct Participant {
-    pub user: tl::types::User,
+    pub user: User,
     pub role: Role,
 }
 
@@ -159,11 +161,9 @@ impl ParticipantIter {
                     tl::enums::ChatParticipants::Participants(c) => c.participants,
                 };
 
-                let mut users = full
-                    .users
-                    .into_iter()
-                    .map(|user| (user.id(), user))
-                    .collect::<HashMap<_, _>>();
+                // Don't actually care for the chats, just the users.
+                let mut chats = ChatMap::new(full.users, Vec::new());
+                let chats = Arc::get_mut(&mut chats).unwrap();
 
                 use tl::enums::ChatParticipant as ChPart;
 
@@ -196,12 +196,17 @@ impl ParticipantIter {
                         ),
                     };
 
-                    users.remove(&user_id).and_then(|user| {
-                        Some(Participant {
-                            user: user.try_into().ok()?,
-                            role,
+                    chats
+                        .remove(&tl::types::PeerUser { user_id }.into())
+                        .and_then(|chat| {
+                            Some(Participant {
+                                user: match chat {
+                                    Chat::User(user) => user,
+                                    _ => unreachable!(),
+                                },
+                                role,
+                            })
                         })
-                    })
                 }));
 
                 *total = Some(buffer.len());
@@ -223,10 +228,9 @@ impl ParticipantIter {
                     iter.request.offset += participants.len() as i32;
                 }
 
-                let mut users = users
-                    .into_iter()
-                    .map(|user| (user.id(), user))
-                    .collect::<HashMap<_, _>>();
+                // Don't actually care for the chats, just the users.
+                let mut chats = ChatMap::new(users, Vec::new());
+                let chats = Arc::get_mut(&mut chats).unwrap();
 
                 use tl::enums::ChannelParticipant as ChPart;
 
@@ -276,12 +280,17 @@ impl ParticipantIter {
                             ),
                             ChPart::Left(p) => (p.user_id, Role::Left),
                         };
-                        users.remove(&user_id).and_then(|user| {
-                            Some(Participant {
-                                user: user.try_into().ok()?,
-                                role,
+                        chats
+                            .remove(&tl::types::PeerUser { user_id }.into())
+                            .and_then(|chat| {
+                                Some(Participant {
+                                    user: match chat {
+                                        Chat::User(user) => user,
+                                        _ => unreachable!(),
+                                    },
+                                    role,
+                                })
                             })
-                        })
                     }));
 
                 iter.total = Some(count as usize);
@@ -473,25 +482,17 @@ impl ClientHandle {
         };
 
         Ok(match peer {
-            tl::enums::Peer::User(tl::types::PeerUser { user_id }) => {
-                users.into_iter().find_map(|user| {
-                    if user.id() == user_id {
-                        Some(Chat::from_user(user))
-                    } else {
-                        None
-                    }
-                })
-            }
+            tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users
+                .into_iter()
+                .map(Chat::from_user)
+                .find(|chat| chat.id() == user_id),
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id })
             | tl::enums::Peer::Channel(tl::types::PeerChannel {
                 channel_id: chat_id,
-            }) => chats.into_iter().find_map(|chat| {
-                if chat.id() == chat_id {
-                    Some(Chat::from_chat(chat))
-                } else {
-                    None
-                }
-            }),
+            }) => chats
+                .into_iter()
+                .map(Chat::from_chat)
+                .find(|chat| chat.id() == chat_id),
         })
     }
 
