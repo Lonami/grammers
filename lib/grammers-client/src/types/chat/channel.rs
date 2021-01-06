@@ -26,8 +26,54 @@ impl fmt::Debug for Channel {
 }
 
 impl Channel {
-    pub(crate) fn from_raw(_chat: tl::enums::Chat) -> Self {
-        todo!()
+    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
+        use tl::enums::Chat as C;
+
+        match chat {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => panic!("cannot create from group chat"),
+            C::Channel(channel) => {
+                if channel.broadcast {
+                    Self(channel)
+                } else {
+                    panic!("tried to create broadcast channel from megagroup");
+                }
+            }
+            C::ChannelForbidden(channel) => {
+                if channel.broadcast {
+                    // TODO store until_date
+                    Self(tl::types::Channel {
+                        creator: false,
+                        left: false,
+                        broadcast: channel.broadcast,
+                        verified: false,
+                        megagroup: channel.megagroup,
+                        restricted: false,
+                        signatures: false,
+                        min: false,
+                        scam: false,
+                        has_link: false,
+                        has_geo: false,
+                        slowmode_enabled: false,
+                        call_active: false,
+                        call_not_empty: false,
+                        id: channel.id,
+                        access_hash: Some(channel.access_hash),
+                        title: channel.title,
+                        username: None,
+                        photo: tl::enums::ChatPhoto::Empty,
+                        date: 0,
+                        version: 0,
+                        restriction_reason: None,
+                        admin_rights: None,
+                        banned_rights: None,
+                        default_banned_rights: None,
+                        participants_count: None,
+                    })
+                } else {
+                    panic!("tried to create broadcast channel from megagroup");
+                }
+            }
+        }
     }
 
     pub(crate) fn to_peer(&self) -> tl::enums::Peer {

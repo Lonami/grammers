@@ -28,8 +28,26 @@ impl fmt::Debug for Group {
 // TODO it might be desirable to manually merge all the properties of the chat to avoid endless matching
 
 impl Group {
-    pub(crate) fn from_raw(_chat: tl::enums::Chat) -> Self {
-        todo!()
+    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
+        use tl::enums::Chat as C;
+
+        match chat {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => Self(chat),
+            C::Channel(ref channel) => {
+                if channel.broadcast {
+                    panic!("tried to create megagroup channel from broadcast");
+                } else {
+                    Self(chat)
+                }
+            }
+            C::ChannelForbidden(ref channel) => {
+                if channel.broadcast {
+                    panic!("tried to create megagroup channel from broadcast");
+                } else {
+                    Self(chat)
+                }
+            }
+        }
     }
 
     pub(crate) fn to_peer(&self) -> tl::enums::Peer {
@@ -51,15 +69,58 @@ impl Group {
     }
 
     pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
-        todo!()
+        use tl::enums::Chat as C;
+
+        match &self.0 {
+            C::Empty(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
+            C::Chat(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
+            C::Forbidden(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
+            C::Channel(chat) => tl::types::InputPeerChannel {
+                channel_id: chat.id,
+                // TODO don't unwrap_or 0
+                access_hash: chat.access_hash.unwrap_or(0),
+            }
+            .into(),
+            C::ChannelForbidden(chat) => tl::types::InputPeerChannel {
+                channel_id: chat.id,
+                access_hash: chat.access_hash,
+            }
+            .into(),
+        }
     }
 
     pub(crate) fn to_input_channel(&self) -> Option<tl::enums::InputChannel> {
-        todo!()
+        use tl::enums::Chat as C;
+
+        match &self.0 {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
+            C::Channel(chat) => Some(
+                tl::types::InputChannel {
+                    channel_id: chat.id,
+                    // TODO don't unwrap_or 0
+                    access_hash: chat.access_hash.unwrap_or(0),
+                }
+                .into(),
+            ),
+            C::ChannelForbidden(chat) => Some(
+                tl::types::InputChannel {
+                    channel_id: chat.id,
+                    access_hash: chat.access_hash,
+                }
+                .into(),
+            ),
+        }
     }
 
     pub(crate) fn to_chat_id(&self) -> Option<i32> {
-        todo!()
+        use tl::enums::Chat as C;
+
+        match &self.0 {
+            C::Empty(chat) => Some(chat.id),
+            C::Chat(chat) => Some(chat.id),
+            C::Forbidden(chat) => Some(chat.id),
+            C::Channel(_) | C::ChannelForbidden(_) => None,
+        }
     }
 
     /// Return the unique identifier for this group.
