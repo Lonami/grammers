@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use block_cipher_trait::generic_array::GenericArray;
-use block_cipher_trait::BlockCipher;
+use aes_soft::cipher::generic_array::GenericArray;
+use aes_soft::cipher::{BlockCipher, NewBlockCipher};
 use once_cell::sync::Lazy;
 
 static USE_AES_NI: Lazy<bool> =

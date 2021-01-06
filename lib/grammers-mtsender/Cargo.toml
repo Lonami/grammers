@@ -17,10 +17,10 @@ edition = "2018"
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.2.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0", features = [ "tl-mtproto" ]}
-tokio = { version = "0.3", features = ["net", "io-util", "sync", "macros", "time"] }
-bytes = "0.6"
-log = "0.4"
+tokio = { version = "1.0.1", features = ["net", "io-util", "sync", "macros", "time"] }
+bytes = "1.0.0"
+log = "0.4.11"
 
 [dev-dependencies]
 simple_logger = "1.11.0"
-tokio = { version = "0.3", features = ["rt"] }
+tokio = { version = "1.0.1", features = ["rt"] }
