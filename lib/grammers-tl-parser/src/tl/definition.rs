@@ -127,7 +127,7 @@ impl FromStr for Definition {
 
         // Parse `id`
         let id = match id {
-            Some(i) => u32::from_str_radix(i, 16).map_err(ParseError::InvalidId)?,
+            Some(v) => u32::from_str_radix(v.trim(), 16).map_err(ParseError::InvalidId)?,
             None => infer_id(definition),
         };
 
