@@ -127,7 +127,7 @@ impl FromStr for Definition {
 
         // Parse `id`
         let id = match id {
-            Some(i) => u32::from_str_radix(i, 16).map_err(ParseError::InvalidId)?,
+            Some(v) => u32::from_str_radix(v.trim(), 16).map_err(ParseError::InvalidId)?,
             None => infer_id(definition),
         };
 
@@ -346,6 +346,35 @@ mod tests {
                 generic_arg: None,
             }
         );
+    }
+
+    #[test]
+    fn parse_multiline_definition() {
+        let def = "
+            first#1 lol:param
+              = t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 1);
+
+        let def = "
+            second#2
+              lol:String
+            = t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 2);
+
+        let def = "
+            third#3
+
+              lol:String
+
+            =
+                     t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 3);
     }
 
     #[test]
