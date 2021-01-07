@@ -349,6 +349,35 @@ mod tests {
     }
 
     #[test]
+    fn parse_multiline_definition() {
+        let def = "
+            first#1 lol:param
+              = t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 1);
+
+        let def = "
+            second#2
+              lol:String
+            = t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 2);
+
+        let def = "
+            third#3
+
+              lol:String
+
+            =
+                     t;
+            ";
+
+        assert_eq!(Definition::from_str(def).unwrap().id, 3);
+    }
+
+    #[test]
     fn parse_complete() {
         let def = "ns1.name#123 {X:Type} flags:# pname:flags.10?ns2.Vector<!X> = ns3.Type";
         assert_eq!(
