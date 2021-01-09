@@ -364,7 +364,7 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_me(&mut self) -> Result<tl::types::User, InvocationError> {
+    pub async fn get_me(&mut self) -> Result<User, InvocationError> {
         let mut res = self
             .invoke(&tl::functions::users::GetUsers {
                 id: vec![tl::enums::InputUser::UserSelf],
@@ -375,10 +375,7 @@ impl ClientHandle {
             panic!("fetching only one user should exactly return one user");
         }
 
-        match res.pop().unwrap() {
-            tl::enums::User::User(user) => Ok(user),
-            tl::enums::User::Empty(_) => panic!("should not get empty user when fetching self"),
-        }
+        Ok(User::from_raw(res.pop().unwrap()))
     }
 
     /// Iterate over the participants of a chat.
