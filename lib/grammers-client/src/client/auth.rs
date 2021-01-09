@@ -123,7 +123,6 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.config.session.auth_key = None;
                 self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
                 self.invoke(&request).await?
             }
@@ -194,7 +193,6 @@ impl Client {
                 //
                 // Just connect and generate a new authorization key with it
                 // before trying again.
-                self.config.session.auth_key = None;
                 self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
                 self.invoke(&request).await?.into()
             }

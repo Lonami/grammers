@@ -22,7 +22,7 @@ fn main() -> std::io::Result<()> {
     // Using boxed variants in the definitions so that deserialization fails if any constructor ID changes.
     let definitions = parse_tl_file(
         r#"
-        dataCenter id:int ipv4:int ipv6:int128 port:int auth:bytes = DataCenter;
+        dataCenter flags:# id:int ipv4:flags.0?int ipv6:flags.1?int128 port:int auth:flags.2?bytes = DataCenter;
         user id:int dc:int bot:Bool = User;
         channelState channel_id:int pts:int = ChannelState;
         updateState pts:int qts:int date:int seq:int channels:Vector<ChannelState> = UpdateState;

@@ -9,8 +9,10 @@ mod generated;
 
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
+use grammers_crypto::auth_key::AuthKey;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
+use std::net::Ipv4Addr;
 use std::path::Path;
 
 // Needed for auto-generated definitions.
@@ -18,7 +20,7 @@ use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Se
 
 pub struct Session {
     file: File,
-    session: types::Session,
+    pub session: types::Session,
 }
 
 impl Session {
@@ -68,5 +70,55 @@ impl Session {
             .write_all(&enums::Session::Session(self.session.clone()).to_bytes())?;
         self.file.sync_data()?;
         Ok(())
+    }
+
+    /// User's home datacenter ID, if known.
+    pub fn user_dc(&self) -> Option<i32> {
+        self.session
+            .user
+            .as_ref()
+            .map(|enums::User::User(user)| user.dc)
+    }
+
+    /// Authorization key data for the given datacenter ID, if any.
+    pub fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
+        self.session
+            .dcs
+            .iter()
+            .filter_map(|enums::DataCenter::Center(dc)| {
+                if dc.id == dc_id {
+                    if let Some(auth) = &dc.auth {
+                        let mut bytes = [0; 256];
+                        bytes.copy_from_slice(auth);
+                        Some(AuthKey::from_bytes(bytes))
+                    } else {
+                        None
+                    }
+                } else {
+                    None
+                }
+            })
+            .next()
+    }
+
+    pub fn insert_dc(&mut self, id: i32, (ipv4, port): (Ipv4Addr, u16), auth: &AuthKey) {
+        if let Some(pos) = self
+            .session
+            .dcs
+            .iter()
+            .position(|enums::DataCenter::Center(dc)| dc.id == id)
+        {
+            self.session.dcs.remove(pos);
+        }
+        self.session.dcs.push(
+            types::DataCenter {
+                id,
+                ipv4: Some(i32::from_le_bytes(ipv4.octets())),
+                ipv6: None,
+                port: port as i32,
+                auth: Some(auth.to_bytes().to_vec()),
+            }
+            .into(),
+        );
     }
 }

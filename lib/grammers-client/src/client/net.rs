@@ -21,13 +21,15 @@ use tokio::sync::{mpsc, oneshot};
 /// The addresses were obtained from the `static` addresses through a call to
 /// `functions::help::GetConfig`.
 const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
-    (Ipv4Addr::new(149, 154, 167, 51), 443), // default (2)
+    (Ipv4Addr::new(0, 0, 0, 0), 0),
     (Ipv4Addr::new(149, 154, 175, 53), 443),
     (Ipv4Addr::new(149, 154, 167, 51), 443),
     (Ipv4Addr::new(149, 154, 175, 100), 443),
     (Ipv4Addr::new(149, 154, 167, 92), 443),
     (Ipv4Addr::new(91, 108, 56, 190), 443),
 ];
+
+const DEFAULT_DC: i32 = 2;
 
 pub(crate) async fn connect_sender(
     dc_id: i32,
@@ -37,12 +39,12 @@ pub(crate) async fn connect_sender(
 
     let addr = DC_ADDRESSES[dc_id as usize];
 
-    let mut sender = if let Some(auth_key) = config.session.auth_key.as_ref() {
+    let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
         info!(
             "creating a new sender with existing auth key to dc {} {:?}",
             dc_id, addr
         );
-        sender::connect_with_auth(transport, addr, auth_key.clone()).await?
+        sender::connect_with_auth(transport, addr, auth_key).await?
     } else {
         info!(
             "creating a new sender and auth key in dc {} {:?}",
@@ -50,7 +52,7 @@ pub(crate) async fn connect_sender(
         );
         let sender = sender::connect(transport, addr).await?;
 
-        config.session.auth_key = Some(sender.auth_key().clone());
+        config.session.insert_dc(dc_id, addr, &sender.auth_key());
         config.session.save()?;
         sender
     };
@@ -75,8 +77,6 @@ pub(crate) async fn connect_sender(
         })
         .await?;
 
-    // TODO use the dc id from the config as "this dc", not the input dc id
-    config.session.user_dc = Some(dc_id);
     config.session.save()?;
 
     Ok(sender)
@@ -113,7 +113,8 @@ impl Client {
     /// # }
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let sender = connect_sender(config.session.user_dc.unwrap_or(0), &mut config).await?;
+        let sender =
+            connect_sender(config.session.user_dc().unwrap_or(DEFAULT_DC), &mut config).await?;
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
