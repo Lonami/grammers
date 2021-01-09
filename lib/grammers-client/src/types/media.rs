@@ -40,6 +40,7 @@ impl Photo {
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         use tl::enums::Photo as P;
+
         self.photo.photo.as_ref().and_then(|p| match p {
             P::Empty(_) => None,
             P::Photo(photo) => Some(
@@ -52,6 +53,15 @@ impl Photo {
                 .into(),
             ),
         })
+    }
+
+    pub fn id(&self) -> i64 {
+        use tl::enums::Photo as P;
+
+        match self.photo.photo.as_ref().unwrap() {
+            P::Empty(photo) => photo.id,
+            P::Photo(photo) => photo.id,
+        }
     }
 }
 

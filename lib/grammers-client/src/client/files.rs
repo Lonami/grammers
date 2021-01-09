@@ -98,9 +98,9 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(file: grammers_tl_types::enums::InputFileLocation, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
-    /// let mut download = client.iter_download(file);
+    /// let mut download = client.iter_download(&media);
     ///
     /// while let Some(chunk) = download.next().await? {
     ///     file_bytes.extend(chunk);
@@ -110,8 +110,8 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_download(&self, file: &Media) -> DownloadIter {
-        DownloadIter::new(self, file)
+    pub fn iter_download(&self, media: &Media) -> DownloadIter {
+        DownloadIter::new(self, media)
     }
 
     /// Downloads a media file into the specified path.
@@ -124,8 +124,8 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(file: grammers_tl_types::enums::InputFileLocation, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.download_media(file, "/home/username/photos/holidays.jpg").await?;
+    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.download_media(&media, "/home/username/photos/holidays.jpg").await?;
     /// # Ok(())
     /// # }
     /// ```
