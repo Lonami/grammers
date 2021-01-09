@@ -6,16 +6,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::types::{Media, Uploaded};
 use crate::utils::generate_random_id;
 use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::io::SeekFrom;
 use std::path::Path;
-use tokio::{
-    fs,
-    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
-};
+use tokio::fs;
+use tokio::io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
@@ -28,7 +27,7 @@ pub struct DownloadIter {
 }
 
 impl DownloadIter {
-    fn new(client: &ClientHandle, location: tl::enums::InputFileLocation) -> Self {
+    fn new(client: &ClientHandle, media: &Media) -> Self {
         // TODO let users tweak all the options from the request
         // TODO cdn support
         Self {
@@ -37,7 +36,7 @@ impl DownloadIter {
             request: tl::functions::upload::GetFile {
                 precise: false,
                 cdn_supported: false,
-                location,
+                location: media.to_input_location().unwrap(), // TODO don't unwrap
                 offset: 0,
                 limit: MAX_CHUNK_SIZE,
             },
@@ -111,7 +110,7 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_download(&self, file: tl::enums::InputFileLocation) -> DownloadIter {
+    pub fn iter_download(&self, file: &Media) -> DownloadIter {
         DownloadIter::new(self, file)
     }
 
@@ -132,7 +131,7 @@ impl ClientHandle {
     /// ```
     pub async fn download_media<P: AsRef<Path>>(
         &mut self,
-        media: tl::enums::InputFileLocation,
+        media: &Media,
         path: P,
     ) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
@@ -190,7 +189,7 @@ impl ClientHandle {
         stream: &mut S,
         size: usize,
         name: String,
-    ) -> Result<tl::enums::InputFile, io::Error> {
+    ) -> Result<Uploaded, io::Error> {
         let file_id = generate_random_id();
         let name = if name.is_empty() {
             "a".to_string()
@@ -248,20 +247,22 @@ impl ClientHandle {
             }
         }
 
-        Ok(if big_file {
-            tl::enums::InputFile::Big(tl::types::InputFileBig {
+        Ok(Uploaded::from_raw(if big_file {
+            tl::types::InputFileBig {
                 id: file_id,
                 parts: total_parts,
                 name,
-            })
+            }
+            .into()
         } else {
-            tl::enums::InputFile::File(tl::types::InputFile {
+            tl::types::InputFile {
                 id: file_id,
                 parts: total_parts,
                 name,
                 md5_checksum: format!("{:x}", md5.compute()),
-            })
-        })
+            }
+            .into()
+        }))
     }
 
     /// Uploads a local file to Telegram servers.
@@ -288,10 +289,7 @@ impl ClientHandle {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    pub async fn upload_file<P: AsRef<Path>>(
-        &mut self,
-        path: P,
-    ) -> Result<tl::enums::InputFile, io::Error> {
+    pub async fn upload_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();
 
         let mut file = fs::File::open(path).await?;

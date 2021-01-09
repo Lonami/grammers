@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::ext::MessageMediaExt;
 use crate::utils;
 use crate::{types, ClientHandle};
 use grammers_mtsender::InvocationError;
@@ -215,8 +214,8 @@ impl Message {
     ///
     /// This not only includes photos or videos, but also contacts, polls, documents, locations
     /// and many other types.
-    pub fn media(&self) -> Option<tl::enums::MessageMedia> {
-        self.msg.media.clone()
+    pub fn media(&self) -> Option<types::Media> {
+        self.msg.media.clone().and_then(types::Media::from_raw)
     }
 
     /// If the message has a reply markup (which can happen for messages produced by bots),
@@ -416,13 +415,9 @@ impl Message {
     ///
     /// Shorthand for `ClientHandle::download_media`.
     pub async fn download_media<P: AsRef<Path>>(&mut self, path: P) -> Result<bool, io::Error> {
-        if let Some(file) = self
-            .msg
-            .media
-            .as_ref()
-            .and_then(|media| media.to_input_file())
-        {
-            self.client.download_media(file, path).await.map(|_| true)
+        // TODO probably encode failed download in error
+        if let Some(media) = self.media() {
+            self.client.download_media(&media, path).await.map(|_| true)
         } else {
             Ok(false)
         }

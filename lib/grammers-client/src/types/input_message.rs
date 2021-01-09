@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::ext::InputFileExt;
+use crate::types::Uploaded;
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -114,10 +114,10 @@ impl InputMessage {
     /// The server will compress the image and convert it to JPEG format if necessary.
     ///
     /// The text will be the caption of the photo, which may be empty for no caption.
-    pub fn photo(mut self, file: tl::enums::InputFile) -> Self {
+    pub fn photo(mut self, file: Uploaded) -> Self {
         self.media = Some(
             tl::types::InputMediaUploadedPhoto {
-                file,
+                file: file.input_file,
                 stickers: None,
                 ttl_seconds: self.media_ttl,
             }
@@ -131,13 +131,13 @@ impl InputMessage {
     /// You can use this to send videos, stickers, audios, or uncompressed photos.
     ///
     /// The text will be the caption of the document, which may be empty for no caption.
-    pub fn document(mut self, file: tl::enums::InputFile) -> Self {
+    pub fn document(mut self, file: Uploaded) -> Self {
         let mime_type = self.get_file_mime(&file);
         self.media = Some(
             tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: false,
-                file,
+                file: file.input_file,
                 thumb: None,
                 mime_type,
                 attributes: Vec::new(),
@@ -154,13 +154,13 @@ impl InputMessage {
     /// You can use this to send any type of media as a simple document file.
     ///
     /// The text will be the caption of the file, which may be empty for no caption.
-    pub fn file(mut self, file: tl::enums::InputFile) -> Self {
+    pub fn file(mut self, file: Uploaded) -> Self {
         let mime_type = self.get_file_mime(&file);
         self.media = Some(
             tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: true,
-                file,
+                file: file.input_file,
                 thumb: None,
                 mime_type,
                 attributes: Vec::new(),
@@ -200,7 +200,7 @@ impl InputMessage {
     }
 
     /// Return the mime type string for the given file.
-    fn get_file_mime(&self, file: &tl::enums::InputFile) -> String {
+    fn get_file_mime(&self, file: &Uploaded) -> String {
         if let Some(mime) = self.mime_type.as_ref() {
             mime.clone()
         } else if let Some(mime) = mime_guess::from_path(file.name()).first() {
