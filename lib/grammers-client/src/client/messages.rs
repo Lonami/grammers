@@ -741,8 +741,8 @@ impl ClientHandle {
     ///
     /// ```
     /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
-    /// if let Some(_message) = client.get_pinned_message(&chat).await? {
-    ///     println!("There is a message pinned in {}", chat.name());
+    /// if let Some(message) = client.get_pinned_message(&chat).await? {
+    ///     println!("There is a message pinned in {}: {}", chat.name(), message.text());
     /// } else {
     ///     println!("There are no messages pinned in {}", chat.name());
     /// }
@@ -752,7 +752,7 @@ impl ClientHandle {
     pub async fn get_pinned_message(
         &mut self,
         chat: &Chat,
-    ) -> Result<Option<tl::enums::Message>, InvocationError> {
+    ) -> Result<Option<Message>, InvocationError> {
         // TODO return types::Message and print its text in the example
         let id = vec![tl::enums::InputMessage::Pinned];
 
@@ -764,17 +764,21 @@ impl ClientHandle {
                 .await
         }?;
 
-        let mut messages = match result {
-            tl::enums::messages::Messages::Messages(m) => m.messages,
-            tl::enums::messages::Messages::Slice(m) => m.messages,
-            tl::enums::messages::Messages::ChannelMessages(m) => m.messages,
+        let (messages, users, chats) = match result {
+            tl::enums::messages::Messages::Messages(m) => (m.messages, m.users, m.chats),
+            tl::enums::messages::Messages::Slice(m) => (m.messages, m.users, m.chats),
+            tl::enums::messages::Messages::ChannelMessages(m) => (m.messages, m.users, m.chats),
             tl::enums::messages::Messages::NotModified(_) => {
                 panic!("API returned Messages::NotModified even though GetMessages was used")
             }
         };
 
-        // TODO filter chat
-        Ok(messages.pop())
+        let chats = ChatMap::new(users, chats);
+        Ok(messages
+            .into_iter()
+            .flat_map(|m| Message::new(self, m, &chats))
+            .filter(|m| m.chat().to_peer() == chat.to_peer())
+            .next())
     }
 
     /// Pin a message in the chat. This will not notify any users.
