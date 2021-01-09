@@ -7,18 +7,20 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
-mod chat;
-mod chat_map;
-mod chats;
-mod dialog;
-mod input_message;
-mod iter_buffer;
-mod login_token;
-mod message;
-mod message_box;
-mod password_token;
-mod terms_of_service;
-mod update;
+pub mod chat;
+pub mod chat_map;
+pub mod chats;
+pub mod dialog;
+pub mod input_message;
+pub mod iter_buffer;
+pub mod login_token;
+pub mod message;
+pub mod message_box;
+pub mod participant;
+pub mod password_token;
+pub mod permissions;
+pub mod terms_of_service;
+pub mod update;
 
 pub use chat::{Channel, Chat, Group, User};
 pub use chat_map::ChatMap;
@@ -30,6 +32,8 @@ pub use iter_buffer::IterBuffer;
 pub use login_token::LoginToken;
 pub use message::Message;
 pub(crate) use message_box::MessageBox;
+pub use participant::{Participant, Role};
 pub use password_token::PasswordToken;
+pub use permissions::{Permissions, Restrictions};
 pub use terms_of_service::TermsOfService;
 pub use update::Update;

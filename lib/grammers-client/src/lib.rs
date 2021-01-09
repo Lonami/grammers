@@ -38,7 +38,7 @@
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
 //! [extension traits]: crate::ext
-mod client;
+pub mod client;
 pub mod ext;
 mod parsers;
 pub mod types;

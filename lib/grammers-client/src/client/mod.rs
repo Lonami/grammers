@@ -5,15 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod auth;
-mod bots;
-mod chats;
-mod client;
-mod dialogs;
-mod files;
-mod messages;
-mod net;
-mod updates;
+pub mod auth;
+pub mod bots;
+pub mod chats;
+pub mod client;
+pub mod dialogs;
+pub mod files;
+pub mod messages;
+pub mod net;
+pub mod updates;
 
 pub use auth::SignInError;
 pub(crate) use client::Request;

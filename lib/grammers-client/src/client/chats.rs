@@ -10,7 +10,7 @@
 
 use super::ClientHandle;
 use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, User,
+    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -22,54 +22,6 @@ use std::time::Duration;
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
-
-fn full_rights() -> tl::types::ChatAdminRights {
-    tl::types::ChatAdminRights {
-        change_info: true,
-        post_messages: true,
-        edit_messages: true,
-        delete_messages: true,
-        ban_users: true,
-        invite_users: true,
-        pin_messages: true,
-        add_admins: true,
-        anonymous: true,
-        manage_call: true,
-    }
-}
-
-#[derive(Clone, Debug, PartialEq)]
-pub enum Role {
-    User {
-        date: i32,
-        inviter_id: Option<i32>,
-    },
-    Creator {
-        admin_rights: tl::types::ChatAdminRights,
-        rank: Option<String>,
-    },
-    Admin {
-        can_edit: bool,
-        inviter_id: Option<i32>,
-        promoted_by: Option<i32>,
-        date: i32,
-        admin_rights: tl::types::ChatAdminRights,
-        rank: Option<String>,
-    },
-    Banned {
-        left: bool,
-        kicked_by: i32,
-        date: i32,
-        banned_rights: tl::types::ChatBannedRights,
-    },
-    Left,
-}
-
-#[derive(Clone, Debug)]
-pub struct Participant {
-    pub user: User,
-    pub role: Role,
-}
 
 pub enum ParticipantIter {
     Empty,
@@ -165,49 +117,11 @@ impl ParticipantIter {
                 let mut chats = ChatMap::new(full.users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
 
-                use tl::enums::ChatParticipant as ChPart;
-
-                buffer.extend(participants.into_iter().filter_map(|participant| {
-                    let (user_id, role) = match participant {
-                        ChPart::Participant(p) => (
-                            p.user_id,
-                            Role::User {
-                                date: p.date,
-                                inviter_id: Some(p.inviter_id),
-                            },
-                        ),
-                        ChPart::Creator(p) => (
-                            p.user_id,
-                            Role::Creator {
-                                admin_rights: full_rights(),
-                                rank: None,
-                            },
-                        ),
-                        ChPart::Admin(p) => (
-                            p.user_id,
-                            Role::Admin {
-                                can_edit: true,
-                                inviter_id: Some(p.inviter_id),
-                                promoted_by: None,
-                                date: p.date,
-                                admin_rights: full_rights(),
-                                rank: None,
-                            },
-                        ),
-                    };
-
-                    chats
-                        .remove(&tl::types::PeerUser { user_id }.into())
-                        .and_then(|chat| {
-                            Some(Participant {
-                                user: match chat {
-                                    Chat::User(user) => user,
-                                    _ => unreachable!(),
-                                },
-                                role,
-                            })
-                        })
-                }));
+                buffer.extend(
+                    participants
+                        .into_iter()
+                        .map(|p| Participant::from_raw_chat(chats, p)),
+                );
 
                 *total = Some(buffer.len());
                 Ok(buffer.len())
@@ -232,66 +146,11 @@ impl ParticipantIter {
                 let mut chats = ChatMap::new(users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
 
-                use tl::enums::ChannelParticipant as ChPart;
-
-                iter.buffer
-                    .extend(participants.into_iter().filter_map(|participant| {
-                        let (user_id, role) = match participant {
-                            ChPart::Participant(p) => (
-                                p.user_id,
-                                Role::User {
-                                    date: p.date,
-                                    inviter_id: None,
-                                },
-                            ),
-                            ChPart::ParticipantSelf(p) => (
-                                p.user_id,
-                                Role::User {
-                                    date: p.date,
-                                    inviter_id: Some(p.inviter_id),
-                                },
-                            ),
-                            ChPart::Creator(p) => (
-                                p.user_id,
-                                Role::Creator {
-                                    admin_rights: p.admin_rights.into(),
-                                    rank: p.rank,
-                                },
-                            ),
-                            ChPart::Admin(p) => (
-                                p.user_id,
-                                Role::Admin {
-                                    can_edit: p.can_edit,
-                                    inviter_id: p.inviter_id,
-                                    promoted_by: Some(p.promoted_by),
-                                    date: p.date,
-                                    admin_rights: p.admin_rights.into(),
-                                    rank: p.rank,
-                                },
-                            ),
-                            ChPart::Banned(p) => (
-                                p.user_id,
-                                Role::Banned {
-                                    left: p.left,
-                                    kicked_by: p.kicked_by,
-                                    date: p.date,
-                                    banned_rights: p.banned_rights.into(),
-                                },
-                            ),
-                            ChPart::Left(p) => (p.user_id, Role::Left),
-                        };
-                        chats
-                            .remove(&tl::types::PeerUser { user_id }.into())
-                            .and_then(|chat| {
-                                Some(Participant {
-                                    user: match chat {
-                                        Chat::User(user) => user,
-                                        _ => unreachable!(),
-                                    },
-                                    role,
-                                })
-                            })
-                    }));
+                iter.buffer.extend(
+                    participants
+                        .into_iter()
+                        .map(|p| Participant::from_raw_channel(chats, p)),
+                );
 
                 iter.total = Some(count as usize);
                 Ok(count as usize)

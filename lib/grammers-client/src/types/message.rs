@@ -6,8 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::ext::MessageMediaExt;
+use crate::utils;
 use crate::{types, ClientHandle};
-use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::io;
@@ -196,8 +196,8 @@ impl Message {
     }
 
     /// The date when this message was produced.
-    pub fn date(&self) -> DateTime<Utc> {
-        DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(self.msg.date as i64, 0), Utc)
+    pub fn date(&self) -> utils::Date {
+        utils::date(self.msg.date)
     }
 
     /// The message's text.
@@ -252,10 +252,8 @@ impl Message {
     }
 
     /// The date when this message was last edited.
-    pub fn edit_date(&self) -> Option<DateTime<Utc>> {
-        self.msg.edit_date.map(|date| {
-            DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(date as i64, 0), Utc)
-        })
+    pub fn edit_date(&self) -> Option<utils::Date> {
+        self.msg.edit_date.map(utils::date)
     }
 
     /// If this message was sent to a channel, return the name used by the author to post it.

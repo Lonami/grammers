@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::Chat;
+use crate::types::{Chat, User};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 use std::sync::Arc;
@@ -75,6 +75,15 @@ impl ChatMap {
     /// Take the full `Chat` object given its `Peer` and remove it from the map.
     pub fn remove(&mut self, peer: &tl::enums::Peer) -> Option<Chat> {
         self.map.remove(&peer.into())
+    }
+
+    pub(crate) fn remove_user(&mut self, user_id: i32) -> Option<User> {
+        self.map
+            .remove(&Peer::User(user_id))
+            .map(|chat| match chat {
+                Chat::User(user) => user,
+                _ => unreachable!(),
+            })
     }
 }
 
