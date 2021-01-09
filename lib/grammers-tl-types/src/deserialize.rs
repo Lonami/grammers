@@ -93,8 +93,9 @@ impl<'a> Cursor<'a> {
 /// The problem with being generic over `std::io::Read` is that it's
 /// fallible, but in practice, we're always going to serialize in-memory,
 /// so instead we just use a `[u8]` as our buffer.
-pub(crate) type Buffer<'a, 'b> = &'a mut Cursor<'b>;
-pub(crate) type Result<T> = std::result::Result<T, Error>;
+// TODO this is only public for session
+pub type Buffer<'a, 'b> = &'a mut Cursor<'b>;
+pub type Result<T> = std::result::Result<T, Error>;
 
 /// This trait allows for data serialized according to the
 /// [Binary Data Serialization] to be deserialized into concrete instances.

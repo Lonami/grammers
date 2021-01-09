@@ -9,7 +9,8 @@
 /// The problem with being generic over `std::io::Write` is that it's
 /// fallible, but in practice, we're always going to serialize in-memory,
 /// so instead we just use a `Vec<u8>` as our buffer.
-pub(crate) type Buffer<'a> = &'a mut Vec<u8>;
+// TODO this is only public for session
+pub type Buffer<'a> = &'a mut Vec<u8>;
 
 /// This trait allows for concrete instances to be serialized into
 /// binary data as specified by the [Binary Data Serialization].

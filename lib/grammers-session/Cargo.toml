@@ -15,3 +15,8 @@ edition = "2018"
 
 [dependencies]
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0" }
+
+[build-dependencies]
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.2.0" }
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.0.0" }

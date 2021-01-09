@@ -5,51 +5,20 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_crypto::auth_key::AuthKey;
+mod generated;
+
+pub use generated::LAYER as VERSION;
+use generated::{enums, types};
 use std::fs::{File, OpenOptions};
-use std::io::{self, BufRead, BufReader, Seek, Write};
+use std::io::{self, Read, Seek, Write};
 use std::path::Path;
 
-const CURRENT_VERSION: u32 = 1;
-
-fn parse_hex(byte: &str) -> Option<u8> {
-    match u8::from_str_radix(byte, 16) {
-        Ok(x) => Some(x),
-        Err(_) => None,
-    }
-}
-
-fn key_from_hex(hex: &str) -> Option<[u8; 256]> {
-    let mut buffer = [0; 256];
-    if hex.len() == buffer.len() * 2 {
-        for (i, byte) in buffer.iter_mut().enumerate() {
-            let i = i * 2;
-            if let Some(value) = parse_hex(&hex[i..i + 2]) {
-                *byte = value;
-            } else {
-                return None;
-            }
-        }
-
-        Some(buffer)
-    } else {
-        None
-    }
-}
-
-fn hex_from_key(key: &[u8; 256]) -> String {
-    use std::fmt::Write;
-    let mut buffer = String::with_capacity(key.len() * 2);
-    for byte in key.iter() {
-        write!(buffer, "{:02x}", byte).unwrap();
-    }
-    buffer
-}
+// Needed for auto-generated definitions.
+use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
 
 pub struct Session {
     file: File,
-    pub user_dc: Option<i32>,
-    pub auth_key: Option<AuthKey>,
+    session: types::Session,
 }
 
 impl Session {
@@ -66,73 +35,37 @@ impl Session {
     pub fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         Ok(Self {
             file: File::create(path)?,
-            user_dc: None,
-            auth_key: None,
+            session: types::Session {
+                dcs: Vec::new(),
+                user: None,
+                state: None,
+            },
         })
     }
 
     /// Load a previous session instance.
     pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut lines = BufReader::new(File::open(path.as_ref())?).lines();
-
-        // Version
-        let version: u32 = if let Some(Ok(line)) = lines.next() {
-            line.parse()
-                .map_err(|_| io::Error::new(io::ErrorKind::InvalidData, "malformed session"))?
-        } else {
-            return Err(io::Error::new(
+        let mut data = Vec::new();
+        File::open(path.as_ref())?.read_to_end(&mut data)?;
+        let enums::Session::Session(session) = enums::Session::from_bytes(&data).map_err(|_| {
+            io::Error::new(
                 io::ErrorKind::InvalidData,
-                "malformed session",
-            ));
-        };
-        if version != CURRENT_VERSION {
-            return Err(io::Error::new(
-                io::ErrorKind::InvalidData,
-                "unknown version",
-            ));
-        }
+                "malformed session or unsupported version",
+            )
+        })?;
 
-        // user_dc
-        let user_dc = if let Some(Ok(line)) = lines.next() {
-            match line.parse() {
-                Ok(x) => Some(x),
-                Err(_) => None,
-            }
-        } else {
-            None
-        };
-
-        // auth_key
-        let auth_key = if let Some(Ok(line)) = lines.next() {
-            key_from_hex(&line)
-        } else {
-            None
-        };
-
-        drop(lines);
         Ok(Self {
             file: OpenOptions::new().write(true).open(path.as_ref())?,
-            user_dc,
-            auth_key: auth_key.map(AuthKey::from_bytes),
+            session,
         })
     }
 
     /// Saves the session file.
     pub fn save(&mut self) -> io::Result<()> {
         self.file.seek(io::SeekFrom::Start(0))?;
-        writeln!(self.file, "{}", CURRENT_VERSION)?;
-
-        if let Some(dc_id) = self.user_dc {
-            writeln!(self.file, "{}", dc_id)?;
-        } else {
-            writeln!(self.file)?;
-        }
-
-        if let Some(data) = &self.auth_key {
-            writeln!(self.file, "{}", hex_from_key(&data.to_bytes()))?;
-        } else {
-            writeln!(self.file)?;
-        }
+        self.file.set_len(0)?;
+        self.file
+            .write_all(&enums::Session::Session(self.session.clone()).to_bytes())?;
         self.file.sync_data()?;
         Ok(())
     }
