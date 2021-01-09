@@ -10,12 +10,12 @@
 
 use super::ClientHandle;
 use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, User,
+    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
+    Photo, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
-use std::convert::TryInto;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -194,7 +194,7 @@ impl ParticipantIter {
 }
 
 pub enum ProfilePhotoIter {
-    User(IterBuffer<tl::functions::photos::GetUserPhotos, tl::types::Photo>),
+    User(IterBuffer<tl::functions::photos::GetUserPhotos, Photo>),
     Chat(IterBuffer<tl::functions::messages::Search, Message>),
 }
 
@@ -261,8 +261,8 @@ impl ProfilePhotoIter {
                     iter.request.offset += photos.len() as i32;
                 }
 
-                iter.buffer
-                    .extend(photos.into_iter().flat_map(|photo| photo.try_into().ok()));
+                iter.buffer.extend(photos.into_iter().map(Photo::from_raw));
+
                 Ok(total)
             }
             Self::Chat(_) => panic!("fill_buffer should not be called for Chat variant"),
@@ -273,9 +273,7 @@ impl ProfilePhotoIter {
     /// empty.
     ///
     /// Returns `None` if the `limit` is reached or there are no photos left.
-    pub async fn next(&mut self) -> Result<Option<tl::types::Photo>, InvocationError> {
-        use tl::enums::{MessageAction, Photo};
-
+    pub async fn next(&mut self) -> Result<Option<Photo>, InvocationError> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
         match self {
             Self::User(iter) => {
@@ -286,13 +284,11 @@ impl ProfilePhotoIter {
             }
             Self::Chat(iter) => {
                 while let Some(message) = iter.next().await? {
-                    if let Some(MessageAction::ChatEditPhoto(
-                        tl::types::MessageActionChatEditPhoto {
-                            photo: Photo::Photo(photo),
-                        },
+                    if let Some(tl::enums::MessageAction::ChatEditPhoto(
+                        tl::types::MessageActionChatEditPhoto { photo },
                     )) = message.action
                     {
-                        return Ok(Some(photo));
+                        return Ok(Some(Photo::from_raw(photo)));
                     } else {
                         continue;
                     }
