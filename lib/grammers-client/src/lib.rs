@@ -15,8 +15,7 @@
 //! that to users (anyone can login, including yourself and bots, with the developer API ID;
 //! they do *not* need to provide their own API ID).
 //!
-//! Once that's ready, connect a new [`Client`] and start making API calls. You may also want to
-//! import some [extension traits] to make the experience less bitter.
+//! Once that's ready, connect a new [`Client`] and start making API calls.
 //!
 //! When a method is said to be "expensive", this often means that calling it too much in a
 //! certain period of time will result in the API returning "flood wait" errors, meaning that
@@ -37,9 +36,7 @@
 //! [Telegram's API]: https://core.telegram.org/#telegram-api
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
-//! [extension traits]: crate::ext
 pub mod client;
-pub mod ext;
 mod parsers;
 pub mod types;
 pub(crate) mod utils;
