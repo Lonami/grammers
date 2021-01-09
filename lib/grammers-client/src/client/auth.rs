@@ -283,10 +283,10 @@ impl Client {
         Ok(PasswordToken::new(password))
     }
 
-    /// Sign in using two-factor authentication (user password)
+    /// Sign in using two-factor authentication (user password).
     ///
-    /// [`password_information`] can be obtained from [SignInError::PasswordRequired] error after
-    /// [`sign_in`] method.
+    /// [`PasswordToken`] can be obtained from [`SignInError::PasswordRequired`] error after the
+    /// [`Client::sign_in`] method fails.
     ///
     /// # Examples
     ///

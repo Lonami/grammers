@@ -184,6 +184,8 @@ impl ClientHandle {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// [`InputMessage`]: crate::types::InputMessage
     pub async fn upload_stream<S: AsyncRead + Unpin>(
         &mut self,
         stream: &mut S,
@@ -273,7 +275,7 @@ impl ClientHandle {
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
     ///
     /// If you need more control over the uploaded data, such as performing only a partial upload
-    /// or with a different name, use [`Client::upload_stream`] instead.
+    /// or with a different name, use [`ClientHandle::upload_stream`] instead.
     ///
     /// # Examples
     ///
