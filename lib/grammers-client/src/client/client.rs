@@ -70,6 +70,11 @@ pub(crate) enum Request {
 ///
 /// To invoke multiple requests concurrently, [`ClientHandle`] must be used instead, and this
 /// structure will coordinate all of them.
+///
+/// On drop, all state is synchronized to the session. The [`FileSession`] attempts to save the
+/// session to disk on drop as well, so everything should persist under normal operation.
+///
+/// [`FileSession`]: grammers_session::FileSession
 pub struct Client {
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
     /// Data center ID for the main sender.
