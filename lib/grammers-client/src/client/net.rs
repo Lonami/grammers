@@ -113,24 +113,25 @@ impl<S: Session> Client<S> {
     pub async fn connect(mut config: Config<S>) -> Result<Self, AuthorizationError> {
         let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
         let sender = connect_sender(dc_id, &mut config).await?;
+        let message_box = if let Some(state) = config.session.get_state() {
+            MessageBox::load(state)
+        } else {
+            MessageBox::new()
+        };
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
-        let mut client = Self {
+        // TODO maybe the session should have a `.without_update_state()`, otherwise we'll detect
+        //      gaps and catch up which users may not want
+        Ok(Self {
             sender,
             dc_id,
             config,
             handle_tx,
             handle_rx,
-            message_box: MessageBox::new(),
+            message_box,
             chat_hashes: ChatHashCache::new(),
-        };
-
-        // TODO use data saved in session instead
-        // TODO maybe the session should have a `.without_update_state()`, otherwise we'll detect
-        //      gaps and catch up which users may not want
-
-        Ok(client)
+        })
     }
 
     /// Invoke a raw API call without the need to use a [`Client::handle`] or having to repeatedly

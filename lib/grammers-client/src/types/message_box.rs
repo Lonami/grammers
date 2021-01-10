@@ -234,6 +234,29 @@ impl MessageBox {
         }
     }
 
+    pub(crate) fn load(state: UpdateState) -> Self {
+        let mut pts_map = HashMap::with_capacity(2 + state.channels.len());
+        pts_map.insert(Entry::AccountWide, state.pts);
+        pts_map.insert(Entry::SecretChats, state.qts);
+        pts_map.extend(
+            state
+                .channels
+                .iter()
+                .map(|(id, pts)| (Entry::Channel(*id), *pts)),
+        );
+
+        MessageBox {
+            getting_diff: false,
+            getting_channel_diff: HashSet::new(),
+            deadline: next_updates_deadline(),
+            date: state.date,
+            seq: state.seq,
+            pts_map: HashMap::new(),
+            possible_gap: HashMap::new(),
+            possible_gap_deadline: None,
+        }
+    }
+
     // Note: calling this method is **really** important, or we'll start fetching updates from
     // scratch.
     pub(crate) fn set_state(&mut self, state: tl::enums::updates::State) {

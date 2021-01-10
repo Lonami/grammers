@@ -56,6 +56,8 @@ pub trait Session {
 
     fn set_user(&mut self, id: i32, dc: i32, bot: bool);
 
+    fn get_state(&self) -> Option<UpdateState>;
+
     fn set_state(&mut self, state: UpdateState);
 }
 
@@ -112,6 +114,21 @@ impl Session for MemorySession {
         self.session.user = Some(types::User { id, dc, bot }.into())
     }
 
+    fn get_state(&self) -> Option<UpdateState> {
+        let enums::UpdateState::State(state) = self.session.state.as_ref()?;
+        Some(UpdateState {
+            pts: state.pts,
+            qts: state.qts,
+            date: state.date,
+            seq: state.seq,
+            channels: state
+                .channels
+                .iter()
+                .map(|enums::ChannelState::State(s)| (s.channel_id, s.pts))
+                .collect(),
+        })
+    }
+
     fn set_state(&mut self, state: UpdateState) {
         self.session.state = Some(
             types::UpdateState {
@@ -145,6 +162,10 @@ impl Session for FileSession {
 
     fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
         self.session.set_user(id, dc, bot)
+    }
+
+    fn get_state(&self) -> Option<UpdateState> {
+        self.session.get_state()
     }
 
     fn set_state(&mut self, state: UpdateState) {
