@@ -21,18 +21,14 @@ enum RightsChat {
     Unsupported,
 }
 
-impl From<Chat> for RightsChat {
-    fn from(chat: Chat) -> Self {
-        match chat {
-            Chat::Channel(chan) => RightsChat::Channel(chan.to_input()),
-            Chat::Group(_) => {
-                if let Some(id) = chat.to_chat_id() {
-                    RightsChat::Group(id)
-                } else {
-                    RightsChat::Unsupported
-                }
-            }
-            _ => RightsChat::Unsupported,
+impl RightsChat {
+    fn new(chat: &Chat) -> Self {
+        if let Some(channel) = chat.to_input_channel() {
+            RightsChat::Channel(channel)
+        } else if let Some(id) = chat.to_chat_id() {
+            RightsChat::Group(id)
+        } else {
+            RightsChat::Unsupported
         }
     }
 }
@@ -52,7 +48,7 @@ impl AdminRightsBuilder {
     pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            chat: chat.clone().into(),
+            chat: RightsChat::new(chat),
             user: user.to_input(),
             rank: "".into(),
             rights: tl::types::ChatAdminRights {
@@ -207,7 +203,8 @@ impl AdminRightsBuilder {
 
 /// Builder for editing the rights of a non-admin user in a specific chat.
 ///
-/// Only kick is supported for normal groups (disallow view_message to kick)
+/// Certain groups (small group chats) only allow banning (disallow `view_messages`). Trying to
+/// disallow other permissions in these groups will fail.
 ///
 /// Use [`ClientHandle::set_banned_rights`] to retrieve an instance of this type.
 pub struct BannedRightsBuilder {
@@ -221,7 +218,7 @@ impl BannedRightsBuilder {
     pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            chat: chat.clone().into(),
+            chat: RightsChat::new(chat),
             user: user.to_input(),
             rights: tl::types::ChatBannedRights {
                 view_messages: false,

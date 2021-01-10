@@ -496,8 +496,9 @@ impl ClientHandle {
     /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
     /// type to learn more about what rights can be given to administrators.
     ///
-    /// Nothing is done until build().await is called on the returned instance, at which point it might result in
-    /// error if you do not have sufficient permissions to grant those rights to the other user.
+    /// Nothing is done until the call to [`AdminRightsBuilder::build`] is awaited, at which point
+    /// it might result in error if you do not have sufficient permissions to grant those rights
+    /// to the other user.
     ///
     /// By default, no permissions are granted, and you need to specify those you want to grant by
     /// setting the permissions to `true`. This means that not granting any permission will turn
