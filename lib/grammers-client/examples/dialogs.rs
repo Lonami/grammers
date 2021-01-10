@@ -11,7 +11,7 @@
 //! ```
 
 use grammers_client::{Client, Config, SignInError};
-use grammers_session::Session;
+use grammers_session::FileSession;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;
@@ -45,7 +45,7 @@ async fn async_main() -> Result<()> {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: Session::load_or_create("dialogs.session")?,
+        session: FileSession::load_or_create("dialogs.session")?,
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
@@ -75,6 +75,7 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!(e),
         };
         println!("Signed in!");
+        drop(client.session().save());
     }
 
     // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.

@@ -11,7 +11,7 @@
 //! ```
 
 use grammers_client::{Client, ClientHandle, Config, Update, UpdateIter};
-use grammers_session::Session;
+use grammers_session::FileSession;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;
@@ -46,7 +46,7 @@ async fn async_main() -> Result {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: Session::load_or_create("echo.session")?,
+        session: FileSession::load_or_create("echo.session")?,
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
