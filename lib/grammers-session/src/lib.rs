@@ -10,7 +10,9 @@ mod generated;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_crypto::auth_key::AuthKey;
+use grammers_tl_types::deserialize::Error as DeserializeError;
 use std::collections::HashMap;
+use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::net::Ipv4Addr;
@@ -18,11 +20,6 @@ use std::path::Path;
 
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
-
-pub struct Session {
-    file: File,
-    pub session: types::Session,
-}
 
 pub struct UpdateState {
     pub pts: i32,
@@ -32,65 +29,44 @@ pub struct UpdateState {
     pub channels: HashMap<i32, i32>,
 }
 
-impl Session {
-    /// Loads or creates a new session file.
-    pub fn load_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        if let Ok(instance) = Self::load(path.as_ref()) {
-            Ok(instance)
-        } else {
-            Self::create(path)
-        }
-    }
+pub struct MemorySession {
+    session: types::Session,
+}
 
-    /// Create a new session instance.
-    pub fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        Ok(Self {
-            file: File::create(path)?,
-            session: types::Session {
-                dcs: Vec::new(),
-                user: None,
-                state: None,
-            },
-        })
-    }
+pub struct FileSession {
+    file: File,
+    session: MemorySession,
+}
 
-    /// Load a previous session instance.
-    pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut data = Vec::new();
-        File::open(path.as_ref())?.read_to_end(&mut data)?;
-        let enums::Session::Session(session) = enums::Session::from_bytes(&data).map_err(|_| {
-            io::Error::new(
-                io::ErrorKind::InvalidData,
-                "malformed session or unsupported version",
-            )
-        })?;
+#[derive(Debug)]
+pub enum Error {
+    MalformedData,
+    UnsupportedVersion,
+}
 
-        Ok(Self {
-            file: OpenOptions::new().write(true).open(path.as_ref())?,
-            session,
-        })
-    }
-
-    /// Saves the session file.
-    pub fn save(&mut self) -> io::Result<()> {
-        self.file.seek(io::SeekFrom::Start(0))?;
-        self.file.set_len(0)?;
-        self.file
-            .write_all(&enums::Session::Session(self.session.clone()).to_bytes())?;
-        self.file.sync_data()?;
-        Ok(())
-    }
-
+pub trait Session {
     /// User's home datacenter ID, if known.
-    pub fn user_dc(&self) -> Option<i32> {
+    fn user_dc(&self) -> Option<i32>;
+
+    /// Authorization key data for the given datacenter ID, if any.
+    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey>;
+
+    fn insert_dc(&mut self, id: i32, ipv4_port: (Ipv4Addr, u16), auth: &AuthKey);
+
+    fn set_user(&mut self, id: i32, dc: i32, bot: bool);
+
+    fn set_state(&mut self, state: UpdateState);
+}
+
+impl Session for MemorySession {
+    fn user_dc(&self) -> Option<i32> {
         self.session
             .user
             .as_ref()
             .map(|enums::User::User(user)| user.dc)
     }
 
-    /// Authorization key data for the given datacenter ID, if any.
-    pub fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
+    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
         self.session
             .dcs
             .iter()
@@ -110,7 +86,7 @@ impl Session {
             .next()
     }
 
-    pub fn insert_dc(&mut self, id: i32, (ipv4, port): (Ipv4Addr, u16), auth: &AuthKey) {
+    fn insert_dc(&mut self, id: i32, (ipv4, port): (Ipv4Addr, u16), auth: &AuthKey) {
         if let Some(pos) = self
             .session
             .dcs
@@ -131,11 +107,11 @@ impl Session {
         );
     }
 
-    pub fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
+    fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
         self.session.user = Some(types::User { id, dc, bot }.into())
     }
 
-    pub fn set_state(&mut self, state: UpdateState) {
+    fn set_state(&mut self, state: UpdateState) {
         self.session.state = Some(
             types::UpdateState {
                 pts: state.pts,
@@ -152,3 +128,104 @@ impl Session {
         )
     }
 }
+
+impl Session for FileSession {
+    fn user_dc(&self) -> Option<i32> {
+        self.session.user_dc()
+    }
+
+    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
+        self.session.dc_auth_key(dc_id)
+    }
+
+    fn insert_dc(&mut self, id: i32, ipv4_port: (Ipv4Addr, u16), auth: &AuthKey) {
+        self.session.insert_dc(id, ipv4_port, auth)
+    }
+
+    fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
+        self.session.set_user(id, dc, bot)
+    }
+
+    fn set_state(&mut self, state: UpdateState) {
+        self.session.set_state(state)
+    }
+}
+
+impl MemorySession {
+    pub fn new() -> Self {
+        Self {
+            session: types::Session {
+                dcs: Vec::new(),
+                user: None,
+                state: None,
+            },
+        }
+    }
+
+    pub fn load(data: &[u8]) -> Result<Self, Error> {
+        Ok(Self {
+            session: enums::Session::from_bytes(&data)
+                .map_err(|e| match e {
+                    DeserializeError::UnexpectedEof => Error::MalformedData,
+                    DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
+                })?
+                .into(),
+        })
+    }
+
+    pub fn save(&self) -> Vec<u8> {
+        self.session.to_bytes()
+    }
+}
+
+impl FileSession {
+    /// Loads or creates a new session file.
+    pub fn load_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        if let Ok(instance) = Self::load(path.as_ref()) {
+            Ok(instance)
+        } else {
+            Self::create(path)
+        }
+    }
+
+    /// Create a new session instance.
+    pub fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        Ok(Self {
+            file: File::create(path)?,
+            session: MemorySession::new(),
+        })
+    }
+
+    /// Load a previous session instance.
+    pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let mut data = Vec::new();
+        File::open(path.as_ref())?.read_to_end(&mut data)?;
+        let session = MemorySession::load(&data)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        Ok(Self {
+            file: OpenOptions::new().write(true).open(path.as_ref())?,
+            session,
+        })
+    }
+
+    /// Saves the session file.
+    pub fn save(&mut self) -> io::Result<()> {
+        self.file.seek(io::SeekFrom::Start(0))?;
+        self.file.set_len(0)?;
+        self.file.write_all(&self.session.save())?;
+        self.file.sync_data()?;
+        Ok(())
+    }
+}
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Error::MalformedData => write!(f, "malformed data"),
+            Error::UnsupportedVersion => write!(f, "unsupported version"),
+        }
+    }
+}
+
+impl std::error::Error for Error {}
