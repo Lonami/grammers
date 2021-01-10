@@ -10,6 +10,7 @@ mod generated;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_crypto::auth_key::AuthKey;
+use std::collections::HashMap;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::net::Ipv4Addr;
@@ -21,6 +22,14 @@ use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Se
 pub struct Session {
     file: File,
     pub session: types::Session,
+}
+
+pub struct UpdateState {
+    pub pts: i32,
+    pub qts: i32,
+    pub date: i32,
+    pub seq: i32,
+    pub channels: HashMap<i32, i32>,
 }
 
 impl Session {
@@ -124,5 +133,22 @@ impl Session {
 
     pub fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
         self.session.user = Some(types::User { id, dc, bot }.into())
+    }
+
+    pub fn set_state(&mut self, state: UpdateState) {
+        self.session.state = Some(
+            types::UpdateState {
+                pts: state.pts,
+                qts: state.qts,
+                date: state.date,
+                seq: state.seq,
+                channels: state
+                    .channels
+                    .into_iter()
+                    .map(|(channel_id, pts)| types::ChannelState { channel_id, pts }.into())
+                    .collect(),
+            }
+            .into(),
+        )
     }
 }
