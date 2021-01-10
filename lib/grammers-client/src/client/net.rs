@@ -10,6 +10,7 @@ use super::{Client, ClientHandle, Config, Request, Step};
 use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
+use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::net::Ipv4Addr;
@@ -21,7 +22,7 @@ use tokio::sync::{mpsc, oneshot};
 /// The addresses were obtained from the `static` addresses through a call to
 /// `functions::help::GetConfig`.
 const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
-    (Ipv4Addr::new(149, 154, 167, 51), 443), // default (2)
+    (Ipv4Addr::new(0, 0, 0, 0), 0),
     (Ipv4Addr::new(149, 154, 175, 53), 443),
     (Ipv4Addr::new(149, 154, 167, 51), 443),
     (Ipv4Addr::new(149, 154, 175, 100), 443),
@@ -29,20 +30,22 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
     (Ipv4Addr::new(91, 108, 56, 190), 443),
 ];
 
-pub(crate) async fn connect_sender(
+const DEFAULT_DC: i32 = 2;
+
+pub(crate) async fn connect_sender<S: Session>(
     dc_id: i32,
-    config: &mut Config,
+    config: &mut Config<S>,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
     let addr = DC_ADDRESSES[dc_id as usize];
 
-    let mut sender = if let Some(auth_key) = config.session.auth_key.as_ref() {
+    let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
         info!(
             "creating a new sender with existing auth key to dc {} {:?}",
             dc_id, addr
         );
-        sender::connect_with_auth(transport, addr, auth_key.clone()).await?
+        sender::connect_with_auth(transport, addr, auth_key).await?
     } else {
         info!(
             "creating a new sender and auth key in dc {} {:?}",
@@ -50,8 +53,7 @@ pub(crate) async fn connect_sender(
         );
         let sender = sender::connect(transport, addr).await?;
 
-        config.session.auth_key = Some(sender.auth_key().clone());
-        config.session.save()?;
+        config.session.insert_dc(dc_id, addr, &sender.auth_key());
         sender
     };
 
@@ -75,15 +77,11 @@ pub(crate) async fn connect_sender(
         })
         .await?;
 
-    // TODO use the dc id from the config as "this dc", not the input dc id
-    config.session.user_dc = Some(dc_id);
-    config.session.save()?;
-
     Ok(sender)
 }
 
 /// Method implementations directly related with network connectivity.
-impl Client {
+impl<S: Session> Client<S> {
     /// Creates and returns a new client instance upon successful connection to Telegram.
     ///
     /// If the session in the configuration did not have an authorization key, a new one
@@ -112,13 +110,15 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let sender = connect_sender(config.session.user_dc.unwrap_or(0), &mut config).await?;
+    pub async fn connect(mut config: Config<S>) -> Result<Self, AuthorizationError> {
+        let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
+        let sender = connect_sender(dc_id, &mut config).await?;
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
         let mut client = Self {
             sender,
+            dc_id,
             config,
             handle_tx,
             handle_rx,

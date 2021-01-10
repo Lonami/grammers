@@ -8,12 +8,14 @@
 use super::net::connect_sender;
 use super::Client;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
+use crate::utils;
+use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::fmt;
-
-use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
+use std::io;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -25,6 +27,7 @@ pub enum SignInError {
     InvalidCode,
     InvalidPassword,
     Other(InvocationError),
+    SaveFailed(io::Error),
 }
 
 impl fmt::Display for SignInError {
@@ -38,6 +41,7 @@ impl fmt::Display for SignInError {
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
+            SaveFailed(e) => write!(f, "sign in error: saving session failed: {}", e),
         }
     }
 }
@@ -48,7 +52,7 @@ impl std::error::Error for SignInError {}
 ///
 /// Most requests to the API require the user to have authorized their key, stored in the session,
 /// before being able to use them.
-impl Client {
+impl<S: Session> Client<S> {
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
     ///
@@ -76,9 +80,22 @@ impl Client {
         }
     }
 
+    fn complete_login(&mut self, auth: tl::types::auth::Authorization) -> io::Result<User> {
+        let user = User::from_raw(auth.user);
+        self.config
+            .session
+            .set_user(user.id(), self.dc_id, user.bot());
+
+        Ok(user)
+    }
+
     /// Signs in to the bot account associated with this token.
     ///
     /// This is the method you need to call to use the client under a bot account.
+    ///
+    /// It is recommended to save the [`Client::session()`] on successful login, and if saving
+    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
+    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
     ///
     /// # Examples
     ///
@@ -123,15 +140,18 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.config.session.auth_key = None;
-                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                let dc_id = value.unwrap() as i32;
+                self.sender = connect_sender(dc_id, &mut self.config).await?;
+                self.dc_id = dc_id;
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
         };
 
         match result {
-            tl::enums::auth::Authorization::Authorization(x) => Ok(User::from_raw(x.user)),
+            tl::enums::auth::Authorization::Authorization(x) => {
+                self.complete_login(x).map_err(Into::into)
+            }
             tl::enums::auth::Authorization::SignUpRequired(_) => {
                 panic!("API returned SignUpRequired even though we're logging in as a bot");
             }
@@ -194,8 +214,9 @@ impl Client {
                 //
                 // Just connect and generate a new authorization key with it
                 // before trying again.
-                self.config.session.auth_key = None;
-                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                let dc_id = value.unwrap() as i32;
+                self.sender = connect_sender(dc_id, &mut self.config).await?;
+                self.dc_id = dc_id;
                 self.invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
@@ -211,6 +232,10 @@ impl Client {
     ///
     /// You must call [`Client::request_login_code`] before using this method in order to obtain
     /// necessary login token, and also have asked the user for the login code.
+    ///
+    /// It is recommended to save the [`Client::session()`] on successful login, and if saving
+    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
+    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
     ///
     /// # Examples
     ///
@@ -251,7 +276,9 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(SignInError::SaveFailed)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
                 Err(SignInError::SignUpRequired {
                     terms_of_service: x.terms_of_service.map(TermsOfService::from_raw),
@@ -330,17 +357,17 @@ impl Client {
     ) -> Result<User, SignInError> {
         let mut password_info = password_token.password;
         let current_algo = password_info.current_algo.unwrap();
-        let mut params = Client::extract_password_parameters(&current_algo);
+        let mut params = utils::extract_password_parameters(&current_algo);
 
         // Telegram sent us incorrect parameters, trying to get them again
         if !check_p_and_g(params.2, params.3) {
             password_info = self
                 .get_password_information()
                 .await
-                .map_err(SignInError::Other)?
+                .map_err(|err| SignInError::Other(err.into()))?
                 .password;
             params =
-                Client::extract_password_parameters(password_info.current_algo.as_ref().unwrap());
+                utils::extract_password_parameters(password_info.current_algo.as_ref().unwrap());
             if !check_p_and_g(params.2, params.3) {
                 panic!("Failed to get correct password information from Telegram")
             }
@@ -362,7 +389,9 @@ impl Client {
         };
 
         match self.invoke(&check_password).await {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(SignInError::SaveFailed)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
                 Err(SignInError::InvalidPassword)
@@ -371,21 +400,15 @@ impl Client {
         }
     }
 
-    fn extract_password_parameters(
-        current_algo: &tl::enums::PasswordKdfAlgo,
-    ) -> (&Vec<u8>, &Vec<u8>, &i32, &Vec<u8>) {
-        let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match current_algo {
-            tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
-            tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
-        };
-        (salt1, salt2, g, p)
-    }
-
     /// Signs up a new user account to Telegram.
     ///
     /// This method should be used after [`Client::sign_in`] fails with
     /// [`SignInError::SignUpRequired`]. This is also the only way to know if a certain phone
     /// number is already reigstered on Telegram or not, by trying and failing to login.
+    ///
+    /// It is recommended to save the [`Client::session()`] on successful sign up, and if saving
+    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
+    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
     ///
     /// # Examples
     ///
@@ -424,7 +447,7 @@ impl Client {
         token: &LoginToken,
         first_name: &str,
         last_name: &str,
-    ) -> Result<User, InvocationError> {
+    ) -> Result<User, AuthorizationError> {
         // TODO accept tos? maybe accept method in the tos object?
         match self
             .invoke(&tl::functions::auth::SignUp {
@@ -435,11 +458,13 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(Into::into)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
                 panic!("API returned SignUpRequired even though we just invoked SignUp");
             }
-            Err(error) => Err(error),
+            Err(error) => Err(error.into()),
         }
     }
 
@@ -469,5 +494,15 @@ impl Client {
     /// [`ClientHandle::disconnect`]: crate::ClientHandle::disconnect
     pub async fn sign_out(&mut self) -> Result<bool, InvocationError> {
         self.invoke(&tl::functions::auth::LogOut {}).await
+    }
+
+    /// Synchronize all state to the session file and provide mutable access to it.
+    ///
+    /// You can use this to temporarily access the session and save it wherever you want to.
+    ///
+    /// Panics if the type parameter does not match the actual session type.
+    pub fn session(&mut self) -> &mut S {
+        self.sync_update_state();
+        &mut self.config.session
     }
 }

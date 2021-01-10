@@ -19,10 +19,10 @@ const DEFAULT_LOCALE: &str = "en";
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
-pub struct Config {
+pub struct Config<S: Session> {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: Session,
+    pub session: S,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -68,9 +68,15 @@ pub(crate) enum Request {
 ///
 /// To invoke multiple requests concurrently, [`ClientHandle`] must be used instead, and this
 /// structure will coordinate all of them.
-pub struct Client {
+///
+/// On drop, all state is synchronized to the session. The [`FileSession`] attempts to save the
+/// session to disk on drop as well, so everything should persist under normal operation.
+///
+/// [`FileSession`]: grammers_session::FileSession
+pub struct Client<S: Session> {
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
-    pub(crate) config: Config,
+    pub(crate) dc_id: i32,
+    pub(crate) config: Config<S>,
     pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
     pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
     pub(crate) message_box: MessageBox,
@@ -117,5 +123,11 @@ impl Default for InitParams {
             system_lang_code,
             lang_code,
         }
+    }
+}
+
+impl<S: Session> Drop for Client<S> {
+    fn drop(&mut self) {
+        self.sync_update_state();
     }
 }

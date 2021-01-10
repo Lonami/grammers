@@ -136,4 +136,9 @@ impl User {
         // TODO if is_self is false, check in chat cache if id == ourself
         self.0.is_self
     }
+
+    /// Is this user represent a bot account?
+    pub fn bot(&self) -> bool {
+        self.0.bot
+    }
 }

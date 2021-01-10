@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::ChatHashCache;
+pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
@@ -691,6 +692,24 @@ impl MessageBox {
     /// When this deadline is met, it means that get difference needs to be called.
     pub(crate) fn timeout_deadline(&self) -> Instant {
         self.possible_gap_deadline.unwrap_or(self.deadline)
+    }
+
+    /// Return the current state in a format that sessions understand.
+    pub(crate) fn session_state(&self) -> UpdateState {
+        UpdateState {
+            pts: *self.pts_map.get(&Entry::AccountWide).unwrap_or(&0),
+            qts: *self.pts_map.get(&Entry::SecretChats).unwrap_or(&0),
+            date: self.date,
+            seq: self.seq,
+            channels: self
+                .pts_map
+                .iter()
+                .filter_map(|(key, pts)| match key {
+                    Entry::Channel(id) => Some((*id, *pts)),
+                    _ => None,
+                })
+                .collect(),
+        }
     }
 }
 

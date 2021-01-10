@@ -11,6 +11,8 @@
 use super::{Client, ClientHandle, Step};
 use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::Session;
+pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::sync::Arc;
@@ -50,7 +52,7 @@ impl Iterator for UpdateIter {
     }
 }
 
-impl Client {
+impl<S: Session> Client<S> {
     /// Returns an iterator with the last updates and some of the chats used in them
     /// in a map for easy access.
     ///
@@ -122,5 +124,12 @@ impl Client {
             updates,
             ChatMap::new(users, chats),
         ))
+    }
+
+    /// Synchronize the updates state to the session.
+    pub fn sync_update_state(&mut self) {
+        self.config
+            .session
+            .set_state(self.message_box.session_state())
     }
 }
