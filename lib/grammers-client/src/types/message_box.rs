@@ -690,9 +690,9 @@ impl MessageBox {
                         "gap on update for {:?} (local {:?}, count {:?}, remote {:?})",
                         pts.entry, local_pts, pts.pts_count, pts.pts
                     );
+                    // TODO store chats too?
+                    self.possible_gap.entry(pts.entry).or_default().push(update);
                     if self.possible_gap_deadline.is_none() {
-                        // TODO store chats too?
-                        self.possible_gap.entry(pts.entry).or_default().push(update);
                         self.possible_gap_deadline = Some(Instant::now() + POSSIBLE_GAP_TIMEOUT);
                     }
                     return None;
