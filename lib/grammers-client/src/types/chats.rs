@@ -10,15 +10,9 @@ use crate::ClientHandle;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::{
-    future::Future,
     mem::drop,
-    pin::Pin,
-    task::{Context, Poll},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
-
-type FutOutput = Result<(), InvocationError>;
-type FutStore = Pin<Box<dyn Future<Output = FutOutput> + Send>>;
 
 /// Builder for editing the administrator rights of a user in a specific channel.
 ///
@@ -29,25 +23,6 @@ pub struct AdminRightsBuilder {
     user: tl::enums::InputUser,
     rights: tl::types::ChatAdminRights,
     rank: String,
-    fut: Option<FutStore>,
-}
-
-impl Future for AdminRightsBuilder {
-    type Output = FutOutput;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<FutOutput> {
-        if self.fut.is_none() {
-            let call = tl::functions::channels::EditAdmin {
-                channel: self.channel.clone(),
-                user_id: self.user.clone(),
-                admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),
-                rank: self.rank.clone(),
-            };
-            let mut c = self.client.clone();
-            self.fut = Some(Box::pin(async move { c.invoke(&call).await.map(drop) }));
-        }
-        Future::poll(self.fut.as_mut().unwrap().as_mut(), cx)
-    }
 }
 
 impl AdminRightsBuilder {
@@ -69,7 +44,6 @@ impl AdminRightsBuilder {
                 add_admins: false,
                 manage_call: false,
             },
-            fut: None,
         }
     }
 
@@ -180,6 +154,17 @@ impl AdminRightsBuilder {
         self.rank = val.into();
         self
     }
+
+    /// Finalize the builder
+    pub async fn build(&mut self) -> Result<(), InvocationError> {
+        let call = tl::functions::channels::EditAdmin {
+            channel: self.channel.clone(),
+            user_id: self.user.clone(),
+            admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),
+            rank: self.rank.clone(),
+        };
+        self.client.invoke(&call).await.map(drop)
+    }
 }
 
 /// Builder for editing the rights of a non-admin user in a specific channel.
@@ -190,24 +175,6 @@ pub struct BannedRightsBuilder {
     channel: tl::enums::InputChannel,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
-    fut: Option<FutStore>,
-}
-
-impl Future for BannedRightsBuilder {
-    type Output = FutOutput;
-
-    fn poll(mut self: Pin<&mut Self>, cx: &mut Context) -> Poll<FutOutput> {
-        if self.fut.is_none() {
-            let call = tl::functions::channels::EditBanned {
-                channel: self.channel.clone(),
-                user_id: self.user.clone(),
-                banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
-            };
-            let mut c = self.client.clone();
-            self.fut = Some(Box::pin(async move { c.invoke(&call).await.map(drop) }));
-        }
-        Future::poll(self.fut.as_mut().unwrap().as_mut(), cx)
-    }
 }
 
 impl BannedRightsBuilder {
@@ -231,7 +198,6 @@ impl BannedRightsBuilder {
                 pin_messages: false,
                 until_date: 0,
             },
-            fut: None,
         }
     }
 
@@ -356,5 +322,15 @@ impl BannedRightsBuilder {
             + val.as_secs() as i32;
 
         self
+    }
+
+    /// Finalize the builder
+    pub async fn build(&mut self) -> Result<(), InvocationError> {
+        let call = tl::functions::channels::EditBanned {
+            channel: self.channel.clone(),
+            user_id: self.user.clone(),
+            banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
+        };
+        self.client.invoke(&call).await.map(drop)
     }
 }
