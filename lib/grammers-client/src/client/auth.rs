@@ -15,7 +15,6 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::fmt;
-use std::io;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -27,7 +26,6 @@ pub enum SignInError {
     InvalidCode,
     InvalidPassword,
     Other(InvocationError),
-    SaveFailed(io::Error),
 }
 
 impl fmt::Display for SignInError {
@@ -41,7 +39,6 @@ impl fmt::Display for SignInError {
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
-            SaveFailed(e) => write!(f, "sign in error: saving session failed: {}", e),
         }
     }
 }
@@ -80,11 +77,25 @@ impl<S: Session> Client<S> {
         }
     }
 
-    fn complete_login(&mut self, auth: tl::types::auth::Authorization) -> io::Result<User> {
+    async fn complete_login(
+        &mut self,
+        auth: tl::types::auth::Authorization,
+    ) -> Result<User, InvocationError> {
         let user = User::from_raw(auth.user);
         self.config
             .session
             .set_user(user.id(), self.dc_id, user.bot());
+
+        match self.invoke(&tl::functions::updates::GetState {}).await {
+            Ok(state) => {
+                self.message_box.set_state(state);
+                self.sync_update_state();
+            }
+            Err(_) => {
+                // In the extremely rare case where this happens, there's not much we can do.
+                // `message_box` will try to correct its state as updates arrive.
+            }
+        }
 
         Ok(user)
     }
@@ -150,7 +161,7 @@ impl<S: Session> Client<S> {
 
         match result {
             tl::enums::auth::Authorization::Authorization(x) => {
-                self.complete_login(x).map_err(Into::into)
+                self.complete_login(x).await.map_err(Into::into)
             }
             tl::enums::auth::Authorization::SignUpRequired(_) => {
                 panic!("API returned SignUpRequired even though we're logging in as a bot");
@@ -277,7 +288,7 @@ impl<S: Session> Client<S> {
             .await
         {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                self.complete_login(x).map_err(SignInError::SaveFailed)
+                self.complete_login(x).await.map_err(SignInError::Other)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
                 Err(SignInError::SignUpRequired {
@@ -390,7 +401,7 @@ impl<S: Session> Client<S> {
 
         match self.invoke(&check_password).await {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                self.complete_login(x).map_err(SignInError::SaveFailed)
+                self.complete_login(x).await.map_err(SignInError::Other)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
@@ -459,7 +470,7 @@ impl<S: Session> Client<S> {
             .await
         {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                self.complete_login(x).map_err(Into::into)
+                self.complete_login(x).await.map_err(Into::into)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
                 panic!("API returned SignUpRequired even though we just invoked SignUp");
