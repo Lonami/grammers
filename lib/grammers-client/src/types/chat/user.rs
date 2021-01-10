@@ -29,6 +29,7 @@ impl fmt::Debug for User {
     }
 }
 
+// TODO: photo, status
 impl User {
     pub(crate) fn from_raw(user: tl::enums::User) -> Self {
         Self(match user {
@@ -137,8 +138,95 @@ impl User {
         self.0.is_self
     }
 
-    /// Is this user represent a bot account?
-    pub fn bot(&self) -> bool {
+    /// Whether the user is a contact
+    pub fn contact(&self) -> bool {
+        self.0.contact
+    }
+
+    /// Whether the user is a mutual contact
+    pub fn mutual_contact(&self) -> bool {
+        self.0.mutual_contact
+    }
+
+    /// Whether the account of this user was deleted
+    pub fn deleted(&self) -> bool {
+        self.0.deleted
+    }
+
+    /// Whether the user is a bot
+    pub fn is_bot(&self) -> bool {
         self.0.bot
+    }
+
+    /// Can the bot see all messages in groups
+    pub fn bot_chat_history(&self) -> bool {
+        self.0.bot_chat_history
+    }
+
+    /// Can the bot be added to groups
+    pub fn bot_nochats(&self) -> bool {
+        self.0.bot_nochats
+    }
+
+    /// Whether this user is verified
+    pub fn verified(&self) -> bool {
+        self.0.verified
+    }
+
+    /// Whether the user has some restrictions on their account
+    pub fn restricted(&self) -> bool {
+        self.0.restricted
+    }
+
+    /// See https://core.telegram.org/api/min
+    pub fn min(&self) -> bool {
+        self.0.min
+    }
+
+    /// Whether the bot can request geo location in inline mode
+    pub fn bot_inline_geo(&self) -> bool {
+        self.0.bot_inline_geo
+    }
+
+    /// Whether the user is an official support account
+    pub fn support(&self) -> bool {
+        self.0.support
+    }
+
+    /// Whether the user is flagged as a scammmer
+    pub fn scam(&self) -> bool {
+        self.0.scam
+    }
+
+    /// Profile picture of the user is not available but possibly exists
+    pub fn apply_min_photo(&self) -> bool {
+        self.0.apply_min_photo
+    }
+
+    /// The reason(s) why this user is restricted, if any
+    pub fn restriction_reason(&self) -> Option<Vec<&str>> {
+        if let Some(reasons) = &self.0.restriction_reason {
+            Some(
+                reasons
+                    .iter()
+                    .map(|r| {
+                        let tl::enums::RestrictionReason::Reason(reason) = r;
+                        reason.reason.as_str() // Should we use reason.text?
+                    })
+                    .collect(),
+            )
+        } else {
+            None
+        }
+    }
+
+    /// Inline placeholder of inline bot, if it exists
+    pub fn bot_inline_placeholder(&self) -> Option<&str> {
+        self.0.bot_inline_placeholder.as_deref()
+    }
+
+    /// Language code of the user, if any
+    pub fn lang_code(&self) -> Option<&str> {
+        self.0.lang_code.as_deref()
     }
 }

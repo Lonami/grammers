@@ -84,7 +84,7 @@ impl<S: Session> Client<S> {
         let user = User::from_raw(auth.user);
         self.config
             .session
-            .set_user(user.id(), self.dc_id, user.bot());
+            .set_user(user.id(), self.dc_id, user.is_bot());
 
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(state) => {
