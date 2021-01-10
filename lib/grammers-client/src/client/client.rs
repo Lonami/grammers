@@ -19,12 +19,10 @@ const DEFAULT_LOCALE: &str = "en";
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
-pub struct Config {
+pub struct Config<S: Session> {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    // Using `Box<dyn ...>` and not a type parameter for simplicity.
-    // Access to the session is uncommon, so it's unlikely to affect performance.
-    pub session: Box<dyn Session>,
+    pub session: S,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -75,11 +73,10 @@ pub(crate) enum Request {
 /// session to disk on drop as well, so everything should persist under normal operation.
 ///
 /// [`FileSession`]: grammers_session::FileSession
-pub struct Client {
+pub struct Client<S: Session> {
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
-    /// Data center ID for the main sender.
     pub(crate) dc_id: i32,
-    pub(crate) config: Config,
+    pub(crate) config: Config<S>,
     pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
     pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
     pub(crate) message_box: MessageBox,
@@ -129,7 +126,7 @@ impl Default for InitParams {
     }
 }
 
-impl Drop for Client {
+impl<S: Session> Drop for Client<S> {
     fn drop(&mut self) {
         self.sync_update_state();
     }
