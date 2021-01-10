@@ -11,6 +11,7 @@ pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_crypto::auth_key::AuthKey;
 use grammers_tl_types::deserialize::Error as DeserializeError;
+use log::warn;
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
@@ -216,6 +217,15 @@ impl FileSession {
         self.file.write_all(&self.session.save())?;
         self.file.sync_data()?;
         Ok(())
+    }
+}
+
+impl Drop for FileSession {
+    fn drop(&mut self) {
+        match self.save() {
+            Ok(_) => {}
+            Err(e) => warn!("failed to save session on drop: {}", e),
+        }
     }
 }
 
