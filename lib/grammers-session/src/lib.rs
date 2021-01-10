@@ -175,7 +175,7 @@ impl MemorySession {
     }
 
     pub fn save(&self) -> Vec<u8> {
-        self.session.to_bytes()
+        enums::Session::Session(self.session.clone()).to_bytes()
     }
 }
 
