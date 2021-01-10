@@ -121,3 +121,9 @@ impl Default for InitParams {
         }
     }
 }
+
+impl Drop for Client {
+    fn drop(&mut self) {
+        self.sync_update_state();
+    }
+}
