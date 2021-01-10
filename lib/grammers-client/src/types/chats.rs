@@ -7,6 +7,7 @@
 // except according to those terms.
 use crate::types::{Chat, User};
 use crate::ClientHandle;
+use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::{
@@ -14,12 +15,34 @@ use std::{
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
 
-/// Builder for editing the administrator rights of a user in a specific channel.
+enum RightsChat {
+    Channel(tl::enums::InputChannel),
+    Group(i32),
+    Unsupported,
+}
+
+impl From<Chat> for RightsChat {
+    fn from(chat: Chat) -> Self {
+        match chat {
+            Chat::Channel(chan) => RightsChat::Channel(chan.to_input()),
+            Chat::Group(_) => {
+                if let Some(id) = chat.to_chat_id() {
+                    RightsChat::Group(id)
+                } else {
+                    RightsChat::Unsupported
+                }
+            }
+            _ => RightsChat::Unsupported,
+        }
+    }
+}
+
+/// Builder for editing the administrator rights of a user in a specific chat.
 ///
 /// Use [`ClientHandle::set_admin_rights`] to retrieve an instance of this type.
 pub struct AdminRightsBuilder {
     client: ClientHandle,
-    channel: tl::enums::InputChannel,
+    chat: RightsChat,
     user: tl::enums::InputUser,
     rights: tl::types::ChatAdminRights,
     rank: String,
@@ -29,7 +52,7 @@ impl AdminRightsBuilder {
     pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            channel: chat.to_input_channel().unwrap(),
+            chat: chat.clone().into(),
             user: user.to_input(),
             rank: "".into(),
             rights: tl::types::ChatAdminRights {
@@ -50,10 +73,15 @@ impl AdminRightsBuilder {
     /// Load the current rights of the user. This lets you trivially grant or take away specific
     /// permissions without changing any of the previous ones.
     pub async fn load_current(&mut self) -> Result<&mut Self, InvocationError> {
+        let chan = match &self.chat {
+            RightsChat::Channel(c) => c.clone(),
+            _ => return Ok(self),
+        };
+
         let tl::enums::channels::ChannelParticipant::Participant(user) = self
             .client
             .invoke(&tl::functions::channels::GetParticipant {
-                channel: self.channel.clone(),
+                channel: chan,
                 user_id: self.user.clone(),
             })
             .await?;
@@ -157,22 +185,34 @@ impl AdminRightsBuilder {
 
     /// Finalize the builder
     pub async fn build(&mut self) -> Result<(), InvocationError> {
-        let call = tl::functions::channels::EditAdmin {
-            channel: self.channel.clone(),
-            user_id: self.user.clone(),
-            admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),
-            rank: self.rank.clone(),
-        };
-        self.client.invoke(&call).await.map(drop)
+        match &self.chat {
+            RightsChat::Channel(c) => self
+                .client
+                .invoke(&tl::functions::channels::EditAdmin {
+                    channel: c.clone(),
+                    user_id: self.user.clone(),
+                    admin_rights: tl::enums::ChatAdminRights::Rights(self.rights.clone()),
+                    rank: self.rank.clone(),
+                })
+                .await
+                .map(drop),
+            _ => Err(InvocationError::Rpc(RpcError {
+                code: 400,
+                name: "PEER_ID_INVALID".to_string(),
+                value: None,
+            })),
+        }
     }
 }
 
-/// Builder for editing the rights of a non-admin user in a specific channel.
+/// Builder for editing the rights of a non-admin user in a specific chat.
+///
+/// Only kick is supported for normal groups (disallow view_message to kick)
 ///
 /// Use [`ClientHandle::set_banned_rights`] to retrieve an instance of this type.
 pub struct BannedRightsBuilder {
     client: ClientHandle,
-    channel: tl::enums::InputChannel,
+    chat: RightsChat,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
 }
@@ -181,7 +221,7 @@ impl BannedRightsBuilder {
     pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
         Self {
             client,
-            channel: chat.to_input_channel().unwrap(),
+            chat: chat.clone().into(),
             user: user.to_input(),
             rights: tl::types::ChatBannedRights {
                 view_messages: false,
@@ -204,10 +244,15 @@ impl BannedRightsBuilder {
     /// Load the current rights of the user. This lets you trivially grant or take away specific
     /// permissions without changing any of the previous ones.
     pub async fn load_current(&mut self) -> Result<&mut Self, InvocationError> {
+        let chan = match &self.chat {
+            RightsChat::Channel(c) => c.clone(),
+            _ => return Ok(self),
+        };
+
         let tl::enums::channels::ChannelParticipant::Participant(user) = self
             .client
             .invoke(&tl::functions::channels::GetParticipant {
-                channel: self.channel.clone(),
+                channel: chan.clone(),
                 user_id: self.user.clone(),
             })
             .await?;
@@ -326,11 +371,38 @@ impl BannedRightsBuilder {
 
     /// Finalize the builder
     pub async fn build(&mut self) -> Result<(), InvocationError> {
-        let call = tl::functions::channels::EditBanned {
-            channel: self.channel.clone(),
-            user_id: self.user.clone(),
-            banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
-        };
-        self.client.invoke(&call).await.map(drop)
+        match &self.chat {
+            RightsChat::Channel(chan) => self
+                .client
+                .invoke(&tl::functions::channels::EditBanned {
+                    channel: chan.clone(),
+                    user_id: self.user.clone(),
+                    banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
+                })
+                .await
+                .map(drop),
+            RightsChat::Group(id) => {
+                if self.rights.view_messages {
+                    self.client
+                        .invoke(&tl::functions::messages::DeleteChatUser {
+                            chat_id: *id,
+                            user_id: self.user.clone(),
+                        })
+                        .await
+                        .map(drop)
+                } else {
+                    Err(InvocationError::Rpc(RpcError {
+                        code: 400,
+                        name: "CHAT_INVALID".to_string(),
+                        value: None,
+                    }))
+                }
+            }
+            _ => Err(InvocationError::Rpc(RpcError {
+                code: 400,
+                name: "PEER_ID_INVALID".to_string(),
+                value: None,
+            })),
+        }
     }
 }
