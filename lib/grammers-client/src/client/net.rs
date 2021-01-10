@@ -113,17 +113,21 @@ impl<S: Session> Client<S> {
     pub async fn connect(mut config: Config<S>) -> Result<Self, AuthorizationError> {
         let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
         let sender = connect_sender(dc_id, &mut config).await?;
-        let message_box = if let Some(state) = config.session.get_state() {
-            MessageBox::load(state)
+        let message_box = if config.params.catch_up {
+            if let Some(state) = config.session.get_state() {
+                MessageBox::load(state)
+            } else {
+                MessageBox::new()
+            }
         } else {
+            // If the user doesn't want to bother with catching up on previous update, start with
+            // pristine state instead.
             MessageBox::new()
         };
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
-        // TODO maybe the session should have a `.without_update_state()`, otherwise we'll detect
-        //      gaps and catch up which users may not want
-        Ok(Self {
+        let mut client = Self {
             sender,
             dc_id,
             config,
@@ -131,7 +135,23 @@ impl<S: Session> Client<S> {
             handle_rx,
             message_box,
             chat_hashes: ChatHashCache::new(),
-        })
+        };
+
+        // Don't bother getting pristine state if we're not logged in.
+        if client.message_box.is_empty() && client.config.session.signed_in() {
+            match client.invoke(&tl::functions::updates::GetState {}).await {
+                Ok(state) => {
+                    client.message_box.set_state(state);
+                    client.sync_update_state();
+                }
+                Err(_) => {
+                    // The account may no longer actually be logged in, or it can rarely fail.
+                    // `message_box` will try to correct its state as updates arrive.
+                }
+            }
+        }
+
+        Ok(client)
     }
 
     /// Invoke a raw API call without the need to use a [`Client::handle`] or having to repeatedly

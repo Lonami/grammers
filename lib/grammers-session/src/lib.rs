@@ -49,6 +49,11 @@ pub trait Session {
     /// User's home datacenter ID, if known.
     fn user_dc(&self) -> Option<i32>;
 
+    fn signed_in(&self) -> bool {
+        // We can only know the user DC if we successfully signed in.
+        self.user_dc().is_some()
+    }
+
     /// Authorization key data for the given datacenter ID, if any.
     fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey>;
 

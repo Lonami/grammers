@@ -46,6 +46,10 @@ pub struct InitParams {
     pub app_version: String,
     pub system_lang_code: String,
     pub lang_code: String,
+    /// Should the client catch-up on updates sent to it while it was offline?
+    ///
+    /// By default, updates sent while the client was offline are ignored.
+    pub catch_up: bool,
 }
 
 /// Request messages that the `ClientHandle` uses to communicate with the `Client`.
@@ -122,6 +126,7 @@ impl Default for InitParams {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             system_lang_code,
             lang_code,
+            catch_up: false,
         }
     }
 }

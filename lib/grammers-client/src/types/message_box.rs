@@ -257,6 +257,11 @@ impl MessageBox {
         }
     }
 
+    /// Return true if the message box is empty and has no state yet.
+    pub(crate) fn is_empty(&self) -> bool {
+        *self.pts_map.get(&Entry::AccountWide).unwrap_or(&NO_SEQ) == NO_SEQ
+    }
+
     // Note: calling this method is **really** important, or we'll start fetching updates from
     // scratch.
     pub(crate) fn set_state(&mut self, state: tl::enums::updates::State) {
