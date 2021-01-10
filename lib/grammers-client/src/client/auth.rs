@@ -85,9 +85,6 @@ impl Client {
             .session
             .set_user(user.id(), self.dc_id, user.bot());
 
-        // TODO should we leave saving the session up to the end user?
-        self.config.session.save()?;
-
         Ok(user)
     }
 

@@ -697,8 +697,8 @@ impl MessageBox {
     /// Return the current state in a format that sessions understand.
     pub(crate) fn session_state(&self) -> UpdateState {
         UpdateState {
-            pts: *self.pts_map.get(&Entry::AccountWide).unwrap_or(0),
-            qts: *self.pts_map.get(&Entry::SecretChats).unwrap_or(0),
+            pts: *self.pts_map.get(&Entry::AccountWide).unwrap_or(&0),
+            qts: *self.pts_map.get(&Entry::SecretChats).unwrap_or(&0),
             date: self.date,
             seq: self.seq,
             channels: self

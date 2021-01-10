@@ -22,7 +22,9 @@ const DEFAULT_LOCALE: &str = "en";
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: Session,
+    // Using `Box<dyn ...>` and not a type parameter for simplicity.
+    // Access to the session is uncommon, so it's unlikely to affect performance.
+    pub session: Box<dyn Session>,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
