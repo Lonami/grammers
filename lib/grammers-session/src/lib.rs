@@ -121,4 +121,8 @@ impl Session {
             .into(),
         );
     }
+
+    pub fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
+        self.session.user = Some(types::User { id, dc, bot }.into())
+    }
 }

@@ -70,6 +70,8 @@ pub(crate) enum Request {
 /// structure will coordinate all of them.
 pub struct Client {
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
+    /// Data center ID for the main sender.
+    pub(crate) dc_id: i32,
     pub(crate) config: Config,
     pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
     pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,

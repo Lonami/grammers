@@ -12,6 +12,7 @@ use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::fmt;
+use std::io;
 
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 
@@ -25,6 +26,7 @@ pub enum SignInError {
     InvalidCode,
     InvalidPassword,
     Other(InvocationError),
+    SaveFailed(io::Error),
 }
 
 impl fmt::Display for SignInError {
@@ -38,6 +40,7 @@ impl fmt::Display for SignInError {
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
+            SaveFailed(e) => write!(f, "sign in error: saving session failed: {}", e),
         }
     }
 }
@@ -74,6 +77,18 @@ impl Client {
             Err(InvocationError::Rpc(_)) => Ok(false),
             Err(err) => Err(err),
         }
+    }
+
+    fn complete_login(&mut self, auth: tl::types::auth::Authorization) -> io::Result<User> {
+        let user = User::from_raw(auth.user);
+        self.config
+            .session
+            .set_user(user.id(), self.dc_id, user.bot());
+
+        // TODO should we leave saving the session up to the end user?
+        self.config.session.save()?;
+
+        Ok(user)
     }
 
     /// Signs in to the bot account associated with this token.
@@ -123,14 +138,18 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                let dc_id = value.unwrap() as i32;
+                self.sender = connect_sender(dc_id, &mut self.config).await?;
+                self.dc_id = dc_id;
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
         };
 
         match result {
-            tl::enums::auth::Authorization::Authorization(x) => Ok(User::from_raw(x.user)),
+            tl::enums::auth::Authorization::Authorization(x) => {
+                self.complete_login(x).map_err(Into::into)
+            }
             tl::enums::auth::Authorization::SignUpRequired(_) => {
                 panic!("API returned SignUpRequired even though we're logging in as a bot");
             }
@@ -193,7 +212,9 @@ impl Client {
                 //
                 // Just connect and generate a new authorization key with it
                 // before trying again.
-                self.sender = connect_sender(value.unwrap() as i32, &mut self.config).await?;
+                let dc_id = value.unwrap() as i32;
+                self.sender = connect_sender(dc_id, &mut self.config).await?;
+                self.dc_id = dc_id;
                 self.invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
@@ -249,7 +270,9 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(SignInError::SaveFailed)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
                 Err(SignInError::SignUpRequired {
                     terms_of_service: x.terms_of_service.map(TermsOfService::from_raw),
@@ -335,7 +358,7 @@ impl Client {
             password_info = self
                 .get_password_information()
                 .await
-                .map_err(SignInError::Other)?
+                .map_err(|err| SignInError::Other(err.into()))?
                 .password;
             params =
                 Client::extract_password_parameters(password_info.current_algo.as_ref().unwrap());
@@ -360,7 +383,9 @@ impl Client {
         };
 
         match self.invoke(&check_password).await {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(SignInError::SaveFailed)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
                 Err(SignInError::InvalidPassword)
@@ -422,7 +447,7 @@ impl Client {
         token: &LoginToken,
         first_name: &str,
         last_name: &str,
-    ) -> Result<User, InvocationError> {
+    ) -> Result<User, AuthorizationError> {
         // TODO accept tos? maybe accept method in the tos object?
         match self
             .invoke(&tl::functions::auth::SignUp {
@@ -433,11 +458,13 @@ impl Client {
             })
             .await
         {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => Ok(User::from_raw(x.user)),
+            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
+                self.complete_login(x).map_err(Into::into)
+            }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
                 panic!("API returned SignUpRequired even though we just invoked SignUp");
             }
-            Err(error) => Err(error),
+            Err(error) => Err(error.into()),
         }
     }
 

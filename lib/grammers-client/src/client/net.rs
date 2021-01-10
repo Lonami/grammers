@@ -113,13 +113,14 @@ impl Client {
     /// # }
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let sender =
-            connect_sender(config.session.user_dc().unwrap_or(DEFAULT_DC), &mut config).await?;
+        let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
+        let sender = connect_sender(dc_id, &mut config).await?;
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
         let mut client = Self {
             sender,
+            dc_id,
             config,
             handle_tx,
             handle_rx,
