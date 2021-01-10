@@ -8,6 +8,43 @@
 use grammers_tl_types as tl;
 use std::fmt;
 
+/// Platform Identifier
+pub enum Platform {
+    All,
+    Android,
+    IOS,
+    WindowsPhone,
+    Other(String),
+}
+
+/// Contains the reason why a certain user is restricted
+pub struct RestrictionReason {
+    pub platforms: Vec<Platform>,
+    pub reason: String,
+    pub text: String,
+}
+
+impl RestrictionReason {
+    pub(crate) fn from_raw(reason: tl::enums::RestrictionReason) -> Self {
+        let tl::enums::RestrictionReason::Reason(reason) = reason;
+        Self {
+            platforms: reason
+                .platform
+                .split("-")
+                .map(|p| match p {
+                    "all" => Platform::All,
+                    "android" => Platform::Android,
+                    "ios" => Platform::IOS,
+                    "WindowsPhone" => Platform::WindowsPhone,
+                    o => Platform::Other(o.to_string()),
+                })
+                .collect(),
+            reason: reason.reason.to_string(),
+            text: reason.text.to_string(),
+        }
+    }
+}
+
 /// A user.
 ///
 /// Users include your contacts, members of a group, bot accounts created by [@BotFather], or
@@ -207,20 +244,15 @@ impl User {
         self.0.scam
     }
 
-    /// The reason(s) why this user is restricted, if any.
-    pub fn restriction_reason(&self) -> Option<Vec<&str>> {
+    /// The reason(s) why this user is restricted, could be empty.
+    pub fn restriction_reason(&self) -> Vec<RestrictionReason> {
         if let Some(reasons) = &self.0.restriction_reason {
-            Some(
-                reasons
-                    .iter()
-                    .map(|r| {
-                        let tl::enums::RestrictionReason::Reason(reason) = r;
-                        reason.reason.as_str() // Should we use reason.text?
-                    })
-                    .collect(),
-            )
+            reasons
+                .iter()
+                .map(|r| RestrictionReason::from_raw(r.clone()))
+                .collect()
         } else {
-            None
+            Vec::new()
         }
     }
 

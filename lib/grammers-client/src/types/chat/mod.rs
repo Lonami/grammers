@@ -13,7 +13,7 @@ use grammers_tl_types as tl;
 
 pub use channel::Channel;
 pub use group::Group;
-pub use user::User;
+pub use user::{Platform, RestrictionReason, User};
 
 /// A chat.
 ///
