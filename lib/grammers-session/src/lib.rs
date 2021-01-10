@@ -180,12 +180,11 @@ impl MemorySession {
 }
 
 impl FileSession {
-    /// Loads or creates a new session file.
+    /// Loads or creates a new session file if one doesn't exist yet.
     pub fn load_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        if let Ok(instance) = Self::load(path.as_ref()) {
-            Ok(instance)
-        } else {
-            Self::create(path)
+        match Self::load(path.as_ref()) {
+            Err(e) if e.kind() == io::ErrorKind::NotFound => Self::create(path),
+            x => x,
         }
     }
 
