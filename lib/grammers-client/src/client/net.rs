@@ -93,16 +93,16 @@ impl<S: Session> Client<S> {
     ///
     /// ```
     /// use grammers_client::{Client, Config};
-    /// use grammers_session::Session;
+    /// use grammers_session::FileSession;
     ///
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
     /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
-    /// # async fn f(mut client: Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::connect(Config {
-    ///     session: Session::load_or_create("hello-world.session")?,
+    ///     session: FileSession::load_or_create("hello-world.session")?,
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     params: Default::default(),
@@ -171,7 +171,7 @@ impl<S: Session> Client<S> {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
@@ -192,7 +192,7 @@ impl<S: Session> Client<S> {
     /// ```
     /// use tokio::task;
     ///
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
     /// // Obtain a handle. After this you can obtain more by using `client_handle.clone()`.
     /// let mut client_handle = client.handle();
     ///
@@ -228,7 +228,7 @@ impl<S: Session> Client<S> {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::NetworkStep;
     ///
     /// loop {
@@ -282,7 +282,7 @@ impl<S: Session> Client<S> {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
     /// client.run_until_disconnected().await?;
     /// # Ok(())
     /// # }
