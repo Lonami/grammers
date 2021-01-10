@@ -138,72 +138,76 @@ impl User {
         self.0.is_self
     }
 
-    /// Whether the user is a contact
+    /// Is this user in your account's contact list?
     pub fn contact(&self) -> bool {
         self.0.contact
     }
 
-    /// Whether the user is a mutual contact
+    /// Is this user a mutual contact?
+    ///
+    /// Contacts are mutual if both the user of the current account and this user have eachother
+    /// in their respective contact list.
     pub fn mutual_contact(&self) -> bool {
         self.0.mutual_contact
     }
 
-    /// Whether the account of this user was deleted
+    /// Has the account of this user been deleted?
     pub fn deleted(&self) -> bool {
         self.0.deleted
     }
 
-    /// Whether the user is a bot
+    /// Is the current account a bot?
+    ///
+    /// Bot accounts are those created by [@BotFather](https://t.me/BotFather).
     pub fn is_bot(&self) -> bool {
         self.0.bot
     }
 
-    /// Can the bot see all messages in groups
-    pub fn bot_chat_history(&self) -> bool {
-        self.0.bot_chat_history
+    /// If the current user is a bot, does it have [privacy mode] enabled?
+    ///
+    /// * Bots with privacy enabled won't see messages in groups unless they are replied or the
+    /// command includes their name (`/command@bot`).
+    /// * Bots with privacy disabled will be able to see all messages in a group.
+    ///
+    /// [privacy mode]: https://core.telegram.org/bots#privacy-mode
+    pub fn bot_privacy(&self) -> bool {
+        !self.0.bot_chat_history
     }
 
-    /// Can the bot be added to groups
-    pub fn bot_nochats(&self) -> bool {
+    /// If the current user is a bot, can it be added to groups?
+    pub fn bot_supports_chats(self) -> bool {
         self.0.bot_nochats
     }
 
-    /// Whether this user is verified
+    /// Has the account of this user been verified?
+    ///
+    /// Verified accounts, such as [@BotFather](https://t.me/BotFather), have a special icon next
+    /// to their names in official applications (commonly a blue starred checkmark).
     pub fn verified(&self) -> bool {
         self.0.verified
     }
 
-    /// Whether the user has some restrictions on their account
+    /// Does this user have restrictions applied to their account?
     pub fn restricted(&self) -> bool {
         self.0.restricted
     }
 
-    /// See https://core.telegram.org/api/min
-    pub fn min(&self) -> bool {
-        self.0.min
-    }
-
-    /// Whether the bot can request geo location in inline mode
+    /// If the current user is a bot, does it want geolocation information on inline queries?
     pub fn bot_inline_geo(&self) -> bool {
         self.0.bot_inline_geo
     }
 
-    /// Whether the user is an official support account
+    /// Is this user an official member of the support team?
     pub fn support(&self) -> bool {
         self.0.support
     }
 
-    /// Whether the user is flagged as a scammmer
+    /// Has this user been flagged for trying to scam other people?
     pub fn scam(&self) -> bool {
         self.0.scam
     }
 
-    /// Profile picture of the user is not available but possibly exists
-    pub fn apply_min_photo(&self) -> bool {
-        self.0.apply_min_photo
-    }
-
-    /// The reason(s) why this user is restricted, if any
+    /// The reason(s) why this user is restricted, if any.
     pub fn restriction_reason(&self) -> Option<Vec<&str>> {
         if let Some(reasons) = &self.0.restriction_reason {
             Some(
@@ -220,12 +224,13 @@ impl User {
         }
     }
 
-    /// Inline placeholder of inline bot, if it exists
+    /// Return the placeholder for inline queries if the current user is a bot and has said
+    /// placeholder configured.
     pub fn bot_inline_placeholder(&self) -> Option<&str> {
         self.0.bot_inline_placeholder.as_deref()
     }
 
-    /// Language code of the user, if any
+    /// Language code of the user, if any.
     pub fn lang_code(&self) -> Option<&str> {
         self.0.lang_code.as_deref()
     }
