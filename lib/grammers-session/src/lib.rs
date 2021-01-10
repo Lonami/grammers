@@ -191,10 +191,13 @@ impl FileSession {
 
     /// Create a new session instance.
     pub fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        Ok(Self {
+        let mut this = Self {
             file: File::create(path)?,
             session: MemorySession::new(),
-        })
+        };
+        // Immediately save or else we'll have an empty (and invalid) session file.
+        this.save()?;
+        Ok(this)
     }
 
     /// Load a previous session instance.
