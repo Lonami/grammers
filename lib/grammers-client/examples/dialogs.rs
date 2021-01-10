@@ -53,6 +53,9 @@ async fn async_main() -> Result<()> {
     .await?;
     println!("Connected!");
 
+    // If we can't save the session, sign out once we're done.
+    let mut sign_out = false;
+
     if !client.is_authorized().await? {
         println!("Signing in...");
         let phone = prompt("Enter your phone number (international format): ")?;
@@ -75,7 +78,16 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!(e),
         };
         println!("Signed in!");
-        drop(client.session().save());
+        match client.session().save() {
+            Ok(_) => {}
+            Err(e) => {
+                println!(
+                    "NOTE: failed to save the session, will sign out when done: {}",
+                    e
+                );
+                sign_out = true;
+            }
+        }
     }
 
     // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
@@ -96,7 +108,12 @@ async fn async_main() -> Result<()> {
         println!("- {: >10} {}", chat.id(), chat.name());
     }
 
-    client_handle.disconnect().await;
+    if sign_out {
+        drop(client_handle.sign_out_disconnect().await);
+    } else {
+        client_handle.disconnect().await;
+    }
+
     network_handle.await??;
     Ok(())
 }

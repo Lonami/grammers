@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::net::connect_sender;
-use super::Client;
+use super::{Client, ClientHandle};
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
@@ -504,5 +504,17 @@ impl<S: Session> Client<S> {
     pub fn session(&mut self) -> &mut S {
         self.sync_update_state();
         &mut self.config.session
+    }
+}
+
+/// Method implementations related with the authentication of the user into the API.
+impl ClientHandle {
+    /// Calls [`Client::sign_out`] and disconnects.
+    ///
+    /// The client will be disconnected even if signing out fails.
+    pub async fn sign_out_disconnect(&mut self) -> Result<(), InvocationError> {
+        let res = self.invoke(&tl::functions::auth::LogOut {}).await;
+        self.disconnect().await;
+        res.map(drop)
     }
 }
