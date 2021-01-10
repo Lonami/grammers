@@ -10,7 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use grammers_client::{Client, ClientHandle, Config, Update, UpdateIter};
+use grammers_client::{Client, ClientHandle, Config, InitParams, Update, UpdateIter};
 use grammers_session::FileSession;
 use log;
 use simple_logger::SimpleLogger;
@@ -49,7 +49,11 @@ async fn async_main() -> Result {
         session: FileSession::load_or_create("echo.session")?,
         api_id,
         api_hash: api_hash.clone(),
-        params: Default::default(),
+        params: InitParams {
+            // Fetch the updates we missed while we were offline
+            catch_up: true,
+            ..Default::default()
+        },
     })
     .await?;
     println!("Connected!");
@@ -57,6 +61,7 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token, api_id, &api_hash).await?;
+        client.session().save()?;
         println!("Signed in!");
     }
 
@@ -69,6 +74,12 @@ async fn async_main() -> Result {
                 Err(e) => eprintln!("Error handling updates!: {}", e),
             }
         });
+
+        // Save the session file on every update so that we can correctly resume next time we
+        // connect after a period of being offline (catching up on updates).
+        //
+        // The alternative is to detect `Ctrl+C` and break from the loop.
+        client.session().save()?;
     }
 
     Ok(())
