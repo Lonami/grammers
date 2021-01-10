@@ -251,7 +251,7 @@ impl MessageBox {
             deadline: next_updates_deadline(),
             date: state.date,
             seq: state.seq,
-            pts_map: HashMap::new(),
+            pts_map,
             possible_gap: HashMap::new(),
             possible_gap_deadline: None,
         }

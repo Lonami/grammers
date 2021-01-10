@@ -22,6 +22,7 @@ use std::path::Path;
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
 
+#[derive(Debug)]
 pub struct UpdateState {
     pub pts: i32,
     pub qts: i32,
