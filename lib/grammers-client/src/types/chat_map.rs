@@ -11,7 +11,7 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Hashable `Peer`.
-#[derive(Hash, PartialEq, Eq)]
+#[derive(Hash, PartialEq, Eq, Debug)]
 pub(crate) enum Peer {
     User(i32),
     Chat(i32),
@@ -35,6 +35,7 @@ impl From<&tl::enums::Peer> for Peer {
 /// A lot of responses include the chats related to them in the form of a list of users
 /// and chats, making it annoying to extract a specific chat. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
+#[derive(Debug)]
 pub struct ChatMap {
     map: HashMap<Peer, Chat>,
 }

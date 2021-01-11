@@ -19,7 +19,7 @@ use types::Chat;
 ///
 /// This message should be treated as a snapshot in time, that is, if the message is edited while
 /// using this object, those changes won't alter this structure.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Message {
     // Message services are a trimmed-down version of normal messages, but with `action`.
     //

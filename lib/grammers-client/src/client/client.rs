@@ -94,7 +94,7 @@ pub struct Client<S: Session> {
 ///
 /// This structure has implementations for most of the methods you will use, such as sending
 /// messages, fetching users, answering bot callbacks, and so on.
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct ClientHandle {
     pub(crate) tx: mpsc::UnboundedSender<Request>,
 }
