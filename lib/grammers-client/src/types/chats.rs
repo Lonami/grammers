@@ -219,8 +219,8 @@ impl AdminRightsBuilder {
         self
     }
 
-    /// Finalize the builder
-    pub async fn build(&mut self) -> Result<(), InvocationError> {
+    /// Perform the call.
+    pub async fn invoke(&mut self) -> Result<(), InvocationError> {
         match &self.chat {
             RightsChat::Channel(c) => self
                 .client
@@ -431,8 +431,8 @@ impl BannedRightsBuilder {
         self
     }
 
-    /// Finalize the builder
-    pub async fn build(&mut self) -> Result<(), InvocationError> {
+    /// Perform the call.
+    pub async fn invoke(&mut self) -> Result<(), InvocationError> {
         match &self.chat {
             RightsChat::Channel(chan) => self
                 .client

@@ -436,10 +436,10 @@ impl ClientHandle {
                 self.set_banned_rights(chat, user)
                     .view_messages(false)
                     .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
-                    .build()
+                    .invoke()
                     .await?;
 
-                self.set_banned_rights(chat, user).build().await
+                self.set_banned_rights(chat, user).invoke().await
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
@@ -458,7 +458,7 @@ impl ClientHandle {
     /// Returns a new [`BannedRightsBuilder`] instance. Check out the documentation for that type
     /// to learn more about what restrictions can be applied.
     ///
-    /// Nothing is done until build().await is called on the returned instance, at which point it might result in
+    /// Nothing is done until the call to [`BannedRightsBuilder::invoke`] is awaited, at which point it might result in
     /// error if you do not have sufficient permissions to ban the user in the input chat.
     ///
     /// By default, the user has all rights, and you need to revoke those you want to take away
@@ -477,7 +477,7 @@ impl ClientHandle {
     /// let res = client
     ///     .set_banned_rights(&chat, &user)
     ///     .send_stickers(false)
-    ///     .build()
+    ///     .invoke()
     ///     .await;
     ///
     /// match res {
@@ -496,7 +496,7 @@ impl ClientHandle {
     /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
     /// type to learn more about what rights can be given to administrators.
     ///
-    /// Nothing is done until the call to [`AdminRightsBuilder::build`] is awaited, at which point
+    /// Nothing is done until the call to [`AdminRightsBuilder::invoke`] is awaited, at which point
     /// it might result in error if you do not have sufficient permissions to grant those rights
     /// to the other user.
     ///
@@ -518,7 +518,7 @@ impl ClientHandle {
     ///     .await?
     ///     .pin_messages(true)
     ///     .ban_users(true)
-    ///     .build()
+    ///     .invoke()
     ///     .await?;
     /// # Ok(())
     /// # }
