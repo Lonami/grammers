@@ -69,28 +69,68 @@ impl AdminRightsBuilder {
     /// Load the current rights of the user. This lets you trivially grant or take away specific
     /// permissions without changing any of the previous ones.
     pub async fn load_current(&mut self) -> Result<&mut Self, InvocationError> {
-        let chan = match &self.chat {
-            RightsChat::Channel(c) => c.clone(),
-            _ => return Ok(self),
-        };
+        if let RightsChat::Channel(chan) = &self.chat {
+            let tl::enums::channels::ChannelParticipant::Participant(user) = self
+                .client
+                .invoke(&tl::functions::channels::GetParticipant {
+                    channel: chan.clone(),
+                    user_id: self.user.clone(),
+                })
+                .await?;
+            match user.participant {
+                tl::enums::ChannelParticipant::Creator(c) => {
+                    self.rights = c.admin_rights.into();
+                    self.rank = c.rank.unwrap_or_else(String::new);
+                }
+                tl::enums::ChannelParticipant::Admin(a) => {
+                    self.rights = a.admin_rights.into();
+                    self.rank = a.rank.unwrap_or_else(String::new);
+                }
+                _ => (),
+            }
+        } else if let RightsChat::Group(id) = &self.chat {
+            // TODO: Use iter_participants
+            let tl::enums::messages::ChatFull::Full(chat_full) = self
+                .client
+                .invoke(&tl::functions::messages::GetFullChat { chat_id: *id })
+                .await?;
+            if let tl::enums::ChatFull::Full(chat_full) = chat_full.full_chat {
+                if let tl::enums::ChatParticipants::Participants(parts) = chat_full.participants {
+                    let uid = match &self.user {
+                        tl::enums::InputUser::User(u) => Some(u.user_id),
+                        tl::enums::InputUser::FromMessage(u) => Some(u.user_id),
+                        _ => None,
+                    };
+                    if let Some(usr_id) = uid {
+                        use tl::enums::ChatParticipant;
+                        use tl::types::{ChatParticipantAdmin, ChatParticipantCreator};
 
-        let tl::enums::channels::ChannelParticipant::Participant(user) = self
-            .client
-            .invoke(&tl::functions::channels::GetParticipant {
-                channel: chan,
-                user_id: self.user.clone(),
-            })
-            .await?;
-        match user.participant {
-            tl::enums::ChannelParticipant::Creator(c) => {
-                self.rights = c.admin_rights.into();
-                self.rank = c.rank.unwrap_or_else(String::new);
+                        if parts.participants.iter().any(|p| match p {
+                            ChatParticipant::Admin(ChatParticipantAdmin {
+                                user_id: uid, ..
+                            })
+                            | ChatParticipant::Creator(ChatParticipantCreator {
+                                user_id: uid,
+                                ..
+                            }) => *uid == usr_id,
+                            _ => false,
+                        }) {
+                            self.rights = tl::types::ChatAdminRights {
+                                change_info: true,
+                                post_messages: true,
+                                edit_messages: false,
+                                delete_messages: true,
+                                ban_users: true,
+                                invite_users: true,
+                                pin_messages: true,
+                                add_admins: true,
+                                anonymous: false,
+                                manage_call: true,
+                            }
+                        }
+                    }
+                }
             }
-            tl::enums::ChannelParticipant::Admin(a) => {
-                self.rights = a.admin_rights.into();
-                self.rank = a.rank.unwrap_or_else(String::new);
-            }
-            _ => (),
         }
 
         Ok(self)
@@ -192,6 +232,31 @@ impl AdminRightsBuilder {
                 })
                 .await
                 .map(drop),
+            RightsChat::Group(id) => {
+                let promote = if self.rights.anonymous
+                    || self.rights.change_info
+                    || self.rights.post_messages
+                    || self.rights.edit_messages
+                    || self.rights.delete_messages
+                    || self.rights.ban_users
+                    || self.rights.invite_users
+                    || self.rights.pin_messages
+                    || self.rights.add_admins
+                    || self.rights.manage_call
+                {
+                    true
+                } else {
+                    false
+                };
+                self.client
+                    .invoke(&tl::functions::messages::EditChatAdmin {
+                        chat_id: *id,
+                        user_id: self.user.clone(),
+                        is_admin: promote,
+                    })
+                    .await
+                    .map(drop)
+            }
             _ => Err(InvocationError::Rpc(RpcError {
                 code: 400,
                 name: "PEER_ID_INVALID".to_string(),
