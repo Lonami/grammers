@@ -8,7 +8,8 @@
 use grammers_tl_types as tl;
 use std::fmt;
 
-/// Platform Identifier
+/// Platform Identifier.
+#[non_exhaustive]
 pub enum Platform {
     All,
     Android,
@@ -17,7 +18,7 @@ pub enum Platform {
     Other(String),
 }
 
-/// Contains the reason why a certain user is restricted
+/// Contains the reason why a certain user is restricted.
 pub struct RestrictionReason {
     pub platforms: Vec<Platform>,
     pub reason: String,
@@ -25,7 +26,7 @@ pub struct RestrictionReason {
 }
 
 impl RestrictionReason {
-    pub(crate) fn from_raw(reason: tl::enums::RestrictionReason) -> Self {
+    pub(crate) fn from_raw(reason: &tl::enums::RestrictionReason) -> Self {
         let tl::enums::RestrictionReason::Reason(reason) = reason;
         Self {
             platforms: reason
@@ -247,10 +248,7 @@ impl User {
     /// The reason(s) why this user is restricted, could be empty.
     pub fn restriction_reason(&self) -> Vec<RestrictionReason> {
         if let Some(reasons) = &self.0.restriction_reason {
-            reasons
-                .iter()
-                .map(|r| RestrictionReason::from_raw(r.clone()))
-                .collect()
+            reasons.iter().map(RestrictionReason::from_raw).collect()
         } else {
             Vec::new()
         }
