@@ -128,7 +128,7 @@ impl User {
     /// Outside of the application, people may link to this user with one of Telegram's URLs, such
     /// as https://t.me/username.
     pub fn username(&self) -> Option<&str> {
-        self.0.last_name.as_deref()
+        self.0.username.as_deref()
     }
 
     /// Does this user represent the account that's currently logged in?
