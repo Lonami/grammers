@@ -33,10 +33,11 @@ impl RestrictionReason {
                 .platform
                 .split("-")
                 .map(|p| match p {
+                    // Taken from https://core.telegram.org/constructor/restrictionReason
                     "all" => Platform::All,
                     "android" => Platform::Android,
                     "ios" => Platform::IOS,
-                    "WindowsPhone" => Platform::WindowsPhone,
+                    "wp" => Platform::WindowsPhone,
                     o => Platform::Other(o.to_string()),
                 })
                 .collect(),
