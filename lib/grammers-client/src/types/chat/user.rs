@@ -8,6 +8,45 @@
 use grammers_tl_types as tl;
 use std::fmt;
 
+/// Platform Identifier.
+#[non_exhaustive]
+pub enum Platform {
+    All,
+    Android,
+    IOS,
+    WindowsPhone,
+    Other(String),
+}
+
+/// Contains the reason why a certain user is restricted.
+pub struct RestrictionReason {
+    pub platforms: Vec<Platform>,
+    pub reason: String,
+    pub text: String,
+}
+
+impl RestrictionReason {
+    pub(crate) fn from_raw(reason: &tl::enums::RestrictionReason) -> Self {
+        let tl::enums::RestrictionReason::Reason(reason) = reason;
+        Self {
+            platforms: reason
+                .platform
+                .split("-")
+                .map(|p| match p {
+                    // Taken from https://core.telegram.org/constructor/restrictionReason
+                    "all" => Platform::All,
+                    "android" => Platform::Android,
+                    "ios" => Platform::IOS,
+                    "wp" => Platform::WindowsPhone,
+                    o => Platform::Other(o.to_string()),
+                })
+                .collect(),
+            reason: reason.reason.to_string(),
+            text: reason.text.to_string(),
+        }
+    }
+}
+
 /// A user.
 ///
 /// Users include your contacts, members of a group, bot accounts created by [@BotFather], or
@@ -29,6 +68,7 @@ impl fmt::Debug for User {
     }
 }
 
+// TODO: photo, status
 impl User {
     pub(crate) fn from_raw(user: tl::enums::User) -> Self {
         Self(match user {
@@ -137,8 +177,92 @@ impl User {
         self.0.is_self
     }
 
-    /// Is this user represent a bot account?
-    pub fn bot(&self) -> bool {
+    /// Is this user in your account's contact list?
+    pub fn contact(&self) -> bool {
+        self.0.contact
+    }
+
+    /// Is this user a mutual contact?
+    ///
+    /// Contacts are mutual if both the user of the current account and this user have eachother
+    /// in their respective contact list.
+    pub fn mutual_contact(&self) -> bool {
+        self.0.mutual_contact
+    }
+
+    /// Has the account of this user been deleted?
+    pub fn deleted(&self) -> bool {
+        self.0.deleted
+    }
+
+    /// Is the current account a bot?
+    ///
+    /// Bot accounts are those created by [@BotFather](https://t.me/BotFather).
+    pub fn is_bot(&self) -> bool {
         self.0.bot
+    }
+
+    /// If the current user is a bot, does it have [privacy mode] enabled?
+    ///
+    /// * Bots with privacy enabled won't see messages in groups unless they are replied or the
+    /// command includes their name (`/command@bot`).
+    /// * Bots with privacy disabled will be able to see all messages in a group.
+    ///
+    /// [privacy mode]: https://core.telegram.org/bots#privacy-mode
+    pub fn bot_privacy(&self) -> bool {
+        !self.0.bot_chat_history
+    }
+
+    /// If the current user is a bot, can it be added to groups?
+    pub fn bot_supports_chats(self) -> bool {
+        self.0.bot_nochats
+    }
+
+    /// Has the account of this user been verified?
+    ///
+    /// Verified accounts, such as [@BotFather](https://t.me/BotFather), have a special icon next
+    /// to their names in official applications (commonly a blue starred checkmark).
+    pub fn verified(&self) -> bool {
+        self.0.verified
+    }
+
+    /// Does this user have restrictions applied to their account?
+    pub fn restricted(&self) -> bool {
+        self.0.restricted
+    }
+
+    /// If the current user is a bot, does it want geolocation information on inline queries?
+    pub fn bot_inline_geo(&self) -> bool {
+        self.0.bot_inline_geo
+    }
+
+    /// Is this user an official member of the support team?
+    pub fn support(&self) -> bool {
+        self.0.support
+    }
+
+    /// Has this user been flagged for trying to scam other people?
+    pub fn scam(&self) -> bool {
+        self.0.scam
+    }
+
+    /// The reason(s) why this user is restricted, could be empty.
+    pub fn restriction_reason(&self) -> Vec<RestrictionReason> {
+        if let Some(reasons) = &self.0.restriction_reason {
+            reasons.iter().map(RestrictionReason::from_raw).collect()
+        } else {
+            Vec::new()
+        }
+    }
+
+    /// Return the placeholder for inline queries if the current user is a bot and has said
+    /// placeholder configured.
+    pub fn bot_inline_placeholder(&self) -> Option<&str> {
+        self.0.bot_inline_placeholder.as_deref()
+    }
+
+    /// Language code of the user, if any.
+    pub fn lang_code(&self) -> Option<&str> {
+        self.0.lang_code.as_deref()
     }
 }

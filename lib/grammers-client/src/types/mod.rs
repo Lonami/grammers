@@ -23,7 +23,7 @@ pub mod permissions;
 pub mod terms_of_service;
 pub mod update;
 
-pub use chat::{Channel, Chat, Group, User};
+pub use chat::{Channel, Chat, Group, Platform, RestrictionReason, User};
 pub use chat_map::ChatMap;
 pub(crate) use chat_map::{ChatHashCache, Peer};
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
