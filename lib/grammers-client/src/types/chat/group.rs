@@ -153,7 +153,7 @@ impl Group {
             Chat::ChannelForbidden(chat) => chat.title.as_str(),
         }
     }
-    
+
     /// Return the type of this group.
     ///
     /// In case inner type of group is Channel, that means it's a megagroup.
@@ -168,5 +168,4 @@ impl Group {
             Chat::ChannelForbidden(_) => true,
         }
     }
-
 }
