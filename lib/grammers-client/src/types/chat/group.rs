@@ -162,7 +162,7 @@ impl Group {
 
         match &self.0 {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => false,
-            Chat::Channel(_) | Chat::ChannelForbidden(_) => true,
+            C::Channel(_) | C::ChannelForbidden(_) => true,
         }
     }
 }
