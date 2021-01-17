@@ -154,7 +154,7 @@ impl Group {
         }
     }
 
-    /// Return the type of this group.
+    /// Returns true if this group is a megagroup (also known as supergroups).
     ///
     /// In case inner type of group is Channel, that means it's a megagroup.
     pub fn is_megagroup(&self) -> bool {
