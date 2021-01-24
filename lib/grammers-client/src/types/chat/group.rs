@@ -153,4 +153,16 @@ impl Group {
             Chat::ChannelForbidden(chat) => chat.title.as_str(),
         }
     }
+
+    /// Returns true if this group is a megagroup (also known as supergroups).
+    ///
+    /// In case inner type of group is Channel, that means it's a megagroup.
+    pub fn is_megagroup(&self) -> bool {
+        use tl::enums::Chat as C;
+
+        match &self.0 {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => false,
+            C::Channel(_) | C::ChannelForbidden(_) => true,
+        }
+    }
 }
