@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::types::{Media, Photo};
 use crate::utils;
 use crate::{types, ClientHandle};
 use grammers_mtsender::InvocationError;
@@ -215,7 +216,10 @@ impl Message {
     /// This not only includes photos or videos, but also contacts, polls, documents, locations
     /// and many other types.
     pub fn media(&self) -> Option<types::Media> {
-        self.msg.media.clone().and_then(types::Media::from_raw)
+        self.msg
+            .media
+            .clone()
+            .and_then(|x| Media::from_raw(x, self.client.clone()))
     }
 
     /// If the message has a reply markup (which can happen for messages produced by bots),
@@ -421,5 +425,14 @@ impl Message {
         } else {
             Ok(false)
         }
+    }
+
+    /// Get photo attached to the message if any.
+    pub fn photo(&self) -> Option<Photo> {
+        if let Media::Photo(photo) = self.media()? {
+            return Some(photo);
+        }
+
+        None
     }
 }
