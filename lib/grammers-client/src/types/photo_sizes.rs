@@ -78,7 +78,17 @@ impl PhotoSize {
     }
 
     /// Download the photo thumb into the defined location
-    pub async fn download(&self, path: &Path) {
+    ///
+    /// # Examples
+    /// ```
+    /// # use grammers_client::types::Message;
+    /// use grammers_client::types::photo_sizes::VecExt;
+    /// async fn load_photo(mut message: Message) {
+    ///   let location = "/home/username/photos/best_photo.jpg";
+    ///   message.photo().unwrap().thumbs().largest().unwrap().download(location).await;
+    /// }
+    /// ```
+    pub async fn download<P: AsRef<Path>>(&self, path: P) {
         match self {
             PhotoSize::Empty(_) => {
                 fs::File::create(path).await.unwrap();
@@ -92,7 +102,7 @@ impl PhotoSize {
                 };
                 size.client
                     .clone()
-                    .download_media_at_location(input_location, path)
+                    .download_media_at_location(input_location.into(), path)
                     .await
                     .unwrap();
             }
