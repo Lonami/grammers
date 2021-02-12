@@ -227,10 +227,12 @@ impl PhotoSize {
     }
 }
 
+/// Empty thumbnail. Image with this thumbnail is unavailable.
 pub struct SizeEmpty {
     photo_type: String,
 }
 
+/// Image description. An additional request to Telegram should be perfomed to download the image
 pub struct Size {
     photo_type: String,
     pub width: i32,
@@ -244,6 +246,7 @@ pub struct Size {
     client: ClientHandle,
 }
 
+/// Description of an image and its content.
 pub struct CachedSize {
     photo_type: String,
 
@@ -252,12 +255,14 @@ pub struct CachedSize {
     pub bytes: Vec<u8>,
 }
 
+/// A low-resolution compressed JPG payload
 pub struct StrippedSize {
     photo_type: String,
 
     pub bytes: Vec<u8>,
 }
 
+/// Progressively encoded photosize
 pub struct ProgressiveSize {
     photo_type: String,
 
@@ -266,6 +271,8 @@ pub struct ProgressiveSize {
     pub sizes: Vec<i32>,
 }
 
+/// Messages with animated stickers can have a compressed svg (< 300 bytes) to show the outline
+/// of the sticker before fetching the actual lottie animation.
 pub struct PathSize {
     photo_type: String,
 

@@ -71,6 +71,15 @@ impl Photo {
     }
 
     /// Get photo thumbs.
+    ///
+    /// Since Telegram doesn't store the original photo, it can be presented in different sizes
+    /// and quality, a.k.a. thumbnails. Each photo preview has a specific type, indicating
+    /// the resolution and image transform that was applied server-side. Some low-resolution
+    /// thumbnails already contain all necessary information that can be shown to the user, but
+    /// for other types an additional request to the Telegram should be performed.
+    /// Check the description of [PhotoSize] to get an information about each particular thumbnail.
+    ///
+    /// https://core.telegram.org/api/files#image-thumbnail-types
     pub fn thumbs(&self) -> Vec<PhotoSize> {
         use tl::enums::Photo as P;
 
