@@ -20,6 +20,7 @@ pub mod message_box;
 pub mod participant;
 pub mod password_token;
 pub mod permissions;
+pub mod photo_sizes;
 pub mod terms_of_service;
 pub mod update;
 

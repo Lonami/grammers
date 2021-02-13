@@ -5,11 +5,16 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::types::photo_sizes::PhotoSize;
+use crate::ClientHandle;
 use grammers_tl_types as tl;
+use std::fmt;
+use std::fmt::{Debug, Formatter};
 
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone)]
 pub struct Photo {
     photo: tl::types::MessageMediaPhoto,
+    client: ClientHandle,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -25,17 +30,18 @@ pub enum Media {
 }
 
 impl Photo {
-    pub(crate) fn from_raw(photo: tl::enums::Photo) -> Self {
+    pub(crate) fn from_raw(photo: tl::enums::Photo, client: ClientHandle) -> Self {
         Self {
             photo: tl::types::MessageMediaPhoto {
                 photo: Some(photo),
                 ttl_seconds: None,
             },
+            client,
         }
     }
 
-    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto) -> Self {
-        Self { photo }
+    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: ClientHandle) -> Self {
+        Self { photo, client }
     }
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
@@ -63,6 +69,46 @@ impl Photo {
             P::Photo(photo) => photo.id,
         }
     }
+
+    /// Get photo thumbs.
+    ///
+    /// Since Telegram doesn't store the original photo, it can be presented in different sizes
+    /// and quality, a.k.a. thumbnails. Each photo preview has a specific type, indicating
+    /// the resolution and image transform that was applied server-side. Some low-resolution
+    /// thumbnails already contain all necessary information that can be shown to the user, but
+    /// for other types an additional request to the Telegram should be performed.
+    /// Check the description of [PhotoSize] to get an information about each particular thumbnail.
+    ///
+    /// https://core.telegram.org/api/files#image-thumbnail-types
+    pub fn thumbs(&self) -> Vec<PhotoSize> {
+        use tl::enums::Photo as P;
+
+        let photo = match self.photo.photo.as_ref() {
+            Some(photo) => photo,
+            None => return vec![],
+        };
+
+        match photo {
+            P::Empty(_) => vec![],
+            P::Photo(photo) => photo
+                .sizes
+                .iter()
+                .map(|x| PhotoSize::make_from(&x, &photo, self.client.clone()))
+                .collect(),
+        }
+    }
+}
+
+impl Debug for Photo {
+    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
+        write!(f, "{:?}", self.photo)
+    }
+}
+
+impl PartialEq for Photo {
+    fn eq(&self, other: &Self) -> bool {
+        self.photo == other.photo
+    }
 }
 
 impl Uploaded {
@@ -79,13 +125,13 @@ impl Uploaded {
 }
 
 impl Media {
-    pub(crate) fn from_raw(media: tl::enums::MessageMedia) -> Option<Self> {
+    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: ClientHandle) -> Option<Self> {
         use tl::enums::MessageMedia as M;
 
         // TODO implement the rest
         match media {
             M::Empty => None,
-            M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo))),
+            M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
             M::Geo(_) => None,
             M::Contact(_) => None,
             M::Unsupported => None,

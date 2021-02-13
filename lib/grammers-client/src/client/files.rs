@@ -28,6 +28,17 @@ pub struct DownloadIter {
 
 impl DownloadIter {
     fn new(client: &ClientHandle, media: &Media) -> Self {
+        DownloadIter::new_from_file_location(client, media.to_input_location().unwrap())
+    }
+
+    fn new_from_location(client: &ClientHandle, location: tl::enums::InputFileLocation) -> Self {
+        DownloadIter::new_from_file_location(client, location)
+    }
+
+    fn new_from_file_location(
+        client: &ClientHandle,
+        location: tl::enums::InputFileLocation,
+    ) -> Self {
         // TODO let users tweak all the options from the request
         // TODO cdn support
         Self {
@@ -36,7 +47,7 @@ impl DownloadIter {
             request: tl::functions::upload::GetFile {
                 precise: false,
                 cdn_supported: false,
-                location: media.to_input_location().unwrap(), // TODO don't unwrap
+                location,
                 offset: 0,
                 limit: MAX_CHUNK_SIZE,
             },
@@ -134,9 +145,23 @@ impl ClientHandle {
         media: &Media,
         path: P,
     ) -> Result<(), io::Error> {
-        let mut file = fs::File::create(path).await?;
         let mut download = self.iter_download(media);
 
+        ClientHandle::load(path, &mut download).await
+    }
+
+    pub(crate) async fn download_media_at_location<P: AsRef<Path>>(
+        &mut self,
+        location: tl::enums::InputFileLocation,
+        path: P,
+    ) -> Result<(), io::Error> {
+        let mut download = DownloadIter::new_from_location(self, location);
+
+        ClientHandle::load(path, &mut download).await
+    }
+
+    async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadIter) -> Result<(), io::Error> {
+        let mut file = fs::File::create(path).await?;
         while let Some(chunk) = download
             .next()
             .await
