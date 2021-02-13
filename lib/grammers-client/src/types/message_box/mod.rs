@@ -16,7 +16,7 @@ use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use tokio::time::Instant;
+use tokio::time::{Duration, Instant};
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT
@@ -140,6 +140,17 @@ impl MessageBox {
         } else {
             debug!("set deadline {:?} for {:?}", deadline, entry);
         }
+    }
+
+    /// Convenience to reset a channel's deadline, with optional timeout.
+    fn reset_channel_deadline(&mut self, channel_id: i32, timeout: Option<i32>) {
+        self.reset_deadline(
+            Entry::Channel(channel_id),
+            Instant::now()
+                + timeout
+                    .map(|t| Duration::from_secs(t as _))
+                    .unwrap_or(defs::NO_UPDATES_TIMEOUT),
+        );
     }
 
     // Note: calling this method is **really** important, or we'll start fetching updates from
@@ -521,9 +532,6 @@ impl MessageBox {
             _ => panic!("request had wrong input channel"),
         };
 
-        self.reset_deadline(Entry::Channel(channel_id), next_updates_deadline());
-
-        // TODO refetch updates after timeout
         match difference {
             tl::enums::updates::ChannelDifference::Empty(diff) => {
                 assert!(!diff.r#final);
@@ -533,6 +541,7 @@ impl MessageBox {
                 );
                 self.getting_channel_diff.remove(&channel_id);
                 self.pts_map.insert(Entry::Channel(channel_id), diff.pts);
+                self.reset_channel_deadline(channel_id, diff.timeout);
 
                 (Vec::new(), Vec::new(), Vec::new())
             }
@@ -555,6 +564,7 @@ impl MessageBox {
                         panic!("received a folder on channelDifferenceTooLong")
                     }
                 }
+                self.reset_channel_deadline(channel_id, diff.timeout);
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
                 // expect all updates to be fetched. Instead, nothing is returned.
@@ -564,7 +574,7 @@ impl MessageBox {
                 tl::types::updates::ChannelDifference {
                     r#final,
                     pts,
-                    timeout: _,
+                    timeout,
                     new_messages,
                     other_updates: mut updates,
                     chats,
@@ -590,6 +600,7 @@ impl MessageBox {
                     }
                     .into()
                 }));
+                self.reset_channel_deadline(channel_id, timeout);
 
                 (updates, users, chats)
             }
