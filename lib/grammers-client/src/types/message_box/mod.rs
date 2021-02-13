@@ -25,15 +25,15 @@ fn next_updates_deadline() -> Instant {
 /// Creation, querying, and setting base state.
 impl MessageBox {
     pub(crate) fn new() -> Self {
-        let next_deadline = next_updates_deadline();
+        let deadline = next_updates_deadline();
         let mut no_update_deadlines = HashMap::with_capacity(1);
-        no_update_deadlines.insert(Entry::AccountWide, next_deadline);
+        no_update_deadlines.insert(Entry::AccountWide, deadline);
 
         Self {
             getting_diff: false,
             getting_channel_diff: HashSet::new(),
             no_update_deadlines,
-            next_deadline,
+            next_channel_deadline: deadline,
             date: 1,
             seq: 0,
             pts_map: HashMap::new(),
@@ -53,21 +53,21 @@ impl MessageBox {
                 .map(|(id, pts)| (Entry::Channel(*id), *pts)),
         );
 
-        let next_deadline = next_updates_deadline();
+        let deadline = next_updates_deadline();
         let mut no_update_deadlines = HashMap::with_capacity(1 + state.channels.len());
-        no_update_deadlines.insert(Entry::AccountWide, next_deadline);
+        no_update_deadlines.insert(Entry::AccountWide, deadline);
         no_update_deadlines.extend(
             state
                 .channels
                 .iter()
-                .map(|(id, _)| (Entry::Channel(*id), next_deadline)),
+                .map(|(id, _)| (Entry::Channel(*id), deadline)),
         );
 
         Self {
             getting_diff: false,
             getting_channel_diff: HashSet::new(),
             no_update_deadlines,
-            next_deadline,
+            next_channel_deadline: deadline,
             date: state.date,
             seq: state.seq,
             pts_map,
@@ -103,18 +103,26 @@ impl MessageBox {
     ///
     /// When this deadline is met, it means that get difference needs to be called.
     pub(crate) fn timeout_deadline(&self) -> Instant {
-        self.possible_gap_deadline.unwrap_or(self.next_deadline)
+        self.next_channel_deadline
+            .min(*self.no_update_deadlines.get(&Entry::AccountWide).unwrap())
     }
 
     /// Reset the deadline for the periods without updates for a given entry.
     ///
     /// It also updates the next deadline time to be accurate the closest deadline.
     fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
+        // If it's not a channel it's account-wide, which has its own `getDifference`, so there is
+        // no need to track a "minimum" for this difference type.
+        if !matches!(entry, Entry::Channel(_)) {
+            self.no_update_deadlines.insert(entry, deadline);
+            return;
+        }
+
         if let Some(old_deadline) = self.no_update_deadlines.insert(entry, deadline) {
-            if self.next_deadline == old_deadline {
+            if self.next_channel_deadline == old_deadline {
                 // The deadline we just updated was the closest one to expiring.
                 // This means we need to find the new closest deadline.
-                self.next_deadline = *self
+                self.next_channel_deadline = *self
                     .no_update_deadlines
                     .iter()
                     .map(|(_, instant)| instant)
@@ -123,7 +131,7 @@ impl MessageBox {
 
                 debug!(
                     "reset deadline {:?} for {:?}, next {:?}",
-                    deadline, entry, self.next_deadline
+                    deadline, entry, self.next_channel_deadline
                 );
             } else {
                 // There is a different, smaller deadline already set (don't change it).
@@ -132,10 +140,10 @@ impl MessageBox {
                     deadline, entry
                 );
             }
-        } else if deadline < self.next_deadline {
+        } else if deadline < self.next_channel_deadline {
             // There was no previous deadline for this entry, but our new deadline is smaller than
             // the "next deadline" we had. Update the next deadline with the new smallest value.
-            self.next_deadline = deadline;
+            self.next_channel_deadline = deadline;
             debug!("updated deadline {:?} for {:?}", deadline, entry);
         } else {
             debug!("set deadline {:?} for {:?}", deadline, entry);
@@ -343,14 +351,12 @@ impl MessageBox {
 impl MessageBox {
     /// Return the request that needs to be made to get the difference, if any.
     pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
-        if self.getting_diff
-            || Instant::now() > self.possible_gap_deadline.unwrap_or(self.next_deadline)
-        {
+        let deadline = *self.no_update_deadlines.get(&Entry::AccountWide).unwrap();
+        if self.getting_diff || Instant::now() > self.possible_gap_deadline.unwrap_or(deadline) {
             if self.possible_gap_deadline.is_some() {
                 info!("gap was not resolved after waiting");
                 self.getting_diff = true;
                 self.possible_gap_deadline = None;
-                // TODO shouldn't this do getChannelDifference?
                 self.possible_gap.clear();
             }
 
@@ -484,6 +490,24 @@ impl MessageBox {
         &mut self,
         chat_hashes: &ChatHashCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
+        // Try to fill `getting_channel_diff` if any channel deadlines expired.
+        let now = Instant::now();
+        if now > self.next_channel_deadline {
+            self.getting_channel_diff
+                .extend(self.no_update_deadlines.iter().flat_map(
+                    |(entry, deadline)| match entry {
+                        Entry::Channel(id) => {
+                            if now > *deadline {
+                                Some(id)
+                            } else {
+                                None
+                            }
+                        }
+                        _ => None,
+                    },
+                ));
+        }
+
         let channel_id = *self.getting_channel_diff.iter().next()?;
         let channel = if let Some(channel) = chat_hashes.get_input_channel(channel_id) {
             channel
@@ -493,6 +517,7 @@ impl MessageBox {
                 channel_id
             );
             self.getting_channel_diff.remove(&channel_id);
+            self.reset_channel_deadline(channel_id, None);
             return None;
         };
 
@@ -514,6 +539,7 @@ impl MessageBox {
                 channel_id
             );
             self.getting_channel_diff.remove(&channel_id);
+            self.reset_channel_deadline(channel_id, None);
             None
         }
     }
