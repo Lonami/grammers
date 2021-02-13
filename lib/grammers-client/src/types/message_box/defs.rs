@@ -46,7 +46,8 @@ pub(crate) enum Entry {
 pub(crate) struct MessageBox {
     pub(super) getting_diff: bool,
     pub(super) getting_channel_diff: HashSet<i32>,
-    pub(super) deadline: Instant,
+    pub(super) no_update_deadlines: HashMap<Entry, Instant>,
+    pub(super) next_deadline: Instant, // min(no_update_deadlines.values())
     pub(super) date: i32,
     pub(super) seq: i32,
     pub(super) pts_map: HashMap<Entry, i32>,

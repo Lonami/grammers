@@ -25,10 +25,15 @@ fn next_updates_deadline() -> Instant {
 /// Creation, querying, and setting base state.
 impl MessageBox {
     pub(crate) fn new() -> Self {
+        let next_deadline = next_updates_deadline();
+        let mut no_update_deadlines = HashMap::with_capacity(1);
+        no_update_deadlines.insert(Entry::AccountWide, next_deadline);
+
         Self {
             getting_diff: false,
             getting_channel_diff: HashSet::new(),
-            deadline: next_updates_deadline(),
+            no_update_deadlines,
+            next_deadline,
             date: 1,
             seq: 0,
             pts_map: HashMap::new(),
@@ -48,10 +53,21 @@ impl MessageBox {
                 .map(|(id, pts)| (Entry::Channel(*id), *pts)),
         );
 
-        MessageBox {
+        let next_deadline = next_updates_deadline();
+        let mut no_update_deadlines = HashMap::with_capacity(1 + state.channels.len());
+        no_update_deadlines.insert(Entry::AccountWide, next_deadline);
+        no_update_deadlines.extend(
+            state
+                .channels
+                .iter()
+                .map(|(id, _)| (Entry::Channel(*id), next_deadline)),
+        );
+
+        Self {
             getting_diff: false,
             getting_channel_diff: HashSet::new(),
-            deadline: next_updates_deadline(),
+            no_update_deadlines,
+            next_deadline,
             date: state.date,
             seq: state.seq,
             pts_map,
@@ -87,7 +103,43 @@ impl MessageBox {
     ///
     /// When this deadline is met, it means that get difference needs to be called.
     pub(crate) fn timeout_deadline(&self) -> Instant {
-        self.possible_gap_deadline.unwrap_or(self.deadline)
+        self.possible_gap_deadline.unwrap_or(self.next_deadline)
+    }
+
+    /// Reset the deadline for the periods without updates for a given entry.
+    ///
+    /// It also updates the next deadline time to be accurate the closest deadline.
+    fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
+        if let Some(old_deadline) = self.no_update_deadlines.insert(entry, deadline) {
+            if self.next_deadline == old_deadline {
+                // The deadline we just updated was the closest one to expiring.
+                // This means we need to find the new closest deadline.
+                self.next_deadline = *self
+                    .no_update_deadlines
+                    .iter()
+                    .map(|(_, instant)| instant)
+                    .min()
+                    .unwrap();
+
+                debug!(
+                    "reset deadline {:?} for {:?}, next {:?}",
+                    deadline, entry, self.next_deadline
+                );
+            } else {
+                // There is a different, smaller deadline already set (don't change it).
+                debug!(
+                    "reset deadline {:?} for {:?}, next unchanged",
+                    deadline, entry
+                );
+            }
+        } else if deadline < self.next_deadline {
+            // There was no previous deadline for this entry, but our new deadline is smaller than
+            // the "next deadline" we had. Update the next deadline with the new smallest value.
+            self.next_deadline = deadline;
+            debug!("updated deadline {:?} for {:?}", deadline, entry);
+        } else {
+            debug!("set deadline {:?} for {:?}", deadline, entry);
+        }
     }
 
     // Note: calling this method is **really** important, or we'll start fetching updates from
@@ -116,9 +168,6 @@ impl MessageBox {
         ),
         Gap,
     > {
-        // As soon as we receive an update of any form, the period for "no updates" is reset.
-        self.deadline = next_updates_deadline();
-
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
         let tl::types::UpdatesCombined {
@@ -135,6 +184,20 @@ impl MessageBox {
                 return Err(Gap);
             }
         };
+
+        // As soon as we receive an update of any form related to messages (has `PtsInfo`),
+        // the "no updates" period for that entry is reset.
+        //
+        // Build a `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
+        let update_deadlines = updates
+            .iter()
+            .flat_map(|update| PtsInfo::from_update(&update).map(|info| info.entry))
+            .collect::<HashSet<_>>();
+
+        let next_deadline = next_updates_deadline();
+        update_deadlines
+            .into_iter()
+            .for_each(|entry| self.reset_deadline(entry, next_deadline));
 
         // > For all the other [not `updates` or `updatesCombined`] `Updates` type constructors
         // > there is no need to check `seq` or change a local state.
@@ -269,7 +332,8 @@ impl MessageBox {
 impl MessageBox {
     /// Return the request that needs to be made to get the difference, if any.
     pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
-        if self.getting_diff || Instant::now() > self.possible_gap_deadline.unwrap_or(self.deadline)
+        if self.getting_diff
+            || Instant::now() > self.possible_gap_deadline.unwrap_or(self.next_deadline)
         {
             if self.possible_gap_deadline.is_some() {
                 info!("gap was not resolved after waiting");
@@ -298,7 +362,7 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
-        self.deadline = next_updates_deadline();
+        self.reset_deadline(Entry::AccountWide, next_updates_deadline());
 
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
@@ -452,12 +516,12 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
-        self.deadline = next_updates_deadline();
-
         let channel_id = match request.channel {
             tl::enums::InputChannel::Channel(c) => c.channel_id,
             _ => panic!("request had wrong input channel"),
         };
+
+        self.reset_deadline(Entry::Channel(channel_id), next_updates_deadline());
 
         // TODO refetch updates after timeout
         match difference {
@@ -469,6 +533,7 @@ impl MessageBox {
                 );
                 self.getting_channel_diff.remove(&channel_id);
                 self.pts_map.insert(Entry::Channel(channel_id), diff.pts);
+
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
