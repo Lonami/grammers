@@ -254,31 +254,34 @@ impl MessageBox {
             .filter_map(|u| self.apply_pts_info(u))
             .collect::<Vec<_>>();
 
-        // For each update in possible gaps, see if the gap has been resolved already.
-        // Borrow checker doesn't know that `possible_gap` won't be changed by `apply_pts_info`.
-        let keys = self.possible_gap.keys().copied().collect::<Vec<_>>();
-        for key in keys {
-            self.possible_gap.get_mut(&key).unwrap().sort_by_key(
-                |update| match PtsInfo::from_update(update) {
-                    Some(pts) => (pts.pts - pts.pts_count),
-                    None => 0,
-                },
-            );
-            for _ in 0..self.possible_gap.get(&key).unwrap().len() {
-                let update = self.possible_gap.get_mut(&key).unwrap().remove(0);
-                // If this fails to apply, it will get re-inserted at the end.
-                // All should fail, so the order will be preserved (it would've cycled once).
-                if let Some(update) = self.apply_pts_info(update) {
-                    result.push(update);
+        if !self.possible_gap.is_empty() {
+            // For each update in possible gaps, see if the gap has been resolved already.
+            // Borrow checker doesn't know that `possible_gap` won't be changed by `apply_pts_info`.
+            let keys = self.possible_gap.keys().copied().collect::<Vec<_>>();
+            for key in keys {
+                self.possible_gap
+                    .get_mut(&key)
+                    .unwrap()
+                    .sort_by_key(|update| match PtsInfo::from_update(update) {
+                        Some(pts) => (pts.pts - pts.pts_count),
+                        None => 0,
+                    });
+                for _ in 0..self.possible_gap.get(&key).unwrap().len() {
+                    let update = self.possible_gap.get_mut(&key).unwrap().remove(0);
+                    // If this fails to apply, it will get re-inserted at the end.
+                    // All should fail, so the order will be preserved (it would've cycled once).
+                    if let Some(update) = self.apply_pts_info(update) {
+                        result.push(update);
+                    }
                 }
             }
-        }
 
-        // Clear now-empty gaps. If all are cleared, also clear the gap deadline.
-        self.possible_gap.retain(|_, v| !v.is_empty());
-        if self.possible_gap.is_empty() {
-            debug!("successfully resolved gap by waiting");
-            self.possible_gap_deadline = None;
+            // Clear now-empty gaps. If all are cleared, also clear the gap deadline.
+            self.possible_gap.retain(|_, v| !v.is_empty());
+            if self.possible_gap.is_empty() {
+                debug!("successfully resolved gap by waiting");
+                self.possible_gap_deadline = None;
+            }
         }
 
         Ok((result, users, chats))
