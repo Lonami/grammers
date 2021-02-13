@@ -175,6 +175,12 @@ impl MessageBox {
         // Borrow checker doesn't know that `possible_gap` won't be changed by `apply_pts_info`.
         let keys = self.possible_gap.keys().copied().collect::<Vec<_>>();
         for key in keys {
+            self.possible_gap.get_mut(&key).unwrap().sort_by_key(
+                |update| match PtsInfo::from_update(update) {
+                    Some(pts) => (pts.pts - pts.pts_count),
+                    None => 0,
+                },
+            );
             for _ in 0..self.possible_gap.get(&key).unwrap().len() {
                 let update = self.possible_gap.get_mut(&key).unwrap().remove(0);
                 // If this fails to apply, it will get re-inserted at the end.
