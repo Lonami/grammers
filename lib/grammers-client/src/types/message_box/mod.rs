@@ -13,7 +13,7 @@ pub(crate) use defs::{Entry, Gap, MessageBox};
 use defs::{PtsInfo, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
 pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
-use log::{debug, info, trace};
+use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use tokio::time::Instant;
@@ -116,6 +116,7 @@ impl MessageBox {
         ),
         Gap,
     > {
+        // As soon as we receive an update of any form, the period for "no updates" is reset.
         self.deadline = next_updates_deadline();
 
         // Top level, when handling received `updates` and `updatesCombined`.
@@ -201,9 +202,14 @@ impl MessageBox {
         Ok((result, users, chats))
     }
 
+    /// Tries to apply the input update if its `PtsInfo` follows the correct order.
+    ///
+    /// If the update can be applied, it is returned; otherwise, the update is stored in a
+    /// possible gap and `None` is returned.
     fn apply_pts_info(&mut self, update: tl::enums::Update) -> Option<tl::enums::Update> {
         let pts = match PtsInfo::from_update(&update) {
             Some(pts) => pts,
+            // No pts means that the update can be applied in any order.
             None => return Some(update),
         };
 
@@ -366,6 +372,7 @@ impl MessageBox {
         updates.iter().for_each(|u| match u {
             tl::enums::Update::ChannelTooLong(c) => {
                 // `c.pts`, if any, is the channel's current `pts`; we do not need this.
+                info!("got {:?} during getDifference", c);
                 self.getting_channel_diff.insert(c.channel_id);
             }
             _ => {}
@@ -406,6 +413,10 @@ impl MessageBox {
         let channel = if let Some(channel) = chat_hashes.get_input_channel(channel_id) {
             channel
         } else {
+            warn!(
+                "cannot getChannelDifference for {} as we're missing its hash",
+                channel_id
+            );
             self.getting_channel_diff.remove(&channel_id);
             return None;
         };
@@ -423,6 +434,10 @@ impl MessageBox {
                 },
             })
         } else {
+            warn!(
+                "cannot getChannelDifference for {} as we're missing its pts",
+                channel_id
+            );
             self.getting_channel_diff.remove(&channel_id);
             None
         }

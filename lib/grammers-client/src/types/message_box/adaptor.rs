@@ -166,6 +166,7 @@ pub(super) fn adapt(
         // > `updatesTooLong` indicates that there are too many events pending to be pushed
         // > to the client, so one needs to fetch them manually.
         tl::enums::Updates::TooLong => {
+            info!("received updatesTooLong, treating as gap");
             return Err(Gap);
         }
         // > `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` [...]
