@@ -213,6 +213,15 @@ impl Message {
         self.msg
             .from_id
             .as_ref()
+            .or_else(|| {
+                // Incoming messages in private conversations don't include `from_id` since
+                // layer 119, but the sender can only be the chat we're in.
+                if !self.msg.out && matches!(self.msg.peer_id, tl::enums::Peer::User(_)) {
+                    Some(&self.msg.peer_id)
+                } else {
+                    None
+                }
+            })
             .and_then(|from| self.chats.get(from))
             .map(|e| e.clone())
     }
