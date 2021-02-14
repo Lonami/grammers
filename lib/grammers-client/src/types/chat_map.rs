@@ -67,6 +67,12 @@ impl ChatMap {
         })
     }
 
+    pub fn single(chat: &Chat) -> Arc<Self> {
+        let mut map = HashMap::new();
+        map.insert((&chat.to_peer()).into(), chat.clone());
+        Arc::new(Self { map })
+    }
+
     /// Retrieve the full `Chat` object given its `Peer`.
     pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Chat> {
         self.map.get(&peer.into())

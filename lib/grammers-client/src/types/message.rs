@@ -134,7 +134,7 @@ impl Message {
             },
             action: None,
             client: client.clone(),
-            chats: ChatMap::empty(), // TODO add input chat
+            chats: ChatMap::single(chat),
         }
     }
 
