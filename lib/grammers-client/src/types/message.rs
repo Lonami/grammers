@@ -5,8 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Media, Photo};
+use crate::types::{InputMessage, Media, Photo};
 use crate::utils;
+use crate::ChatMap;
 use crate::{types, ClientHandle};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -85,6 +86,55 @@ impl Message {
                 client: client.clone(),
                 chats: Arc::clone(chats),
             }),
+        }
+    }
+
+    pub(crate) fn from_short_updates(
+        client: &ClientHandle,
+        updates: tl::types::UpdateShortSentMessage,
+        input: InputMessage,
+        chat: &Chat,
+    ) -> Self {
+        Self {
+            msg: tl::types::Message {
+                out: updates.out,
+                mentioned: false,
+                media_unread: false,
+                silent: input.silent,
+                post: false, // TODO true if sent to broadcast channel
+                from_scheduled: false,
+                legacy: false,
+                edit_hide: false,
+                pinned: false,
+                id: updates.id,
+                from_id: None, // TODO self
+                peer_id: chat.to_peer(),
+                fwd_from: None,
+                via_bot_id: None,
+                reply_to: input.reply_to.map(|reply_to_msg_id| {
+                    tl::types::MessageReplyHeader {
+                        reply_to_msg_id,
+                        reply_to_peer_id: None,
+                        reply_to_top_id: None,
+                    }
+                    .into()
+                }),
+                date: updates.date,
+                message: input.text,
+                media: updates.media,
+                reply_markup: input.reply_markup,
+                entities: updates.entities,
+                views: None,
+                forwards: None,
+                replies: None,
+                edit_date: None,
+                post_author: None,
+                grouped_id: None,
+                restriction_reason: None,
+            },
+            action: None,
+            client: client.clone(),
+            chats: ChatMap::empty(), // TODO add input chat
         }
     }
 
