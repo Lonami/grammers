@@ -310,7 +310,7 @@ impl Message {
     /// replying to it.
     ///
     /// Shorthand for `ClientHandle::send_message`.
-    pub async fn respond(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
+    pub async fn respond(&mut self, message: types::InputMessage) -> Result<Self, InvocationError> {
         self.client.send_message(&self.chat(), message).await
     }
 
@@ -318,7 +318,7 @@ impl Message {
     /// it. This methods overrides the `reply_to` on the `InputMessage` to point to `self`.
     ///
     /// Shorthand for `ClientHandle::send_message`.
-    pub async fn reply(&mut self, message: types::InputMessage) -> Result<(), InvocationError> {
+    pub async fn reply(&mut self, message: types::InputMessage) -> Result<Self, InvocationError> {
         self.client
             .send_message(&self.chat(), message.reply_to(Some(self.msg.id)))
             .await

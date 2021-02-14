@@ -348,14 +348,13 @@ impl ClientHandle {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    // TODO don't require nasty InputPeer
-    // TODO return Message
     pub async fn send_message(
         &mut self,
         chat: &Chat,
         message: types::InputMessage,
-    ) -> Result<(), InvocationError> {
-        if let Some(media) = message.media {
+    ) -> Result<Message, InvocationError> {
+        let random_id = generate_random_id();
+        let updates = if let Some(media) = message.media {
             self.invoke(&tl::functions::messages::SendMedia {
                 silent: message.silent,
                 background: message.background,
@@ -364,7 +363,7 @@ impl ClientHandle {
                 reply_to_msg_id: message.reply_to,
                 media,
                 message: message.text,
-                random_id: generate_random_id(),
+                random_id,
                 reply_markup: message.reply_markup,
                 entities: if message.entities.is_empty() {
                     None
@@ -374,7 +373,6 @@ impl ClientHandle {
                 schedule_date: message.schedule_date,
             })
             .await
-            .map(drop)
         } else {
             self.invoke(&tl::functions::messages::SendMessage {
                 no_webpage: !message.link_preview,
@@ -384,7 +382,7 @@ impl ClientHandle {
                 peer: chat.to_input_peer(),
                 reply_to_msg_id: message.reply_to,
                 message: message.text,
-                random_id: generate_random_id(),
+                random_id,
                 reply_markup: message.reply_markup,
                 entities: if message.entities.is_empty() {
                     None
@@ -394,8 +392,12 @@ impl ClientHandle {
                 schedule_date: message.schedule_date,
             })
             .await
-            .map(drop)
-        }
+        }?;
+
+        Ok(map_random_ids_to_messages(self, &[random_id], updates)
+            .pop()
+            .unwrap()
+            .unwrap())
     }
 
     /// Edits an existing message.
