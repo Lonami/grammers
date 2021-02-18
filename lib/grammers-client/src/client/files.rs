@@ -93,6 +93,7 @@ impl DownloadIter {
                     }
                 }
 
+                self.request.offset += self.request.limit;
                 Ok(Some(f.bytes))
             }
             File::CdnRedirect(_) => {
