@@ -7,6 +7,7 @@
 // except according to those terms.
 use aes_soft::cipher::generic_array::GenericArray;
 use aes_soft::cipher::{BlockCipher, NewBlockCipher};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use once_cell::sync::Lazy;
 
 #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
