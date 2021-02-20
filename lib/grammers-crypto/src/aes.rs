@@ -7,8 +7,10 @@
 // except according to those terms.
 use aes_soft::cipher::generic_array::GenericArray;
 use aes_soft::cipher::{BlockCipher, NewBlockCipher};
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 use once_cell::sync::Lazy;
 
+#[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
 static USE_AES_NI: Lazy<bool> =
     Lazy::new(|| is_x86_feature_detected!("aes") && is_x86_feature_detected!("sse2"));
 
@@ -92,18 +94,28 @@ macro_rules! do_decrypt {
 
 /// Encrypt the input plaintext using the AES-IGE mode.
 pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    if *USE_AES_NI {
-        do_encrypt!(aesni(plaintext, key, iv))
-    } else {
-        do_encrypt!(aes_soft(plaintext, key, iv))
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if *USE_AES_NI {
+            do_encrypt!(aesni(plaintext, key, iv))
+        } else {
+            do_encrypt!(aes_soft(plaintext, key, iv))
+        }
     }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    do_encrypt!(aes_soft(plaintext, key, iv))
 }
 
 /// Decrypt the input ciphertext using the AES-IGE mode.
 pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    if *USE_AES_NI {
-        do_decrypt!(aesni(ciphertext, key, iv))
-    } else {
-        do_decrypt!(aes_soft(ciphertext, key, iv))
+    #[cfg(any(target_arch = "x86", target_arch = "x86_64"))]
+    {
+        if *USE_AES_NI {
+            do_decrypt!(aesni(ciphertext, key, iv))
+        } else {
+            do_decrypt!(aes_soft(ciphertext, key, iv))
+        }
     }
+    #[cfg(not(any(target_arch = "x86", target_arch = "x86_64")))]
+    do_decrypt!(aes_soft(ciphertext, key, iv))
 }
