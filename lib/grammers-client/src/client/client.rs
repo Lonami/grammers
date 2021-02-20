@@ -112,14 +112,27 @@ impl Default for InitParams {
     fn default() -> Self {
         let info = os_info::get();
 
-        let mut system_lang_code = locate_locale::system();
-        if system_lang_code.is_empty() {
-            system_lang_code.push_str(DEFAULT_LOCALE);
-        }
+        #[allow(unused_mut)]
+        let mut system_lang_code: String;
+        #[allow(unused_mut)]
+        let mut lang_code: String;
 
-        let mut lang_code = locate_locale::user();
-        if lang_code.is_empty() {
-            lang_code.push_str(DEFAULT_LOCALE);
+        #[cfg(not(target_os = "android"))]
+        {
+            system_lang_code = locate_locale::system();
+            if system_lang_code.is_empty() {
+                system_lang_code.push_str(DEFAULT_LOCALE);
+            }
+
+            lang_code = locate_locale::user();
+            if lang_code.is_empty() {
+                lang_code.push_str(DEFAULT_LOCALE);
+            }
+        }
+        #[cfg(target_os = "android")]
+        {
+            system_lang_code = DEFAULT_LOCALE.into();
+            lang_code = DEFAULT_LOCALE.into();
         }
 
         Self {
