@@ -1,3 +1,5 @@
+use std::net::Ipv4Addr;
+
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -52,6 +54,9 @@ pub struct InitParams {
     // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
     // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
+    pub dc_addr: Option<Ipv4Addr>,
+    pub dc_port: u16,
+    pub dc: Option<i32>,
 }
 
 /// Request messages that the `ClientHandle` uses to communicate with the `Client`.
@@ -134,6 +139,9 @@ impl Default for InitParams {
             system_lang_code,
             lang_code,
             catch_up: false,
+            dc_addr: None,
+            dc: None,
+            dc_port: 443,
         }
     }
 }
