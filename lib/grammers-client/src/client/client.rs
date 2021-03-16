@@ -1,5 +1,3 @@
-use std::net::Ipv4Addr;
-
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -14,6 +12,7 @@ use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use tokio::sync::{mpsc, oneshot};
+use std::net::SocketAddr;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -54,8 +53,7 @@ pub struct InitParams {
     // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
     // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
-    pub dc_addr: Vec<(Ipv4Addr, u16)>,
-    pub dc_id: Option<usize>,
+    pub server_addr: Option<SocketAddr>,
 }
 
 /// Request messages that the `ClientHandle` uses to communicate with the `Client`.
@@ -138,8 +136,7 @@ impl Default for InitParams {
             system_lang_code,
             lang_code,
             catch_up: false,
-            dc_addr: Vec::new(),
-            dc_id: None,
+            server_addr: None,
         }
     }
 }

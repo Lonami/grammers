@@ -13,7 +13,7 @@ use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sen
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use tokio::sync::{mpsc, oneshot};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
@@ -33,30 +33,16 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
 const DEFAULT_DC: i32 = 2;
 
 pub(crate) async fn connect_sender<S: Session>(
-    mut dc_id: i32,
+    dc_id: i32,
     config: &mut Config<S>,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
-    let mut addr = DC_ADDRESSES[dc_id as usize];
-
-    let dc_addr = config.params.dc_addr.clone();
-    dc_id = if let Some(id) = config.params.dc_id {
-        id as i32
+    let addr: SocketAddr = if let Some(ip) = config.params.server_addr {
+        ip
     } else {
-        DEFAULT_DC
+        DC_ADDRESSES[dc_id as usize].into()
     };
-
-    if !&dc_addr.is_empty() {
-        if let Some(usr_addr) = dc_addr.get(dc_id as usize) {
-            addr = *usr_addr;
-        } else {
-            info!(
-                "Not found ip in params by index {}. Use default addr {:?}",
-                dc_id, addr
-            );
-        }
-    }
 
     let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
         info!(

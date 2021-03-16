@@ -16,7 +16,7 @@ use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
-use std::net::Ipv4Addr;
+use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 
 // Needed for auto-generated definitions.
@@ -58,7 +58,7 @@ pub trait Session {
     /// Authorization key data for the given datacenter ID, if any.
     fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey>;
 
-    fn insert_dc(&mut self, id: i32, ipv4_port: (Ipv4Addr, u16), auth: &AuthKey);
+    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey);
 
     fn set_user(&mut self, id: i32, dc: i32, bot: bool);
 
@@ -95,7 +95,7 @@ impl Session for MemorySession {
             .next()
     }
 
-    fn insert_dc(&mut self, id: i32, (ipv4, port): (Ipv4Addr, u16), auth: &AuthKey) {
+    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey) {
         if let Some(pos) = self
             .session
             .dcs
@@ -104,12 +104,23 @@ impl Session for MemorySession {
         {
             self.session.dcs.remove(pos);
         }
+        let addr: SocketAddr = server_addr.into();
+
+        let (ip_v4, ip_v6): (Option<&SocketAddrV4>, Option<&SocketAddrV6>) = match &addr {
+            SocketAddr::V4(ip_v4) => {
+                (Some(ip_v4), None)
+            },
+            SocketAddr::V6(ref ip_v6) => {
+                (None, Some(ip_v6))
+            }
+        };
+
         self.session.dcs.push(
             types::DataCenter {
                 id,
-                ipv4: Some(i32::from_le_bytes(ipv4.octets())),
-                ipv6: None,
-                port: port as i32,
+                ipv4: if let Some(ip_v4) = ip_v4 { Some(i32::from_le_bytes(ip_v4.ip().octets())) } else { None },
+                ipv6: if let Some(ip_v6) = ip_v6 { Some(ip_v6.ip().octets()) } else { None },
+                port: addr.port() as i32,
                 auth: Some(auth.to_bytes().to_vec()),
             }
             .into(),
@@ -162,8 +173,8 @@ impl Session for FileSession {
         self.session.dc_auth_key(dc_id)
     }
 
-    fn insert_dc(&mut self, id: i32, ipv4_port: (Ipv4Addr, u16), auth: &AuthKey) {
-        self.session.insert_dc(id, ipv4_port, auth)
+    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey) {
+        self.session.insert_dc(id, server_addr, auth)
     }
 
     fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
