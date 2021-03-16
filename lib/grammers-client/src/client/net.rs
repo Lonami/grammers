@@ -33,19 +33,29 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
 const DEFAULT_DC: i32 = 2;
 
 pub(crate) async fn connect_sender<S: Session>(
-    mut dc_id: i32,
+    dc_id: i32,
     config: &mut Config<S>,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
     let mut addr = DC_ADDRESSES[dc_id as usize];
 
-    let dc_addr = &config.params.dc_addr;
-    let dc_num = config.params.dc;
+    let dc_addr = config.params.dc_addr.clone();
+    let dc_num = if let Some(id) = config.params.dc_id {
+        id
+    } else {
+        DEFAULT_DC as usize
+    };
 
-    if dc_addr.is_some() && dc_num.is_some() {
-        dc_id = dc_num.unwrap();
-        addr = (dc_addr.unwrap().clone(), config.params.dc_port);
+    if !&dc_addr.is_empty() {
+        if let Some(usr_addr) = dc_addr.get(dc_num as usize) {
+            addr = *usr_addr;
+        } else {
+            info!(
+                "Not found ip in params by index {}. Use default addr {:?}",
+                dc_num, addr
+            );
+        }
     }
 
     let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
