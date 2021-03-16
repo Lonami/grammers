@@ -11,6 +11,7 @@ use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types as tl;
+use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
 
 /// When no locale is found, use this one instead.
@@ -52,6 +53,11 @@ pub struct InitParams {
     // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
     // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
+    /// Server address to connect to. By default, the library will connect to the address stored
+    /// in the session file (or a default production address if no such address exists). This
+    /// field can be used to override said address, and is most commonly used to connect to one
+    /// of Telegram's test servers instead.
+    pub server_addr: Option<SocketAddr>,
 }
 
 /// Request messages that the `ClientHandle` uses to communicate with the `Client`.
@@ -134,6 +140,7 @@ impl Default for InitParams {
             system_lang_code,
             lang_code,
             catch_up: false,
+            server_addr: None,
         }
     }
 }

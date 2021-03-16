@@ -13,7 +13,7 @@ use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sen
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::net::Ipv4Addr;
+use std::net::{Ipv4Addr, SocketAddr};
 use tokio::sync::{mpsc, oneshot};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
@@ -38,7 +38,11 @@ pub(crate) async fn connect_sender<S: Session>(
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
-    let addr = DC_ADDRESSES[dc_id as usize];
+    let addr: SocketAddr = if let Some(ip) = config.params.server_addr {
+        ip
+    } else {
+        DC_ADDRESSES[dc_id as usize].into()
+    };
 
     let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
         info!(
