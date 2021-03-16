@@ -114,16 +114,8 @@ impl Session for MemorySession {
         self.session.dcs.push(
             types::DataCenter {
                 id,
-                ipv4: if let Some(ip_v4) = ip_v4 {
-                    Some(i32::from_le_bytes(ip_v4.ip().octets()))
-                } else {
-                    None
-                },
-                ipv6: if let Some(ip_v6) = ip_v6 {
-                    Some(ip_v6.ip().octets())
-                } else {
-                    None
-                },
+                ipv4: ip_v4.map(|addr| i32::from_le_bytes(addr.ip().octets())),
+                ipv6: ip_v6.map(|addr| addr.ip().octets()),
                 port: addr.port() as i32,
                 auth: Some(auth.to_bytes().to_vec()),
             }
