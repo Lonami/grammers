@@ -11,8 +11,8 @@ use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types as tl;
-use tokio::sync::{mpsc, oneshot};
 use std::net::SocketAddr;
+use tokio::sync::{mpsc, oneshot};
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
