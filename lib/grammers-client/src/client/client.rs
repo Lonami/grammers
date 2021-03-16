@@ -53,8 +53,10 @@ pub struct InitParams {
     // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
     // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
-    ///Addr to telegram dc, by default use one of DC_ADDRESSES, but if you need a specific or test
-    ///you can use this param
+    /// Server address to connect to. By default, the library will connect to the address stored
+    /// in the session file (or a default production address if no such address exists). This
+    /// field can be used to override said address, and is most commonly used to connect to one
+    /// of Telegram's test servers instead.
     pub server_addr: Option<SocketAddr>,
 }
 
