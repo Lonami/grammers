@@ -26,7 +26,7 @@ pub(crate) fn generate_random_id() -> i64 {
             .expect("system time is before epoch")
             .as_nanos() as i64;
 
-        LAST_ID.compare_and_swap(0, now, Ordering::SeqCst);
+        drop(LAST_ID.compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst));
     }
 
     LAST_ID.fetch_add(1, Ordering::SeqCst)
