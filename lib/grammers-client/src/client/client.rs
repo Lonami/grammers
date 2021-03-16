@@ -53,6 +53,8 @@ pub struct InitParams {
     // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
     // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
+    ///Addr to telegram dc, by default use one of DC_ADDRESSES, but if you need a specific or test
+    ///you can use this param
     pub server_addr: Option<SocketAddr>,
 }
 
