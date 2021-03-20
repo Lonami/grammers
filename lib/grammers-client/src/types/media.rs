@@ -17,6 +17,12 @@ pub struct Photo {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Document {
+    document: tl::types::MessageMediaDocument,
+    client: ClientHandle,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Uploaded {
     pub(crate) input_file: tl::enums::InputFile,
 }
@@ -25,6 +31,7 @@ pub struct Uploaded {
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
+    Document(Document),
     Uploaded(Uploaded),
 }
 
@@ -98,6 +105,41 @@ impl Photo {
     }
 }
 
+impl Document {
+    pub(crate) fn from_media(
+        document: tl::types::MessageMediaDocument,
+        client: ClientHandle,
+    ) -> Self {
+        Self { document, client }
+    }
+
+    fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+        use tl::enums::Document as D;
+
+        self.document.document.as_ref().and_then(|p| match p {
+            D::Empty(_) => None,
+            D::Document(document) => Some(
+                tl::types::InputDocumentFileLocation {
+                    id: document.id,
+                    access_hash: document.access_hash,
+                    file_reference: document.file_reference.clone(),
+                    thumb_size: String::new(),
+                }
+                .into(),
+            ),
+        })
+    }
+
+    pub fn id(&self) -> i64 {
+        use tl::enums::Document as D;
+
+        match self.document.document.as_ref().unwrap() {
+            D::Empty(document) => document.id,
+            D::Document(document) => document.id,
+        }
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -122,7 +164,7 @@ impl Media {
             M::Geo(_) => None,
             M::Contact(_) => None,
             M::Unsupported => None,
-            M::Document(_) => None,
+            M::Document(document) => Some(Self::Document(Document::from_media(document, client))),
             M::WebPage(_) => None,
             M::Venue(_) => None,
             M::Game(_) => None,
@@ -136,6 +178,7 @@ impl Media {
     pub(crate) fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         match self {
             Media::Photo(photo) => photo.to_input_location(),
+            Media::Document(document) => document.to_input_location(),
             Media::Uploaded(_) => None,
         }
     }
