@@ -8,10 +8,9 @@
 use crate::types::photo_sizes::PhotoSize;
 use crate::ClientHandle;
 use grammers_tl_types as tl;
-use std::fmt;
-use std::fmt::{Debug, Formatter};
+use std::fmt::Debug;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
     photo: tl::types::MessageMediaPhoto,
     client: ClientHandle,
@@ -96,18 +95,6 @@ impl Photo {
                 .map(|x| PhotoSize::make_from(&x, &photo, self.client.clone()))
                 .collect(),
         }
-    }
-}
-
-impl Debug for Photo {
-    fn fmt(&self, f: &mut Formatter) -> fmt::Result {
-        write!(f, "{:?}", self.photo)
-    }
-}
-
-impl PartialEq for Photo {
-    fn eq(&self, other: &Self) -> bool {
-        self.photo == other.photo
     }
 }
 
