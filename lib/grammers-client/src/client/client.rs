@@ -87,6 +87,8 @@ pub(crate) enum Request {
 ///
 /// [`FileSession`]: grammers_session::FileSession
 pub struct Client<S: Session> {
+    // Used to implement `PartialEq`.
+    pub(crate) id: i64,
     pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
     pub(crate) dc_id: i32,
     pub(crate) config: Config<S>,
@@ -103,6 +105,8 @@ pub struct Client<S: Session> {
 /// messages, fetching users, answering bot callbacks, and so on.
 #[derive(Clone)]
 pub struct ClientHandle {
+    // Used to implement `PartialEq`.
+    pub(crate) id: i64,
     pub(crate) tx: mpsc::UnboundedSender<Request>,
 }
 
@@ -166,5 +170,17 @@ impl fmt::Debug for ClientHandle {
         // FIXME don't use dummy field, use finish_non_exhaustive once
         // https://github.com/rust-lang/rust/issues/67364 is closed
         f.debug_struct("ClientHandle").field("_", &"...").finish()
+    }
+}
+
+impl<S: Session> PartialEq for Client<S> {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
+    }
+}
+
+impl PartialEq for ClientHandle {
+    fn eq(&self, other: &Self) -> bool {
+        self.id == other.id
     }
 }

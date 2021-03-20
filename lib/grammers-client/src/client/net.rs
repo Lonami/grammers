@@ -8,6 +8,7 @@
 pub use super::updates::UpdateIter;
 use super::{Client, ClientHandle, Config, Request, Step};
 use crate::types::{ChatHashCache, MessageBox};
+use crate::utils;
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::Session;
@@ -132,6 +133,7 @@ impl<S: Session> Client<S> {
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
         let mut client = Self {
+            id: utils::generate_random_id(),
             sender,
             dc_id,
             config,
@@ -214,6 +216,7 @@ impl<S: Session> Client<S> {
     ///
     pub fn handle(&self) -> ClientHandle {
         ClientHandle {
+            id: self.id,
             tx: self.handle_tx.clone(),
         }
     }
