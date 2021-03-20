@@ -133,6 +133,7 @@ impl InputMessage {
     /// The text will be the caption of the document, which may be empty for no caption.
     pub fn document(mut self, file: Uploaded) -> Self {
         let mime_type = self.get_file_mime(&file);
+        let file_name = file.name().to_string();
         self.media = Some(
             tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
@@ -140,7 +141,8 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                attributes: Vec::new(),
+                // TODO provide a way to set other attributes
+                attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
             }
@@ -156,6 +158,7 @@ impl InputMessage {
     /// The text will be the caption of the file, which may be empty for no caption.
     pub fn file(mut self, file: Uploaded) -> Self {
         let mime_type = self.get_file_mime(&file);
+        let file_name = file.name().to_string();
         self.media = Some(
             tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
@@ -163,7 +166,8 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                attributes: Vec::new(),
+                // TODO provide a way to set other attributes
+                attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
             }
