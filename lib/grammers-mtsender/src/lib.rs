@@ -256,7 +256,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .iter_mut()
             .zip(msg_ids.into_iter())
             .for_each(|(req, msg_id)| {
-                debug!("serialized request with {:?}", msg_id);
+                assert!(req.body.len() >= 4);
+                let req_id = [req.body[0], req.body[1], req.body[2], req.body[3]];
+                debug!(
+                    "serialized request {:x} with {:?}",
+                    u32::from_le_bytes(req_id),
+                    msg_id
+                );
                 req.state = RequestState::Serialized(msg_id);
             });
     }
