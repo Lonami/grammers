@@ -11,6 +11,7 @@ use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types as tl;
+use std::fmt;
 use std::net::SocketAddr;
 use tokio::sync::{mpsc, oneshot};
 
@@ -148,5 +149,22 @@ impl Default for InitParams {
 impl<S: Session> Drop for Client<S> {
     fn drop(&mut self) {
         self.sync_update_state();
+    }
+}
+
+impl<S: Session> fmt::Debug for Client<S> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // TODO show more info, like user id and session name if present
+        f.debug_struct("Client")
+            .field("dc_id", &self.dc_id)
+            .finish()
+    }
+}
+
+impl fmt::Debug for ClientHandle {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        // FIXME don't use dummy field, use finish_non_exhaustive once
+        // https://github.com/rust-lang/rust/issues/67364 is closed
+        f.debug_struct("ClientHandle").field("_", &"...").finish()
     }
 }
