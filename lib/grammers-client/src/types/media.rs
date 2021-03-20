@@ -138,6 +138,25 @@ impl Document {
             D::Document(document) => document.id,
         }
     }
+
+    /// Return the file's name.
+    ///
+    /// If the file was uploaded with no file name, the returned string will be empty.
+    pub fn name(&self) -> &str {
+        use tl::enums::Document as D;
+
+        match self.document.document.as_ref().unwrap() {
+            D::Empty(_) => "",
+            D::Document(document) => document
+                .attributes
+                .iter()
+                .find_map(|attr| match attr {
+                    tl::enums::DocumentAttribute::Filename(attr) => Some(attr.file_name.as_ref()),
+                    _ => None,
+                })
+                .unwrap_or(""),
+        }
+    }
 }
 
 impl Uploaded {
