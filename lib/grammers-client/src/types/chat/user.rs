@@ -129,6 +129,10 @@ impl User {
         self.0.id
     }
 
+    pub(crate) fn access_hash(&self) -> Option<i64> {
+        self.0.access_hash
+    }
+
     /// Return the first name of this user.
     ///
     /// If the account was deleted, the returned string will be empty.

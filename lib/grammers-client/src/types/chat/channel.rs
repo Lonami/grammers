@@ -104,6 +104,10 @@ impl Channel {
         self.0.id
     }
 
+    pub(crate) fn access_hash(&self) -> Option<i64> {
+        self.0.access_hash
+    }
+
     /// Return the title of this channel.
     pub fn title(&self) -> &str {
         self.0.title.as_str()

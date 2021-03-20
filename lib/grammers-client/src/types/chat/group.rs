@@ -139,6 +139,18 @@ impl Group {
         }
     }
 
+    pub(crate) fn access_hash(&self) -> Option<i64> {
+        use tl::enums::Chat;
+
+        match &self.0 {
+            Chat::Empty(_) => None,
+            Chat::Chat(_) => None,
+            Chat::Forbidden(_) => None,
+            Chat::Channel(chat) => chat.access_hash,
+            Chat::ChannelForbidden(chat) => Some(chat.access_hash),
+        }
+    }
+
     /// Return the title of this group.
     ///
     /// The title may be the empty string if the group is not accessible.

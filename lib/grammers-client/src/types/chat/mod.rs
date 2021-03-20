@@ -11,6 +11,7 @@ mod user;
 
 use grammers_tl_types as tl;
 
+use super::Peer;
 pub use channel::Channel;
 pub use group::Group;
 pub use user::{Platform, RestrictionReason, User};
@@ -32,6 +33,13 @@ pub enum Chat {
 
     /// A broadcast [`Channel`].
     Channel(Channel),
+}
+
+/// A packed chat
+#[allow(dead_code)]
+pub struct PackedChat {
+    peer: Peer,
+    access_hash: Option<i64>,
 }
 
 impl Chat {
@@ -117,6 +125,14 @@ impl Chat {
         }
     }
 
+    fn access_hash(&self) -> Option<i64> {
+        match self {
+            Self::User(user) => user.access_hash(),
+            Self::Group(group) => group.access_hash(),
+            Self::Channel(channel) => channel.access_hash(),
+        }
+    }
+
     /// Return the name of this chat.
     ///
     /// For private conversations (users), this is their first name. For groups and channels,
@@ -128,6 +144,14 @@ impl Chat {
             Self::User(user) => user.first_name(),
             Self::Group(group) => group.title(),
             Self::Channel(channel) => channel.title(),
+        }
+    }
+
+    /// Pack this chat into a smaller representation that can be loaded later.
+    pub fn pack(&self) -> PackedChat {
+        PackedChat {
+            peer: (&self.to_peer()).into(),
+            access_hash: self.access_hash(),
         }
     }
 }
