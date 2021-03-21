@@ -225,14 +225,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             return;
         }
 
-        // TODO avoid clone
         // TODO add a test to make sure we only ever send the same request once
         let requests = self
             .requests
-            .iter()
-            .filter_map(|r| match r.state {
-                RequestState::NotSerialized => Some(r.body.clone()),
-                RequestState::Serialized(_) | RequestState::Sent(_) => None,
+            .iter_mut()
+            .filter(|r| match r.state {
+                RequestState::NotSerialized => true,
+                RequestState::Serialized(_) | RequestState::Sent(_) => false,
             })
             .collect::<Vec<_>>();
 
@@ -243,8 +242,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         // TODO make mtp itself use BytesMut to avoid copies
         let mut msg_ids = Vec::new();
-        for request in requests {
-            if let Some(msg_id) = self.mtp.push(&request) {
+        for request in requests.iter() {
+            if let Some(msg_id) = self.mtp.push(&request.body) {
                 msg_ids.push(msg_id);
             } else {
                 break;
@@ -256,8 +255,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.transport
             .pack(&self.mtp_buffer, &mut self.write_buffer);
 
-        self.requests
-            .iter_mut()
+        // NOTE: we have to use the FILTERED requests, not the saved ones.
+        // The key to finding this was printing the old and new state (but took ~2h to find).
+        // Otherwise we will likely change from Sent to Serialized and enter an infinite loop.
+        // This will very easily cause transport flood (using self, trying to upload two files at once).
+        // TODO add a test for this
+        requests
+            .into_iter()
             .zip(msg_ids.into_iter())
             .for_each(|(req, msg_id)| {
                 assert!(req.body.len() >= 4);
