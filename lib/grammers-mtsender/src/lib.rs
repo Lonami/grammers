@@ -140,6 +140,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         &mut self,
         body: Vec<u8>,
     ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        assert!(body.len() >= 4);
+        let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
+        debug!("enqueueing request {:x} to be serialized", req_id);
+
         let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
             body,
@@ -308,8 +312,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     /// Handle `n` more written bytes being ready to process by the transport.
     fn on_net_write(&mut self, n: usize) {
-        trace!("written {} bytes to the network", n);
         self.write_index += n;
+        trace!(
+            "written {} bytes to the network ({}/{})",
+            n,
+            self.write_index,
+            self.write_buffer.len()
+        );
+        assert!(self.write_index <= self.write_buffer.len());
         if self.write_index != self.write_buffer.len() {
             return;
         }
@@ -360,8 +370,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }));
 
         for (msg_id, ret) in result.rpc_results {
-            debug!("got result for request {:?}", msg_id);
-
+            let mut found = false;
             for i in (0..self.requests.len()).rev() {
                 let req = &mut self.requests[i];
                 match req.state {
@@ -373,12 +382,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     }
                     RequestState::Sent(sid) if sid == msg_id => {
                         let result = match ret {
-                            Ok(x) => Ok(x),
+                            Ok(x) => {
+                                assert!(x.len() >= 4);
+                                let res_id = u32::from_le_bytes([x[0], x[1], x[2], x[3]]);
+                                debug!("got result {:x} for request {:?}", res_id, msg_id);
+                                Ok(x)
+                            }
                             Err(mtp::RequestError::RpcError(error)) => {
+                                debug!("got rpc error {:?} for request {:?}", error, msg_id);
                                 Err(InvocationError::Rpc(error))
                             }
-                            Err(mtp::RequestError::Dropped) => Err(InvocationError::Dropped),
+                            Err(mtp::RequestError::Dropped) => {
+                                debug!("response for request {:?} dropped", msg_id);
+                                Err(InvocationError::Dropped)
+                            }
                             Err(mtp::RequestError::Deserialize(error)) => {
+                                debug!(
+                                    "got deserialize error {:?} for request {:?}",
+                                    error, msg_id
+                                );
                                 Err(InvocationError::Read(error.into()))
                             }
                             Err(mtp::RequestError::BadMessage { .. }) => {
@@ -392,10 +414,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         drop(req);
                         let req = self.requests.remove(i);
                         drop(req.result.send(result));
+                        found = true;
                         break;
                     }
                     _ => {}
                 }
+            }
+
+            if !found {
+                info!("got rpc result {:?} but no such request is saved", msg_id);
             }
         }
 
