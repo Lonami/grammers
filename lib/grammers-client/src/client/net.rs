@@ -9,7 +9,8 @@ pub use super::updates::UpdateIter;
 use super::{Client, ClientHandle, Config, Request, Step};
 use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
-use grammers_mtproto::{mtp, transport};
+use grammers_mtproto::mtp::{self, RpcError};
+use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
@@ -218,6 +219,7 @@ impl<S: Session> Client<S> {
         ClientHandle {
             id: self.id,
             tx: self.handle_tx.clone(),
+            flood_sleep_threshold: self.config.params.flood_sleep_threshold,
         }
     }
 
@@ -333,32 +335,55 @@ impl ClientHandle {
         &mut self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let (response, rx) = oneshot::channel();
+        // TODO this retry logic is not present in `Client`; ideally we'd merge the two
+        let mut slept_flood = false;
+        let sleep_thresh = self.flood_sleep_threshold.unwrap_or(0);
+        loop {
+            let (response, rx) = oneshot::channel();
 
-        // TODO add a test this (using handle with client dropped)
-        if let Err(_) = self.tx.send(Request::Rpc {
-            request: request.to_bytes(),
-            response,
-        }) {
-            // `Client` was dropped, can no longer send requests
-            return Err(InvocationError::Dropped);
-        }
+            // TODO add a test this (using handle with client dropped)
+            if let Err(_) = self.tx.send(Request::Rpc {
+                request: request.to_bytes(),
+                response,
+            }) {
+                // `Client` was dropped, can no longer send requests
+                return Err(InvocationError::Dropped);
+            }
 
-        // First receive the `oneshot::Receiver` with from the `Client`,
-        // then `await` on that to receive the response body for the request.
-        if let Ok(response) = rx.await {
-            if let Ok(result) = response.await {
-                match result {
-                    Ok(body) => R::Return::from_bytes(&body).map_err(|e| e.into()),
-                    Err(e) => Err(e),
+            // First receive the `oneshot::Receiver` with from the `Client`,
+            // then `await` on that to receive the response body for the request.
+            if let Ok(response) = rx.await {
+                if let Ok(result) = response.await {
+                    match result {
+                        Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
+                        Err(InvocationError::Rpc(RpcError {
+                            name,
+                            code: 420,
+                            value: Some(seconds),
+                        })) if !slept_flood && seconds <= sleep_thresh => {
+                            // In test servers, FLOOD_WAIT_0 has been observed, and sleeping for
+                            // such a short amount will cause retries very fast leading to issues.
+                            let delay = std::time::Duration::from_secs(seconds.min(1) as _);
+                            info!(
+                                "sleeping on {} for {:?} before retrying {}",
+                                name,
+                                delay,
+                                std::any::type_name::<R>()
+                            );
+                            tokio::time::sleep(delay).await;
+                            slept_flood = true;
+                            continue;
+                        }
+                        Err(e) => break Err(e),
+                    }
+                } else {
+                    // `Sender` dropped, won't be receiving a response for this
+                    break Err(InvocationError::Dropped);
                 }
             } else {
-                // `Sender` dropped, won't be receiving a response for this
-                Err(InvocationError::Dropped)
+                // `Client` dropped, won't be receiving a response for this
+                break Err(InvocationError::Dropped);
             }
-        } else {
-            // `Client` dropped, won't be receiving a response for this
-            Err(InvocationError::Dropped)
         }
     }
 

@@ -59,6 +59,18 @@ pub struct InitParams {
     /// field can be used to override said address, and is most commonly used to connect to one
     /// of Telegram's test servers instead.
     pub server_addr: Option<SocketAddr>,
+    /// The threshold below which the library should automatically sleep on flood-wait and slow
+    /// mode wait errors (inclusive). For instance, if an
+    /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
+    /// and `flood_sleep_threshold` is 20 (seconds), the library will `sleep` automatically for
+    /// 17 seconds. If the error was for 21s, it would propagate the error instead instead.
+    ///
+    /// By default, the library will sleep on flood-waits below or equal to one minute (60
+    /// seconds), but this can be disabled by passing `None`.
+    ///
+    /// On flood, the library will retry *once*. If the flood error occurs a second time after
+    /// sleeping, the error will be returned.
+    pub flood_sleep_threshold: Option<u32>,
 }
 
 /// Request messages that the `ClientHandle` uses to communicate with the `Client`.
@@ -108,6 +120,7 @@ pub struct ClientHandle {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
     pub(crate) tx: mpsc::UnboundedSender<Request>,
+    pub(crate) flood_sleep_threshold: Option<u32>,
 }
 
 /// A network step.
@@ -146,6 +159,7 @@ impl Default for InitParams {
             lang_code,
             catch_up: false,
             server_addr: None,
+            flood_sleep_threshold: Some(60),
         }
     }
 }
