@@ -10,8 +10,8 @@
 
 use super::ClientHandle;
 use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
-    Photo, User,
+    chat::PackedChat, AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message,
+    Participant, Peer, Photo, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -555,5 +555,67 @@ impl ClientHandle {
     /// ```
     pub fn iter_profile_photos(&self, chat: &Chat) -> ProfilePhotoIter {
         ProfilePhotoIter::new(self, chat)
+    }
+
+    /// Convert a [`PackedChat`] back into a [`Chat`]
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(packed_chat: grammers_client::types::chat::PackedChat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// let chat = client.unpack_chat(&packed_chat).await?;
+    ///
+    /// println!("Found chat: {}", chat.name());
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn unpack_chat(&mut self, packed_chat: &PackedChat) -> Result<Chat, InvocationError> {
+        Ok(match packed_chat.peer {
+            Peer::User(user_id) => {
+                let mut res = self
+                    .invoke(&tl::functions::users::GetUsers {
+                        id: vec![tl::enums::InputUser::User(tl::types::InputUser {
+                            user_id,
+                            access_hash: packed_chat.access_hash.unwrap(),
+                        })],
+                    })
+                    .await?;
+                if res.len() != 1 {
+                    panic!("fetching only one user should exactly return one user");
+                }
+                Chat::from_user(res.pop().unwrap())
+            }
+            Peer::Chat(chat_id) => {
+                let mut res = match self
+                    .invoke(&tl::functions::messages::GetChats { id: vec![chat_id] })
+                    .await?
+                {
+                    tl::enums::messages::Chats::Chats(chats) => chats.chats,
+                    tl::enums::messages::Chats::Slice(chat_slice) => chat_slice.chats,
+                };
+                if res.len() != 1 {
+                    panic!("fetching only one chat should exactly return one chat");
+                }
+                Chat::from_chat(res.pop().unwrap())
+            }
+            Peer::Channel(channel_id) => {
+                let mut res = match self
+                    .invoke(&tl::functions::channels::GetChannels {
+                        id: vec![tl::enums::InputChannel::Channel(tl::types::InputChannel {
+                            channel_id,
+                            access_hash: packed_chat.access_hash.unwrap(),
+                        })],
+                    })
+                    .await?
+                {
+                    tl::enums::messages::Chats::Chats(chats) => chats.chats,
+                    tl::enums::messages::Chats::Slice(chat_slice) => chat_slice.chats,
+                };
+                if res.len() != 1 {
+                    panic!("fetching only one chat should exactly return one chat");
+                }
+                Chat::from_chat(res.pop().unwrap())
+            }
+        })
     }
 }
