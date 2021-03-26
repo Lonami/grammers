@@ -67,12 +67,15 @@ impl Photo {
         })
     }
 
-    pub fn id(&self) -> i64 {
+    /// Get photo id.
+    ///
+    /// Photo id may be missing in case of expired photo.
+    pub fn id(&self) -> Option<i64> {
         use tl::enums::Photo as P;
 
-        match self.photo.photo.as_ref().unwrap() {
-            P::Empty(photo) => photo.id,
-            P::Photo(photo) => photo.id,
+        match self.photo.photo.as_ref()? {
+            P::Empty(photo) => Some(photo.id),
+            P::Photo(photo) => Some(photo.id),
         }
     }
 

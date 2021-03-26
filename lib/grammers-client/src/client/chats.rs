@@ -548,7 +548,7 @@ impl ClientHandle {
     /// let mut photos = client.iter_profile_photos(&chat);
     ///
     /// while let Some(photo) = photos.next().await? {
-    ///     println!("Did you know chat has a photo with ID {}?", photo.id());
+    ///     println!("Did you know chat has a photo with ID {}?", photo.id().unwrap());
     /// }
     /// # Ok(())
     /// # }
