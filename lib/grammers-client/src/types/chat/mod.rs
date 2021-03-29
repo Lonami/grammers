@@ -36,10 +36,9 @@ pub enum Chat {
 }
 
 /// A packed chat
-#[allow(dead_code)]
 pub struct PackedChat {
-    peer: Peer,
-    access_hash: Option<i64>,
+    pub(crate) peer: Peer,
+    pub(crate) access_hash: Option<i64>,
 }
 
 impl Chat {
