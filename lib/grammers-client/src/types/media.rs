@@ -23,6 +23,13 @@ pub struct Document {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Sticker {
+    pub document: Document,
+    attrs: tl::types::DocumentAttributeSticker,
+    animated: bool,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 pub struct Uploaded {
     pub(crate) input_file: tl::enums::InputFile,
 }
@@ -32,6 +39,7 @@ pub struct Uploaded {
 pub enum Media {
     Photo(Photo),
     Document(Document),
+    Sticker(Sticker),
     Uploaded(Uploaded),
 }
 
@@ -159,6 +167,40 @@ impl Document {
     }
 }
 
+impl Sticker {
+    pub(crate) fn from_document(document: &Document) -> Option<Self> {
+        match document.document.document {
+            Some(tl::enums::Document::Document(ref doc)) => {
+                let mut animated = false;
+                let mut sticker_attrs: Option<tl::types::DocumentAttributeSticker> = None;
+                for attr in &doc.attributes {
+                    match attr {
+                        tl::enums::DocumentAttribute::Sticker(s) => sticker_attrs = Some(s.clone()),
+                        tl::enums::DocumentAttribute::Animated => animated = true,
+                        _ => (),
+                    }
+                }
+                Some(Self {
+                    document: document.clone(),
+                    attrs: sticker_attrs?,
+                    animated,
+                })
+            }
+            _ => None,
+        }
+    }
+
+    /// Get the emoji associated with the sticker.
+    pub fn emoji(&self) -> &str {
+        return self.attrs.alt.as_str();
+    }
+
+    /// Is this sticker an animated sticker?
+    pub fn is_animated(&self) -> bool {
+        return self.animated;
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -183,7 +225,14 @@ impl Media {
             M::Geo(_) => None,
             M::Contact(_) => None,
             M::Unsupported => None,
-            M::Document(document) => Some(Self::Document(Document::from_media(document, client))),
+            M::Document(document) => {
+                let document = Document::from_media(document, client);
+                Some(if let Some(sticker) = Sticker::from_document(&document) {
+                    Self::Sticker(sticker)
+                } else {
+                    Self::Document(document)
+                })
+            }
             M::WebPage(_) => None,
             M::Venue(_) => None,
             M::Game(_) => None,
@@ -198,6 +247,7 @@ impl Media {
         match self {
             Media::Photo(photo) => photo.to_input_location(),
             Media::Document(document) => document.to_input_location(),
+            Media::Sticker(sticker) => sticker.document.to_input_location(),
             Media::Uploaded(_) => None,
         }
     }
