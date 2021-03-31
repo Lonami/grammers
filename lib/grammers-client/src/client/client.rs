@@ -13,7 +13,8 @@ use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::fmt;
 use std::net::SocketAddr;
-use tokio::sync::{mpsc, oneshot};
+use std::sync::{Arc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -84,6 +85,19 @@ pub(crate) enum Request {
     },
 }
 
+pub(crate) struct ClientInner<S: Session> {
+    // Used to implement `PartialEq`.
+    pub(crate) id: i64,
+    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
+    pub(crate) dc_id: Mutex<i32>,
+    // TODO try to avoid a mutex over the ENTIRE config; only the session needs it
+    pub(crate) config: Mutex<Config<S>>,
+    pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
+    pub(crate) handle_rx: AsyncMutex<mpsc::UnboundedReceiver<Request>>,
+    pub(crate) message_box: Mutex<MessageBox>,
+    pub(crate) chat_hashes: ChatHashCache,
+}
+
 /// A client capable of connecting to Telegram and invoking requests.
 ///
 /// This structure is the "entry point" of the library, from which you can start using the rest.
@@ -98,17 +112,7 @@ pub(crate) enum Request {
 /// session to disk on drop as well, so everything should persist under normal operation.
 ///
 /// [`FileSession`]: grammers_session::FileSession
-pub struct Client<S: Session> {
-    // Used to implement `PartialEq`.
-    pub(crate) id: i64,
-    pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
-    pub(crate) dc_id: i32,
-    pub(crate) config: Config<S>,
-    pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
-    pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
-    pub(crate) message_box: MessageBox,
-    pub(crate) chat_hashes: ChatHashCache,
-}
+pub struct Client<S: Session>(pub(crate) Arc<ClientInner<S>>);
 
 /// A client handle which can be freely cloned and moved around tasks to invoke requests
 /// concurrently.
@@ -164,6 +168,7 @@ impl Default for InitParams {
     }
 }
 
+// TODO move some stuff like drop into ClientInner?
 impl<S: Session> Drop for Client<S> {
     fn drop(&mut self) {
         self.sync_update_state();
@@ -174,7 +179,7 @@ impl<S: Session> fmt::Debug for Client<S> {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO show more info, like user id and session name if present
         f.debug_struct("Client")
-            .field("dc_id", &self.dc_id)
+            .field("dc_id", &self.0.dc_id)
             .finish()
     }
 }
@@ -189,7 +194,7 @@ impl fmt::Debug for ClientHandle {
 
 impl<S: Session> PartialEq for Client<S> {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.0.id == other.0.id
     }
 }
 

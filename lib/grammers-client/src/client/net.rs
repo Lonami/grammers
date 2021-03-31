@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub use super::updates::UpdateIter;
-use super::{Client, ClientHandle, Config, Request, Step};
+use super::{Client, ClientHandle, ClientInner, Config, Request, Step};
 use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
@@ -16,7 +16,8 @@ use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::net::{Ipv4Addr, SocketAddr};
-use tokio::sync::{mpsc, oneshot};
+use std::sync::{Arc, Mutex};
+use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -133,22 +134,24 @@ impl<S: Session> Client<S> {
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let (handle_tx, handle_rx) = mpsc::unbounded_channel();
-        let mut client = Self {
+        let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
-            sender,
-            dc_id,
-            config,
+            sender: AsyncMutex::new(sender),
+            dc_id: Mutex::new(dc_id),
+            config: Mutex::new(config),
             handle_tx,
-            handle_rx,
-            message_box,
+            handle_rx: AsyncMutex::new(handle_rx),
+            message_box: Mutex::new(message_box),
             chat_hashes: ChatHashCache::new(),
-        };
+        }));
 
+        let mut message_box = client.0.message_box.lock().unwrap();
+        let config = client.0.config.lock().unwrap();
         // Don't bother getting pristine state if we're not logged in.
-        if client.message_box.is_empty() && client.config.session.signed_in() {
+        if message_box.is_empty() && config.session.signed_in() {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    client.message_box.set_state(state);
+                    message_box.set_state(state);
                     client.sync_update_state();
                 }
                 Err(_) => {
@@ -158,6 +161,8 @@ impl<S: Session> Client<S> {
             }
         }
 
+        drop(message_box);
+        drop(config);
         Ok(client)
     }
 
@@ -186,10 +191,11 @@ impl<S: Session> Client<S> {
     /// # }
     /// ```
     pub async fn invoke<R: tl::RemoteCall>(
-        &mut self,
+        &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        self.sender.invoke(request).await
+        let mut sender = self.0.sender.lock().await;
+        sender.invoke(request).await
     }
 
     /// Return a new [`ClientHandle`] that can be used to invoke remote procedure calls.
@@ -217,9 +223,9 @@ impl<S: Session> Client<S> {
     ///
     pub fn handle(&self) -> ClientHandle {
         ClientHandle {
-            id: self.id,
-            tx: self.handle_tx.clone(),
-            flood_sleep_threshold: self.config.params.flood_sleep_threshold,
+            id: self.0.id,
+            tx: self.0.handle_tx.clone(),
+            flood_sleep_threshold: self.0.config.lock().unwrap().params.flood_sleep_threshold,
         }
     }
 
@@ -250,11 +256,13 @@ impl<S: Session> Client<S> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn step(&mut self) -> Result<Step, sender::ReadError> {
+    pub async fn step(&self) -> Result<Step, sender::ReadError> {
+        let mut sender = self.0.sender.lock().await;
+        let mut handle_rx = self.0.handle_rx.lock().await;
         let (network, request) = {
             tokio::select! {
-                network = self.sender.step() => (Some(network), None),
-                request = self.handle_rx.recv() => (None, Some(request)),
+                network = sender.step() => (Some(network), None),
+                request = handle_rx.recv() => (None, Some(request)),
             }
         };
 
@@ -263,7 +271,7 @@ impl<S: Session> Client<S> {
             match request {
                 Request::Rpc { request, response } => {
                     // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
-                    drop(response.send(self.sender.enqueue_body(request)));
+                    drop(response.send(sender.enqueue_body(request)));
                 }
                 Request::Disconnect { response } => {
                     // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
@@ -296,7 +304,7 @@ impl<S: Session> Client<S> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn run_until_disconnected(mut self) -> Result<(), sender::ReadError> {
+    pub async fn run_until_disconnected(self) -> Result<(), sender::ReadError> {
         loop {
             match self.step().await? {
                 Step::Connected { .. } => continue,

@@ -9,7 +9,7 @@
 //! Methods to deal with and offer access to updates.
 
 use super::{Client, ClientHandle, Step};
-use crate::types::{ChatMap, Update};
+use crate::types::{ChatMap, MessageBox, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::Session;
 pub use grammers_session::UpdateState;
@@ -58,11 +58,12 @@ impl<S: Session> Client<S> {
     ///
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
-    pub async fn next_updates(&mut self) -> Result<Option<UpdateIter>, InvocationError> {
+    pub async fn next_updates(&self) -> Result<Option<UpdateIter>, InvocationError> {
+        let mut message_box = self.0.message_box.lock().unwrap();
         loop {
-            if let Some(request) = self.message_box.get_difference() {
+            if let Some(request) = message_box.get_difference() {
                 let response = self.invoke(&request).await?;
-                let (updates, users, chats) = self.message_box.apply_difference(response);
+                let (updates, users, chats) = message_box.apply_difference(response);
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
                 // > gaps in the same sequence.
@@ -75,10 +76,10 @@ impl<S: Session> Client<S> {
                 )));
             }
 
-            if let Some(request) = self.message_box.get_channel_difference(&self.chat_hashes) {
+            if let Some(request) = message_box.get_channel_difference(&self.0.chat_hashes) {
                 let response = self.invoke(&request).await?;
                 let (updates, users, chats) =
-                    self.message_box.apply_channel_difference(request, response);
+                    message_box.apply_channel_difference(request, response);
                 return Ok(Some(UpdateIter::new(
                     self.handle(),
                     updates,
@@ -86,11 +87,11 @@ impl<S: Session> Client<S> {
                 )));
             }
 
-            let deadline = self.message_box.timeout_deadline();
+            let deadline = message_box.timeout_deadline();
             tokio::select! {
                 step = self.step() => {
                     match step? {
-                        Step::Connected { updates } => if let Some(iter) = self.get_update_iter(updates) {
+                        Step::Connected { updates } => if let Some(iter) = self.get_update_iter(updates, &mut message_box) {
                             break Ok(Some(iter));
                         },
                         Step::Disconnected => break Ok(None),
@@ -101,14 +102,18 @@ impl<S: Session> Client<S> {
         }
     }
 
-    fn get_update_iter(&mut self, all_updates: Vec<tl::enums::Updates>) -> Option<UpdateIter> {
+    fn get_update_iter(
+        &self,
+        all_updates: Vec<tl::enums::Updates>,
+        message_box: &mut MessageBox,
+    ) -> Option<UpdateIter> {
         if all_updates.is_empty() {
             return None;
         }
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         for updates in all_updates {
-            match self.message_box.process_updates(updates, &self.chat_hashes) {
+            match message_box.process_updates(updates, &self.0.chat_hashes) {
                 Ok(tuple) => {
                     result.0.extend(tuple.0);
                     result.1.extend(tuple.1);
@@ -127,9 +132,12 @@ impl<S: Session> Client<S> {
     }
 
     /// Synchronize the updates state to the session.
-    pub fn sync_update_state(&mut self) {
-        self.config
+    pub fn sync_update_state(&self) {
+        self.0
+            .config
+            .lock()
+            .unwrap()
             .session
-            .set_state(self.message_box.session_state())
+            .set_state(self.0.message_box.lock().unwrap().session_state())
     }
 }

@@ -82,13 +82,15 @@ impl<S: Session> Client<S> {
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
         let user = User::from_raw(auth.user);
-        self.config
-            .session
-            .set_user(user.id(), self.dc_id, user.is_bot());
+        self.0.config.lock().unwrap().session.set_user(
+            user.id(),
+            *self.0.dc_id.lock().unwrap(),
+            user.is_bot(),
+        );
 
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(state) => {
-                self.message_box.set_state(state);
+                self.0.message_box.lock().unwrap().set_state(state);
                 self.sync_update_state();
             }
             Err(_) => {
@@ -152,8 +154,9 @@ impl<S: Session> Client<S> {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 let dc_id = value.unwrap() as i32;
-                self.sender = connect_sender(dc_id, &mut self.config).await?;
-                self.dc_id = dc_id;
+                *self.0.sender.lock().await =
+                    connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                *self.0.dc_id.lock().unwrap() = dc_id;
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -226,8 +229,9 @@ impl<S: Session> Client<S> {
                 // Just connect and generate a new authorization key with it
                 // before trying again.
                 let dc_id = value.unwrap() as i32;
-                self.sender = connect_sender(dc_id, &mut self.config).await?;
-                self.dc_id = dc_id;
+                *self.0.sender.lock().await =
+                    connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                *self.0.dc_id.lock().unwrap() = dc_id;
                 self.invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),
@@ -514,7 +518,7 @@ impl<S: Session> Client<S> {
     /// Panics if the type parameter does not match the actual session type.
     pub fn session(&mut self) -> &mut S {
         self.sync_update_state();
-        &mut self.config.session
+        panic!("figure out a way to give mut access to self.config.session with locks")
     }
 }
 
