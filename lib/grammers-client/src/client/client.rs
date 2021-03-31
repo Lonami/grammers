@@ -22,10 +22,10 @@ const DEFAULT_LOCALE: &str = "en";
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
-pub struct Config<S: Session> {
+pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: S,
+    pub session: Box<dyn Session>,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -85,13 +85,13 @@ pub(crate) enum Request {
     },
 }
 
-pub(crate) struct ClientInner<S: Session> {
+pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
     pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
     pub(crate) dc_id: Mutex<i32>,
     // TODO try to avoid a mutex over the ENTIRE config; only the session needs it
-    pub(crate) config: Mutex<Config<S>>,
+    pub(crate) config: Mutex<Config>,
     pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
     pub(crate) handle_rx: AsyncMutex<mpsc::UnboundedReceiver<Request>>,
     pub(crate) message_box: Mutex<MessageBox>,
@@ -112,7 +112,7 @@ pub(crate) struct ClientInner<S: Session> {
 /// session to disk on drop as well, so everything should persist under normal operation.
 ///
 /// [`FileSession`]: grammers_session::FileSession
-pub struct Client<S: Session>(pub(crate) Arc<ClientInner<S>>);
+pub struct Client(pub(crate) Arc<ClientInner>);
 
 /// A client handle which can be freely cloned and moved around tasks to invoke requests
 /// concurrently.
@@ -169,13 +169,13 @@ impl Default for InitParams {
 }
 
 // TODO move some stuff like drop into ClientInner?
-impl<S: Session> Drop for Client<S> {
+impl Drop for Client {
     fn drop(&mut self) {
         self.sync_update_state();
     }
 }
 
-impl<S: Session> fmt::Debug for Client<S> {
+impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO show more info, like user id and session name if present
         f.debug_struct("Client")
@@ -192,7 +192,7 @@ impl fmt::Debug for ClientHandle {
     }
 }
 
-impl<S: Session> PartialEq for Client<S> {
+impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
     }

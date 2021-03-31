@@ -12,7 +12,6 @@ use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
-use grammers_session::Session;
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::net::{Ipv4Addr, SocketAddr};
@@ -35,9 +34,9 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
 
 const DEFAULT_DC: i32 = 2;
 
-pub(crate) async fn connect_sender<S: Session>(
+pub(crate) async fn connect_sender(
     dc_id: i32,
-    config: &mut Config<S>,
+    config: &mut Config,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
@@ -88,7 +87,7 @@ pub(crate) async fn connect_sender<S: Session>(
 }
 
 /// Method implementations directly related with network connectivity.
-impl<S: Session> Client<S> {
+impl Client {
     /// Creates and returns a new client instance upon successful connection to Telegram.
     ///
     /// If the session in the configuration did not have an authorization key, a new one
@@ -117,7 +116,7 @@ impl<S: Session> Client<S> {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn connect(mut config: Config<S>) -> Result<Self, AuthorizationError> {
+    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
         let sender = connect_sender(dc_id, &mut config).await?;
         let message_box = if config.params.catch_up {

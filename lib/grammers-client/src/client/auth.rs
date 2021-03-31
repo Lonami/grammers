@@ -12,7 +12,6 @@ use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -49,7 +48,7 @@ impl std::error::Error for SignInError {}
 ///
 /// Most requests to the API require the user to have authorized their key, stored in the session,
 /// before being able to use them.
-impl<S: Session> Client<S> {
+impl Client {
     /// Returns `true` if the current account is authorized. Otherwise,
     /// logging in will be required before being able to invoke requests.
     ///
@@ -516,7 +515,7 @@ impl<S: Session> Client<S> {
     /// You can use this to temporarily access the session and save it wherever you want to.
     ///
     /// Panics if the type parameter does not match the actual session type.
-    pub fn session(&mut self) -> &mut S {
+    pub fn session(&mut self) -> () {
         self.sync_update_state();
         panic!("figure out a way to give mut access to self.config.session with locks")
     }
