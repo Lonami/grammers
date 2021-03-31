@@ -10,7 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use grammers_client::{Client, ClientHandle, Config, InitParams, Update, UpdateIter};
+use grammers_client::{Client, Config, InitParams, Update, UpdateIter};
 use grammers_session::FileSession;
 use log;
 use simple_logger::SimpleLogger;
@@ -19,7 +19,7 @@ use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
-async fn handle_update(mut client: ClientHandle, updates: UpdateIter) -> Result {
+async fn handle_update(mut client: Client, updates: UpdateIter) -> Result {
     for update in updates {
         match update {
             Update::NewMessage(message) if !message.outgoing() => {
@@ -46,7 +46,7 @@ async fn async_main() -> Result {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: FileSession::load_or_create("echo.session")?,
+        session: Box::new(FileSession::load_or_create("echo.session")?),
         api_id,
         api_hash: api_hash.clone(),
         params: InitParams {
@@ -61,13 +61,13 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token, api_id, &api_hash).await?;
-        client.session().save()?;
+        // TODO save session
         println!("Signed in!");
     }
 
     println!("Waiting for messages...");
     while let Some(updates) = client.next_updates().await? {
-        let handle = client.handle();
+        let handle = client.clone();
         task::spawn(async move {
             match handle_update(handle, updates).await {
                 Ok(_) => {}
@@ -79,7 +79,7 @@ async fn async_main() -> Result {
         // connect after a period of being offline (catching up on updates).
         //
         // The alternative is to detect `Ctrl+C` and break from the loop.
-        client.session().save()?;
+        // TODO save session
     }
 
     Ok(())
