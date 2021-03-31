@@ -190,7 +190,7 @@ impl Sticker {
         }
     }
 
-    /// Get the first emoji associated with the sticker
+    /// Get the emoji associated with the sticker.
     pub fn emoji(&self) -> &str {
         return self.attrs.alt.as_str();
     }
