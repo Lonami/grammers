@@ -36,7 +36,7 @@ fn test_invoke_encrypted_method() {
 
         match sender.invoke(&functions::help::GetNearestDc {}).await {
             Ok(enums::NearestDc::Dc(_)) => {}
-            x => panic!(format!("did not get nearest dc, got: {:?}", x)),
+            x => panic!("did not get nearest dc, got: {:?}", x),
         }
     });
 }

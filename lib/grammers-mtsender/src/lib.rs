@@ -379,10 +379,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 let req = &mut self.requests[i];
                 match req.state {
                     RequestState::Serialized(sid) if sid == msg_id => {
-                        panic!(format!(
-                            "got rpc result {:?} for unsent request {:?}",
-                            msg_id, sid
-                        ));
+                        panic!("got rpc result {:?} for unsent request {:?}", msg_id, sid);
                     }
                     RequestState::Sent(sid) if sid == msg_id => {
                         let result = match ret {

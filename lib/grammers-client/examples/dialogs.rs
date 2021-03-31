@@ -75,7 +75,7 @@ async fn async_main() -> Result<()> {
                     .await?;
             }
             Ok(_) => (),
-            Err(e) => panic!(e),
+            Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
         match client.session().save() {
