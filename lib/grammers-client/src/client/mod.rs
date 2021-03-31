@@ -16,6 +16,6 @@ pub mod net;
 pub mod updates;
 
 pub use auth::SignInError;
-pub use client::{Client, ClientHandle, Config, InitParams, Step};
+pub use client::{Client, Config, InitParams, Step};
 pub(crate) use client::{ClientInner, Request};
 pub use updates::UpdateIter;

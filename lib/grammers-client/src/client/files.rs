@@ -8,7 +8,7 @@
 
 use crate::types::{Media, Uploaded};
 use crate::utils::generate_random_id;
-use crate::ClientHandle;
+use crate::Client;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::io::SeekFrom;
@@ -21,24 +21,21 @@ pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 
 pub struct DownloadIter {
-    client: ClientHandle,
+    client: Client,
     done: bool,
     request: tl::functions::upload::GetFile,
 }
 
 impl DownloadIter {
-    fn new(client: &ClientHandle, media: &Media) -> Self {
+    fn new(client: &Client, media: &Media) -> Self {
         DownloadIter::new_from_file_location(client, media.to_input_location().unwrap())
     }
 
-    fn new_from_location(client: &ClientHandle, location: tl::enums::InputFileLocation) -> Self {
+    fn new_from_location(client: &Client, location: tl::enums::InputFileLocation) -> Self {
         DownloadIter::new_from_file_location(client, location)
     }
 
-    fn new_from_file_location(
-        client: &ClientHandle,
-        location: tl::enums::InputFileLocation,
-    ) -> Self {
+    fn new_from_file_location(client: &Client, location: tl::enums::InputFileLocation) -> Self {
         // TODO let users tweak all the options from the request
         // TODO cdn support
         Self {
@@ -104,13 +101,13 @@ impl DownloadIter {
 }
 
 /// Method implementations related to uploading or downloading files.
-impl ClientHandle {
+impl Client {
     /// Returns a new iterator over the contents of a media document that will be downloaded.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
     /// let mut download = client.iter_download(&media);
     ///
@@ -130,13 +127,13 @@ impl ClientHandle {
     ///
     /// If the file already exists, it will be overwritten.
     ///
-    /// This is a small wrapper around [`ClientHandle::iter_download`] for the common case of
+    /// This is a small wrapper around [`Client::iter_download`] for the common case of
     /// wanting to save the file locally.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.download_media(&media, "/home/username/photos/holidays.jpg").await?;
     /// # Ok(())
     /// # }
@@ -148,7 +145,7 @@ impl ClientHandle {
     ) -> Result<(), io::Error> {
         let mut download = self.iter_download(media);
 
-        ClientHandle::load(path, &mut download).await
+        Client::load(path, &mut download).await
     }
 
     pub(crate) async fn download_media_at_location<P: AsRef<Path>>(
@@ -158,7 +155,7 @@ impl ClientHandle {
     ) -> Result<(), io::Error> {
         let mut download = DownloadIter::new_from_location(self, location);
 
-        ClientHandle::load(path, &mut download).await
+        Client::load(path, &mut download).await
     }
 
     async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadIter) -> Result<(), io::Error> {
@@ -198,7 +195,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// // In-memory `Vec<u8>` buffers can be used as async streams
@@ -301,12 +298,12 @@ impl ClientHandle {
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
     ///
     /// If you need more control over the uploaded data, such as performing only a partial upload
-    /// or with a different name, use [`ClientHandle::upload_stream`] instead.
+    /// or with a different name, use [`Client::upload_stream`] instead.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// let uploaded_file = client.upload_file("/home/username/photos/holidays.jpg").await?;

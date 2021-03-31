@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::ClientHandle;
+use crate::Client;
 pub use grammers_mtsender::InvocationError;
 use std::collections::VecDeque;
 
@@ -14,7 +14,7 @@ use std::collections::VecDeque;
 ///
 /// End-users should obtain particular instances of this type via client methods.
 pub struct IterBuffer<R, T> {
-    pub(crate) client: ClientHandle,
+    pub(crate) client: Client,
     pub(crate) limit: Option<usize>,
     pub(crate) fetched: usize,
     pub(crate) buffer: VecDeque<T>,
@@ -25,7 +25,7 @@ pub struct IterBuffer<R, T> {
 
 impl<R, T> IterBuffer<R, T> {
     /// Create a new `IterBuffer` instance from a handle, capacity and request.
-    pub(crate) fn from_request(client: &ClientHandle, capacity: usize, request: R) -> Self {
+    pub(crate) fn from_request(client: &Client, capacity: usize, request: R) -> Self {
         Self {
             client: client.clone(),
             limit: None,

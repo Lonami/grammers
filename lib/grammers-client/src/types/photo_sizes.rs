@@ -12,7 +12,7 @@ use tokio::io::AsyncWriteExt;
 
 use grammers_tl_types as tl;
 
-use crate::ClientHandle;
+use crate::Client;
 
 pub enum PhotoSize {
     Empty(SizeEmpty),
@@ -27,7 +27,7 @@ impl PhotoSize {
     pub(crate) fn make_from(
         size: &tl::enums::PhotoSize,
         photo: &tl::types::Photo,
-        client: ClientHandle,
+        client: Client,
     ) -> Self {
         match size {
             tl::enums::PhotoSize::Empty(size) => PhotoSize::Empty(SizeEmpty {
@@ -250,7 +250,7 @@ pub struct Size {
     access_hash: i64,
     file_reference: Vec<u8>,
 
-    client: ClientHandle,
+    client: Client,
 }
 
 /// Description of an image and its content.

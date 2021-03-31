@@ -8,7 +8,7 @@
 
 //! Methods to deal with and offer access to updates.
 
-use super::{Client, ClientHandle, Step};
+use super::{Client, Step};
 use crate::types::{ChatMap, MessageBox, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 pub use grammers_session::UpdateState;
@@ -18,14 +18,14 @@ use std::sync::Arc;
 use tokio::time::sleep_until;
 
 pub struct UpdateIter {
-    client: ClientHandle,
+    client: Client,
     updates: VecDeque<tl::enums::Update>,
     chat_hashes: Arc<ChatMap>,
 }
 
 impl UpdateIter {
     pub(crate) fn new(
-        client: ClientHandle,
+        client: Client,
         updates: Vec<tl::enums::Update>,
         chat_hashes: Arc<ChatMap>,
     ) -> Self {
@@ -69,7 +69,7 @@ impl Client {
                 //
                 // Basically, don't `step`, simply repeatedly get difference until we're done.
                 return Ok(Some(UpdateIter::new(
-                    self.handle(),
+                    self.clone(),
                     updates,
                     ChatMap::new(users, chats),
                 )));
@@ -80,7 +80,7 @@ impl Client {
                 let (updates, users, chats) =
                     message_box.apply_channel_difference(request, response);
                 return Ok(Some(UpdateIter::new(
-                    self.handle(),
+                    self.clone(),
                     updates,
                     ChatMap::new(users, chats),
                 )));
@@ -124,7 +124,7 @@ impl Client {
 
         let (updates, users, chats) = result;
         Some(UpdateIter::new(
-            self.handle(),
+            self.clone(),
             updates,
             ChatMap::new(users, chats),
         ))

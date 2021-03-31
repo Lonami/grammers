@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::net::connect_sender;
-use super::{Client, ClientHandle};
+use super::Client;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
@@ -489,8 +489,7 @@ impl Client {
     /// The client is not disconnected after signing out.
     ///
     /// Note that after using this method you will have to sign in again. If all you want to do
-    /// is disconnect, simply [`drop`] the [`Client`] instance or use the
-    /// [`ClientHandle::disconnect`] method.
+    /// is disconnect, simply [`drop`] the [`Client`] instance.
     ///
     /// # Examples
     ///
@@ -504,8 +503,6 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// [`ClientHandle::disconnect`]: crate::ClientHandle::disconnect
     pub async fn sign_out(&mut self) -> Result<bool, InvocationError> {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
@@ -519,16 +516,12 @@ impl Client {
         self.sync_update_state();
         panic!("figure out a way to give mut access to self.config.session with locks")
     }
-}
 
-/// Method implementations related with the authentication of the user into the API.
-impl ClientHandle {
     /// Calls [`Client::sign_out`] and disconnects.
     ///
     /// The client will be disconnected even if signing out fails.
     pub async fn sign_out_disconnect(&mut self) -> Result<(), InvocationError> {
-        let res = self.invoke(&tl::functions::auth::LogOut {}).await;
-        self.disconnect().await;
-        res.map(drop)
+        let _res = self.invoke(&tl::functions::auth::LogOut {}).await;
+        panic!("disconnect now only works via dropping");
     }
 }

@@ -105,13 +105,11 @@ pub(crate) struct ClientInner {
 /// This structure owns all the necessary connections to Telegram, and has implementations for the
 /// most basic methods, such as connecting, signing in, or processing network events.
 ///
-/// To invoke multiple requests concurrently, [`ClientHandle`] must be used instead, and this
-/// structure will coordinate all of them.
-///
 /// On drop, all state is synchronized to the session. The [`FileSession`] attempts to save the
 /// session to disk on drop as well, so everything should persist under normal operation.
 ///
 /// [`FileSession`]: grammers_session::FileSession
+#[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
 
 /// A client handle which can be freely cloned and moved around tasks to invoke requests

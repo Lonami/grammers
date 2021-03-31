@@ -5,8 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::client::ClientHandle;
 pub use super::updates::UpdateIter;
-use super::{Client, ClientHandle, ClientInner, Config, Request, Step};
+use super::{Client, ClientInner, Config, Request, Step};
 use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
@@ -331,7 +332,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
@@ -402,7 +403,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::ClientHandle) {
+    /// # async fn f(mut client: grammers_client::Client) {
     /// client.disconnect().await;
     /// # }
     /// ```
