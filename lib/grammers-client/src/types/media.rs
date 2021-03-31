@@ -7,6 +7,7 @@
 // except according to those terms.
 use crate::types::photo_sizes::PhotoSize;
 use crate::ClientHandle;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_tl_types as tl;
 use std::fmt::Debug;
 
@@ -163,6 +164,34 @@ impl Document {
                     _ => None,
                 })
                 .unwrap_or(""),
+        }
+    }
+
+    /// Get the file's MIME type, if any.
+    pub fn mime_type(&self) -> Option<&str> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => Some(d.mime_type.as_str()),
+            _ => None,
+        }
+    }
+
+    /// The date on which the file was created, if any.
+    pub fn creation_date(&self) -> Option<DateTime<Utc>> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => Some(DateTime::from_utc(
+                NaiveDateTime::from_timestamp(d.date as i64, 0),
+                Utc,
+            )),
+            _ => None,
+        }
+    }
+
+    /// The size of the file.
+    /// returns 0 if the document is empty.
+    pub fn size(&self) -> i32 {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => d.size,
+            _ => 0,
         }
     }
 }
