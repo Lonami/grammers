@@ -8,13 +8,13 @@
 pub use super::updates::UpdateIter;
 use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{InvocationError, Sender};
+use grammers_mtsender::Sender;
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -74,17 +74,6 @@ pub struct InitParams {
     pub flood_sleep_threshold: Option<u32>,
 }
 
-/// Request messages that the `ClientHandle` uses to communicate with the `Client`.
-pub(crate) enum Request {
-    Rpc {
-        request: Vec<u8>,
-        response: oneshot::Sender<oneshot::Receiver<Result<Vec<u8>, InvocationError>>>,
-    },
-    Disconnect {
-        response: oneshot::Sender<()>,
-    },
-}
-
 pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
@@ -92,8 +81,6 @@ pub(crate) struct ClientInner {
     pub(crate) dc_id: Mutex<i32>,
     // TODO try to avoid a mutex over the ENTIRE config; only the session needs it
     pub(crate) config: Mutex<Config>,
-    pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
-    pub(crate) handle_rx: AsyncMutex<mpsc::UnboundedReceiver<Request>>,
     pub(crate) message_box: Mutex<MessageBox>,
     pub(crate) chat_hashes: ChatHashCache,
 }
@@ -111,19 +98,6 @@ pub(crate) struct ClientInner {
 /// [`FileSession`]: grammers_session::FileSession
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
-
-/// A client handle which can be freely cloned and moved around tasks to invoke requests
-/// concurrently.
-///
-/// This structure has implementations for most of the methods you will use, such as sending
-/// messages, fetching users, answering bot callbacks, and so on.
-#[derive(Clone)]
-pub struct ClientHandle {
-    // Used to implement `PartialEq`.
-    pub(crate) id: i64,
-    pub(crate) tx: mpsc::UnboundedSender<Request>,
-    pub(crate) flood_sleep_threshold: Option<u32>,
-}
 
 /// A network step.
 pub enum Step {
@@ -182,22 +156,8 @@ impl fmt::Debug for Client {
     }
 }
 
-impl fmt::Debug for ClientHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // FIXME don't use dummy field, use finish_non_exhaustive once
-        // https://github.com/rust-lang/rust/issues/67364 is closed
-        f.debug_struct("ClientHandle").field("_", &"...").finish()
-    }
-}
-
 impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
         self.0.id == other.0.id
-    }
-}
-
-impl PartialEq for ClientHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
     }
 }

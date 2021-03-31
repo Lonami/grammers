@@ -5,19 +5,18 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::client::ClientHandle;
 pub use super::updates::UpdateIter;
-use super::{Client, ClientInner, Config, Request, Step};
+use super::{Client, ClientInner, Config, Step};
 use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
-use grammers_mtproto::mtp::{self, RpcError};
+use grammers_mtproto::mtp::{self};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
-use grammers_tl_types::{self as tl, Deserializable};
+use grammers_tl_types::{self as tl};
 use log::info;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
-use tokio::sync::{mpsc, oneshot, Mutex as AsyncMutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -133,14 +132,11 @@ impl Client {
         };
 
         // TODO Sender doesn't have a way to handle backpressure yet
-        let (handle_tx, handle_rx) = mpsc::unbounded_channel();
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             sender: AsyncMutex::new(sender),
             dc_id: Mutex::new(dc_id),
             config: Mutex::new(config),
-            handle_tx,
-            handle_rx: AsyncMutex::new(handle_rx),
             message_box: Mutex::new(message_box),
             chat_hashes: ChatHashCache::new(),
         }));
@@ -198,44 +194,7 @@ impl Client {
         sender.invoke(request).await
     }
 
-    /// Return a new [`ClientHandle`] that can be used to invoke remote procedure calls.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use tokio::task;
-    ///
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Obtain a handle. After this you can obtain more by using `client_handle.clone()`.
-    /// let mut client_handle = client.handle();
-    ///
-    /// // Run the network loop. This is necessary, or no network events will be processed!
-    /// let network_handle = task::spawn(async move { client.run_until_disconnected().await });
-    ///
-    /// // Use the `client_handle` to your heart's content, maybe you just want to disconnect:
-    /// client_handle.disconnect().await;
-    ///
-    /// // Joining on the spawned task lets us access the result from `run_until_disconnected`,
-    /// // so we can verify everything went fine. You could also just drop this though.
-    /// network_handle.await?;
-    /// # Ok(())
-    /// # }
-    ///
-    pub fn handle(&self) -> ClientHandle {
-        ClientHandle {
-            id: self.0.id,
-            tx: self.0.handle_tx.clone(),
-            flood_sleep_threshold: self.0.config.lock().unwrap().params.flood_sleep_threshold,
-        }
-    }
-
-    /// Perform a single network step or processing of incoming requests via handles.
-    ///
-    /// If a server message is received, requests enqueued via the [`ClientHandle`]s may have
-    /// their result delivered via a channel, and a (possibly empty) list of updates will be
-    /// returned.
-    ///
-    /// The other return values are graceful disconnection, or a read error.
+    /// Perform a single network step.
     ///
     /// Most commonly, you will want to use the higher-level abstraction [`Client::next_updates`]
     /// instead.
@@ -258,38 +217,13 @@ impl Client {
     /// ```
     pub async fn step(&self) -> Result<Step, sender::ReadError> {
         let mut sender = self.0.sender.lock().await;
-        let mut handle_rx = self.0.handle_rx.lock().await;
-        let (network, request) = {
-            tokio::select! {
-                network = sender.step() => (Some(network), None),
-                request = handle_rx.recv() => (None, Some(request)),
-            }
-        };
+        let updates = sender.step().await?;
 
-        if let Some(request) = request {
-            let request = request.expect("mpsc returned None");
-            match request {
-                Request::Rpc { request, response } => {
-                    // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
-                    drop(response.send(sender.enqueue_body(request)));
-                }
-                Request::Disconnect { response } => {
-                    // Channel will return `Err` if the `ClientHandle` lost interest, just drop the error.
-                    drop(response.send(()));
-                    return Ok(Step::Disconnected);
-                }
-            }
-        }
+        // TODO deal with the no-handle situation
 
         // TODO request cancellation if this is Err
         // (perhaps a method on the sender to cancel_all)
-        Ok(Step::Connected {
-            updates: if let Some(updates) = network {
-                updates?
-            } else {
-                Vec::new()
-            },
-        })
+        Ok(Step::Connected { updates })
     }
 
     /// Run the client by repeatedly calling [`Client::step`] until a graceful disconnection
@@ -310,111 +244,6 @@ impl Client {
                 Step::Connected { .. } => continue,
                 Step::Disconnected => break Ok(()),
             }
-        }
-    }
-}
-
-/// Method implementations directly related with network connectivity.
-impl ClientHandle {
-    /// Invoke a raw API call.
-    ///
-    /// Using function definitions corresponding to a different layer is likely to cause the
-    /// responses to the request to not be understood.
-    ///
-    /// <div class="stab unstable">
-    ///
-    /// **Warning**: this method is **not** part of the stability guarantees of semantic
-    /// versioning. It **may** break during *minor* version changes (but not on patch version
-    /// changes). Use with care.
-    ///
-    /// </div>
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_tl_types as tl;
-    ///
-    /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn invoke<R: tl::RemoteCall>(
-        &mut self,
-        request: &R,
-    ) -> Result<R::Return, InvocationError> {
-        // TODO this retry logic is not present in `Client`; ideally we'd merge the two
-        let mut slept_flood = false;
-        let sleep_thresh = self.flood_sleep_threshold.unwrap_or(0);
-        loop {
-            let (response, rx) = oneshot::channel();
-
-            // TODO add a test this (using handle with client dropped)
-            if let Err(_) = self.tx.send(Request::Rpc {
-                request: request.to_bytes(),
-                response,
-            }) {
-                // `Client` was dropped, can no longer send requests
-                return Err(InvocationError::Dropped);
-            }
-
-            // First receive the `oneshot::Receiver` with from the `Client`,
-            // then `await` on that to receive the response body for the request.
-            if let Ok(response) = rx.await {
-                if let Ok(result) = response.await {
-                    match result {
-                        Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
-                        Err(InvocationError::Rpc(RpcError {
-                            name,
-                            code: 420,
-                            value: Some(seconds),
-                        })) if !slept_flood && seconds <= sleep_thresh => {
-                            // In test servers, FLOOD_WAIT_0 has been observed, and sleeping for
-                            // such a short amount will cause retries very fast leading to issues.
-                            let delay = std::time::Duration::from_secs(seconds.min(1) as _);
-                            info!(
-                                "sleeping on {} for {:?} before retrying {}",
-                                name,
-                                delay,
-                                std::any::type_name::<R>()
-                            );
-                            tokio::time::sleep(delay).await;
-                            slept_flood = true;
-                            continue;
-                        }
-                        Err(e) => break Err(e),
-                    }
-                } else {
-                    // `Sender` dropped, won't be receiving a response for this
-                    break Err(InvocationError::Dropped);
-                }
-            } else {
-                // `Client` dropped, won't be receiving a response for this
-                break Err(InvocationError::Dropped);
-            }
-        }
-    }
-
-    /// Gracefully tell the [`Client`] that created this handle to disconnect and stop receiving
-    /// things from the network.
-    ///
-    /// If the client has already been dropped (and thus disconnected), this method does nothing.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(mut client: grammers_client::Client) {
-    /// client.disconnect().await;
-    /// # }
-    /// ```
-    pub async fn disconnect(&mut self) {
-        let (response, rx) = oneshot::channel();
-
-        if let Ok(_) = self.tx.send(Request::Disconnect { response }) {
-            // It's fine to drop errors here, it means the channel was dropped by the `Client`.
-            drop(rx.await);
-        } else {
-            // `Client` is already dropped, no need to disconnect again.
         }
     }
 }
