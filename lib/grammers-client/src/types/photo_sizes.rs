@@ -287,11 +287,18 @@ pub struct PathSize {
 }
 
 pub trait VecExt {
+    /// Helper method to get the smallest photo thumb
+    fn smallest(&self) -> Option<&PhotoSize>;
+
     /// Helper method to get the largest photo thumb
     fn largest(&self) -> Option<&PhotoSize>;
 }
 
 impl VecExt for Vec<PhotoSize> {
+    fn smallest(&self) -> Option<&PhotoSize> {
+        self.iter().min_by_key(|x| x.size())
+    }
+
     fn largest(&self) -> Option<&PhotoSize> {
         self.iter().max_by_key(|x| x.size())
     }
