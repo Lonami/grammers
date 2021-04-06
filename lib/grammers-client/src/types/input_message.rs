@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::Uploaded;
+use crate::types::{Media, Uploaded};
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -148,6 +148,14 @@ impl InputMessage {
             }
             .into(),
         );
+        self
+    }
+
+    /// Copy media from an existing message.
+    ///
+    /// You can use this to send media from another message without re-uploading it.
+    pub fn copy_media(mut self, media: &Media) -> Self {
+        self.media = Some(media.to_input_media());
         self
     }
 
