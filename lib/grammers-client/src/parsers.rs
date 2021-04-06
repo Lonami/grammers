@@ -146,7 +146,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
         // \\\n or   \n
         Event::HardBreak => {
             text.push_str("\n\n");
-            offset += 1;
+            offset += 2;
         }
         Event::End(Tag::Paragraph) => {
             text.push('\n');
