@@ -75,6 +75,26 @@ impl Photo {
         })
     }
 
+    fn to_input_media(&self) -> tl::types::InputMediaPhoto {
+        use tl::{
+            enums::{InputPhoto as eInputPhoto, Photo},
+            types::InputPhoto,
+        };
+
+        tl::types::InputMediaPhoto {
+            id: match self.photo.photo {
+                Some(Photo::Photo(ref photo)) => InputPhoto {
+                    id: photo.id,
+                    access_hash: photo.access_hash,
+                    file_reference: photo.file_reference.clone(),
+                }
+                .into(),
+                _ => eInputPhoto::Empty,
+            },
+            ttl_seconds: self.photo.ttl_seconds,
+        }
+    }
+
     pub fn id(&self) -> i64 {
         use tl::enums::Photo as P;
 
@@ -136,6 +156,27 @@ impl Document {
                 .into(),
             ),
         })
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaDocument {
+        use tl::{
+            enums::{Document, InputDocument as eInputDocument},
+            types::InputDocument,
+        };
+
+        tl::types::InputMediaDocument {
+            id: match self.document.document {
+                Some(Document::Document(ref document)) => InputDocument {
+                    id: document.id,
+                    access_hash: document.access_hash,
+                    file_reference: document.file_reference.clone(),
+                }
+                .into(),
+                _ => eInputDocument::Empty,
+            },
+            ttl_seconds: self.document.ttl_seconds,
+            query: None,
+        }
     }
 
     pub fn id(&self) -> i64 {
@@ -268,6 +309,14 @@ impl Media {
             M::GeoLive(_) => None,
             M::Poll(_) => None,
             M::Dice(_) => None,
+        }
+    }
+
+    pub(crate) fn to_input_media(&self) -> tl::enums::InputMedia {
+        match self {
+            Media::Photo(photo) => photo.to_input_media().into(),
+            Media::Document(document) => document.to_input_media().into(),
+            Media::Sticker(sticker) => sticker.document.to_input_media().into(),
         }
     }
 
