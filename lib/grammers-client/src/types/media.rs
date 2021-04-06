@@ -41,7 +41,6 @@ pub enum Media {
     Photo(Photo),
     Document(Document),
     Sticker(Sticker),
-    Uploaded(Uploaded),
 }
 
 impl Photo {
@@ -277,7 +276,6 @@ impl Media {
             Media::Photo(photo) => photo.to_input_location(),
             Media::Document(document) => document.to_input_location(),
             Media::Sticker(sticker) => sticker.document.to_input_location(),
-            Media::Uploaded(_) => None,
         }
     }
 }
@@ -285,11 +283,5 @@ impl Media {
 impl From<Photo> for Media {
     fn from(photo: Photo) -> Self {
         Self::Photo(photo)
-    }
-}
-
-impl From<Uploaded> for Media {
-    fn from(uploaded: Uploaded) -> Self {
-        Self::Uploaded(uploaded)
     }
 }
