@@ -38,7 +38,7 @@
 //!
 //! The default feature set is intended to make the use of the library
 //! comfortable, and not intended to be minimal in code size. If you need
-//! a smaller libary or are concerned about build-times, consider disabling
+//! a smaller library or are concerned about build-times, consider disabling
 //! some of the default features.
 //!
 //! The default feature set includes:
