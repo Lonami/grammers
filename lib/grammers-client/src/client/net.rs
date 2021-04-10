@@ -111,7 +111,7 @@ impl Client {
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::connect(Config {
-    ///     session: FileSession::load_or_create("hello-world.session")?,
+    ///     session: Box::new(FileSession::load_or_create("hello-world.session")?),
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     params: Default::default(),
@@ -182,7 +182,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
@@ -220,15 +220,10 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::NetworkStep;
-    ///
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// loop {
     ///     // Process network events forever until we gracefully disconnect or get an error.
-    ///     match client.step().await? {
-    ///         NetworkStep::Connected { .. } => continue,
-    ///         NetworkStep::Disconnected => break,
-    ///     }
+    ///     client.step().await?;
     /// }
     /// # Ok(())
     /// # }
@@ -267,7 +262,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.run_until_disconnected().await?;
     /// # Ok(())
     /// # }

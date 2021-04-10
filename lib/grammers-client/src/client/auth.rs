@@ -59,7 +59,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if client.is_authorized().await? {
     ///     println!("Client is not authorized, you will need to sign_in!");
     /// } else {
@@ -112,7 +112,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
@@ -184,7 +184,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
@@ -260,7 +260,7 @@ impl Client {
     /// ```
     /// # use grammers_client::SignInError;
     ///
-    ///  async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
@@ -338,7 +338,7 @@ impl Client {
     /// ```
     /// use grammers_client::SignInError;
     ///
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
@@ -431,7 +431,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///  async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # let token = client.request_login_code("", 0, "").await?;
     /// # let code = "".to_string();
     ///
@@ -498,7 +498,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client<grammers_session::MemorySession>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if client.sign_out().await? {
     ///     println!("Signed out successfully!");
     /// } else {
