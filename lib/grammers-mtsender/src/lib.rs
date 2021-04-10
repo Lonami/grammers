@@ -153,6 +153,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         ))
     }
 
+    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
+        let rx = self.enqueue_body(request.to_bytes());
+        Ok(self.step_until_receive(rx).await?)
+    }
+
     /// Like `invoke` but raw data.
     async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
         let rx = self.enqueue_body(body);

@@ -8,7 +8,7 @@
 pub use super::updates::UpdateIter;
 use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::Sender;
+use grammers_mtsender::{Enqueuer, Sender};
 use grammers_session::Session;
 use std::collections::VecDeque;
 use std::fmt;
@@ -86,6 +86,8 @@ pub(crate) struct ClientInner {
     // TODO add a way to disable these and support also an upper bound, and warn when reached
     //      we probably want the upper bound to be for updates, and not bundles of them
     pub(crate) updates: Mutex<VecDeque<UpdateIter>>,
+    // Used to avoid locking the entire sender when enqueueing requests.
+    pub(crate) request_tx: Mutex<Enqueuer>,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.

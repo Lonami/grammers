@@ -12,11 +12,13 @@ use crate::utils;
 use grammers_mtproto::mtp::{self};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
-use grammers_tl_types::{self as tl};
+use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
+use sender::Enqueuer;
 use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
+use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::Mutex as AsyncMutex;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
@@ -38,7 +40,7 @@ const DEFAULT_DC: i32 = 2;
 pub(crate) async fn connect_sender(
     dc_id: i32,
     config: &mut Config,
-) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+) -> Result<(Sender<transport::Full, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let transport = transport::Full::new();
 
     let addr: SocketAddr = if let Some(ip) = config.params.server_addr {
@@ -47,7 +49,7 @@ pub(crate) async fn connect_sender(
         DC_ADDRESSES[dc_id as usize].into()
     };
 
-    let mut sender = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
+    let (mut sender, request_tx) = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
         info!(
             "creating a new sender with existing auth key to dc {} {:?}",
             dc_id, addr
@@ -58,10 +60,10 @@ pub(crate) async fn connect_sender(
             "creating a new sender and auth key in dc {} {:?}",
             dc_id, addr
         );
-        let sender = sender::connect(transport, addr).await?;
+        let (sender, tx) = sender::connect(transport, addr).await?;
 
         config.session.insert_dc(dc_id, addr, &sender.auth_key());
-        sender
+        (sender, tx)
     };
 
     // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
@@ -84,7 +86,7 @@ pub(crate) async fn connect_sender(
         })
         .await?;
 
-    Ok(sender)
+    Ok((sender, request_tx))
 }
 
 /// Method implementations directly related with network connectivity.
@@ -119,7 +121,7 @@ impl Client {
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
-        let sender = connect_sender(dc_id, &mut config).await?;
+        let (sender, request_tx) = connect_sender(dc_id, &mut config).await?;
         let message_box = if config.params.catch_up {
             if let Some(state) = config.session.get_state() {
                 MessageBox::load(state)
@@ -141,6 +143,7 @@ impl Client {
             message_box: Mutex::new(message_box),
             chat_hashes: ChatHashCache::new(),
             updates: Mutex::new(VecDeque::new()),
+            request_tx: Mutex::new(request_tx),
         }));
 
         // Don't bother getting pristine state if we're not logged in.
@@ -190,9 +193,23 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let mut sender = self.0.sender.lock().await;
-        // TODO remove invoke from sender. we're the one that will "step until resolved"
-        sender.invoke(request).await
+        let mut rx = self.0.request_tx.lock().unwrap().enqueue(request);
+        loop {
+            match rx.try_recv() {
+                Ok(response) => {
+                    break match response {
+                        Ok(body) => R::Return::from_bytes(&body).map_err(|e| e.into()),
+                        Err(err) => Err(err),
+                    }
+                }
+                Err(TryRecvError::Empty) => {
+                    self.step().await?;
+                }
+                Err(TryRecvError::Closed) => {
+                    panic!("request channel dropped before receiving a result")
+                }
+            }
+        }
     }
 
     /// Perform a single network step.
@@ -236,6 +253,8 @@ impl Client {
                 // complete and return immediately without stepping again. The caller wants
                 // *one* step to complete, but it doesn't care *who* completes it.
                 self.0.sender.lock().await;
+                // TODO figure out and document why (or if) this yield is necessary
+                tokio::task::yield_now().await;
                 Ok(())
             }
         }

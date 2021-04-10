@@ -153,8 +153,10 @@ impl Client {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 let dc_id = value.unwrap() as i32;
-                *self.0.sender.lock().await =
+                let (sender, request_tx) =
                     connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                *self.0.sender.lock().await = sender;
+                *self.0.request_tx.lock().unwrap() = request_tx;
                 *self.0.dc_id.lock().unwrap() = dc_id;
                 self.invoke(&request).await?
             }
@@ -228,8 +230,10 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again.
                 let dc_id = value.unwrap() as i32;
-                *self.0.sender.lock().await =
+                let (sender, request_tx) =
                     connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                *self.0.sender.lock().await = sender;
+                *self.0.request_tx.lock().unwrap() = request_tx;
                 *self.0.dc_id.lock().unwrap() = dc_id;
                 self.invoke(&request).await?.into()
             }
