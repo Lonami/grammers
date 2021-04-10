@@ -382,6 +382,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         panic!("got rpc result {:?} for unsent request {:?}", msg_id, sid);
                     }
                     RequestState::Sent(sid) if sid == msg_id => {
+                        found = true;
                         let result = match ret {
                             Ok(x) => {
                                 assert!(x.len() >= 4);
@@ -406,7 +407,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             }
                             Err(mtp::RequestError::BadMessage { .. }) => {
                                 // TODO add a test to make sure we resend the request
-                                info!("bad msg mtp error, re-sending request");
+                                info!("bad msg mtp error, re-sending request {:?}", msg_id);
                                 req.state = RequestState::NotSerialized;
                                 break;
                             }
@@ -415,7 +416,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         drop(req);
                         let req = self.requests.remove(i);
                         drop(req.result.send(result));
-                        found = true;
                         break;
                     }
                     _ => {}
