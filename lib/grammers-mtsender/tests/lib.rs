@@ -13,7 +13,7 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transport;
 use grammers_mtsender::connect;
-use grammers_tl_types::{enums, functions};
+use grammers_tl_types::{enums, functions, Deserializable, RemoteCall};
 use log;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
@@ -30,13 +30,26 @@ fn test_invoke_encrypted_method() {
         .build()
         .unwrap();
     rt.block_on(async {
-        let mut sender = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
+        let (mut sender, enqueuer) = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
             .await
             .unwrap();
 
-        match sender.invoke(&functions::help::GetNearestDc {}).await {
-            Ok(enums::NearestDc::Dc(_)) => {}
-            x => panic!("did not get nearest dc, got: {:?}", x),
+        let mut rx = enqueuer.enqueue(&functions::help::GetNearestDc {});
+        loop {
+            sender.step().await.unwrap();
+            if let Ok(response) = rx.try_recv() {
+                match response {
+                    Ok(body) => {
+                        let response =
+                            <functions::help::GetNearestDc as RemoteCall>::Return::from_bytes(
+                                &body,
+                            );
+                        assert!(matches!(response, Ok(enums::NearestDc::Dc(_))));
+                        break;
+                    }
+                    x => panic!("did not get nearest dc, got: {:?}", x),
+                }
+            }
         }
     });
 }
