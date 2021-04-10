@@ -45,7 +45,7 @@ async fn async_main() -> Result<()> {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: FileSession::load_or_create("dialogs.session")?,
+        session: Box::new(FileSession::load_or_create("dialogs.session")?),
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
@@ -54,7 +54,7 @@ async fn async_main() -> Result<()> {
     println!("Connected!");
 
     // If we can't save the session, sign out once we're done.
-    let mut sign_out = false;
+    let sign_out = false;
 
     if !client.is_authorized().await? {
         println!("Signing in...");
@@ -78,16 +78,7 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match client.session().save() {
-            Ok(_) => {}
-            Err(e) => {
-                println!(
-                    "NOTE: failed to save the session, will sign out when done: {}",
-                    e
-                );
-                sign_out = true;
-            }
-        }
+        // TODO save session
     }
 
     // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
@@ -97,7 +88,7 @@ async fn async_main() -> Result<()> {
     // one that communicates with the network.
     //
     // The design's annoying to use for trivial sequential tasks, but is otherwise scalable.
-    let mut client_handle = client.handle();
+    let mut client_handle = client.clone();
     let network_handle = task::spawn(async move { client.run_until_disconnected().await });
 
     let mut dialogs = client_handle.iter_dialogs();
@@ -109,9 +100,8 @@ async fn async_main() -> Result<()> {
     }
 
     if sign_out {
+        // TODO revisit examples and get rid of "handle references" (also, this panics)
         drop(client_handle.sign_out_disconnect().await);
-    } else {
-        client_handle.disconnect().await;
     }
 
     network_handle.await??;

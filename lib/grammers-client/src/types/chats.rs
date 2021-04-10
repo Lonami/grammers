@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::types::{Chat, Role, User};
-use crate::ClientHandle;
+use crate::Client;
 use grammers_mtproto::mtp::RpcError;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -17,9 +17,9 @@ use std::{
 
 /// Builder for editing the administrator rights of a user in a specific chat.
 ///
-/// Use [`ClientHandle::set_admin_rights`] to retrieve an instance of this type.
+/// Use [`Client::set_admin_rights`] to retrieve an instance of this type.
 pub struct AdminRightsBuilder {
-    client: ClientHandle,
+    client: Client,
     chat: Chat,
     user: tl::enums::InputUser,
     rights: tl::types::ChatAdminRights,
@@ -27,7 +27,7 @@ pub struct AdminRightsBuilder {
 }
 
 impl AdminRightsBuilder {
-    pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
+    pub(crate) fn new(client: Client, chat: &Chat, user: &User) -> Self {
         Self {
             client,
             chat: chat.clone(),
@@ -242,16 +242,16 @@ impl AdminRightsBuilder {
 /// Certain groups (small group chats) only allow banning (disallow `view_messages`). Trying to
 /// disallow other permissions in these groups will fail.
 ///
-/// Use [`ClientHandle::set_banned_rights`] to retrieve an instance of this type.
+/// Use [`Client::set_banned_rights`] to retrieve an instance of this type.
 pub struct BannedRightsBuilder {
-    client: ClientHandle,
+    client: Client,
     chat: Chat,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
 }
 
 impl BannedRightsBuilder {
-    pub(crate) fn new(client: ClientHandle, chat: &Chat, user: &User) -> Self {
+    pub(crate) fn new(client: Client, chat: &Chat, user: &User) -> Self {
         Self {
             client,
             chat: chat.clone(),

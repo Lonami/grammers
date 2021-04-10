@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::types::photo_sizes::PhotoSize;
-use crate::ClientHandle;
+use crate::Client;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_tl_types as tl;
 use std::fmt::Debug;
@@ -14,13 +14,13 @@ use std::fmt::Debug;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
     photo: tl::types::MessageMediaPhoto,
-    client: ClientHandle,
+    client: Client,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     document: tl::types::MessageMediaDocument,
-    client: ClientHandle,
+    client: Client,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -44,7 +44,7 @@ pub enum Media {
 }
 
 impl Photo {
-    pub(crate) fn from_raw(photo: tl::enums::Photo, client: ClientHandle) -> Self {
+    pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
         Self {
             photo: tl::types::MessageMediaPhoto {
                 photo: Some(photo),
@@ -54,7 +54,7 @@ impl Photo {
         }
     }
 
-    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: ClientHandle) -> Self {
+    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
         Self { photo, client }
     }
 
@@ -134,10 +134,7 @@ impl Photo {
 }
 
 impl Document {
-    pub(crate) fn from_media(
-        document: tl::types::MessageMediaDocument,
-        client: ClientHandle,
-    ) -> Self {
+    pub(crate) fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
         Self { document, client }
     }
 
@@ -284,7 +281,7 @@ impl Uploaded {
 }
 
 impl Media {
-    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: ClientHandle) -> Option<Self> {
+    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
         use tl::enums::MessageMedia as M;
 
         // TODO implement the rest

@@ -8,12 +8,13 @@
 pub use super::updates::UpdateIter;
 use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{InvocationError, Sender};
+use grammers_mtsender::{Enqueuer, Sender};
 use grammers_session::Session;
-use grammers_tl_types as tl;
+use std::collections::VecDeque;
 use std::fmt;
 use std::net::SocketAddr;
-use tokio::sync::{mpsc, oneshot};
+use std::sync::{Arc, Mutex};
+use tokio::sync::Mutex as AsyncMutex;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -21,10 +22,10 @@ const DEFAULT_LOCALE: &str = "en";
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
-pub struct Config<S: Session> {
+pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: S,
+    pub session: Box<dyn Session + Send + Sync>,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -73,15 +74,20 @@ pub struct InitParams {
     pub flood_sleep_threshold: Option<u32>,
 }
 
-/// Request messages that the `ClientHandle` uses to communicate with the `Client`.
-pub(crate) enum Request {
-    Rpc {
-        request: Vec<u8>,
-        response: oneshot::Sender<oneshot::Receiver<Result<Vec<u8>, InvocationError>>>,
-    },
-    Disconnect {
-        response: oneshot::Sender<()>,
-    },
+pub(crate) struct ClientInner {
+    // Used to implement `PartialEq`.
+    pub(crate) id: i64,
+    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
+    pub(crate) dc_id: Mutex<i32>,
+    // TODO try to avoid a mutex over the ENTIRE config; only the session needs it
+    pub(crate) config: Mutex<Config>,
+    pub(crate) message_box: Mutex<MessageBox>,
+    pub(crate) chat_hashes: ChatHashCache,
+    // TODO add a way to disable these and support also an upper bound, and warn when reached
+    //      we probably want the upper bound to be for updates, and not bundles of them
+    pub(crate) updates: Mutex<VecDeque<UpdateIter>>,
+    // Used to avoid locking the entire sender when enqueueing requests.
+    pub(crate) request_tx: Mutex<Enqueuer>,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -91,46 +97,12 @@ pub(crate) enum Request {
 /// This structure owns all the necessary connections to Telegram, and has implementations for the
 /// most basic methods, such as connecting, signing in, or processing network events.
 ///
-/// To invoke multiple requests concurrently, [`ClientHandle`] must be used instead, and this
-/// structure will coordinate all of them.
-///
 /// On drop, all state is synchronized to the session. The [`FileSession`] attempts to save the
 /// session to disk on drop as well, so everything should persist under normal operation.
 ///
 /// [`FileSession`]: grammers_session::FileSession
-pub struct Client<S: Session> {
-    // Used to implement `PartialEq`.
-    pub(crate) id: i64,
-    pub(crate) sender: Sender<transport::Full, mtp::Encrypted>,
-    pub(crate) dc_id: i32,
-    pub(crate) config: Config<S>,
-    pub(crate) handle_tx: mpsc::UnboundedSender<Request>,
-    pub(crate) handle_rx: mpsc::UnboundedReceiver<Request>,
-    pub(crate) message_box: MessageBox,
-    pub(crate) chat_hashes: ChatHashCache,
-}
-
-/// A client handle which can be freely cloned and moved around tasks to invoke requests
-/// concurrently.
-///
-/// This structure has implementations for most of the methods you will use, such as sending
-/// messages, fetching users, answering bot callbacks, and so on.
 #[derive(Clone)]
-pub struct ClientHandle {
-    // Used to implement `PartialEq`.
-    pub(crate) id: i64,
-    pub(crate) tx: mpsc::UnboundedSender<Request>,
-    pub(crate) flood_sleep_threshold: Option<u32>,
-}
-
-/// A network step.
-pub enum Step {
-    /// The `Client` is still connected, and a possibly-empty list of updates were received
-    /// during this step.
-    Connected { updates: Vec<tl::enums::Updates> },
-    /// The `Client` has been gracefully disconnected, and no more calls to `step` are needed.
-    Disconnected,
-}
+pub struct Client(pub(crate) Arc<ClientInner>);
 
 impl Default for InitParams {
     fn default() -> Self {
@@ -164,37 +136,24 @@ impl Default for InitParams {
     }
 }
 
-impl<S: Session> Drop for Client<S> {
+// TODO move some stuff like drop into ClientInner?
+impl Drop for Client {
     fn drop(&mut self) {
         self.sync_update_state();
     }
 }
 
-impl<S: Session> fmt::Debug for Client<S> {
+impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO show more info, like user id and session name if present
         f.debug_struct("Client")
-            .field("dc_id", &self.dc_id)
+            .field("dc_id", &self.0.dc_id)
             .finish()
     }
 }
 
-impl fmt::Debug for ClientHandle {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // FIXME don't use dummy field, use finish_non_exhaustive once
-        // https://github.com/rust-lang/rust/issues/67364 is closed
-        f.debug_struct("ClientHandle").field("_", &"...").finish()
-    }
-}
-
-impl<S: Session> PartialEq for Client<S> {
+impl PartialEq for Client {
     fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
-    }
-}
-
-impl PartialEq for ClientHandle {
-    fn eq(&self, other: &Self) -> bool {
-        self.id == other.id
+        self.0.id == other.0.id
     }
 }

@@ -58,7 +58,7 @@ pub trait Session {
     /// Authorization key data for the given datacenter ID, if any.
     fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey>;
 
-    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey);
+    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey);
 
     fn set_user(&mut self, id: i32, dc: i32, bot: bool);
 
@@ -95,7 +95,7 @@ impl Session for MemorySession {
             .next()
     }
 
-    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey) {
+    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
         if let Some(pos) = self
             .session
             .dcs
@@ -169,7 +169,7 @@ impl Session for FileSession {
         self.session.dc_auth_key(dc_id)
     }
 
-    fn insert_dc<A: Into<SocketAddr>>(&mut self, id: i32, server_addr: A, auth: &AuthKey) {
+    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
         self.session.insert_dc(id, server_addr, auth)
     }
 

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::types::{Chat, ChatMap, Dialog, IterBuffer, Message};
-use crate::ClientHandle;
+use crate::Client;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -16,7 +16,7 @@ const MAX_LIMIT: usize = 100;
 pub type DialogIter = IterBuffer<tl::functions::messages::GetDialogs, Dialog>;
 
 impl DialogIter {
-    fn new(client: &ClientHandle) -> Self {
+    fn new(client: &Client) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
@@ -114,13 +114,13 @@ impl DialogIter {
 }
 
 /// Method implementations related to open conversations.
-impl ClientHandle {
+impl Client {
     /// Returns a new iterator over the dialogs.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut dialogs = client.iter_dialogs();
     ///
     /// while let Some(dialog) = dialogs.next().await? {
@@ -146,7 +146,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in chat!
     /// client.delete_dialog(&chat).await?;
     /// # Ok(())
@@ -181,12 +181,12 @@ impl ClientHandle {
     /// Mark a chat as read.
     ///
     /// If you want to get rid of all the mentions (for example, a voice note that you have not
-    /// listened to yet), you need to also use [`ClientHandle::clear_mentions`].
+    /// listened to yet), you need to also use [`Client::clear_mentions`].
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.mark_as_read(&chat).await?;
     /// # Ok(())
     /// # }
@@ -211,7 +211,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.clear_mentions(&chat).await?;
     /// # Ok(())
     /// # }

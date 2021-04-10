@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{ChatMap, Message};
-use crate::ClientHandle;
+use crate::Client;
 use grammers_tl_types as tl;
 use std::sync::Arc;
 
@@ -18,7 +18,7 @@ pub enum Update {
 
 impl Update {
     pub(crate) fn new(
-        client: &ClientHandle,
+        client: &Client,
         update: tl::enums::Update,
         chats: &Arc<ChatMap>,
     ) -> Option<Self> {

@@ -5,16 +5,16 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::ClientHandle;
 use crate::types::{Chat, IterBuffer, User};
 use crate::utils::generate_random_id;
+use crate::Client;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 50;
 
 pub struct InlineResult {
-    client: ClientHandle,
+    client: Client,
     query_id: i64,
     result: tl::enums::BotInlineResult,
 }
@@ -64,7 +64,7 @@ impl InlineResult {
 }
 
 impl InlineResultIter {
-    fn new(client: &ClientHandle, bot: &User, query: &str) -> Self {
+    fn new(client: &Client, bot: &User, query: &str) -> Self {
         Self::from_request(
             client,
             MAX_LIMIT,
@@ -122,7 +122,7 @@ impl InlineResultIter {
 }
 
 /// Method implementations related to dealing with bots.
-impl ClientHandle {
+impl Client {
     /// Perform an inline query to the specified bot.
     ///
     /// The query text may be empty.
@@ -132,7 +132,7 @@ impl ClientHandle {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(bot: grammers_client::types::User, mut client: grammers_client::ClientHandle) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(bot: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This is equivalent to writing `@bot inline query` in a Telegram app.
     /// let mut inline_results = client.inline_query(&bot, "inline query");
     ///
