@@ -10,7 +10,7 @@ use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::Sender;
 use grammers_session::Session;
-use grammers_tl_types as tl;
+use std::collections::VecDeque;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::{Arc, Mutex};
@@ -83,6 +83,9 @@ pub(crate) struct ClientInner {
     pub(crate) config: Mutex<Config>,
     pub(crate) message_box: Mutex<MessageBox>,
     pub(crate) chat_hashes: ChatHashCache,
+    // TODO add a way to disable these and support also an upper bound, and warn when reached
+    //      we probably want the upper bound to be for updates, and not bundles of them
+    pub(crate) updates: Mutex<VecDeque<UpdateIter>>,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -98,15 +101,6 @@ pub(crate) struct ClientInner {
 /// [`FileSession`]: grammers_session::FileSession
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
-
-/// A network step.
-pub enum Step {
-    /// The `Client` is still connected, and a possibly-empty list of updates were received
-    /// during this step.
-    Connected { updates: Vec<tl::enums::Updates> },
-    /// The `Client` has been gracefully disconnected, and no more calls to `step` are needed.
-    Disconnected,
-}
 
 impl Default for InitParams {
     fn default() -> Self {

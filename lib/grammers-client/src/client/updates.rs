@@ -8,7 +8,7 @@
 
 //! Methods to deal with and offer access to updates.
 
-use super::{Client, Step};
+use super::Client;
 use crate::types::{ChatMap, MessageBox, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 pub use grammers_session::UpdateState;
@@ -58,8 +58,12 @@ impl Client {
     /// Similar using an iterator manually, this method will return `Some` until no more updates
     /// are available (e.g. a disconnection occurred).
     pub async fn next_updates(&self) -> Result<Option<UpdateIter>, InvocationError> {
-        let mut message_box = self.0.message_box.lock().unwrap();
         loop {
+            if let Some(updates) = self.0.updates.lock().unwrap().pop_front() {
+                return Ok(Some(updates));
+            }
+
+            let mut message_box = self.0.message_box.lock().unwrap();
             if let Some(request) = message_box.get_difference() {
                 let response = self.invoke(&request).await?;
                 let (updates, users, chats) = message_box.apply_difference(response);
@@ -87,21 +91,15 @@ impl Client {
             }
 
             let deadline = message_box.timeout_deadline();
+            drop(message_box);
             tokio::select! {
-                step = self.step() => {
-                    match step? {
-                        Step::Connected { updates } => if let Some(iter) = self.get_update_iter(updates, &mut message_box) {
-                            break Ok(Some(iter));
-                        },
-                        Step::Disconnected => break Ok(None),
-                    }
-                }
+                _ = self.step() => {}
                 _ = sleep_until(deadline) => {}
             }
         }
     }
 
-    fn get_update_iter(
+    pub(crate) fn get_update_iter(
         &self,
         all_updates: Vec<tl::enums::Updates>,
         message_box: &mut MessageBox,

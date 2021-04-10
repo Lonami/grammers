@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub use super::updates::UpdateIter;
-use super::{Client, ClientInner, Config, Step};
+use super::{Client, ClientInner, Config};
 use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
 use grammers_mtproto::mtp::{self};
@@ -14,6 +14,7 @@ use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_tl_types::{self as tl};
 use log::info;
+use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, Mutex};
 use tokio::sync::Mutex as AsyncMutex;
@@ -139,15 +140,16 @@ impl Client {
             config: Mutex::new(config),
             message_box: Mutex::new(message_box),
             chat_hashes: ChatHashCache::new(),
+            updates: Mutex::new(VecDeque::new()),
         }));
 
-        let mut message_box = client.0.message_box.lock().unwrap();
-        let config = client.0.config.lock().unwrap();
         // Don't bother getting pristine state if we're not logged in.
-        if message_box.is_empty() && config.session.signed_in() {
+        if client.0.message_box.lock().unwrap().is_empty()
+            && client.0.config.lock().unwrap().session.signed_in()
+        {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    message_box.set_state(state);
+                    client.0.message_box.lock().unwrap().set_state(state);
                     client.sync_update_state();
                 }
                 Err(_) => {
@@ -157,8 +159,6 @@ impl Client {
             }
         }
 
-        drop(message_box);
-        drop(config);
         Ok(client)
     }
 
@@ -191,6 +191,7 @@ impl Client {
         request: &R,
     ) -> Result<R::Return, InvocationError> {
         let mut sender = self.0.sender.lock().await;
+        // TODO remove invoke from sender. we're the one that will "step until resolved"
         sender.invoke(request).await
     }
 
@@ -215,15 +216,29 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn step(&self) -> Result<Step, sender::ReadError> {
-        let mut sender = self.0.sender.lock().await;
-        let updates = sender.step().await?;
+    pub async fn step(&self) -> Result<(), sender::ReadError> {
+        match self.0.sender.try_lock() {
+            Ok(mut sender) => {
+                // Sender was unlocked, we're the ones that will perform the network step.
+                let updates = sender.step().await?;
+                if let Some(uiter) =
+                    self.get_update_iter(updates, &mut self.0.message_box.lock().unwrap())
+                {
+                    self.0.updates.lock().unwrap().push_back(uiter);
+                }
 
-        // TODO deal with the no-handle situation
-
-        // TODO request cancellation if this is Err
-        // (perhaps a method on the sender to cancel_all)
-        Ok(Step::Connected { updates })
+                // TODO request cancellation if this is Err
+                // (perhaps a method on the sender to cancel_all)
+                Ok(())
+            }
+            Err(_) => {
+                // Someone else is already performing the network step. Wait for the step to
+                // complete and return immediately without stepping again. The caller wants
+                // *one* step to complete, but it doesn't care *who* completes it.
+                self.0.sender.lock().await;
+                Ok(())
+            }
+        }
     }
 
     /// Run the client by repeatedly calling [`Client::step`] until a graceful disconnection
@@ -240,10 +255,8 @@ impl Client {
     /// ```
     pub async fn run_until_disconnected(self) -> Result<(), sender::ReadError> {
         loop {
-            match self.step().await? {
-                Step::Connected { .. } => continue,
-                Step::Disconnected => break Ok(()),
-            }
+            // TODO review doc comments regarding disconnects
+            self.step().await?;
         }
     }
 }
