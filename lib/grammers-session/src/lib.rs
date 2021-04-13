@@ -11,10 +11,9 @@ pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_crypto::auth_key::AuthKey;
 use grammers_tl_types::deserialize::Error as DeserializeError;
-use log::warn;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::{File, OpenOptions};
+use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
@@ -31,51 +30,67 @@ pub struct UpdateState {
     pub channels: HashMap<i32, i32>,
 }
 
-pub struct MemorySession {
+pub struct Session {
     session: types::Session,
 }
 
-pub struct FileSession {
-    file: File,
-    session: MemorySession,
-}
-
-#[derive(Debug)]
-pub enum Error {
-    MalformedData,
-    UnsupportedVersion,
-}
-
-pub trait Session {
-    /// User's home datacenter ID, if known.
-    fn user_dc(&self) -> Option<i32>;
-
-    fn signed_in(&self) -> bool {
-        // We can only know the user DC if we successfully signed in.
-        self.user_dc().is_some()
+impl Session {
+    pub fn new() -> Self {
+        Self {
+            session: types::Session {
+                dcs: Vec::new(),
+                user: None,
+                state: None,
+            },
+        }
     }
 
-    /// Authorization key data for the given datacenter ID, if any.
-    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey>;
+    /// Load a previous session instance from a file,
+    /// creating one if it doesn't exist
+    pub fn load_file_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
+            File::create(path)?;
+            let session = Session::new();
+            session.save_to_file(path)?;
+            Ok(session)
+        } else {
+            Self::load_file(path)
+        }
+    }
 
-    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey);
+    /// Load a previous session instance from a file.
+    pub fn load_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let mut data = Vec::new();
+        File::open(path.as_ref())?.read_to_end(&mut data)?;
 
-    fn set_user(&mut self, id: i32, dc: i32, bot: bool);
+        Self::load(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
+    }
 
-    fn get_state(&self) -> Option<UpdateState>;
+    pub fn load(data: &[u8]) -> Result<Self, Error> {
+        Ok(Self {
+            session: enums::Session::from_bytes(&data)
+                .map_err(|e| match e {
+                    DeserializeError::UnexpectedEof => Error::MalformedData,
+                    DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
+                })?
+                .into(),
+        })
+    }
 
-    fn set_state(&mut self, state: UpdateState);
-}
-
-impl Session for MemorySession {
-    fn user_dc(&self) -> Option<i32> {
+    pub fn user_dc(&self) -> Option<i32> {
         self.session
             .user
             .as_ref()
             .map(|enums::User::User(user)| user.dc)
     }
 
-    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
+    pub fn signed_in(&self) -> bool {
+        // We can only know the user DC if we successfully signed in.
+        self.user_dc().is_some()
+    }
+
+    pub fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
         self.session
             .dcs
             .iter()
@@ -95,7 +110,7 @@ impl Session for MemorySession {
             .next()
     }
 
-    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
+    pub fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
         if let Some(pos) = self
             .session
             .dcs
@@ -123,11 +138,11 @@ impl Session for MemorySession {
         );
     }
 
-    fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
+    pub fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
         self.session.user = Some(types::User { id, dc, bot }.into())
     }
 
-    fn get_state(&self) -> Option<UpdateState> {
+    pub fn get_state(&self) -> Option<UpdateState> {
         let enums::UpdateState::State(state) = self.session.state.as_ref()?;
         Some(UpdateState {
             pts: state.pts,
@@ -142,7 +157,7 @@ impl Session for MemorySession {
         })
     }
 
-    fn set_state(&mut self, state: UpdateState) {
+    pub fn set_state(&mut self, state: UpdateState) {
         self.session.state = Some(
             types::UpdateState {
                 pts: state.pts,
@@ -158,111 +173,25 @@ impl Session for MemorySession {
             .into(),
         )
     }
-}
-
-impl Session for FileSession {
-    fn user_dc(&self) -> Option<i32> {
-        self.session.user_dc()
-    }
-
-    fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
-        self.session.dc_auth_key(dc_id)
-    }
-
-    fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
-        self.session.insert_dc(id, server_addr, auth)
-    }
-
-    fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
-        self.session.set_user(id, dc, bot)
-    }
-
-    fn get_state(&self) -> Option<UpdateState> {
-        self.session.get_state()
-    }
-
-    fn set_state(&mut self, state: UpdateState) {
-        self.session.set_state(state)
-    }
-}
-
-impl MemorySession {
-    pub fn new() -> Self {
-        Self {
-            session: types::Session {
-                dcs: Vec::new(),
-                user: None,
-                state: None,
-            },
-        }
-    }
-
-    pub fn load(data: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
-            session: enums::Session::from_bytes(&data)
-                .map_err(|e| match e {
-                    DeserializeError::UnexpectedEof => Error::MalformedData,
-                    DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
-                })?
-                .into(),
-        })
-    }
 
     pub fn save(&self) -> Vec<u8> {
         enums::Session::Session(self.session.clone()).to_bytes()
     }
-}
 
-impl FileSession {
-    /// Loads or creates a new session file if one doesn't exist yet.
-    pub fn load_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        match Self::load(path.as_ref()) {
-            Err(e) if e.kind() == io::ErrorKind::NotFound => Self::create(path),
-            x => x,
-        }
-    }
-
-    /// Create a new session instance.
-    pub fn create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut this = Self {
-            file: File::create(path)?,
-            session: MemorySession::new(),
-        };
-        // Immediately save or else we'll have an empty (and invalid) session file.
-        this.save()?;
-        Ok(this)
-    }
-
-    /// Load a previous session instance.
-    pub fn load<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut data = Vec::new();
-        File::open(path.as_ref())?.read_to_end(&mut data)?;
-        let session = MemorySession::load(&data)
-            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
-
-        Ok(Self {
-            file: OpenOptions::new().write(true).open(path.as_ref())?,
-            session,
-        })
-    }
-
-    /// Saves the session file.
-    pub fn save(&mut self) -> io::Result<()> {
-        self.file.seek(io::SeekFrom::Start(0))?;
-        self.file.set_len(0)?;
-        self.file.write_all(&self.session.save())?;
-        self.file.sync_data()?;
-        Ok(())
+    /// Saves the session to a file.
+    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
+        let mut file = File::open(path.as_ref())?;
+        file.seek(io::SeekFrom::Start(0))?;
+        file.set_len(0)?;
+        file.write_all(&self.save())?;
+        file.sync_data()
     }
 }
 
-impl Drop for FileSession {
-    fn drop(&mut self) {
-        match self.save() {
-            Ok(_) => {}
-            Err(e) => warn!("failed to save session on drop: {}", e),
-        }
-    }
+#[derive(Debug)]
+pub enum Error {
+    MalformedData,
+    UnsupportedVersion,
 }
 
 impl fmt::Display for Error {
