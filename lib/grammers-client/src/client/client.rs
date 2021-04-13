@@ -97,10 +97,10 @@ pub(crate) struct ClientInner {
 /// This structure owns all the necessary connections to Telegram, and has implementations for the
 /// most basic methods, such as connecting, signing in, or processing network events.
 ///
-/// On drop, all state is synchronized to the session. The [`FileSession`] attempts to save the
-/// session to disk on drop as well, so everything should persist under normal operation.
+/// On drop, all state is synchronized to the session. The [`Session`] must be explicitly saved
+/// to disk with [`Session::save_to_file`] for persistence
 ///
-/// [`FileSession`]: grammers_session::FileSession
+/// [`Session`]: grammers_session::Session
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
 
