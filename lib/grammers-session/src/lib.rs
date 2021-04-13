@@ -35,8 +35,32 @@ pub struct Session {
 }
 
 impl Session {
-    /// Load a previous session instance.
-    pub fn from_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+    pub fn new() -> Self {
+        Self {
+            session: types::Session {
+                dcs: Vec::new(),
+                user: None,
+                state: None,
+            },
+        }
+    }
+
+    /// Load a previous session instance from a file,
+    /// creating one if it doesn't exist
+    pub fn load_file_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
+        let path = path.as_ref();
+        if !path.exists() {
+            File::create(path)?;
+            let session = Session::new();
+            session.save_to_file(path)?;
+            Ok(session)
+        } else {
+            Self::load_file(path)
+        }
+    }
+
+    /// Load a previous session instance from a file.
+    pub fn load_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
         let mut data = Vec::new();
         File::open(path.as_ref())?.read_to_end(&mut data)?;
 

@@ -111,7 +111,7 @@ impl Client {
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let client = Client::connect(Config {
-    ///     session: Session::from_file("hello-world.session")?,
+    ///     session: Session::load_file_or_create("hello-world.session")?,
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     params: Default::default(),

@@ -14,7 +14,7 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 async fn async_main() -> Result {
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Session::from_file("ping.session")?,
+        session: Session::load_file_or_create("ping.session")?,
         api_id: 1, // not actually logging in, but has to look real
         api_hash: "".to_string(),
         params: Default::default(),

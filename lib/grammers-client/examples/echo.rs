@@ -46,7 +46,7 @@ async fn async_main() -> Result {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: Session::from_file("echo.session")?,
+        session: Session::load_file_or_create("echo.session")?,
         api_id,
         api_hash: api_hash.clone(),
         params: InitParams {
