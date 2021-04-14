@@ -6,12 +6,15 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use chrono::{DateTime, NaiveDateTime, Utc};
 use crate::Config;
+use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_session::Session;
 use grammers_tl_types as tl;
 use std::ops::{Deref, DerefMut};
-use std::sync::{MutexGuard, atomic::{AtomicI64, Ordering}};
+use std::sync::{
+    atomic::{AtomicI64, Ordering},
+    MutexGuard,
+};
 use std::time::SystemTime;
 
 // This atomic isn't for anything critical, just to generate unique IDs without locks.
@@ -53,15 +56,17 @@ pub(crate) fn extract_password_parameters(
     (salt1, salt2, g, p)
 }
 
+/// Custom [`MutexGuard`] for [`Session`]
+///
+/// [`Session`]: grammers_session::Session
+/// [`MutexGuard`]: std::sync::MutexGuard
 pub struct SessionGuard<'a> {
-    inner: MutexGuard<'a, Config>
+    inner: MutexGuard<'a, Config>,
 }
 
 impl<'a> SessionGuard<'a> {
     pub(crate) fn new(config: MutexGuard<'a, Config>) -> Self {
-        Self {
-            inner: config
-        }
+        Self { inner: config }
     }
 }
 

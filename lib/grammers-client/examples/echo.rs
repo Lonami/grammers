@@ -61,8 +61,8 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token, api_id, &api_hash).await?;
-        // TODO save session
         println!("Signed in!");
+        client.session().save_to_file("echo.session")?;
     }
 
     println!("Waiting for messages...");

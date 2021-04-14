@@ -78,7 +78,7 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        // TODO save session
+        client.session().save_to_file("dialogs.session")?;
     }
 
     // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
