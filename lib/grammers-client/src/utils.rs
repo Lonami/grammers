@@ -7,8 +7,11 @@
 // except according to those terms.
 
 use chrono::{DateTime, NaiveDateTime, Utc};
+use crate::Config;
+use grammers_session::Session;
 use grammers_tl_types as tl;
-use std::sync::atomic::{AtomicI64, Ordering};
+use std::ops::{Deref, DerefMut};
+use std::sync::{MutexGuard, atomic::{AtomicI64, Ordering}};
 use std::time::SystemTime;
 
 // This atomic isn't for anything critical, just to generate unique IDs without locks.
@@ -48,4 +51,30 @@ pub(crate) fn extract_password_parameters(
         tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
     };
     (salt1, salt2, g, p)
+}
+
+pub struct SessionGuard<'a> {
+    inner: MutexGuard<'a, Config>
+}
+
+impl<'a> SessionGuard<'a> {
+    pub(crate) fn new(config: MutexGuard<'a, Config>) -> Self {
+        Self {
+            inner: config
+        }
+    }
+}
+
+impl Deref for SessionGuard<'_> {
+    type Target = Session;
+
+    fn deref(&self) -> &Session {
+        &self.inner.deref().session
+    }
+}
+
+impl DerefMut for SessionGuard<'_> {
+    fn deref_mut(&mut self) -> &mut Session {
+        &mut self.inner.deref_mut().session
+    }
 }

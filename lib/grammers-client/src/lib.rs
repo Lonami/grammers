@@ -43,3 +43,4 @@ pub(crate) mod utils;
 
 pub use client::{Client, Config, InitParams, SignInError, UpdateIter};
 pub use types::{ChatMap, InputMessage, Update};
+pub use utils::SessionGuard;

@@ -8,7 +8,7 @@
 use super::net::connect_sender;
 use super::Client;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
-use crate::utils;
+use crate::utils::{self, SessionGuard};
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
@@ -516,9 +516,9 @@ impl Client {
     /// You can use this to temporarily access the session and save it wherever you want to.
     ///
     /// Panics if the type parameter does not match the actual session type.
-    pub fn session(&mut self) -> () {
+    pub fn session(&mut self) -> SessionGuard<'_> {
         self.sync_update_state();
-        panic!("figure out a way to give mut access to self.config.session with locks")
+        SessionGuard::new(self.0.config.lock().unwrap())
     }
 
     /// Calls [`Client::sign_out`] and disconnects.
