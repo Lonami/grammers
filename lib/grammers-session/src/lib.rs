@@ -13,7 +13,7 @@ use grammers_crypto::auth_key::AuthKey;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 use std::collections::HashMap;
 use std::fmt;
-use std::fs::File;
+use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
@@ -180,7 +180,7 @@ impl Session {
 
     /// Saves the session to a file.
     pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        let mut file = File::open(path.as_ref())?;
+        let mut file = OpenOptions::new().write(true).open(path.as_ref())?;
         file.seek(io::SeekFrom::Start(0))?;
         file.set_len(0)?;
         file.write_all(&self.save())?;
