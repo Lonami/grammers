@@ -7,8 +7,8 @@
 // except according to those terms.
 use super::net::connect_sender;
 use super::Client;
-use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
-use crate::utils::{self, SessionGuard};
+use crate::types::{LoginToken, PasswordToken, SessionGuard, TermsOfService, User};
+use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};

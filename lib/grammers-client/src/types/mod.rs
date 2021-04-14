@@ -21,6 +21,7 @@ pub mod participant;
 pub mod password_token;
 pub mod permissions;
 pub mod photo_sizes;
+pub mod session_guard;
 pub mod terms_of_service;
 pub mod update;
 
@@ -39,5 +40,6 @@ pub(crate) use message_box::MessageBox;
 pub use participant::{Participant, Role};
 pub use password_token::PasswordToken;
 pub use permissions::{Permissions, Restrictions};
+pub use session_guard::SessionGuard;
 pub use terms_of_service::TermsOfService;
 pub use update::Update;
