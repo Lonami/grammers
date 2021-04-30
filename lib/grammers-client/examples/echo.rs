@@ -68,7 +68,15 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    while let Some(updates) = client.next_updates().await? {
+
+    // This code uses `select!` on Ctrl+C to gracefully stop the client and have a chance to
+    // save the session. You could have fancier logic to save the session if you wanted to
+    // (or even save it on every update). Or you could also ignore Ctrl+C and just use
+    // `while let Some(updates) =  client.next_updates().await?`.
+    while let Some(updates) = tokio::select! {
+        _ = tokio::signal::ctrl_c() => Ok(None),
+        result = client.next_updates() => result,
+    }? {
         let handle = client.clone();
         task::spawn(async move {
             match handle_update(handle, updates).await {
@@ -76,14 +84,10 @@ async fn async_main() -> Result {
                 Err(e) => eprintln!("Error handling updates!: {}", e),
             }
         });
-
-        // Save the session file on every update so that we can correctly resume next time we
-        // connect after a period of being offline (catching up on updates).
-        //
-        // The alternative is to detect `Ctrl+C` and break from the loop.
-        client.session().save_to_file(SESSION_FILE)?;
     }
 
+    println!("Saving session file and exiting...");
+    client.session().save_to_file(SESSION_FILE)?;
     Ok(())
 }
 
