@@ -79,8 +79,7 @@ pub(crate) struct ClientInner {
     pub(crate) id: i64,
     pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
     pub(crate) dc_id: Mutex<i32>,
-    // TODO try to avoid a mutex over the ENTIRE config; only the session needs it
-    pub(crate) config: Mutex<Config>,
+    pub(crate) config: Config,
     pub(crate) message_box: Mutex<MessageBox>,
     pub(crate) chat_hashes: ChatHashCache,
     // TODO add a way to disable these and support also an upper bound, and warn when reached

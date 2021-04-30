@@ -132,8 +132,6 @@ impl Client {
     pub fn sync_update_state(&self) {
         self.0
             .config
-            .lock()
-            .unwrap()
             .session
             .set_state(self.0.message_box.lock().unwrap().session_state())
     }

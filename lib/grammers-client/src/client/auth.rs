@@ -81,11 +81,10 @@ impl Client {
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
         let user = User::from_raw(auth.user);
-        self.0.config.lock().unwrap().session.set_user(
-            user.id(),
-            *self.0.dc_id.lock().unwrap(),
-            user.is_bot(),
-        );
+        self.0
+            .config
+            .session
+            .set_user(user.id(), *self.0.dc_id.lock().unwrap(), user.is_bot());
 
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(state) => {
@@ -153,8 +152,7 @@ impl Client {
             Ok(x) => x,
             Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
                 let dc_id = value.unwrap() as i32;
-                let (sender, request_tx) =
-                    connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
                 *self.0.request_tx.lock().unwrap() = request_tx;
                 *self.0.dc_id.lock().unwrap() = dc_id;
@@ -230,8 +228,7 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again.
                 let dc_id = value.unwrap() as i32;
-                let (sender, request_tx) =
-                    connect_sender(dc_id, &mut self.0.config.lock().unwrap()).await?;
+                let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
                 *self.0.request_tx.lock().unwrap() = request_tx;
                 *self.0.dc_id.lock().unwrap() = dc_id;

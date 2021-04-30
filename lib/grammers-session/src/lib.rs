@@ -17,6 +17,7 @@ use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
+use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
@@ -31,17 +32,17 @@ pub struct UpdateState {
 }
 
 pub struct Session {
-    session: types::Session,
+    session: Mutex<types::Session>,
 }
 
 impl Session {
     pub fn new() -> Self {
         Self {
-            session: types::Session {
+            session: Mutex::new(types::Session {
                 dcs: Vec::new(),
                 user: None,
                 state: None,
-            },
+            }),
         }
     }
 
@@ -69,17 +70,21 @@ impl Session {
 
     pub fn load(data: &[u8]) -> Result<Self, Error> {
         Ok(Self {
-            session: enums::Session::from_bytes(&data)
-                .map_err(|e| match e {
-                    DeserializeError::UnexpectedEof => Error::MalformedData,
-                    DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
-                })?
-                .into(),
+            session: Mutex::new(
+                enums::Session::from_bytes(&data)
+                    .map_err(|e| match e {
+                        DeserializeError::UnexpectedEof => Error::MalformedData,
+                        DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
+                    })?
+                    .into(),
+            ),
         })
     }
 
     pub fn user_dc(&self) -> Option<i32> {
         self.session
+            .lock()
+            .unwrap()
             .user
             .as_ref()
             .map(|enums::User::User(user)| user.dc)
@@ -92,6 +97,8 @@ impl Session {
 
     pub fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
         self.session
+            .lock()
+            .unwrap()
             .dcs
             .iter()
             .filter_map(|enums::DataCenter::Center(dc)| {
@@ -110,14 +117,14 @@ impl Session {
             .next()
     }
 
-    pub fn insert_dc(&mut self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
-        if let Some(pos) = self
-            .session
+    pub fn insert_dc(&self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
+        let mut session = self.session.lock().unwrap();
+        if let Some(pos) = session
             .dcs
             .iter()
             .position(|enums::DataCenter::Center(dc)| dc.id == id)
         {
-            self.session.dcs.remove(pos);
+            session.dcs.remove(pos);
         }
         let addr: SocketAddr = server_addr.into();
 
@@ -126,7 +133,7 @@ impl Session {
             SocketAddr::V6(ref ip_v6) => (None, Some(ip_v6)),
         };
 
-        self.session.dcs.push(
+        session.dcs.push(
             types::DataCenter {
                 id,
                 ipv4: ip_v4.map(|addr| i32::from_le_bytes(addr.ip().octets())),
@@ -138,12 +145,13 @@ impl Session {
         );
     }
 
-    pub fn set_user(&mut self, id: i32, dc: i32, bot: bool) {
-        self.session.user = Some(types::User { id, dc, bot }.into())
+    pub fn set_user(&self, id: i32, dc: i32, bot: bool) {
+        self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
     }
 
     pub fn get_state(&self) -> Option<UpdateState> {
-        let enums::UpdateState::State(state) = self.session.state.as_ref()?;
+        let session = self.session.lock().unwrap();
+        let enums::UpdateState::State(state) = session.state.as_ref()?;
         Some(UpdateState {
             pts: state.pts,
             qts: state.qts,
@@ -157,8 +165,8 @@ impl Session {
         })
     }
 
-    pub fn set_state(&mut self, state: UpdateState) {
-        self.session.state = Some(
+    pub fn set_state(&self, state: UpdateState) {
+        self.session.lock().unwrap().state = Some(
             types::UpdateState {
                 pts: state.pts,
                 qts: state.qts,
@@ -175,7 +183,7 @@ impl Session {
     }
 
     pub fn save(&self) -> Vec<u8> {
-        enums::Session::Session(self.session.clone()).to_bytes()
+        enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
     }
 
     /// Saves the session to a file.

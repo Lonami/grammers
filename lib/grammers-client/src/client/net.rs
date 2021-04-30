@@ -39,7 +39,7 @@ const DEFAULT_DC: i32 = 2;
 
 pub(crate) async fn connect_sender(
     dc_id: i32,
-    config: &mut Config,
+    config: &Config,
 ) -> Result<(Sender<transport::Full, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let transport = transport::Full::new();
 
@@ -139,7 +139,7 @@ impl Client {
             id: utils::generate_random_id(),
             sender: AsyncMutex::new(sender),
             dc_id: Mutex::new(dc_id),
-            config: Mutex::new(config),
+            config,
             message_box: Mutex::new(message_box),
             chat_hashes: ChatHashCache::new(),
             updates: Mutex::new(VecDeque::new()),
@@ -147,9 +147,7 @@ impl Client {
         }));
 
         // Don't bother getting pristine state if we're not logged in.
-        if client.0.message_box.lock().unwrap().is_empty()
-            && client.0.config.lock().unwrap().session.signed_in()
-        {
+        if client.0.message_box.lock().unwrap().is_empty() && client.0.config.session.signed_in() {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
                     client.0.message_box.lock().unwrap().set_state(state);
