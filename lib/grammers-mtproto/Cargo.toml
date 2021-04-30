@@ -15,12 +15,12 @@ edition = "2018"
 
 [dependencies]
 crc = "1.8.1"
-getrandom = "0.2.1"
+getrandom = "0.2.2"
 grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
-flate2 = "1.0.19"
-num-bigint = "0.3.1"
+flate2 = "1.0.20"
+num-bigint = "0.4.0"
 sha1 = "0.6.0"
-bytes = "1.0.0"
+bytes = "1.0.1"
 
 [dependencies.grammers-tl-types]
 path = "../grammers-tl-types"
