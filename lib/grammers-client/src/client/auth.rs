@@ -513,9 +513,9 @@ impl Client {
     /// You can use this to temporarily access the session and save it wherever you want to.
     ///
     /// Panics if the type parameter does not match the actual session type.
-    pub fn session(&mut self) -> () {
+    pub fn session(&self) -> &grammers_session::Session {
         self.sync_update_state();
-        panic!("figure out a way to give mut access to self.config.session with locks")
+        &self.0.config.session
     }
 
     /// Calls [`Client::sign_out`] and disconnects.

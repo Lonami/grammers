@@ -20,6 +20,8 @@ use tokio::{runtime, task};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
+const SESSION_FILE: &str = "dialogs.session";
+
 fn prompt(message: &str) -> Result<String> {
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
@@ -45,7 +47,7 @@ async fn async_main() -> Result<()> {
 
     println!("Connecting to Telegram...");
     let mut client = Client::connect(Config {
-        session: Session::load_file_or_create("dialogs.session")?,
+        session: Session::load_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
@@ -54,7 +56,7 @@ async fn async_main() -> Result<()> {
     println!("Connected!");
 
     // If we can't save the session, sign out once we're done.
-    let sign_out = false;
+    let mut sign_out = false;
 
     if !client.is_authorized().await? {
         println!("Signing in...");
@@ -78,7 +80,16 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        // TODO save session
+        match client.session().save_to_file(SESSION_FILE) {
+            Ok(_) => {}
+            Err(e) => {
+                println!(
+                    "NOTE: failed to save the session, will sign out when done: {}",
+                    e
+                );
+                sign_out = true;
+            }
+        }
     }
 
     // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
