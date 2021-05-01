@@ -75,7 +75,7 @@ impl PackedChat {
 
     /// Deserialize the buffer into a packed chat
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ()> {
-        if buf.len() != 6 || buf.len() != 14 {
+        if buf.len() != 6 && buf.len() != 14 {
             return Err(());
         }
         if buf[1] as usize != buf.len() {
