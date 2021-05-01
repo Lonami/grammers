@@ -65,7 +65,9 @@ impl Client {
 
             let mut message_box = self.0.message_box.lock().unwrap();
             if let Some(request) = message_box.get_difference() {
+                drop(message_box);
                 let response = self.invoke(&request).await?;
+                let mut message_box = self.0.message_box.lock().unwrap();
                 let (updates, users, chats) = message_box.apply_difference(response);
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
@@ -80,7 +82,9 @@ impl Client {
             }
 
             if let Some(request) = message_box.get_channel_difference(&self.0.chat_hashes) {
+                drop(message_box);
                 let response = self.invoke(&request).await?;
+                let mut message_box = self.0.message_box.lock().unwrap();
                 let (updates, users, chats) =
                     message_box.apply_channel_difference(request, response);
                 return Ok(Some(UpdateIter::new(
