@@ -104,6 +104,44 @@ impl PackedChat {
             access_hash,
         })
     }
+
+    /// Unpack this into a `Chat` that can be used in requests.
+    pub fn unpack(&self) -> Chat {
+        // TODO this isn't ideal, because it's quite wasteful
+        // create instances of the smallest representations that work for us to avoid providing all fields
+        match self.ty {
+            PackedType::User | PackedType::Bot => {
+                let mut user = User::from_raw(tl::types::UserEmpty { id: self.id }.into());
+                user.0.access_hash = self.access_hash;
+                Chat::User(user)
+            }
+            PackedType::Chat => {
+                Chat::Group(Group::from_raw(tl::types::ChatEmpty { id: self.id }.into()))
+            }
+            PackedType::Megagroup => Chat::Group(Group::from_raw(
+                tl::types::ChannelForbidden {
+                    id: self.id,
+                    broadcast: false,
+                    megagroup: true,
+                    access_hash: self.access_hash.unwrap_or(0),
+                    title: String::new(),
+                    until_date: None,
+                }
+                .into(),
+            )),
+            PackedType::Broadcast | PackedType::Gigagroup => Chat::Channel(Channel::from_raw(
+                tl::types::ChannelForbidden {
+                    id: self.id,
+                    broadcast: false,
+                    megagroup: true,
+                    access_hash: self.access_hash.unwrap_or(0),
+                    title: String::new(),
+                    until_date: None,
+                }
+                .into(),
+            )),
+        }
+    }
 }
 
 impl Chat {

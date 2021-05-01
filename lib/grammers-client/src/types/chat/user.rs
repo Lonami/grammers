@@ -60,7 +60,7 @@ impl RestrictionReason {
 ///
 /// [@BotFather]: https://t.me/BotFather
 #[derive(Clone)]
-pub struct User(tl::types::User);
+pub struct User(pub(crate) tl::types::User);
 
 impl fmt::Debug for User {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
