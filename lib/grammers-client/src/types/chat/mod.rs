@@ -49,6 +49,7 @@ pub(crate) enum PackedType {
     Gigagroup = 0b0011_1000,
 }
 
+#[derive(Debug)]
 /// A packed chat
 pub struct PackedChat {
     pub(crate) ty: PackedType,
