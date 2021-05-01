@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{ChatMap, Permissions, Restrictions};
+use super::{Chat, ChatMap, Permissions, Restrictions};
 use crate::utils;
 use grammers_tl_types as tl;
 
@@ -164,7 +164,10 @@ impl Participant {
                 }),
             },
             P::Banned(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                user: match chats.remove(&p.peer).unwrap() {
+                    Chat::User(user) => user,
+                    _ => todo!("figure out how to deal with non-user being banned"),
+                },
                 role: Role::Banned(Banned {
                     left: p.left,
                     kicked_by: p.kicked_by,
@@ -173,7 +176,10 @@ impl Participant {
                 }),
             },
             P::Left(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                user: match chats.remove(&p.peer).unwrap() {
+                    Chat::User(user) => user,
+                    _ => todo!("figure out how to deal with non-user leaving"),
+                },
                 role: Role::Left(Left {}),
             },
         }

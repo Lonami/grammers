@@ -83,6 +83,7 @@ pub(super) fn update_short_message(
                 post_author: None,
                 grouped_id: None,
                 restriction_reason: None,
+                ttl_period: short.ttl_period,
             }
             .into(),
             pts: short.pts,
@@ -134,6 +135,7 @@ pub(super) fn update_short_chat_message(
                 post_author: None,
                 grouped_id: None,
                 restriction_reason: None,
+                ttl_period: short.ttl_period,
             }
             .into(),
             pts: short.pts,
@@ -149,7 +151,11 @@ pub(super) fn update_short_sent_message(
 ) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
         update: tl::types::UpdateNewMessage {
-            message: tl::types::MessageEmpty { id: short.id }.into(),
+            message: tl::types::MessageEmpty {
+                id: short.id,
+                peer_id: None,
+            }
+            .into(),
             pts: short.pts,
             pts_count: short.pts_count,
         }
@@ -397,11 +403,6 @@ impl PtsInfo {
             DialogFilterOrder(_) => None,
             DialogFilters => None,
             PhoneCallSignalingData(_) => None,
-            ChannelParticipant(u) => Some(Self {
-                pts: u.qts,
-                pts_count: 0,
-                entry: Entry::SecretChats,
-            }),
             ChannelMessageForwards(_) => None,
             ReadChannelDiscussionInbox(_) => None,
             ReadChannelDiscussionOutbox(_) => None,
@@ -423,6 +424,22 @@ impl PtsInfo {
             Chat(_) => None,
             GroupCallParticipants(_) => None,
             GroupCall(_) => None,
+            PeerHistoryTtl(_) => None,
+            ChatParticipant(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            ChannelParticipant(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            BotStopped(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
         }
     }
 }

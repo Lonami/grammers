@@ -56,6 +56,8 @@ impl Channel {
                         slowmode_enabled: false,
                         call_active: false,
                         call_not_empty: false,
+                        fake: false,
+                        gigagroup: false,
                         id: channel.id,
                         access_hash: Some(channel.access_hash),
                         title: channel.title,

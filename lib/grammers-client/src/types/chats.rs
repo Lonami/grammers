@@ -21,7 +21,8 @@ use std::{
 pub struct AdminRightsBuilder {
     client: Client,
     chat: Chat,
-    user: tl::enums::InputUser,
+    peer: tl::enums::InputPeer,
+    user: tl::enums::InputUser, // TODO redundant with `peer` (but less annoying to use)
     rights: tl::types::ChatAdminRights,
     rank: String,
 }
@@ -31,6 +32,7 @@ impl AdminRightsBuilder {
         Self {
             client,
             chat: chat.clone(),
+            peer: user.to_input_peer(),
             user: user.to_input(),
             rank: "".into(),
             rights: tl::types::ChatAdminRights {
@@ -44,6 +46,7 @@ impl AdminRightsBuilder {
                 pin_messages: false,
                 add_admins: false,
                 manage_call: false,
+                other: false,
             },
         }
     }
@@ -56,7 +59,7 @@ impl AdminRightsBuilder {
                 .client
                 .invoke(&tl::functions::channels::GetParticipant {
                     channel: chan,
-                    user_id: self.user.clone(),
+                    participant: self.peer.clone(),
                 })
                 .await?;
             match user.participant {
@@ -99,6 +102,7 @@ impl AdminRightsBuilder {
                         add_admins: true,
                         anonymous: false,
                         manage_call: true,
+                        other: true,
                     };
                     break;
                 }
@@ -246,6 +250,7 @@ impl AdminRightsBuilder {
 pub struct BannedRightsBuilder {
     client: Client,
     chat: Chat,
+    peer: tl::enums::InputPeer,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
 }
@@ -255,6 +260,7 @@ impl BannedRightsBuilder {
         Self {
             client,
             chat: chat.clone(),
+            peer: user.to_input_peer(),
             user: user.to_input(),
             rights: tl::types::ChatBannedRights {
                 view_messages: false,
@@ -282,7 +288,7 @@ impl BannedRightsBuilder {
                 .client
                 .invoke(&tl::functions::channels::GetParticipant {
                     channel: chan,
-                    user_id: self.user.clone(),
+                    participant: self.peer.clone(),
                 })
                 .await?;
             match user.participant {
@@ -405,7 +411,7 @@ impl BannedRightsBuilder {
             self.client
                 .invoke(&tl::functions::channels::EditBanned {
                     channel: chan,
-                    user_id: self.user.clone(),
+                    participant: self.peer.clone(),
                     banned_rights: tl::enums::ChatBannedRights::Rights(self.rights.clone()),
                 })
                 .await
@@ -416,6 +422,7 @@ impl BannedRightsBuilder {
                     .invoke(&tl::functions::messages::DeleteChatUser {
                         chat_id: id,
                         user_id: self.user.clone(),
+                        revoke_history: false,
                     })
                     .await
                     .map(drop)

@@ -162,6 +162,7 @@ impl Client {
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id: chat_id,
                 user_id: tl::enums::InputUser::UserSelf,
+                revoke_history: false,
             })
             .await
             .map(drop)

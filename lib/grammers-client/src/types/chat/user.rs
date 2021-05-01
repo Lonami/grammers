@@ -87,6 +87,7 @@ impl User {
                 support: false,
                 scam: false,
                 apply_min_photo: false,
+                fake: false,
                 id: empty.id,
                 access_hash: None,
                 first_name: None,

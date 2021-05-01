@@ -229,7 +229,14 @@ impl Chat {
                 };
                 (ty, chat.id())
             }
-            Self::Channel(channel) => (PackedType::Broadcast, channel.id()),
+            Self::Channel(channel) => {
+                let ty = if channel.0.gigagroup {
+                    PackedType::Gigagroup
+                } else {
+                    PackedType::Broadcast
+                };
+                (ty, channel.id())
+            }
         };
 
         PackedChat {

@@ -27,6 +27,7 @@ impl Permissions {
             add_admins: true,
             anonymous: true,
             manage_call: true,
+            other: true,
         })
     }
 
