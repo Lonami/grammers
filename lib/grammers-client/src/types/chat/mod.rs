@@ -212,36 +212,33 @@ impl Chat {
 
     /// Pack this chat into a smaller representation that can be loaded later.
     pub fn pack(&self) -> PackedChat {
-        let (ty, id) = match self {
+        let ty = match self {
             Self::User(user) => {
-                let ty = if user.is_bot() {
+                if user.is_bot() {
                     PackedType::Bot
                 } else {
                     PackedType::User
-                };
-                (ty, user.id())
+                }
             }
             Self::Group(chat) => {
-                let ty = if chat.is_megagroup() {
+                if chat.is_megagroup() {
                     PackedType::Megagroup
                 } else {
                     PackedType::Chat
-                };
-                (ty, chat.id())
+                }
             }
             Self::Channel(channel) => {
-                let ty = if channel.0.gigagroup {
+                if channel.0.gigagroup {
                     PackedType::Gigagroup
                 } else {
                     PackedType::Broadcast
-                };
-                (ty, channel.id())
+                }
             }
         };
 
         PackedChat {
             ty,
-            id,
+            id: self.id(),
             access_hash: self.access_hash(),
         }
     }
