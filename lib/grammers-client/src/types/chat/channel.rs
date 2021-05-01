@@ -17,7 +17,7 @@ use std::fmt;
 /// this variant will always represent a broadcast channel. The only difference between a
 /// broadcast channel and a megagroup are the permissions (default, and available).
 #[derive(Clone)]
-pub struct Channel(tl::types::Channel);
+pub struct Channel(pub(crate) tl::types::Channel);
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

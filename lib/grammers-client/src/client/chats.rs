@@ -9,9 +9,10 @@
 //! Methods related to users, groups and channels.
 
 use super::Client;
+use crate::types::chat::PackedType;
 use crate::types::{
     chat::PackedChat, AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message,
-    Participant, Peer, Photo, User,
+    Participant, Photo, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
@@ -570,12 +571,12 @@ impl Client {
     /// # }
     /// ```
     pub async fn unpack_chat(&mut self, packed_chat: &PackedChat) -> Result<Chat, InvocationError> {
-        Ok(match packed_chat.peer {
-            Peer::User(user_id) => {
+        Ok(match packed_chat.ty {
+            PackedType::User | PackedType::Bot => {
                 let mut res = self
                     .invoke(&tl::functions::users::GetUsers {
                         id: vec![tl::enums::InputUser::User(tl::types::InputUser {
-                            user_id,
+                            user_id: packed_chat.id,
                             access_hash: packed_chat.access_hash.unwrap(),
                         })],
                     })
@@ -585,9 +586,11 @@ impl Client {
                 }
                 Chat::from_user(res.pop().unwrap())
             }
-            Peer::Chat(chat_id) => {
+            PackedType::Chat => {
                 let mut res = match self
-                    .invoke(&tl::functions::messages::GetChats { id: vec![chat_id] })
+                    .invoke(&tl::functions::messages::GetChats {
+                        id: vec![packed_chat.id],
+                    })
                     .await?
                 {
                     tl::enums::messages::Chats::Chats(chats) => chats.chats,
@@ -598,11 +601,11 @@ impl Client {
                 }
                 Chat::from_chat(res.pop().unwrap())
             }
-            Peer::Channel(channel_id) => {
+            PackedType::Megagroup | PackedType::Broadcast | PackedType::Gigagroup => {
                 let mut res = match self
                     .invoke(&tl::functions::channels::GetChannels {
                         id: vec![tl::enums::InputChannel::Channel(tl::types::InputChannel {
-                            channel_id,
+                            channel_id: packed_chat.id,
                             access_hash: packed_chat.access_hash.unwrap(),
                         })],
                     })
