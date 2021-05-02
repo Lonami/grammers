@@ -6,15 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use std::{convert::TryInto, time::Duration};
 
 pub enum Attribute {
     Audio {
-        duration: i32,
+        duration: Duration,
         title: Option<String>,
         performer: Option<String>,
     },
     Voice {
-        duration: i32,
+        duration: Duration,
         waveform: Option<Vec<u8>>,
     },
     Video {
@@ -37,14 +38,14 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
                 performer,
             } => Self::Audio(tl::types::DocumentAttributeAudio {
                 voice: false,
-                duration,
+                duration: duration.as_secs().try_into().unwrap(),
                 title,
                 performer,
                 waveform: None,
             }),
             Voice { duration, waveform } => Self::Audio(tl::types::DocumentAttributeAudio {
                 voice: false,
-                duration,
+                duration: duration.as_secs().try_into().unwrap(),
                 title: None,
                 performer: None,
                 waveform,
