@@ -137,25 +137,20 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
         Event::End(Tag::CodeBlock(_kind)) => {
             update_entity_len!(Pre(offset) => entities);
         }
-
-        // \n
-        Event::SoftBreak => {
+        // "\\\n"
+        Event::HardBreak => {
             text.push('\n');
             offset += 1;
         }
-        // \\\n or   \n
-        Event::HardBreak => {
+        // "\n\n"
+        Event::End(Tag::Paragraph) => {
             text.push_str("\n\n");
             offset += 2;
         }
-        Event::End(Tag::Paragraph) => {
-            text.push('\n');
-            offset += 1;
-        }
-
         _ => {}
     });
 
+    text.truncate(text.trim_end().len());
     (text, entities)
 }
 
