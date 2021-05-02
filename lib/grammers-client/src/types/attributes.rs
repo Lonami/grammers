@@ -21,7 +21,7 @@ pub enum Attribute {
     Video {
         round_message: bool,
         supports_streaming: bool,
-        duration: i32,
+        duration: Duration,
         w: i32,
         h: i32,
     },
@@ -59,7 +59,7 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
             } => Self::Video(tl::types::DocumentAttributeVideo {
                 round_message,
                 supports_streaming,
-                duration,
+                duration: duration.as_secs().try_into().unwrap(),
                 w,
                 h,
             }),
