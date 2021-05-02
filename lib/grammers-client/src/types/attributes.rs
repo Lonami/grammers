@@ -24,12 +24,14 @@ pub enum Attribute {
         w: i32,
         h: i32,
     },
+    FileName(String),
 }
 
 impl From<Attribute> for tl::enums::DocumentAttribute {
     fn from(attr: Attribute) -> Self {
+        use Attribute::*;
         match attr {
-            Attribute::Audio {
+            Audio {
                 duration,
                 title,
                 performer,
@@ -40,16 +42,14 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
                 performer,
                 waveform: None,
             }),
-            Attribute::Voice { duration, waveform } => {
-                Self::Audio(tl::types::DocumentAttributeAudio {
-                    voice: false,
-                    duration,
-                    title: None,
-                    performer: None,
-                    waveform,
-                })
-            }
-            Attribute::Video {
+            Voice { duration, waveform } => Self::Audio(tl::types::DocumentAttributeAudio {
+                voice: false,
+                duration,
+                title: None,
+                performer: None,
+                waveform,
+            }),
+            Video {
                 round_message,
                 supports_streaming,
                 duration,
@@ -62,6 +62,9 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
                 w,
                 h,
             }),
+            FileName(file_name) => {
+                Self::Filename(tl::types::DocumentAttributeFilename { file_name })
+            }
         }
     }
 }
