@@ -9,10 +9,12 @@ use grammers_tl_types as tl;
 
 pub enum Attribute {
     Audio {
-        voice: bool,
         duration: i32,
         title: Option<String>,
         performer: Option<String>,
+    },
+    Voice {
+        duration: i32,
         waveform: Option<Vec<u8>>,
     },
     Video {
@@ -24,22 +26,29 @@ pub enum Attribute {
     },
 }
 
-impl From<&Attribute> for tl::enums::DocumentAttribute {
-    fn from(attr: &Attribute) -> Self {
+impl From<Attribute> for tl::enums::DocumentAttribute {
+    fn from(attr: Attribute) -> Self {
         match attr {
             Attribute::Audio {
-                voice,
                 duration,
                 title,
                 performer,
-                waveform,
             } => Self::Audio(tl::types::DocumentAttributeAudio {
-                voice: voice.clone(),
-                duration: duration.clone(),
-                title: title.clone(),
-                performer: performer.clone(),
-                waveform: waveform.clone(),
+                voice: false,
+                duration,
+                title,
+                performer,
+                waveform: None,
             }),
+            Attribute::Voice { duration, waveform } => {
+                Self::Audio(tl::types::DocumentAttributeAudio {
+                    voice: false,
+                    duration,
+                    title: None,
+                    performer: None,
+                    waveform,
+                })
+            }
             Attribute::Video {
                 round_message,
                 supports_streaming,
@@ -47,11 +56,11 @@ impl From<&Attribute> for tl::enums::DocumentAttribute {
                 w,
                 h,
             } => Self::Video(tl::types::DocumentAttributeVideo {
-                round_message: round_message.clone(),
-                supports_streaming: supports_streaming.clone(),
-                duration: duration.clone(),
-                w: w.clone(),
-                h: h.clone(),
+                round_message,
+                supports_streaming,
+                duration,
+                w,
+                h,
             }),
         }
     }

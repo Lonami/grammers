@@ -153,7 +153,7 @@ impl InputMessage {
         self
     }
 
-    pub fn attribute(mut self, attr: &Attribute) -> Self {
+    pub fn attribute(mut self, attr: Attribute) -> Self {
         match &mut self.media {
             Some(input) => match input {
                 tl::enums::InputMedia::UploadedDocument(document) => {
