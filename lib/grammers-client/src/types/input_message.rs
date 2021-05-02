@@ -9,6 +9,8 @@ use crate::types::{Media, Uploaded};
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
 
+use super::attributes::Attribute;
+
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7FFFFFFE;
 
@@ -148,6 +150,19 @@ impl InputMessage {
             }
             .into(),
         );
+        self
+    }
+
+    pub fn attribute(mut self, attr: &Attribute) -> Self {
+        match &mut self.media {
+            Some(input) => match input {
+                tl::enums::InputMedia::UploadedDocument(document) => {
+                    document.attributes.push(attr.into());
+                }
+                _ => {}
+            },
+            None => {}
+        }
         self
     }
 

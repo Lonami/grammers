@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
+pub mod attributes;
 pub mod chat;
 pub mod chat_map;
 pub mod chats;
