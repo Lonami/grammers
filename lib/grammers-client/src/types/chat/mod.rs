@@ -10,6 +10,7 @@ mod group;
 mod user;
 
 use grammers_tl_types as tl;
+use std::fmt;
 
 pub use channel::Channel;
 pub use group::Group;
@@ -35,7 +36,7 @@ pub enum Chat {
 }
 
 #[repr(u8)]
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub(crate) enum PackedType {
     // The fancy bit pattern may enable some optimizations.
     // * 2nd bit for tl::enums::Peer::User
@@ -49,7 +50,7 @@ pub(crate) enum PackedType {
     Gigagroup = 0b0011_1000,
 }
 
-#[derive(Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// A packed chat
 pub struct PackedChat {
     pub(crate) ty: PackedType,
@@ -141,6 +142,25 @@ impl PackedChat {
                 .into(),
             )),
         }
+    }
+}
+
+impl fmt::Display for PackedType {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str(match self {
+            Self::User => "User",
+            Self::Bot => "Bot",
+            Self::Chat => "Group",
+            Self::Megagroup => "Supergroup",
+            Self::Broadcast => "Channel",
+            Self::Gigagroup => "BroadcastGroup",
+        })
+    }
+}
+
+impl fmt::Display for PackedChat {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "PackedChat::{}({})", self.ty, self.id)
     }
 }
 
