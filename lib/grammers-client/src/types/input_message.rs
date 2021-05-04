@@ -156,14 +156,12 @@ impl InputMessage {
     /// # Examples
     ///
     /// ```
-    /// # use std::time::Duration;
-    /// # use grammers_client::{
-    /// #    types::Attribute, Client, InputMessage,
-    /// # };
-    /// #
-    /// # async fn f(client: &mut Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # let audio = client.upload_file("audio.flac").await?;
     /// #
+    /// use std::time::Duration;
+    /// use grammers_client::{types::Attribute, InputMessage};
+    ///
     /// let message = InputMessage::text("").document(audio).attribute(
     ///    Attribute::Audio {
     ///        duration: Duration::new(123, 0),
