@@ -142,7 +142,6 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                // TODO provide a way to set other attributes
                 attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
@@ -152,6 +151,29 @@ impl InputMessage {
         self
     }
 
+    /// Add additional attributes to the message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # use std::time::Duration;
+    /// # use grammers_client::{
+    /// #    types::Attribute, Client, InputMessage,
+    /// # };
+    /// #
+    /// # async fn f(client: &mut Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # let audio = client.upload_file("audio.flac").await?;
+    /// #
+    /// let message = InputMessage::text("").document(audio).attribute(
+    ///    Attribute::Audio {
+    ///        duration: Duration::new(123, 0),
+    ///        title: Some("Hello".to_string()),
+    ///        performer: Some("World".to_string()),
+    ///    }
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
     pub fn attribute(mut self, attr: Attribute) -> Self {
         match &mut self.media {
             Some(input) => match input {
@@ -188,7 +210,6 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                // TODO provide a way to set other attributes
                 attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
