@@ -1,6 +1,6 @@
 [package]
 name = "grammers-mtsender"
-version = "0.2.0"
+version = "0.3.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -14,9 +14,9 @@ categories = ["api-bindings", "network-programming"]
 edition = "2018"
 
 [dependencies]
-grammers-crypto = { path = "../grammers-crypto", version = "0.2.0" }
-grammers-mtproto = { path = "../grammers-mtproto", version = "0.2.0" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.2.0", features = [ "tl-mtproto" ]}
+grammers-crypto = { path = "../grammers-crypto", version = "0.3.0" }
+grammers-mtproto = { path = "../grammers-mtproto", version = "0.3.0" }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.3.0", features = [ "tl-mtproto" ]}
 tokio = { version = "1.5.0", features = ["net", "io-util", "sync", "macros", "time"] }
 bytes = "1.0.1"
 log = "0.4.14"
