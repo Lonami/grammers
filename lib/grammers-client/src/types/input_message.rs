@@ -153,6 +153,8 @@ impl InputMessage {
 
     /// Add additional attributes to the message.
     ///
+    /// This must be called *after* setting a file.
+    ///
     /// # Examples
     ///
     /// ```
