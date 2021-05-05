@@ -9,8 +9,9 @@
 //! Methods to deal with and offer access to updates.
 
 use super::Client;
-use crate::types::{ChatMap, MessageBox, Update};
+use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::MessageBox;
 pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
@@ -98,7 +99,7 @@ impl Client {
             drop(message_box);
             tokio::select! {
                 _ = self.step() => {}
-                _ = sleep_until(deadline) => {}
+                _ = sleep_until(deadline.into()) => {}
             }
         }
     }

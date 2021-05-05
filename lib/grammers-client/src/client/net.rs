@@ -7,11 +7,11 @@
 // except according to those terms.
 pub use super::updates::UpdateIter;
 use super::{Client, ClientInner, Config};
-use crate::types::{ChatHashCache, MessageBox};
 use crate::utils;
 use grammers_mtproto::mtp::{self};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
+use grammers_session::{ChatHashCache, MessageBox};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use sender::Enqueuer;

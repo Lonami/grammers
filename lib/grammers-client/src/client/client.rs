@@ -6,10 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub use super::updates::UpdateIter;
-use crate::types::{ChatHashCache, MessageBox};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{Enqueuer, Sender};
-use grammers_session::Session;
+use grammers_session::{ChatHashCache, MessageBox, Session};
 use std::collections::VecDeque;
 use std::fmt;
 use std::net::SocketAddr;

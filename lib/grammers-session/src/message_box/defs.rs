@@ -7,7 +7,7 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 use std::collections::{HashMap, HashSet};
-use tokio::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 pub(super) const NO_SEQ: i32 = 0;
@@ -43,7 +43,7 @@ pub(crate) enum Entry {
 ///
 /// See https://core.telegram.org/api/updates#message-related-event-sequences.
 #[derive(Debug)]
-pub(crate) struct MessageBox {
+pub struct MessageBox {
     pub(super) getting_diff: bool,
     pub(super) getting_channel_diff: HashSet<i32>,
     pub(super) no_update_deadlines: HashMap<Entry, Instant>,
@@ -72,4 +72,4 @@ pub(super) struct PtsInfo {
     pub(super) entry: Entry,
 }
 
-pub(crate) struct Gap;
+pub struct Gap;

@@ -9,14 +9,15 @@ mod adaptor;
 mod defs;
 
 use super::ChatHashCache;
-pub(crate) use defs::{Entry, Gap, MessageBox};
+use crate::UpdateState;
+pub(crate) use defs::Entry;
+pub use defs::{Gap, MessageBox};
 use defs::{PtsInfo, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
-pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
-use tokio::time::{Duration, Instant};
+use std::time::{Duration, Instant};
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT
@@ -24,7 +25,7 @@ fn next_updates_deadline() -> Instant {
 
 /// Creation, querying, and setting base state.
 impl MessageBox {
-    pub(crate) fn new() -> Self {
+    pub fn new() -> Self {
         let deadline = next_updates_deadline();
         let mut no_update_deadlines = HashMap::with_capacity(1);
         no_update_deadlines.insert(Entry::AccountWide, deadline);
@@ -42,7 +43,7 @@ impl MessageBox {
         }
     }
 
-    pub(crate) fn load(state: UpdateState) -> Self {
+    pub fn load(state: UpdateState) -> Self {
         let mut pts_map = HashMap::with_capacity(2 + state.channels.len());
         pts_map.insert(Entry::AccountWide, state.pts);
         pts_map.insert(Entry::SecretChats, state.qts);
@@ -77,7 +78,7 @@ impl MessageBox {
     }
 
     /// Return the current state in a format that sessions understand.
-    pub(crate) fn session_state(&self) -> UpdateState {
+    pub fn session_state(&self) -> UpdateState {
         UpdateState {
             pts: *self.pts_map.get(&Entry::AccountWide).unwrap_or(&0),
             qts: *self.pts_map.get(&Entry::SecretChats).unwrap_or(&0),
@@ -95,14 +96,14 @@ impl MessageBox {
     }
 
     /// Return true if the message box is empty and has no state yet.
-    pub(crate) fn is_empty(&self) -> bool {
+    pub fn is_empty(&self) -> bool {
         *self.pts_map.get(&Entry::AccountWide).unwrap_or(&NO_SEQ) == NO_SEQ
     }
 
     /// Return the next deadline when receiving updates should timeout.
     ///
     /// When this deadline is met, it means that get difference needs to be called.
-    pub(crate) fn timeout_deadline(&self) -> Instant {
+    pub fn timeout_deadline(&self) -> Instant {
         self.next_channel_deadline
             .min(*self.no_update_deadlines.get(&Entry::AccountWide).unwrap())
     }
@@ -163,7 +164,7 @@ impl MessageBox {
 
     // Note: calling this method is **really** important, or we'll start fetching updates from
     // scratch.
-    pub(crate) fn set_state(&mut self, state: tl::enums::updates::State) {
+    pub fn set_state(&mut self, state: tl::enums::updates::State) {
         let state: tl::types::updates::State = state.into();
         self.date = state.date;
         self.seq = state.seq;
@@ -175,7 +176,7 @@ impl MessageBox {
 // "Normal" updates flow (processing and detection of gaps).
 impl MessageBox {
     /// Process an update and return what should be done with it.
-    pub(crate) fn process_updates(
+    pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
         chat_hashes: &ChatHashCache,
@@ -353,7 +354,7 @@ impl MessageBox {
 /// Getting and applying account difference.
 impl MessageBox {
     /// Return the request that needs to be made to get the difference, if any.
-    pub(crate) fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
+    pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
         let deadline = *self.no_update_deadlines.get(&Entry::AccountWide).unwrap();
         if self.getting_diff || Instant::now() > self.possible_gap_deadline.unwrap_or(deadline) {
             if self.possible_gap_deadline.is_some() {
@@ -374,7 +375,7 @@ impl MessageBox {
         }
     }
 
-    pub(crate) fn apply_difference(
+    pub fn apply_difference(
         &mut self,
         difference: tl::enums::updates::Difference,
     ) -> (
@@ -489,7 +490,7 @@ impl MessageBox {
 /// Getting and applying channel difference.
 impl MessageBox {
     /// Return the request that needs to be made to get a channel's difference, if any.
-    pub(crate) fn get_channel_difference(
+    pub fn get_channel_difference(
         &mut self,
         chat_hashes: &ChatHashCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
@@ -547,7 +548,7 @@ impl MessageBox {
         }
     }
 
-    pub(crate) fn apply_channel_difference(
+    pub fn apply_channel_difference(
         &mut self,
         request: tl::functions::updates::GetChannelDifference,
         difference: tl::enums::updates::ChannelDifference,

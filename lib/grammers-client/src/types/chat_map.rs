@@ -39,14 +39,6 @@ pub struct ChatMap {
     map: HashMap<Peer, Chat>,
 }
 
-/// In-memory chat cache, mapping peers to their respective access hashes.
-pub(crate) struct ChatHashCache {
-    users: HashMap<i32, i64>,
-    channels: HashMap<i32, i64>,
-    self_id: Option<i32>,
-    self_bot: bool,
-}
-
 impl ChatMap {
     /// Create a new chat set.
     pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
@@ -90,39 +82,5 @@ impl ChatMap {
                 Chat::User(user) => user,
                 _ => unreachable!(),
             })
-    }
-}
-
-impl ChatHashCache {
-    pub(crate) fn new() -> Self {
-        Self {
-            users: HashMap::new(),
-            channels: HashMap::new(),
-            self_id: None,
-            self_bot: false,
-        }
-    }
-
-    pub(crate) fn self_id(&self) -> i32 {
-        self.self_id
-            .expect("tried to query self_id before it's known")
-    }
-
-    pub(crate) fn is_self_bot(&self) -> bool {
-        self.self_bot
-    }
-
-    pub(crate) fn contains_user(&self, user_id: i32) -> bool {
-        self.users.contains_key(&user_id)
-    }
-
-    pub(crate) fn get_input_channel(&self, channel_id: i32) -> Option<tl::enums::InputChannel> {
-        self.channels.get(&channel_id).map(|&access_hash| {
-            tl::types::InputChannel {
-                channel_id,
-                access_hash,
-            }
-            .into()
-        })
     }
 }
