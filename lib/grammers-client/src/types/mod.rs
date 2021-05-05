@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
+pub mod attributes;
 pub mod chat;
 pub mod chat_map;
 pub mod chats;
@@ -24,6 +25,7 @@ pub mod photo_sizes;
 pub mod terms_of_service;
 pub mod update;
 
+pub use attributes::Attribute;
 pub use chat::{Channel, Chat, Group, Platform, RestrictionReason, User};
 pub use chat_map::ChatMap;
 pub(crate) use chat_map::{ChatHashCache, Peer};

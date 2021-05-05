@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::attributes::Attribute;
 use crate::types::{Media, Uploaded};
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
@@ -141,13 +142,48 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                // TODO provide a way to set other attributes
                 attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
             }
             .into(),
         );
+        self
+    }
+
+    /// Add additional attributes to the message.
+    ///
+    /// This must be called *after* setting a file.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # let audio = client.upload_file("audio.flac").await?;
+    /// #
+    /// use std::time::Duration;
+    /// use grammers_client::{types::Attribute, InputMessage};
+    ///
+    /// let message = InputMessage::text("").document(audio).attribute(
+    ///    Attribute::Audio {
+    ///        duration: Duration::new(123, 0),
+    ///        title: Some("Hello".to_string()),
+    ///        performer: Some("World".to_string()),
+    ///    }
+    /// );
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn attribute(mut self, attr: Attribute) -> Self {
+        match &mut self.media {
+            Some(input) => match input {
+                tl::enums::InputMedia::UploadedDocument(document) => {
+                    document.attributes.push(attr.into());
+                }
+                _ => {}
+            },
+            None => {}
+        }
         self
     }
 
@@ -174,7 +210,6 @@ impl InputMessage {
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                // TODO provide a way to set other attributes
                 attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
