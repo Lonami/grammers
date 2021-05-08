@@ -1,12 +1,11 @@
 # gramme.rs
 
-A set of Rust libraries to interact with Telegram's API,
-hence the name *(tele)gramme.rs*.
+A set of Rust libraries to interact with Telegram's API, hence the name *(tele)gramme.rs*.
 
 ## Current status
 
-It works! You can access Telegram's API and handle updates, but the internals are a bit rough
-and need a lot of work. We're still looking for a nice solid interface on all the public methods.
+It works! The high-level interface is slowly taking shape, and it can already be used to [build
+real projects], such as [RSS bots].
 
 For an up-to-date taste on how the library looks like, refer to the [client examples] folder.
 
@@ -33,6 +32,19 @@ The following auxiliary CLI tools are available in the [`bin/`] folder:
 * **[tl-to-json]**: tool to read `.tl` and output `.json`, equivalent to
   [Telegram's JSON schema][tl-json].
 
+## Security
+
+It is recommended to always use [cargo-crev] to verify the trustworthiness of each of your
+dependencies, including this one.
+
+As far as I know, this code has not been audited, so if, for any reason, you're using this crate
+where security is critical, I strongly encourage you to review at least `grammers-crypto` and the
+authentication part of `grammers-mtproto`. I am not a security export, although I trust my code
+enough to use it myself.
+
+If you know about some published audit for this crate, please let me know, so that I can link it
+here and review the issues found.
+
 ## License
 
 All the libraries and binaries contained in this repository are licensed under either of
@@ -46,10 +58,22 @@ at your option.
 
 ## Contribution
 
+Thank you for considering to contribute! I'll try my best to provide quick, constructive feedback
+on your issues or pull requests. Please do call me out if you think my behaviour is not acceptable
+at any time. I will try to keep the discussion as technical as possible. Similarly, I will not
+tolerate poor behaviour from your side towards other people (including myself).
+
+If you don't have the time to [contribute code], you may contribute by [reporting issues] or
+feature ideas. Please note that every feature added will increase maintenance burden on my part,
+so be mindful when suggesting things. It may be possible that your idea could exist as its own
+crate, offered as [extensions to grammers].
+
 Unless you explicitly state otherwise, any contribution intentionally submitted
 for inclusion in the work by you, as defined in the Apache-2.0 license, shall be
 dual licensed as above, without any additional terms or conditions.
 
+[build real projects]: https://github.com/Lonami/grammers/wiki/Real-world-projects
+[RSS bots]: https://github.com/Lonami/srsrssrsbot
 [client examples]: lib/grammers-client/examples
 [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 [Type Language]: https://core.telegram.org/mtproto/TL
@@ -66,5 +90,9 @@ dual licensed as above, without any additional terms or conditions.
 [scrape-docs]: bin/scrape-docs/
 [tl-to-json]: bin/tl-to-json/
 [tl-json]: https://core.telegram.org/schema/json
+[cargo-crev]: https://github.com/crev-dev/cargo-crev
 [LICENSE-APACHE]: LICENSE-APACHE
 [LICENSE-MIT]: LICENSE-MIT
+[contribute code]: https://github.com/Lonami/grammers/compare
+[reporting issues]: https://github.com/Lonami/grammers/issues/new
+[extensions to grammers]: https://github.com/Lonami/grammers/wiki/Client-extensions
