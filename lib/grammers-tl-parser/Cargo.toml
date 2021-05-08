@@ -15,3 +15,6 @@ edition = "2018"
 
 [dependencies]
 crc32fast = "1.2.1"
+
+[dev-dependencies]
+toml = "0.5.8"

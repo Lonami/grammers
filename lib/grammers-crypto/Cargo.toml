@@ -26,6 +26,7 @@ glass_pumpkin = "1.0.0"
 
 [dev-dependencies]
 criterion = "0.3.4"
+toml = "0.5.8"
 
 [[bench]]
 name = "cipher"
