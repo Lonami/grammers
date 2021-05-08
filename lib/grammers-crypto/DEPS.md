@@ -17,10 +17,6 @@ attack, although I'm not sure how dangerous it is in practice.
 
 If this concerns you, please propose a fix and send a pull request.
 
-## once_cell
-
-This dependency is no longer used and should be removed.
-
 ## sha1
 
 Used in certain functions that require a certain AES key.
