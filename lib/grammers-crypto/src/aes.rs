@@ -28,8 +28,8 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
             .for_each(|(x, (a, b))| *x = a ^ b);
 
         // block = encrypt(block);
-        let mut ciphertext_block = GenericArray::clone_from_slice(&xored_block);
-        cipher.encrypt_block(&mut ciphertext_block);
+        let ciphertext_block = GenericArray::from_mut_slice(&mut xored_block);
+        cipher.encrypt_block(ciphertext_block);
 
         // block = block XOR iv2
         ciphertext_block
@@ -39,8 +39,8 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
 
         // save ciphertext and adjust iv
         ciphertext.extend(ciphertext_block.iter());
-        iv1.clone_from_slice(&ciphertext_block);
-        iv2.clone_from_slice(plaintext_block);
+        iv1.copy_from_slice(ciphertext_block);
+        iv2.copy_from_slice(plaintext_block);
     }
 
     ciphertext
@@ -66,8 +66,8 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
             .for_each(|(x, (a, b))| *x = a ^ b);
 
         // block = decrypt(block);
-        let mut plaintext_block = GenericArray::clone_from_slice(&xored_block);
-        cipher.decrypt_block(&mut plaintext_block);
+        let plaintext_block = GenericArray::from_mut_slice(&mut xored_block);
+        cipher.decrypt_block(plaintext_block);
 
         // block = block XOR iv1
         plaintext_block
@@ -78,7 +78,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
         // save plaintext and adjust iv
         plaintext.extend(plaintext_block.iter());
         iv1.clone_from_slice(ciphertext_block);
-        iv2.clone_from_slice(&plaintext_block);
+        iv2.clone_from_slice(plaintext_block);
     }
 
     plaintext
