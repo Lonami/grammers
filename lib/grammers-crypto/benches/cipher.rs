@@ -5,86 +5,61 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use criterion::{black_box, criterion_group, criterion_main, BenchmarkId, Criterion, Throughput};
+use bencher::{benchmark_group, benchmark_main, black_box, Bencher};
 use grammers_crypto::aes::{ige_decrypt, ige_encrypt};
 
-fn bench_encrypt_ige(c: &mut Criterion) {
-    let mut group = c.benchmark_group("IGE encryption (≤1KB)");
+macro_rules! define_benches {
+    ($(fn $func:ident($method:ident, $n:expr);)+) => {
+        $(
+            fn $func(bench: &mut Bencher) {
+                let data = black_box(vec![1; $n]);
+                let key = black_box([2; 32]);
+                let iv = black_box([3; 32]);
 
-    for size in [16usize, 256, 512, 1024].iter().copied() {
-        group.throughput(Throughput::Bytes(size as u64));
+                bench.iter(|| {
+                    black_box($method(&data, &key, &iv))
+                });
+                bench.bytes = data.len() as u64;
 
-        let data = black_box(vec![1; size]);
-        let key = black_box([2; 32]);
-        let iv = black_box([3; 32]);
-
-        group.bench_with_input(
-            BenchmarkId::new("encrypt", size),
-            &(data, key, iv),
-            |b, (data, key, iv)| b.iter(|| ige_encrypt(data, key, iv)),
-        );
-    }
-
-    group.finish();
-
-    let mut group = c.benchmark_group("IGE encryption (>1KB)");
-    group.sample_size(10);
-
-    for size in [16 * 1024, 128 * 1024, 512 * 1024].iter().copied() {
-        group.throughput(Throughput::Bytes(size as u64));
-
-        let data = black_box(vec![1; size]);
-        let key = black_box([2; 32]);
-        let iv = black_box([3; 32]);
-
-        group.bench_with_input(
-            BenchmarkId::new("encrypt", size),
-            &(data, key, iv),
-            |b, (data, key, iv)| b.iter(|| ige_encrypt(data, key, iv)),
-        );
-    }
-
-    group.finish();
+            }
+        )+
+    };
 }
 
-fn bench_decrypt_ige(c: &mut Criterion) {
-    let mut group = c.benchmark_group("IGE decryption (≤1KB)");
+define_benches!(
+    fn encrypt_b0016(ige_encrypt, 16);
+    fn encrypt_b0256(ige_encrypt, 256);
+    fn encrypt_b0512(ige_encrypt, 512);
+    fn encrypt_b1024(ige_encrypt, 1024);
 
-    for size in [16usize, 256, 512, 1024].iter().copied() {
-        group.throughput(Throughput::Bytes(size as u64));
+    fn encrypt_kb0016(ige_encrypt, 16 * 1024);
+    fn encrypt_kb0128(ige_encrypt, 128 * 1024);
+    fn encrypt_kb0512(ige_encrypt, 512 * 1024);
 
-        let data = black_box(vec![1; size]);
-        let key = black_box([2; 32]);
-        let iv = black_box([3; 32]);
+    fn decrypt_b0016(ige_decrypt, 16);
+    fn decrypt_b0256(ige_decrypt, 256);
+    fn decrypt_b0512(ige_decrypt, 512);
+    fn decrypt_b1024(ige_decrypt, 1024);
 
-        group.bench_with_input(
-            BenchmarkId::new("decrypt", size),
-            &(data, key, iv),
-            |b, (data, key, iv)| b.iter(|| ige_decrypt(data, key, iv)),
-        );
-    }
+    fn decrypt_kb0016(ige_decrypt, 16 * 1024);
+    fn decrypt_kb0128(ige_decrypt, 128 * 1024);
+    fn decrypt_kb0512(ige_decrypt, 512 * 1024);
+);
 
-    group.finish();
-
-    let mut group = c.benchmark_group("IGE decryption (>1KB)");
-    group.sample_size(10);
-
-    for size in [16 * 1024, 128 * 1024, 512 * 1024].iter().copied() {
-        group.throughput(Throughput::Bytes(size as u64));
-
-        let data = black_box(vec![1; size]);
-        let key = black_box([2; 32]);
-        let iv = black_box([3; 32]);
-
-        group.bench_with_input(
-            BenchmarkId::new("decrypt", size),
-            &(data, key, iv),
-            |b, (data, key, iv)| b.iter(|| ige_decrypt(data, key, iv)),
-        );
-    }
-
-    group.finish();
-}
-
-criterion_group!(benches, bench_encrypt_ige, bench_decrypt_ige);
-criterion_main!(benches);
+benchmark_group!(
+    encrypt_small,
+    encrypt_b0016,
+    encrypt_b0256,
+    encrypt_b0512,
+    encrypt_b1024
+);
+benchmark_group!(encrypt_big, encrypt_kb0016, encrypt_kb0128, encrypt_kb0512);
+benchmark_group!(
+    decrypt_small,
+    decrypt_b0016,
+    decrypt_b0256,
+    decrypt_b0512,
+    decrypt_b1024
+);
+benchmark_group!(decrypt_big, decrypt_kb0016, decrypt_kb0128, decrypt_kb0512);
+benchmark_main!(encrypt_small, encrypt_big, decrypt_small, decrypt_big);

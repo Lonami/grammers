@@ -37,7 +37,7 @@ Used for methods relied on by the 2-factor offered by Telegram.
 
 Used for methods relied on by the 2-factor offered by Telegram.
 
-## criterion
+## bencher
 
 Used for benchmarking the encryption and decryption methods.
 
