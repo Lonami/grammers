@@ -1,9 +1,5 @@
 # Dependencies
 
-## grammers-crypto
-
-Used to access some of the types defined in the crate (particularly `AuthKey`).
-
 ## grammers-mtproto
 
 Contains the actual implementation of the protocol without performing any IO. This crate's job

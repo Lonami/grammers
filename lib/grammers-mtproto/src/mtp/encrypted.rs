@@ -104,9 +104,9 @@ impl Builder {
 
     /// Finishes the builder and returns the `MTProto` instance with all
     /// the configuration changes applied.
-    pub fn finish(self, auth_key: AuthKey) -> Encrypted {
+    pub fn finish(self, auth_key: [u8; 256]) -> Encrypted {
         Encrypted {
-            auth_key,
+            auth_key: AuthKey::from_bytes(auth_key),
             time_offset: self.time_offset,
             salt: self.first_salt,
             client_id: {
@@ -137,8 +137,8 @@ impl Encrypted {
     }
 
     /// The authorization key used for encryption and decryption.
-    pub fn auth_key(&self) -> &AuthKey {
-        &self.auth_key
+    pub fn auth_key(&self) -> [u8; 256] {
+        self.auth_key.to_bytes()
     }
 
     /// Correct our time offset based on a known valid message ID.
@@ -1180,8 +1180,8 @@ mod tests {
     const REQUEST: &[u8] = b"Hey!";
     const REQUEST_B: &[u8] = b"Bye!";
 
-    fn auth_key() -> AuthKey {
-        AuthKey::from_bytes([0; 256])
+    fn auth_key() -> [u8; 256] {
+        [0; 256]
     }
 
     fn ensure_buffer_is_message(buffer: &[u8], body: &[u8], seq_no: u8) {

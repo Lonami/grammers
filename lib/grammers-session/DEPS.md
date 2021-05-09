@@ -1,9 +1,5 @@
 # Dependencies
 
-## grammers-crypto
-
-Used to access some of the types defined in the crate (particularly `AuthKey`).
-
 ## grammers-tl-types
 
 Used for dealing with correct update processing.

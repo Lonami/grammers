@@ -523,7 +523,7 @@ fn do_step3(
 /// [`create_key`]: fn.create_key.html
 #[derive(Clone, Debug, PartialEq)]
 pub struct Finished {
-    pub auth_key: AuthKey,
+    pub auth_key: [u8; 256],
     pub time_offset: i32,
     pub first_salt: i64,
 }
@@ -594,7 +594,7 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
     // 1 for DhGenOk
     if dh_gen.nonce_number == 1 {
         Ok(Finished {
-            auth_key,
+            auth_key: auth_key.to_bytes(),
             time_offset,
             first_salt,
         })
@@ -846,7 +846,7 @@ mod tests {
         assert_eq!(
             finished,
             Finished {
-                auth_key: AuthKey::from_bytes(expected_auth_key),
+                auth_key: expected_auth_key,
                 time_offset: 0,
                 first_salt: 4809708467028043047,
             }

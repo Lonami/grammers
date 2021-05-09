@@ -12,7 +12,6 @@ mod message_box;
 pub use chat_hash_cache::ChatHashCache;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
-use grammers_crypto::auth_key::AuthKey;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::MessageBox;
 use std::collections::HashMap;
@@ -99,7 +98,7 @@ impl Session {
         self.user_dc().is_some()
     }
 
-    pub fn dc_auth_key(&self, dc_id: i32) -> Option<AuthKey> {
+    pub fn dc_auth_key(&self, dc_id: i32) -> Option<[u8; 256]> {
         self.session
             .lock()
             .unwrap()
@@ -110,7 +109,7 @@ impl Session {
                     if let Some(auth) = &dc.auth {
                         let mut bytes = [0; 256];
                         bytes.copy_from_slice(auth);
-                        Some(AuthKey::from_bytes(bytes))
+                        Some(bytes)
                     } else {
                         None
                     }
@@ -121,7 +120,7 @@ impl Session {
             .next()
     }
 
-    pub fn insert_dc(&self, id: i32, server_addr: SocketAddr, auth: &AuthKey) {
+    pub fn insert_dc(&self, id: i32, server_addr: SocketAddr, auth: [u8; 256]) {
         let mut session = self.session.lock().unwrap();
         if let Some(pos) = session
             .dcs
@@ -143,7 +142,7 @@ impl Session {
                 ipv4: ip_v4.map(|addr| i32::from_le_bytes(addr.ip().octets())),
                 ipv6: ip_v6.map(|addr| addr.ip().octets()),
                 port: addr.port() as i32,
-                auth: Some(auth.to_bytes().to_vec()),
+                auth: Some(auth.into()),
             }
             .into(),
         );

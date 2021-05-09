@@ -9,7 +9,6 @@ mod errors;
 
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
-use grammers_crypto::AuthKey;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
@@ -472,7 +471,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 }
 
 impl<T: Transport> Sender<T, mtp::Encrypted> {
-    pub fn auth_key(&self) -> &AuthKey {
+    pub fn auth_key(&self) -> [u8; 256] {
         self.mtp.auth_key()
     }
 }
@@ -527,7 +526,7 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
 pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
-    auth_key: AuthKey,
+    auth_key: [u8; 256],
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
     Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
 }

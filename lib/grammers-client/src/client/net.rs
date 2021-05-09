@@ -62,7 +62,7 @@ pub(crate) async fn connect_sender(
         );
         let (sender, tx) = sender::connect(transport, addr).await?;
 
-        config.session.insert_dc(dc_id, addr, &sender.auth_key());
+        config.session.insert_dc(dc_id, addr, sender.auth_key());
         (sender, tx)
     };
 
