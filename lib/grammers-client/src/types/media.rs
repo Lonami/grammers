@@ -291,10 +291,12 @@ impl Contact {
         self.contact.phone_number.as_str()
     }
 
+    /// May be empty if it's not set by sender.
     pub fn first_name(&self) -> &str {
         self.contact.first_name.as_str()
     }
 
+    /// May be empty if it's not set by sender.
     pub fn last_name(&self) -> &str {
         self.contact.last_name.as_str()
     }
@@ -302,6 +304,8 @@ impl Contact {
     /// vCard is a format standard for electronic business cards.
     ///
     /// See https://en.wikipedia.org/wiki/VCard
+    ///
+    /// May be empty if it's not set by sender.
     pub fn vcard(&self) -> &str {
         self.contact.vcard.as_str()
     }
