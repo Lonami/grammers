@@ -287,8 +287,8 @@ impl Contact {
         }
     }
 
-    pub fn phone_number(&self) -> String {
-        self.contact.phone_number.clone()
+    pub fn phone_number(&self) -> &str {
+        self.contact.phone_number.as_str()
     }
 
     pub fn first_name(&self) -> String {
