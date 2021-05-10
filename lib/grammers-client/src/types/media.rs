@@ -291,16 +291,16 @@ impl Contact {
         self.contact.phone_number.as_str()
     }
 
-    pub fn first_name(&self) -> String {
-        self.contact.first_name.clone()
+    pub fn first_name(&self) -> &str {
+        self.contact.first_name.as_str()
     }
 
-    pub fn last_name(&self) -> String {
-        self.contact.last_name.clone()
+    pub fn last_name(&self) -> &str {
+        self.contact.last_name.as_str()
     }
 
-    pub fn vcard(&self) -> String {
-        self.contact.vcard.clone()
+    pub fn vcard(&self) -> &str {
+        self.contact.vcard.as_str()
     }
 }
 
