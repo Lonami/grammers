@@ -36,11 +36,17 @@ pub struct Uploaded {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Contact {
+    contact: tl::types::MessageMediaContact,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
     Document(Document),
     Sticker(Sticker),
+    Contact(Contact),
 }
 
 impl Photo {
@@ -267,6 +273,37 @@ impl Sticker {
     }
 }
 
+impl Contact {
+    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self { contact }
+    }
+
+    pub(crate) fn to_input_media(&self) -> tl::types::InputMediaContact {
+        tl::types::InputMediaContact {
+            phone_number: self.contact.phone_number.clone(),
+            first_name: self.contact.first_name.clone(),
+            last_name: self.contact.last_name.clone(),
+            vcard: self.contact.vcard.clone(),
+        }
+    }
+
+    pub fn phone_number(&self) -> String {
+        self.contact.phone_number.clone()
+    }
+
+    pub fn first_name(&self) -> String {
+        self.contact.first_name.clone()
+    }
+
+    pub fn last_name(&self) -> String {
+        self.contact.last_name.clone()
+    }
+
+    pub fn vcard(&self) -> String {
+        self.contact.vcard.clone()
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -289,7 +326,7 @@ impl Media {
             M::Empty => None,
             M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
             M::Geo(_) => None,
-            M::Contact(_) => None,
+            M::Contact(contact) => Some(Self::Contact(Contact::from_media(contact))),
             M::Unsupported => None,
             M::Document(document) => {
                 let document = Document::from_media(document, client);
@@ -314,6 +351,7 @@ impl Media {
             Media::Photo(photo) => photo.to_input_media().into(),
             Media::Document(document) => document.to_input_media().into(),
             Media::Sticker(sticker) => sticker.document.to_input_media().into(),
+            Media::Contact(contact) => contact.to_input_media().into(),
         }
     }
 
@@ -322,6 +360,7 @@ impl Media {
             Media::Photo(photo) => photo.to_input_location(),
             Media::Document(document) => document.to_input_location(),
             Media::Sticker(sticker) => sticker.document.to_input_location(),
+            Media::Contact(_) => None,
         }
     }
 }
