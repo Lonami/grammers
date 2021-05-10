@@ -299,6 +299,9 @@ impl Contact {
         self.contact.last_name.as_str()
     }
 
+    /// vCard is a format standard for electronic business cards.
+    ///
+    /// See https://en.wikipedia.org/wiki/VCard
     pub fn vcard(&self) -> &str {
         self.contact.vcard.as_str()
     }
