@@ -108,7 +108,11 @@ impl Enqueuer {
         let body = request.to_bytes();
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        debug!("enqueueing request {:x} to be serialized", req_id);
+        debug!(
+            "enqueueing request {:x} ({}) to be serialized",
+            req_id,
+            tl::name_for_id(req_id)
+        );
 
         let (tx, rx) = oneshot::channel();
         if let Err(err) = self.0.send(Request {
@@ -169,7 +173,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        debug!("enqueueing request {:x} to be serialized", req_id);
+        debug!(
+            "enqueueing request {:x} ({}) to be serialized",
+            req_id,
+            tl::name_for_id(req_id)
+        );
 
         let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
@@ -299,10 +307,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .zip(msg_ids.into_iter())
             .for_each(|(req, msg_id)| {
                 assert!(req.body.len() >= 4);
-                let req_id = [req.body[0], req.body[1], req.body[2], req.body[3]];
+                let req_id =
+                    u32::from_le_bytes([req.body[0], req.body[1], req.body[2], req.body[3]]);
                 debug!(
-                    "serialized request {:x} with {:?}",
-                    u32::from_le_bytes(req_id),
+                    "serialized request {:x} ({}) with {:?}",
+                    req_id,
+                    tl::name_for_id(req_id),
                     msg_id
                 );
                 req.state = RequestState::Serialized(msg_id);
@@ -426,7 +436,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             Ok(x) => {
                                 assert!(x.len() >= 4);
                                 let res_id = u32::from_le_bytes([x[0], x[1], x[2], x[3]]);
-                                debug!("got result {:x} for request {:?}", res_id, msg_id);
+                                debug!(
+                                    "got result {:x} ({}) for request {:?}",
+                                    res_id,
+                                    tl::name_for_id(res_id),
+                                    msg_id
+                                );
                                 Ok(x)
                             }
                             Err(mtp::RequestError::RpcError(error)) => {
