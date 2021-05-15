@@ -221,6 +221,21 @@ impl FromStr for Definition {
     }
 }
 
+impl Definition {
+    /// Convenience function to format both the namespace and name back into a single string.
+    pub fn full_name(&self) -> String {
+        let mut result = String::with_capacity(
+            self.namespace.iter().map(|ns| ns.len() + 1).sum::<usize>() + self.name.len(),
+        );
+        for ns in self.namespace.iter() {
+            result.push_str(ns);
+            result.push('.');
+        }
+        result.push_str(&self.name);
+        result
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

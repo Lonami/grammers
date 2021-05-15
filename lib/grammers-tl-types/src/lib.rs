@@ -78,7 +78,7 @@ mod generated;
 pub mod serialize;
 
 pub use deserialize::{Cursor, Deserializable};
-pub use generated::{enums, functions, types, LAYER};
+pub use generated::{enums, functions, name_for_id, types, LAYER};
 pub use serialize::Serializable;
 
 /// This struct represents the concrete type of a vector, that is,

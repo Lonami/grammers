@@ -65,8 +65,25 @@ pub fn generate_rust_code(
 
 /// The schema layer from which the definitions were generated.
 pub const LAYER: i32 = {};
+
+/// Return the name from the `.tl` definition corresponding to the provided definition identifier.
+pub fn name_for_id(id: u32) -> &'static str {{
+    match id {{
 "#,
         layer
+    )?;
+
+    for def in definitions {
+        writeln!(file, r#"        0x{:x} => "{}","#, def.id, def.full_name())?;
+    }
+
+    writeln!(
+        file,
+        r#"
+        _ => "(unknown)",
+    }}
+}}
+"#,
     )?;
 
     let metadata = metadata::Metadata::new(&definitions);
