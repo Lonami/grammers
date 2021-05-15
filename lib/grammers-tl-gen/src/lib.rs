@@ -18,6 +18,7 @@ use grammers_tl_parser::tl::{Category, Definition, Type};
 use std::io::{self, Write};
 
 pub struct Config {
+    pub gen_name_for_id: bool,
     pub deserializable_functions: bool,
     pub impl_debug: bool,
     pub impl_from_type: bool,
@@ -27,6 +28,7 @@ pub struct Config {
 impl Default for Config {
     fn default() -> Self {
         Self {
+            gen_name_for_id: false,
             deserializable_functions: false,
             impl_debug: true,
             impl_from_type: true,
@@ -65,26 +67,32 @@ pub fn generate_rust_code(
 
 /// The schema layer from which the definitions were generated.
 pub const LAYER: i32 = {};
-
-/// Return the name from the `.tl` definition corresponding to the provided definition identifier.
-pub fn name_for_id(id: u32) -> &'static str {{
-    match id {{
 "#,
         layer
     )?;
 
-    for def in definitions {
-        writeln!(file, r#"        0x{:x} => "{}","#, def.id, def.full_name())?;
-    }
+    if config.gen_name_for_id {
+        writeln!(
+            file,
+            r#"
+/// Return the name from the `.tl` definition corresponding to the provided definition identifier.
+pub fn name_for_id(id: u32) -> &'static str {{
+    match id {{
+        "#
+        )?;
+        for def in definitions {
+            writeln!(file, r#"        0x{:x} => "{}","#, def.id, def.full_name())?;
+        }
 
-    writeln!(
-        file,
-        r#"
+        writeln!(
+            file,
+            r#"
         _ => "(unknown)",
     }}
 }}
-"#,
-    )?;
+    "#,
+        )?;
+    }
 
     let metadata = metadata::Metadata::new(&definitions);
     structs::write_category_mod(file, Category::Types, definitions, &metadata, config)?;

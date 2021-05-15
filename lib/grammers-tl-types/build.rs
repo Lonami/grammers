@@ -72,6 +72,7 @@ fn main() -> std::io::Result<()> {
     )?);
 
     let config = Config {
+        gen_name_for_id: true,
         deserializable_functions: cfg!(feature = "deserializable-functions"),
         impl_debug: cfg!(feature = "impl-debug"),
         impl_from_enum: cfg!(feature = "impl-from-enum"),
