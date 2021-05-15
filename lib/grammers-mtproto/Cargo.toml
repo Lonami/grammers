@@ -14,7 +14,7 @@ categories = ["network-programming"]
 edition = "2018"
 
 [dependencies]
-crc = "1.8.1"
+crc32fast = "1.2.1"
 getrandom = "0.2.2"
 grammers-crypto = { path = "../grammers-crypto", version = "0.3.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.3.0", features = ["tl-mtproto"] }

@@ -1,6 +1,6 @@
 # Dependencies
 
-## crc
+## crc32fast
 
 Needed by the full transport mode.
 

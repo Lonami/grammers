@@ -7,7 +7,7 @@
 // except according to those terms.
 use super::{Error, Transport};
 use bytes::{Buf, BufMut, BytesMut};
-use crc::crc32::{self, Hasher32};
+use crc32fast::Hasher;
 
 /// The basic MTProto transport protocol. This is an implementation of the
 /// [full transport].
@@ -53,9 +53,9 @@ impl Transport for Full {
         output.put_u32_le(self.send_seq);
         output.put(input);
         let crc = {
-            let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&output[buf_start..]);
-            digest.sum32()
+            let mut hasher = Hasher::new();
+            hasher.update(&output[buf_start..]);
+            hasher.finalize()
         };
         output.put_u32_le(crc);
 
@@ -97,9 +97,9 @@ impl Transport for Full {
         let crc = needle.get_u32_le();
 
         let valid_crc = {
-            let mut digest = crc32::Digest::new(crc32::IEEE);
-            digest.write(&input[..len - 4]);
-            digest.sum32()
+            let mut hasher = Hasher::new();
+            hasher.update(&input[..len - 4]);
+            hasher.finalize()
         };
         if crc != valid_crc {
             return Err(Error::BadCrc {
