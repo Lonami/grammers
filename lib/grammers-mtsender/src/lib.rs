@@ -459,9 +459,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                                 );
                                 Err(InvocationError::Read(error.into()))
                             }
-                            Err(mtp::RequestError::BadMessage { .. }) => {
+                            Err(err @ mtp::RequestError::BadMessage { .. }) => {
                                 // TODO add a test to make sure we resend the request
-                                info!("bad msg mtp error, re-sending request {:?}", msg_id);
+                                info!("{}; re-sending request {:?}", err, msg_id);
                                 req.state = RequestState::NotSerialized;
                                 break;
                             }
