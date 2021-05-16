@@ -36,11 +36,17 @@ pub struct Uploaded {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Contact {
+    contact: tl::types::MessageMediaContact,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
     Document(Document),
     Sticker(Sticker),
+    Contact(Contact),
 }
 
 impl Photo {
@@ -267,6 +273,47 @@ impl Sticker {
     }
 }
 
+impl Contact {
+    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self { contact }
+    }
+
+    pub(crate) fn to_input_media(&self) -> tl::types::InputMediaContact {
+        tl::types::InputMediaContact {
+            phone_number: self.contact.phone_number.clone(),
+            first_name: self.contact.first_name.clone(),
+            last_name: self.contact.last_name.clone(),
+            vcard: self.contact.vcard.clone(),
+        }
+    }
+
+    /// The contact's phone number, in international format. This field will always be a non-empty
+    /// string of digits, although there's no guarantee that the number actually exists.
+    pub fn phone_number(&self) -> &str {
+        self.contact.phone_number.as_str()
+    }
+
+    /// The contact's first name. Although official clients will always send a non-empty string,
+    /// it is possible for this field to be empty when sent via different means.
+    pub fn first_name(&self) -> &str {
+        self.contact.first_name.as_str()
+    }
+
+    /// The contact's last name. May be empty if it's not set by sender.
+    pub fn last_name(&self) -> &str {
+        self.contact.last_name.as_str()
+    }
+
+    /// Contact information in [vCard format][1]. Applications such as Telegram Desktop leave this
+    /// field empty. The vCard version used in this field could be any. The field may also contain
+    /// arbitrary text when sent by non-official clients.
+    ///
+    /// [1]: https://en.wikipedia.org/wiki/VCard
+    pub fn vcard(&self) -> &str {
+        self.contact.vcard.as_str()
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -289,7 +336,7 @@ impl Media {
             M::Empty => None,
             M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
             M::Geo(_) => None,
-            M::Contact(_) => None,
+            M::Contact(contact) => Some(Self::Contact(Contact::from_media(contact))),
             M::Unsupported => None,
             M::Document(document) => {
                 let document = Document::from_media(document, client);
@@ -314,6 +361,7 @@ impl Media {
             Media::Photo(photo) => photo.to_input_media().into(),
             Media::Document(document) => document.to_input_media().into(),
             Media::Sticker(sticker) => sticker.document.to_input_media().into(),
+            Media::Contact(contact) => contact.to_input_media().into(),
         }
     }
 
@@ -322,6 +370,7 @@ impl Media {
             Media::Photo(photo) => photo.to_input_location(),
             Media::Document(document) => document.to_input_location(),
             Media::Sticker(sticker) => sticker.document.to_input_location(),
+            Media::Contact(_) => None,
         }
     }
 }
