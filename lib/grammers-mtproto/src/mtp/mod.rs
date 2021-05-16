@@ -182,6 +182,35 @@ impl From<tl::types::RpcError> for RpcError {
     }
 }
 
+impl RpcError {
+    /// Matches on the name of the RPC error (case-sensitive).
+    ///
+    /// Useful in `match` arm guards. A single trailing or leading asterisk (`'*'`) is allowed,
+    /// and will instead check if the error name starts (or ends with) the input parameter.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # let request_result = Result::<(), _>::Err(grammers_mtproto::mtp::RpcError {
+    /// #     code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None });
+    /// #
+    /// match request_result {
+    ///     Err(rpc_err) if rpc_err.is("SESSION_PASSWORD_NEEDED") => panic!(),
+    ///     Err(rpc_err) if rpc_err.is("PHONE_CODE_*") => {},
+    ///     _ => panic!()
+    /// }
+    /// ```
+    pub fn is(&self, rpc_error: &str) -> bool {
+        if rpc_error.ends_with('*') {
+            self.name.starts_with(&rpc_error[..rpc_error.len() - 1])
+        } else if rpc_error.starts_with('*') {
+            self.name.ends_with(&rpc_error[1..])
+        } else {
+            self.name == rpc_error
+        }
+    }
+}
+
 /// This error occurs when a Remote Procedure call was unsuccessful.
 ///
 /// The request should be retransmited when this happens, unless the

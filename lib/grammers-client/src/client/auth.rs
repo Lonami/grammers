@@ -10,7 +10,6 @@ use super::Client;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
-use grammers_mtproto::mtp::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::fmt;
@@ -150,8 +149,8 @@ impl Client {
 
         let result = match self.invoke(&request).await {
             Ok(x) => x,
-            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "USER_MIGRATE" => {
-                let dc_id = value.unwrap() as i32;
+            Err(InvocationError::Rpc(err)) if err.is("USER_MIGRATE") => {
+                let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
                 *self.0.request_tx.lock().unwrap() = request_tx;
@@ -220,14 +219,14 @@ impl Client {
 
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request).await {
             Ok(x) => x.into(),
-            Err(InvocationError::Rpc(RpcError { name, value, .. })) if name == "PHONE_MIGRATE" => {
+            Err(InvocationError::Rpc(err)) if err.is("PHONE_MIGRATE") => {
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
                 // authorization and re-import it at a different datacenter.
                 //
                 // Just connect and generate a new authorization key with it
                 // before trying again.
-                let dc_id = value.unwrap() as i32;
+                let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
                 *self.0.request_tx.lock().unwrap() = request_tx;
@@ -299,18 +298,14 @@ impl Client {
                     terms_of_service: x.terms_of_service.map(TermsOfService::from_raw),
                 })
             }
-            Err(InvocationError::Rpc(RpcError { name, .. }))
-                if name == "SESSION_PASSWORD_NEEDED" =>
-            {
+            Err(err) if err.is("SESSION_PASSWORD_NEEDED") => {
                 let password_token = self.get_password_information().await;
                 match password_token {
                     Ok(token) => Err(SignInError::PasswordRequired(token)),
                     Err(e) => Err(SignInError::Other(e)),
                 }
             }
-            Err(InvocationError::Rpc(RpcError { name, .. })) if name.starts_with("PHONE_CODE_") => {
-                Err(SignInError::InvalidCode)
-            }
+            Err(err) if err.is("PHONE_CODE_*") => Err(SignInError::InvalidCode),
             Err(error) => Err(SignInError::Other(error)),
         }
     }
@@ -408,9 +403,7 @@ impl Client {
                 self.complete_login(x).await.map_err(SignInError::Other)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
-            Err(InvocationError::Rpc(RpcError { name, .. })) if name == "PASSWORD_HASH_INVALID" => {
-                Err(SignInError::InvalidPassword)
-            }
+            Err(err) if err.is("PASSWORD_HASH_INVALID") => Err(SignInError::InvalidPassword),
             Err(error) => Err(SignInError::Other(error)),
         }
     }

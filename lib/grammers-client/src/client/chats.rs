@@ -336,9 +336,7 @@ impl Client {
             .await
         {
             Ok(tl::enums::contacts::ResolvedPeer::Peer(p)) => p,
-            Err(InvocationError::Rpc(err)) if err.name == "USERNAME_NOT_OCCUPIED" => {
-                return Ok(None)
-            }
+            Err(err) if err.is("USERNAME_NOT_OCCUPIED") => return Ok(None),
             Err(err) => return Err(err),
         };
 

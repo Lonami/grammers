@@ -100,6 +100,35 @@ impl From<tl::deserialize::Error> for InvocationError {
     }
 }
 
+impl InvocationError {
+    /// Matches on the name of the RPC error (case-sensitive).
+    ///
+    /// Useful in `match` arm guards. A single trailing or leading asterisk (`'*'`) is allowed,
+    /// and will instead check if the error name starts (or ends with) the input parameter.
+    ///
+    /// If the error is not a RPC error, returns `false`.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # let request_result = Result::<(), _>::Err(grammers_mtsender::InvocationError::Rpc(
+    /// #     grammers_mtproto::mtp::RpcError { code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None }));
+    /// #
+    /// match request_result {
+    ///     Err(err) if err.is("SESSION_PASSWORD_NEEDED") => panic!(),
+    ///     Err(err) if err.is("PHONE_CODE_*") => {},
+    ///     _ => panic!()
+    /// }
+    /// ```
+    #[inline]
+    pub fn is(&self, rpc_error: &str) -> bool {
+        match self {
+            Self::Rpc(rpc) => rpc.is(rpc_error),
+            _ => false,
+        }
+    }
+}
+
 /// This error occurs when the process to generate an authorization key fails.
 #[derive(Debug)]
 pub enum AuthorizationError {
