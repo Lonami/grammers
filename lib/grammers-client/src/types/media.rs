@@ -287,25 +287,28 @@ impl Contact {
         }
     }
 
+    /// The contact's phone number, in international format. This field will always be a non-empty
+    /// string of digits, although there's no guarantee that the number actually exists.
     pub fn phone_number(&self) -> &str {
         self.contact.phone_number.as_str()
     }
 
-    /// May be empty if it's not set by sender.
+    /// The contact's first name. Although official clients will always send a non-empty string,
+    /// it is possible for this field to be empty when sent via different means.
     pub fn first_name(&self) -> &str {
         self.contact.first_name.as_str()
     }
 
-    /// May be empty if it's not set by sender.
+    /// The contact's last name. May be empty if it's not set by sender.
     pub fn last_name(&self) -> &str {
         self.contact.last_name.as_str()
     }
 
-    /// vCard is a format standard for electronic business cards.
+    /// Contact information in [vCard format][1]. Applications such as Telegram Desktop leave this
+    /// field empty. The vCard version used in this field could be any. The field may also contain
+    /// arbitrary text when sent by non-official clients.
     ///
-    /// See https://en.wikipedia.org/wiki/VCard
-    ///
-    /// May be empty if it's not set by sender.
+    /// [1]: https://en.wikipedia.org/wiki/VCard
     pub fn vcard(&self) -> &str {
         self.contact.vcard.as_str()
     }
