@@ -104,8 +104,10 @@ impl MessageBox {
     ///
     /// When this deadline is met, it means that get difference needs to be called.
     pub fn timeout_deadline(&self) -> Instant {
-        self.next_channel_deadline
-            .min(*self.no_update_deadlines.get(&Entry::AccountWide).unwrap())
+        self.possible_gap_deadline.unwrap_or_else(|| {
+            self.next_channel_deadline
+                .min(*self.no_update_deadlines.get(&Entry::AccountWide).unwrap())
+        })
     }
 
     /// Reset the deadline for the periods without updates for a given entry.
