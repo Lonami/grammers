@@ -249,6 +249,7 @@ impl Client {
                 // Someone else is already performing the network step. Wait for the step to
                 // complete and return immediately without stepping again. The caller wants
                 // *one* step to complete, but it doesn't care *who* completes it.
+                tokio::task::yield_now().await;
                 self.0.sender.lock("client.step").await;
                 // TODO figure out and document why (or if) this yield is necessary
                 tokio::task::yield_now().await;
