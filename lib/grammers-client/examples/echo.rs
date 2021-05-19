@@ -36,7 +36,7 @@ async fn handle_update(mut client: Client, update: Update) -> Result {
 
 async fn async_main() -> Result {
     SimpleLogger::new()
-        .with_level(log::LevelFilter::Debug)
+        .with_level(log::LevelFilter::Trace)
         .init()
         .unwrap();
 

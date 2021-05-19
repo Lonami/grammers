@@ -8,6 +8,7 @@
 
 use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_tl_types as tl;
+use log::trace;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 
@@ -48,4 +49,59 @@ pub(crate) fn extract_password_parameters(
         tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
     };
     (salt1, salt2, g, p)
+}
+
+pub(crate) struct Mutex<T: ?Sized> {
+    name: &'static str,
+    mutex: std::sync::Mutex<T>,
+}
+
+pub(crate) struct MutexGuard<'a, T: ?Sized> {
+    name: &'static str,
+    reason: &'static str,
+    guard: std::sync::MutexGuard<'a, T>,
+}
+
+impl<T> Mutex<T> {
+    pub fn new(name: &'static str, value: T) -> Self {
+        Self {
+            name,
+            mutex: std::sync::Mutex::new(value),
+        }
+    }
+
+    pub fn lock(&self, reason: &'static str) -> MutexGuard<T> {
+        trace!("locking {} for {}", self.name, reason);
+        MutexGuard {
+            name: self.name,
+            reason,
+            guard: self.mutex.lock().unwrap(),
+        }
+    }
+}
+
+impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for Mutex<T> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        self.mutex.fmt(f)
+    }
+}
+
+impl<T: ?Sized> std::ops::Deref for MutexGuard<'_, T> {
+    type Target = T;
+
+    fn deref(&self) -> &T {
+        self.guard.deref()
+    }
+}
+
+impl<T: ?Sized> std::ops::DerefMut for MutexGuard<'_, T> {
+    fn deref_mut(&mut self) -> &mut T {
+        self.guard.deref_mut()
+    }
+}
+
+impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
+    fn drop(&mut self) {
+        trace!("unlocking {} for {}", self.name, self.reason);
+    }
 }

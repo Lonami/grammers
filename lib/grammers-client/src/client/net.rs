@@ -7,6 +7,7 @@
 // except according to those terms.
 use super::{Client, ClientInner, Config};
 use crate::utils;
+use crate::utils::Mutex;
 use grammers_mtproto::mtp::{self};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
@@ -16,7 +17,7 @@ use log::info;
 use sender::Enqueuer;
 use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::sync::Mutex as AsyncMutex;
 
@@ -137,19 +138,29 @@ impl Client {
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             sender: AsyncMutex::new(sender),
-            dc_id: Mutex::new(dc_id),
+            dc_id: Mutex::new("client.dc_id", dc_id),
             config,
-            message_box: Mutex::new(message_box),
+            message_box: Mutex::new("client.message_box", message_box),
             chat_hashes: ChatHashCache::new(),
-            updates: Mutex::new(VecDeque::new()),
-            request_tx: Mutex::new(request_tx),
+            updates: Mutex::new("client.updates", VecDeque::new()),
+            request_tx: Mutex::new("client.request_tx", request_tx),
         }));
 
         // Don't bother getting pristine state if we're not logged in.
-        if client.0.message_box.lock().unwrap().is_empty() && client.0.config.session.signed_in() {
+        if client
+            .0
+            .message_box
+            .lock("client.connect.is_empty")
+            .is_empty()
+            && client.0.config.session.signed_in()
+        {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    client.0.message_box.lock().unwrap().set_state(state);
+                    client
+                        .0
+                        .message_box
+                        .lock("client.connect.set_state")
+                        .set_state(state);
                     client.sync_update_state();
                 }
                 Err(_) => {
@@ -190,7 +201,7 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let mut rx = self.0.request_tx.lock().unwrap().enqueue(request);
+        let mut rx = self.0.request_tx.lock("invoke").enqueue(request);
         loop {
             match rx.try_recv() {
                 Ok(response) => {

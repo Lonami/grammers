@@ -42,15 +42,15 @@ impl Client {
     /// ```
     pub async fn next_update(&self) -> Result<Option<Update>, InvocationError> {
         loop {
-            if let Some(updates) = self.0.updates.lock().unwrap().pop_front() {
+            if let Some(updates) = self.0.updates.lock("client.next_update").pop_front() {
                 return Ok(Some(updates));
             }
 
-            let mut message_box = self.0.message_box.lock().unwrap();
+            let mut message_box = self.0.message_box.lock("client.next_update");
             if let Some(request) = message_box.get_difference() {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
-                let mut message_box = self.0.message_box.lock().unwrap();
+                let mut message_box = self.0.message_box.lock("client.next_update/get_difference");
                 let (updates, users, chats) = message_box.apply_difference(response);
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
@@ -65,7 +65,10 @@ impl Client {
             if let Some(request) = message_box.get_channel_difference(&self.0.chat_hashes) {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
-                let mut message_box = self.0.message_box.lock().unwrap();
+                let mut message_box = self
+                    .0
+                    .message_box
+                    .lock("client.next_update/get_channel_difference");
                 let (updates, users, chats) =
                     message_box.apply_channel_difference(request, response);
 
@@ -88,7 +91,7 @@ impl Client {
         }
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
-        let mut message_box = self.0.message_box.lock().unwrap();
+        let mut message_box = self.0.message_box.lock("client.process_socket_updates");
         for updates in all_updates {
             match message_box.process_updates(updates, &self.0.chat_hashes) {
                 Ok(tuple) => {
@@ -105,7 +108,7 @@ impl Client {
     }
 
     fn extend_update_queue(&self, updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
-        self.0.updates.lock().unwrap().extend(
+        self.0.updates.lock("client.extend_update_queue").extend(
             updates
                 .into_iter()
                 .flat_map(|u| Update::new(self, u, &chat_map)),
@@ -114,9 +117,11 @@ impl Client {
 
     /// Synchronize the updates state to the session.
     pub fn sync_update_state(&self) {
-        self.0
-            .config
-            .session
-            .set_state(self.0.message_box.lock().unwrap().session_state());
+        self.0.config.session.set_state(
+            self.0
+                .message_box
+                .lock("client.sync_update_state")
+                .session_state(),
+        );
     }
 }

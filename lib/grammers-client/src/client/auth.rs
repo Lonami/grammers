@@ -80,14 +80,18 @@ impl Client {
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
         let user = User::from_raw(auth.user);
-        self.0
-            .config
-            .session
-            .set_user(user.id(), *self.0.dc_id.lock().unwrap(), user.is_bot());
+        self.0.config.session.set_user(
+            user.id(),
+            *self.0.dc_id.lock("client.complete_login"),
+            user.is_bot(),
+        );
 
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(state) => {
-                self.0.message_box.lock().unwrap().set_state(state);
+                self.0
+                    .message_box
+                    .lock("client.complete_login")
+                    .set_state(state);
                 self.sync_update_state();
             }
             Err(_) => {
@@ -153,8 +157,8 @@ impl Client {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
-                *self.0.request_tx.lock().unwrap() = request_tx;
-                *self.0.dc_id.lock().unwrap() = dc_id;
+                *self.0.request_tx.lock("client.bot_sign_in") = request_tx;
+                *self.0.dc_id.lock("client.bot_sign_in") = dc_id;
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -229,8 +233,8 @@ impl Client {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock().await = sender;
-                *self.0.request_tx.lock().unwrap() = request_tx;
-                *self.0.dc_id.lock().unwrap() = dc_id;
+                *self.0.request_tx.lock("client.request_login_code") = request_tx;
+                *self.0.dc_id.lock("client.request_login_code") = dc_id;
                 self.invoke(&request).await?.into()
             }
             Err(e) => return Err(e.into()),

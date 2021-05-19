@@ -5,13 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::utils::Mutex;
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{Enqueuer, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
 use std::collections::VecDeque;
 use std::fmt;
 use std::net::SocketAddr;
-use std::sync::{Arc, Mutex};
+use std::sync::Arc;
 use tokio::sync::Mutex as AsyncMutex;
 
 /// When no locale is found, use this one instead.
