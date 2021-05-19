@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub use super::updates::UpdateIter;
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{Enqueuer, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
@@ -83,7 +82,7 @@ pub(crate) struct ClientInner {
     pub(crate) chat_hashes: ChatHashCache,
     // TODO add a way to disable these and support also an upper bound, and warn when reached
     //      we probably want the upper bound to be for updates, and not bundles of them
-    pub(crate) updates: Mutex<VecDeque<UpdateIter>>,
+    pub(crate) updates: Mutex<VecDeque<crate::types::Update>>,
     // Used to avoid locking the entire sender when enqueueing requests.
     pub(crate) request_tx: Mutex<Enqueuer>,
 }

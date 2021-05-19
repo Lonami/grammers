@@ -10,7 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use grammers_client::{Client, Config, InitParams, Update, UpdateIter};
+use grammers_client::{Client, Config, InitParams, Update};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
@@ -21,16 +21,14 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 const SESSION_FILE: &str = "echo.session";
 
-async fn handle_update(mut client: Client, updates: UpdateIter) -> Result {
-    for update in updates {
-        match update {
-            Update::NewMessage(message) if !message.outgoing() => {
-                let chat = message.chat();
-                println!("Responding to {}", chat.name());
-                client.send_message(&chat, message.text().into()).await?;
-            }
-            _ => {}
+async fn handle_update(mut client: Client, update: Update) -> Result {
+    match update {
+        Update::NewMessage(message) if !message.outgoing() => {
+            let chat = message.chat();
+            println!("Responding to {}", chat.name());
+            client.send_message(&chat, message.text().into()).await?;
         }
+        _ => {}
     }
 
     Ok(())
@@ -73,13 +71,13 @@ async fn async_main() -> Result {
     // save the session. You could have fancier logic to save the session if you wanted to
     // (or even save it on every update). Or you could also ignore Ctrl+C and just use
     // `while let Some(updates) =  client.next_updates().await?`.
-    while let Some(updates) = tokio::select! {
+    while let Some(update) = tokio::select! {
         _ = tokio::signal::ctrl_c() => Ok(None),
-        result = client.next_updates() => result,
+        result = client.next_update() => result,
     }? {
         let handle = client.clone();
         task::spawn(async move {
-            match handle_update(handle, updates).await {
+            match handle_update(handle, update).await {
                 Ok(_) => {}
                 Err(e) => eprintln!("Error handling updates!: {}", e),
             }

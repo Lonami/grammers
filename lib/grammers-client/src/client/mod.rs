@@ -18,4 +18,3 @@ pub mod updates;
 pub use auth::SignInError;
 pub(crate) use client::ClientInner;
 pub use client::{Client, Config, InitParams};
-pub use updates::UpdateIter;

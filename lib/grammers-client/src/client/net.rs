@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-pub use super::updates::UpdateIter;
 use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtproto::mtp::{self};
@@ -231,11 +230,7 @@ impl Client {
             Ok(mut sender) => {
                 // Sender was unlocked, we're the ones that will perform the network step.
                 let updates = sender.step().await?;
-                if let Some(uiter) =
-                    self.get_update_iter(updates, &mut self.0.message_box.lock().unwrap())
-                {
-                    self.0.updates.lock().unwrap().push_back(uiter);
-                }
+                self.process_socket_updates(updates);
 
                 // TODO request cancellation if this is Err
                 // (perhaps a method on the sender to cancel_all)
