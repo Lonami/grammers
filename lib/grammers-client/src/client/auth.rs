@@ -156,7 +156,7 @@ impl Client {
             Err(InvocationError::Rpc(err)) if err.is("USER_MIGRATE") => {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                *self.0.sender.lock().await = sender;
+                *self.0.sender.lock("client.bot_sign_in").await = sender;
                 *self.0.request_tx.lock("client.bot_sign_in") = request_tx;
                 *self.0.dc_id.lock("client.bot_sign_in") = dc_id;
                 self.invoke(&request).await?
@@ -232,7 +232,7 @@ impl Client {
                 // before trying again.
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                *self.0.sender.lock().await = sender;
+                *self.0.sender.lock("client.request_login_code").await = sender;
                 *self.0.request_tx.lock("client.request_login_code") = request_tx;
                 *self.0.dc_id.lock("client.request_login_code") = dc_id;
                 self.invoke(&request).await?.into()

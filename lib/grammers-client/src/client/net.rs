@@ -6,8 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner, Config};
-use crate::utils;
-use crate::utils::Mutex;
+use crate::utils::{self, AsyncMutex, Mutex};
 use grammers_mtproto::mtp::{self};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
@@ -19,7 +18,6 @@ use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::Mutex as AsyncMutex;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -137,7 +135,7 @@ impl Client {
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
-            sender: AsyncMutex::new(sender),
+            sender: AsyncMutex::new("client.sender", sender),
             dc_id: Mutex::new("client.dc_id", dc_id),
             config,
             message_box: Mutex::new("client.message_box", message_box),
@@ -237,7 +235,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn step(&self) -> Result<(), sender::ReadError> {
-        match self.0.sender.try_lock() {
+        match self.0.sender.try_lock("client.step") {
             Ok(mut sender) => {
                 // Sender was unlocked, we're the ones that will perform the network step.
                 let updates = sender.step().await?;
@@ -251,7 +249,7 @@ impl Client {
                 // Someone else is already performing the network step. Wait for the step to
                 // complete and return immediately without stepping again. The caller wants
                 // *one* step to complete, but it doesn't care *who* completes it.
-                self.0.sender.lock().await;
+                self.0.sender.lock("client.step").await;
                 // TODO figure out and document why (or if) this yield is necessary
                 tokio::task::yield_now().await;
                 Ok(())
