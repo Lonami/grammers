@@ -13,8 +13,13 @@ use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 pub use grammers_session::UpdateState;
 use grammers_tl_types as tl;
+use log::warn;
 use std::sync::Arc;
+use std::time::{Duration, Instant};
 use tokio::time::sleep_until;
+
+/// How long to wait after warning the user that the updates limit was exceeded.
+const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
 
 impl Client {
     /// Returns the next update from the buffer where they are queued until used.
@@ -111,8 +116,35 @@ impl Client {
         self.extend_update_queue(updates, ChatMap::new(users, chats));
     }
 
-    fn extend_update_queue(&self, updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
-        self.0.updates.lock("client.extend_update_queue").extend(
+    fn extend_update_queue(&self, mut updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
+        let mut guard = self.0.updates.lock("client.extend_update_queue");
+
+        if let Some(limit) = self.0.config.params.update_queue_limit {
+            if let Some(exceeds) = (guard.len() + updates.len()).checked_sub(limit + 1) {
+                let exceeds = exceeds + 1;
+                let now = Instant::now();
+                let mut warn_guard = self
+                    .0
+                    .last_update_limit_warn
+                    .lock("client.extend_update_queue");
+                let notify = match *warn_guard {
+                    None => true,
+                    Some(instant) => now - instant > UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN,
+                };
+
+                updates.truncate(updates.len() - exceeds);
+                if notify {
+                    warn!(
+                        "{} updates were dropped because the update_queue_limit was exceeded",
+                        exceeds
+                    );
+                }
+
+                *warn_guard = Some(now);
+            }
+        }
+
+        guard.extend(
             updates
                 .into_iter()
                 .flat_map(|u| Update::new(self, u, &chat_map)),

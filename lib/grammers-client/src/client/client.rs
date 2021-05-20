@@ -13,6 +13,7 @@ use std::collections::VecDeque;
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
+use std::time::Instant;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -70,6 +71,26 @@ pub struct InitParams {
     /// On flood, the library will retry *once*. If the flood error occurs a second time after
     /// sleeping, the error will be returned.
     pub flood_sleep_threshold: Option<u32>,
+    /// How many updates may be buffered by the client at any given time.
+    ///
+    /// Telegram passively sends updates to the client through the open connection, so they must
+    /// be buffered until the application has the capacity to consume them.
+    ///
+    /// Upon reaching this limit, updates will be dropped, and a warning log message will be
+    /// emitted (but not too often, to avoid spamming the log), in order to let the developer
+    /// know that they should either change how they handle updates or increase the limit.
+    ///
+    /// A limit of zero (`0`) indicates that updates should not be buffered. They will be
+    /// immediately dropped, and no warning will ever be emitted.
+    ///
+    /// A limit of `None` disables the upper bound for the buffer. This is not recommended, as it
+    /// could eventually lead to memory exhaustion. This option will also not emit any warnings.
+    ///
+    /// The default limit, which may change at any time, should be enough for user accounts,
+    /// although bot accounts may need to increase the limit depending on their capacity.
+    ///
+    /// When the limit is `Some`, a buffer to hold that many updates will be pre-allocated.
+    pub update_queue_limit: Option<usize>,
 }
 
 pub(crate) struct ClientInner {
@@ -80,8 +101,9 @@ pub(crate) struct ClientInner {
     pub(crate) config: Config,
     pub(crate) message_box: Mutex<MessageBox>,
     pub(crate) chat_hashes: ChatHashCache,
-    // TODO add a way to disable these and support also an upper bound, and warn when reached
-    //      we probably want the upper bound to be for updates, and not bundles of them
+    // When did we last warn the user that the update queue filled up?
+    // This is used to avoid spamming the log.
+    pub(crate) last_update_limit_warn: Mutex<Option<Instant>>,
     pub(crate) updates: Mutex<VecDeque<crate::types::Update>>,
     // Used to avoid locking the entire sender when enqueueing requests.
     pub(crate) request_tx: Mutex<Enqueuer>,
@@ -129,6 +151,7 @@ impl Default for InitParams {
             catch_up: false,
             server_addr: None,
             flood_sleep_threshold: Some(60),
+            update_queue_limit: Some(100),
         }
     }
 }

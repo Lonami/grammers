@@ -132,6 +132,18 @@ impl Client {
             MessageBox::new()
         };
 
+        // Pre-allocate the right `VecDeque` size if a limit is given.
+        let updates = if let Some(limit) = config.params.update_queue_limit {
+            VecDeque::with_capacity(limit)
+        } else {
+            VecDeque::new()
+        };
+
+        // "Remove" the limit to avoid checking for it (and avoid warning).
+        if let Some(0) = config.params.update_queue_limit {
+            config.params.update_queue_limit = None;
+        }
+
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
@@ -140,7 +152,8 @@ impl Client {
             config,
             message_box: Mutex::new("client.message_box", message_box),
             chat_hashes: ChatHashCache::new(),
-            updates: Mutex::new("client.updates", VecDeque::new()),
+            last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
+            updates: Mutex::new("client.updates", updates),
             request_tx: Mutex::new("client.request_tx", request_tx),
         }));
 
