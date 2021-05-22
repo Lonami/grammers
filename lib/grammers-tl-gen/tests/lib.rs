@@ -33,6 +33,7 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
         &definitions,
         LAYER,
         &Config {
+            gen_name_for_id: false,
             deserializable_functions: true,
             impl_debug: true,
             impl_from_enum: true,
