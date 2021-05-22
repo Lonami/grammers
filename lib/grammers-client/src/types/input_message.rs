@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::attributes::Attribute;
-use crate::types::{Media, Uploaded};
+use crate::types::{Media, ReplyMarkup, Uploaded};
 use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -59,11 +59,18 @@ impl InputMessage {
         self
     }
 
-    /// The reply markup to show under the message.
+    /// Defines the suggested reply markup for the message (such as adding inline buttons).
+    /// This will be displayed below the message.
     ///
-    /// User accounts cannot use markup, and it will be ignored if set.
-    pub fn reply_markup(mut self, reply_markup: Option<tl::enums::ReplyMarkup>) -> Self {
-        self.reply_markup = reply_markup;
+    /// Only bot accounts can make use of the reply markup feature (a user attempting to send a
+    /// message with a reply markup will result in the markup being ignored by Telegram).
+    ///
+    /// The user is free to ignore the markup and continue sending usual text messages.
+    ///
+    /// See [`crate::reply_markup`] for the different available markups along with how
+    /// they behave.
+    pub fn reply_markup<RM: ReplyMarkup>(mut self, markup: &RM) -> Self {
+        self.reply_markup = Some(markup.to_reply_markup().0);
         self
     }
 

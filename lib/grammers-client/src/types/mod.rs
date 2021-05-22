@@ -8,6 +8,7 @@
 
 //! Custom types extending those provided by Telegram.
 pub mod attributes;
+pub mod button;
 pub mod chat;
 pub mod chat_map;
 pub mod chats;
@@ -21,6 +22,7 @@ pub mod participant;
 pub mod password_token;
 pub mod permissions;
 pub mod photo_sizes;
+pub mod reply_markup;
 pub mod terms_of_service;
 pub mod update;
 
@@ -39,5 +41,6 @@ pub use message::Message;
 pub use participant::{Participant, Role};
 pub use password_token::PasswordToken;
 pub use permissions::{Permissions, Restrictions};
+pub(crate) use reply_markup::ReplyMarkup;
 pub use terms_of_service::TermsOfService;
 pub use update::Update;
