@@ -36,8 +36,8 @@ impl Client {
     /// while let Some(update) = client.next_update().await? {
     ///     // Echo incoming messages and ignore everything else
     ///     match update {
-    ///         Update::NewMessage(message) if !message.outgoing() => {
-    ///             client.send_message(&chat, message.text().into()).await?;
+    ///         Update::NewMessage(mut message) if !message.outgoing() => {
+    ///             message.respond(message.text().into()).await?;
     ///         }
     ///         _ => {}
     ///     }
