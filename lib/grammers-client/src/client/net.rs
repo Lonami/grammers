@@ -184,8 +184,7 @@ impl Client {
         Ok(client)
     }
 
-    /// Invoke a raw API call without the need to use a [`Client::handle`] or having to repeatedly
-    /// call [`Client::step`]. This directly sends the request to Telegram's servers.
+    /// Invoke a raw API call. This directly sends the request to Telegram's servers.
     ///
     /// Using function definitions corresponding to a different layer is likely to cause the
     /// responses to the request to not be understood.
@@ -233,7 +232,7 @@ impl Client {
 
     /// Perform a single network step.
     ///
-    /// Most commonly, you will want to use the higher-level abstraction [`Client::next_updates`]
+    /// Most commonly, you will want to use the higher-level abstraction [`Client::next_update`]
     /// instead.
     ///
     /// # Examples
