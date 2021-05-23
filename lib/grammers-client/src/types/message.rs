@@ -225,7 +225,7 @@ impl Message {
                 }
             })
             .and_then(|from| self.chats.get(from))
-            .map(|e| e.clone())
+            .cloned()
     }
 
     /// The chat where this message was sent to.
@@ -233,10 +233,7 @@ impl Message {
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
     pub fn chat(&self) -> types::Chat {
-        self.chats
-            .get(&self.msg.peer_id)
-            .map(|e| e.clone())
-            .unwrap()
+        self.chats.get(&self.msg.peer_id).cloned().unwrap()
     }
 
     /// If this message was forwarded from a previous message, return the header with information
@@ -371,7 +368,7 @@ impl Message {
     /// replying to it.
     ///
     /// Shorthand for `Client::send_message`.
-    pub async fn respond(&mut self, message: types::InputMessage) -> Result<Self, InvocationError> {
+    pub async fn respond(&self, message: types::InputMessage) -> Result<Self, InvocationError> {
         self.client.send_message(&self.chat(), message).await
     }
 
@@ -379,7 +376,7 @@ impl Message {
     /// it. This methods overrides the `reply_to` on the `InputMessage` to point to `self`.
     ///
     /// Shorthand for `Client::send_message`.
-    pub async fn reply(&mut self, message: types::InputMessage) -> Result<Self, InvocationError> {
+    pub async fn reply(&self, message: types::InputMessage) -> Result<Self, InvocationError> {
         self.client
             .send_message(&self.chat(), message.reply_to(Some(self.msg.id)))
             .await
@@ -389,7 +386,7 @@ impl Message {
     ///
     /// Shorthand for `Client::forward_messages`. If you need to forward multiple messages
     /// at once, consider using that method instead.
-    pub async fn forward_to(&mut self, chat: &Chat) -> Result<Self, InvocationError> {
+    pub async fn forward_to(&self, chat: &Chat) -> Result<Self, InvocationError> {
         // TODO return `Message`
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
@@ -462,7 +459,7 @@ impl Message {
     /// No changes will be made to the message if it fails to be fetched.
     ///
     /// Shorthand for `Client::get_messages_by_id`.
-    pub async fn refetch(&mut self) -> Result<(), InvocationError> {
+    pub async fn refetch(&self) -> Result<(), InvocationError> {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client

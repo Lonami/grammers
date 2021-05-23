@@ -160,7 +160,7 @@ impl Client {
         } else if let Some(chat_id) = chat.to_chat_id() {
             // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
-                chat_id: chat_id,
+                chat_id,
                 user_id: tl::enums::InputUser::UserSelf,
                 revoke_history: false,
             })

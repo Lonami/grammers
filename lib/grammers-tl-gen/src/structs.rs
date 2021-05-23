@@ -74,7 +74,7 @@ fn write_struct<W: Write>(
         get_generic_param_list(def, true),
     )?;
 
-    writeln!(file, "")?;
+    writeln!(file)?;
     for param in def.params.iter() {
         match param.ty {
             ParameterType::Flags => {

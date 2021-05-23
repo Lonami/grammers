@@ -208,7 +208,7 @@ impl AdminRightsBuilder {
                 .await
                 .map(drop)
         } else if let Some(id) = self.chat.to_chat_id() {
-            let promote = if self.rights.anonymous
+            let promote = self.rights.anonymous
                 || self.rights.change_info
                 || self.rights.post_messages
                 || self.rights.edit_messages
@@ -217,12 +217,7 @@ impl AdminRightsBuilder {
                 || self.rights.invite_users
                 || self.rights.pin_messages
                 || self.rights.add_admins
-                || self.rights.manage_call
-            {
-                true
-            } else {
-                false
-            };
+                || self.rights.manage_call;
             self.client
                 .invoke(&tl::functions::messages::EditChatAdmin {
                     chat_id: id,

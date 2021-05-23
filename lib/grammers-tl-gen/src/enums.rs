@@ -240,7 +240,7 @@ fn write_impl_from<W: Write>(
         )?;
 
         if def.params.is_empty() {
-            writeln!(file, "")?;
+            writeln!(file)?;
         } else if metadata.is_recursive_def(def) {
             writeln!(file, "(Box::new(x))")?;
         } else {

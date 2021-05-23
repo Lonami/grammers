@@ -312,9 +312,7 @@ impl<T: Deserializable> Deserializable for Vec<T> {
             return Err(Error::UnexpectedConstructor { id });
         }
         let len = u32::deserialize(buf)?;
-        Ok((0..len)
-            .map(|_| T::deserialize(buf))
-            .collect::<Result<Vec<T>>>()?)
+        (0..len).map(|_| T::deserialize(buf)).collect()
     }
 }
 

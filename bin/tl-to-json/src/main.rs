@@ -50,7 +50,7 @@ fn adapt_id(id: u32) -> String {
     (id as i32).to_string()
 }
 
-fn full_name(ns: &Vec<String>, name: &String) -> String {
+fn full_name(ns: &[String], name: &str) -> String {
     let mut result = String::new();
     ns.iter().for_each(|ns| {
         result.push_str(ns);

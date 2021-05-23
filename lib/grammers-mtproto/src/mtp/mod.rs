@@ -201,10 +201,10 @@ impl RpcError {
     /// }
     /// ```
     pub fn is(&self, rpc_error: &str) -> bool {
-        if rpc_error.ends_with('*') {
-            self.name.starts_with(&rpc_error[..rpc_error.len() - 1])
-        } else if rpc_error.starts_with('*') {
-            self.name.ends_with(&rpc_error[1..])
+        if let Some(rpc_error) = rpc_error.strip_suffix('*') {
+            self.name.starts_with(rpc_error)
+        } else if let Some(rpc_error) = rpc_error.strip_prefix('*') {
+            self.name.ends_with(rpc_error)
         } else {
             self.name == rpc_error
         }

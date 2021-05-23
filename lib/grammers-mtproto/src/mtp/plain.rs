@@ -59,7 +59,7 @@ impl Mtp for Plain {
         0i64.serialize(&mut self.buffer); // message_id
 
         (request.len() as i32).serialize(&mut self.buffer); // message_data_length
-        &mut self.buffer.extend_from_slice(request); // message_data
+        self.buffer.extend_from_slice(request); // message_data
 
         Some(MsgId(0))
     }

@@ -264,12 +264,12 @@ impl Sticker {
 
     /// Get the emoji associated with the sticker.
     pub fn emoji(&self) -> &str {
-        return self.attrs.alt.as_str();
+        self.attrs.alt.as_str()
     }
 
     /// Is this sticker an animated sticker?
     pub fn is_animated(&self) -> bool {
-        return self.animated;
+        self.animated
     }
 }
 

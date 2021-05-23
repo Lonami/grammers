@@ -45,8 +45,8 @@ impl ChatMap {
         Arc::new(Self {
             map: users
                 .into_iter()
-                .map(|user| Chat::from_user(user))
-                .chain(chats.into_iter().map(|chat| Chat::from_chat(chat)))
+                .map(Chat::from_user)
+                .chain(chats.into_iter().map(Chat::from_chat))
                 .map(|chat| ((&chat.to_peer()).into(), chat))
                 .collect(),
         })

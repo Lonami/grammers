@@ -18,7 +18,7 @@ pub(crate) fn group_by_ns(
 ) -> HashMap<String, Vec<&Definition>> {
     let mut result = HashMap::new();
     definitions
-        .into_iter()
+        .iter()
         .filter(|d| d.category == category)
         .for_each(|d| {
             // We currently only handle zero or one namespace.
@@ -37,7 +37,7 @@ pub(crate) fn group_by_ns(
 pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&Type>> {
     let mut result = HashMap::new();
     definitions
-        .into_iter()
+        .iter()
         .filter(|d| d.category == Category::Types && !d.ty.generic_ref)
         .for_each(|d| {
             // We currently only handle zero or one namespace.

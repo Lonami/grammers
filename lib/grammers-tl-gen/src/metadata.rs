@@ -23,7 +23,7 @@ impl<'a> Metadata<'a> {
         };
 
         definitions
-            .into_iter()
+            .iter()
             .filter(|d| d.category == Category::Types)
             .for_each(|d| {
                 if d.params.iter().any(|p| match &p.ty {

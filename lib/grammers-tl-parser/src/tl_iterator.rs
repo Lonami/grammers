@@ -56,12 +56,12 @@ impl Iterator for TlIterator {
 
         // Get rid of the leading separator and adjust category
         let definition = if definition.starts_with("---") {
-            if definition.starts_with(FUNCTIONS_SEP) {
+            if let Some(definition) = definition.strip_prefix(FUNCTIONS_SEP) {
                 self.category = Category::Functions;
-                definition[FUNCTIONS_SEP.len()..].trim()
-            } else if definition.starts_with(TYPES_SEP) {
+                definition.trim()
+            } else if let Some(definition) = definition.strip_prefix(TYPES_SEP) {
                 self.category = Category::Types;
-                definition[TYPES_SEP.len()..].trim()
+                definition.trim()
             } else {
                 return Some(Err(ParseError::UnknownSeparator));
             }
