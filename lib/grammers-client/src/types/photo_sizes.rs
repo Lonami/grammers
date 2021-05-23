@@ -191,7 +191,6 @@ impl PhotoSize {
             }
             PhotoSize::Path(size) => {
                 // Based on https://core.tlgr.org/api/files#vector-thumbnails
-                // let encoded = &size.bytes;
                 let lookup = "AACAAAAHAAALMAAAQASTAVAAAZaacaaaahaaalmaaaqastava.az0123456789-,";
                 let mut path = String::from("M");
                 for num in &size.bytes {

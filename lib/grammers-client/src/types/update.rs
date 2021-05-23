@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{ChatMap, Message};
+use super::{CallbackQuery, ChatMap, Message};
 use crate::Client;
 use grammers_tl_types as tl;
 use std::sync::Arc;
@@ -14,6 +14,9 @@ use std::sync::Arc;
 pub enum Update {
     /// Occurs whenever a new text message or a message with media is produced.
     NewMessage(Message),
+    /// Occurs when Telegram calls back into your bot because an inline callback button was
+    /// pressed.
+    CallbackQuery(CallbackQuery),
 }
 
 impl Update {
@@ -30,6 +33,9 @@ impl Update {
                 message,
                 ..
             }) => Message::new(client, message, chats).map(Self::NewMessage),
+            tl::enums::Update::BotCallbackQuery(query) => Some(Update::CallbackQuery(
+                CallbackQuery::new(client, query, chats),
+            )),
             _ => None,
         }
     }
