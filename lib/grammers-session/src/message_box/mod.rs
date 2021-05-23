@@ -523,6 +523,9 @@ impl MessageBox {
                 channel_id
             );
             self.getting_channel_diff.remove(&channel_id);
+            // Remove the outdated `pts` entry from the map so that the next update can correct
+            // it. Otherwise, it will spam that the access hash is missing.
+            self.pts_map.remove(&Entry::Channel(channel_id));
             self.reset_channel_deadline(channel_id, None);
             return None;
         };
