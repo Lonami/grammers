@@ -93,8 +93,19 @@ impl ReplyMarkup for ForceReply {
 /// # Ok(())
 /// # }
 /// ```
-pub fn inline() -> Inline {
-    Inline(tl::types::ReplyInlineMarkup { rows: Vec::new() })
+pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
+    Inline(tl::types::ReplyInlineMarkup {
+        rows: buttons
+            .into()
+            .into_iter()
+            .map(|row| {
+                tl::types::KeyboardButtonRow {
+                    buttons: row.into_iter().map(|button| button.0).collect(),
+                }
+                .into()
+            })
+            .collect(),
+    })
 }
 
 /// Define a custom keyboard, replacing the user's own virtual keyboard.
