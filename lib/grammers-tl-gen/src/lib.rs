@@ -42,10 +42,7 @@ impl Default for Config {
 const SPECIAL_CASED_TYPES: [&str; 1] = ["Bool"];
 
 fn ignore_type(ty: &Type) -> bool {
-    SPECIAL_CASED_TYPES
-        .iter()
-        .find(|&&x| x == ty.name)
-        .is_some()
+    SPECIAL_CASED_TYPES.iter().any(|&x| x == ty.name)
 }
 
 pub fn generate_rust_code(

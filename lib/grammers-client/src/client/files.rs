@@ -139,7 +139,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn download_media<P: AsRef<Path>>(
-        &mut self,
+        &self,
         media: &Media,
         path: P,
     ) -> Result<(), io::Error> {
@@ -149,7 +149,7 @@ impl Client {
     }
 
     pub(crate) async fn download_media_at_location<P: AsRef<Path>>(
-        &mut self,
+        &self,
         location: tl::enums::InputFileLocation,
         path: P,
     ) -> Result<(), io::Error> {
@@ -210,7 +210,7 @@ impl Client {
     ///
     /// [`InputMessage`]: crate::types::InputMessage
     pub async fn upload_stream<S: AsyncRead + Unpin>(
-        &mut self,
+        &self,
         stream: &mut S,
         size: usize,
         name: String,
@@ -314,7 +314,7 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    pub async fn upload_file<P: AsRef<Path>>(&mut self, path: P) -> Result<Uploaded, io::Error> {
+    pub async fn upload_file<P: AsRef<Path>>(&self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();
 
         let mut file = fs::File::open(path).await?;

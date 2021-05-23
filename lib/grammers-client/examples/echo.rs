@@ -21,7 +21,7 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 const SESSION_FILE: &str = "echo.session";
 
-async fn handle_update(mut client: Client, update: Update) -> Result {
+async fn handle_update(client: Client, update: Update) -> Result {
     match update {
         Update::NewMessage(message) if !message.outgoing() => {
             let chat = message.chat();

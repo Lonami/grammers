@@ -34,7 +34,7 @@ use tokio::time::{sleep_until, Duration, Instant};
 /// Telegram will close the connection with roughly a megabyte of data,
 /// so to account for the transports' own overhead, we add a few extra
 /// kilobytes to the maximum data size.
-const MAXIMUM_DATA: usize = (1 * 1024 * 1024) + (8 * 1024);
+const MAXIMUM_DATA: usize = (1024 * 1024) + (8 * 1024);
 
 /// Every how often are pings sent?
 const PING_DELAY: Duration = Duration::from_secs(60);
@@ -58,7 +58,9 @@ pub(crate) fn generate_random_id() -> i64 {
             .expect("system time is before epoch")
             .as_nanos() as i64;
 
-        drop(LAST_ID.compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst));
+        LAST_ID
+            .compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst)
+            .unwrap();
     }
 
     LAST_ID.fetch_add(1, Ordering::SeqCst)
@@ -467,9 +469,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             }
                         };
 
-                        drop(req);
                         let req = self.requests.remove(i);
-                        drop(req.result.send(result));
+                        req.result.send(result).unwrap();
                         break;
                     }
                     _ => {}

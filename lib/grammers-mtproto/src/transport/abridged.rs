@@ -65,7 +65,7 @@ impl Transport for Abridged {
     }
 
     fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
-        if input.len() < 1 {
+        if input.is_empty() {
             return Err(Error::MissingBytes);
         }
 

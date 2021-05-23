@@ -119,7 +119,7 @@ impl Client {
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
         let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
-        let (sender, request_tx) = connect_sender(dc_id, &mut config).await?;
+        let (sender, request_tx) = connect_sender(dc_id, &config).await?;
         let message_box = if config.params.catch_up {
             if let Some(state) = config.session.get_state() {
                 MessageBox::load(state)

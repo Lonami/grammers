@@ -113,7 +113,7 @@ impl InlineResultIter {
         self.buffer
             .extend(results.into_iter().map(|r| InlineResult {
                 client: client.clone(),
-                query_id: query_id,
+                query_id,
                 result: r,
             }));
 

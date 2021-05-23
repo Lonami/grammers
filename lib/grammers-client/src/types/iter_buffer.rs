@@ -62,10 +62,8 @@ impl<R, T> IterBuffer<R, T> {
     pub(crate) fn next_raw(&mut self) -> Option<Result<Option<T>, InvocationError>> {
         if self.limit_reached() || (self.buffer.is_empty() && self.last_chunk) {
             Some(Ok(None))
-        } else if let Some(item) = self.pop_item() {
-            Some(Ok(Some(item)))
         } else {
-            None
+            self.pop_item().map(|item| Ok(Some(item)))
         }
     }
 
@@ -74,7 +72,7 @@ impl<R, T> IterBuffer<R, T> {
     pub(crate) fn determine_limit(&self, max: usize) -> i32 {
         if let Some(limit) = self.limit {
             if self.fetched < limit {
-                return (limit - self.fetched).min(max) as i32;
+                (limit - self.fetched).min(max) as i32
             } else {
                 1 // 0 would cause Telegram to send a default amount and not actually 0
             }

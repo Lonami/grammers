@@ -378,7 +378,7 @@ impl Client {
             password_info = self
                 .get_password_information()
                 .await
-                .map_err(|err| SignInError::Other(err.into()))?
+                .map_err(SignInError::Other)?
                 .password;
             params =
                 utils::extract_password_parameters(password_info.current_algo.as_ref().unwrap());

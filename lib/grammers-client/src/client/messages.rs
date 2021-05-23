@@ -56,7 +56,7 @@ fn map_random_ids_to_messages(
                 .collect::<HashMap<_, _>>();
 
             random_ids
-                .into_iter()
+                .iter()
                 .map(|rnd| rnd_to_id.get(rnd).and_then(|id| id_to_msg.remove(id)))
                 .collect()
         }
@@ -349,7 +349,7 @@ impl Client {
     ///
     /// [`InputMessage`]: crate::InputMessage
     pub async fn send_message(
-        &mut self,
+        &self,
         chat: &Chat,
         message: types::InputMessage,
     ) -> Result<Message, InvocationError> {
@@ -426,7 +426,7 @@ impl Client {
     // TODO don't require nasty InputPeer
     // TODO Media
     pub async fn edit_message(
-        &mut self,
+        &self,
         chat: &Chat,
         message_id: i32,
         new_message: types::InputMessage,
@@ -477,7 +477,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn delete_messages(
-        &mut self,
+        &self,
         chat: &Chat,
         message_ids: &[i32],
     ) -> Result<usize, InvocationError> {
@@ -524,7 +524,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn forward_messages(
-        &mut self,
+        &self,
         destination: &Chat,
         message_ids: &[i32],
         source: &Chat,
@@ -559,12 +559,12 @@ impl Client {
     /// # }
     /// ```
     pub async fn get_reply_to_message(
-        &mut self,
+        &self,
         message: &Message,
     ) -> Result<Option<Message>, InvocationError> {
         /// Helper method to fetch a single message by its input message.
         async fn get_message(
-            client: &mut Client,
+            client: &Client,
             chat: &Chat,
             id: tl::enums::InputMessage,
         ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
@@ -705,12 +705,12 @@ impl Client {
     /// # }
     /// ```
     pub async fn get_messages_by_id(
-        &mut self,
+        &self,
         chat: &Chat,
         message_ids: &[i32],
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         let id = message_ids
-            .into_iter()
+            .iter()
             .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
             .collect();
 
@@ -757,7 +757,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn get_pinned_message(
-        &mut self,
+        &self,
         chat: &Chat,
     ) -> Result<Option<Message>, InvocationError> {
         // TODO return types::Message and print its text in the example
@@ -784,8 +784,7 @@ impl Client {
         Ok(messages
             .into_iter()
             .flat_map(|m| Message::new(self, m, &chats))
-            .filter(|m| m.chat().to_peer() == chat.to_peer())
-            .next())
+            .find(|m| m.chat().to_peer() == chat.to_peer()))
     }
 
     /// Pin a message in the chat. This will not notify any users.
@@ -800,11 +799,7 @@ impl Client {
     /// # }
     /// ```
     // TODO return produced Option<service message>
-    pub async fn pin_message(
-        &mut self,
-        chat: &Chat,
-        message_id: i32,
-    ) -> Result<(), InvocationError> {
+    pub async fn pin_message(&self, chat: &Chat, message_id: i32) -> Result<(), InvocationError> {
         self.update_pinned(chat, message_id, true).await
     }
 
@@ -819,20 +814,11 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpin_message(
-        &mut self,
-        chat: &Chat,
-        message_id: i32,
-    ) -> Result<(), InvocationError> {
+    pub async fn unpin_message(&self, chat: &Chat, message_id: i32) -> Result<(), InvocationError> {
         self.update_pinned(chat, message_id, false).await
     }
 
-    async fn update_pinned(
-        &mut self,
-        chat: &Chat,
-        id: i32,
-        pin: bool,
-    ) -> Result<(), InvocationError> {
+    async fn update_pinned(&self, chat: &Chat, id: i32, pin: bool) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UpdatePinnedMessage {
             silent: true,
             unpin: !pin,
@@ -854,11 +840,11 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpin_all_messages(&mut self, chat: &Chat) -> Result<(), InvocationError> {
+    pub async fn unpin_all_messages(&self, chat: &Chat) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UnpinAllMessages {
             peer: chat.to_input_peer(),
         })
-        .await
-        .map(drop)
+        .await?;
+        Ok(())
     }
 }

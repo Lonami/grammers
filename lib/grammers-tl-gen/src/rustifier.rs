@@ -102,7 +102,7 @@ pub mod definitions {
                 // Use the name from the last uppercase letter
                 &name[name
                     .as_bytes()
-                    .into_iter()
+                    .iter()
                     .rposition(|c| c.is_ascii_uppercase())
                     .unwrap_or(0)..]
             }
@@ -110,7 +110,7 @@ pub mod definitions {
                 // Use the name from the second-to-last uppercase letter
                 &name[name
                     .as_bytes()
-                    .into_iter()
+                    .iter()
                     .take(name.len() - variant.len())
                     .rposition(|c| c.is_ascii_uppercase())
                     .unwrap_or(0)..]

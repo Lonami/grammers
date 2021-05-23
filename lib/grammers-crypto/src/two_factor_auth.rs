@@ -30,10 +30,10 @@ macro_rules! h {
 ///
 /// The algorithm is described here: https://core.telegram.org/api/srp
 pub fn calculate_2fa(
-    salt1: &Vec<u8>,
-    salt2: &Vec<u8>,
+    salt1: &[u8],
+    salt2: &[u8],
     g: &i32,
-    p: &Vec<u8>,
+    p: &[u8],
     g_b: Vec<u8>,
     a: Vec<u8>,
     password: impl AsRef<[u8]>,
@@ -102,7 +102,7 @@ pub fn calculate_2fa(
 }
 
 /// Validation for parameters required for two-factor authentication
-pub fn check_p_and_g(g: &i32, p: &Vec<u8>) -> bool {
+pub fn check_p_and_g(g: &i32, p: &[u8]) -> bool {
     if !check_p_len(p) {
         return false;
     }
@@ -110,14 +110,14 @@ pub fn check_p_and_g(g: &i32, p: &Vec<u8>) -> bool {
     check_p_prime_and_subgroup(p, g)
 }
 
-fn check_p_prime_and_subgroup(p: &Vec<u8>, g: &i32) -> bool {
+fn check_p_prime_and_subgroup(p: &[u8], g: &i32) -> bool {
     let p = &BigUint::from_bytes_be(p);
 
     if !safe_prime::check(p) {
         return false;
     }
 
-    let is_subgroup = match g {
+    match g {
         2 => p % 8u8 == BigUint::from(7u8),
         3 => p % 3u8 == BigUint::from(2u8),
         4 => true,
@@ -136,12 +136,10 @@ fn check_p_prime_and_subgroup(p: &Vec<u8>, g: &i32) -> bool {
                 || mod_value == BigUint::from(6u8)
         }
         _ => panic!("Unexpected g parameter"),
-    };
-
-    is_subgroup
+    }
 }
 
-fn check_p_len(p: &Vec<u8>) -> bool {
+fn check_p_len(p: &[u8]) -> bool {
     p.len() == 256
 }
 
@@ -151,13 +149,13 @@ fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Output<Sha256> {
 }
 
 // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
-fn ph1(password: impl AsRef<[u8]>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
+fn ph1(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256> {
     sh(&sh(password, salt1), salt2)
 }
 
 // PH2(password, salt1, salt2)
 //                      := SH(pbkdf2(sha512, PH1(password, salt1, salt2), salt1, 100000), salt2)
-fn ph2(password: impl AsRef<[u8]>, salt1: &Vec<u8>, salt2: &Vec<u8>) -> Output<Sha256> {
+fn ph2(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256> {
     let hash1 = ph1(password, salt1, salt2);
 
     // 512-bit derived key
@@ -175,7 +173,7 @@ fn xor(left: &Output<Sha256>, right: &Output<Sha256>) -> Vec<u8> {
         .collect();
 }
 
-fn pad_to_256(data: &Vec<u8>) -> Vec<u8> {
+fn pad_to_256(data: &[u8]) -> Vec<u8> {
     let mut new_vec = vec![0; 256 - data.len()];
     new_vec.extend(data);
     new_vec

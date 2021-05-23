@@ -791,7 +791,7 @@ impl Encrypted {
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
         self.rpc_results
-            .push((MsgId(salts.req_msg_id), Ok(message.body.clone())));
+            .push((MsgId(salts.req_msg_id), Ok(message.body)));
         Ok(())
     }
 
@@ -834,7 +834,7 @@ impl Encrypted {
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
         self.rpc_results
-            .push((MsgId(pong.msg_id), Ok(message.body.clone())));
+            .push((MsgId(pong.msg_id), Ok(message.body)));
         Ok(())
     }
 

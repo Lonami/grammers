@@ -120,7 +120,7 @@ impl Session {
             .next()
     }
 
-    pub fn insert_dc(&self, id: i32, server_addr: SocketAddr, auth: [u8; 256]) {
+    pub fn insert_dc(&self, id: i32, addr: SocketAddr, auth: [u8; 256]) {
         let mut session = self.session.lock().unwrap();
         if let Some(pos) = session
             .dcs
@@ -129,11 +129,10 @@ impl Session {
         {
             session.dcs.remove(pos);
         }
-        let addr: SocketAddr = server_addr.into();
 
         let (ip_v4, ip_v6): (Option<&SocketAddrV4>, Option<&SocketAddrV6>) = match &addr {
             SocketAddr::V4(ip_v4) => (Some(ip_v4), None),
-            SocketAddr::V6(ref ip_v6) => (None, Some(ip_v6)),
+            SocketAddr::V6(ip_v6) => (None, Some(ip_v6)),
         };
 
         session.dcs.push(

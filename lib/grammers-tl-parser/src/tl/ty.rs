@@ -72,8 +72,8 @@ impl FromStr for Type {
     /// ```
     fn from_str(ty: &str) -> Result<Self, Self::Err> {
         // Parse `!type`
-        let (ty, generic_ref) = if ty.starts_with('!') {
-            (&ty[1..], true)
+        let (ty, generic_ref) = if let Some(ty) = ty.strip_prefix('!') {
+            (ty, true)
         } else {
             (ty, false)
         };

@@ -13,7 +13,7 @@ use std::fmt;
 pub enum Platform {
     All,
     Android,
-    IOS,
+    Ios,
     WindowsPhone,
     Other(String),
 }
@@ -31,12 +31,12 @@ impl RestrictionReason {
         Self {
             platforms: reason
                 .platform
-                .split("-")
+                .split('-')
                 .map(|p| match p {
                     // Taken from https://core.telegram.org/constructor/restrictionReason
                     "all" => Platform::All,
                     "android" => Platform::Android,
-                    "ios" => Platform::IOS,
+                    "ios" => Platform::Ios,
                     "wp" => Platform::WindowsPhone,
                     o => Platform::Other(o.to_string()),
                 })

@@ -9,7 +9,6 @@
 //! Custom types extending those provided by Telegram.
 pub mod attributes;
 pub mod button;
-pub mod callback_query;
 pub mod chat;
 pub mod chat_map;
 pub mod chats;
