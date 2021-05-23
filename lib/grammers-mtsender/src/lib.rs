@@ -470,7 +470,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         };
 
                         let req = self.requests.remove(i);
-                        req.result.send(result).unwrap();
+                        drop(req.result.send(result));
                         break;
                     }
                     _ => {}
