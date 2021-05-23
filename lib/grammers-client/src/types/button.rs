@@ -25,6 +25,14 @@ pub struct Inline(pub(crate) tl::enums::KeyboardButton);
 pub struct Keyboard(pub(crate) tl::enums::KeyboardButton);
 
 /// An inline button, able to hold some arbitrary binary payload.
+///
+/// Although any combination of bytes can be used (including null, and not just UTF-8), [there is
+/// a limit](https://core.telegram.org/bots/api#inlinekeyboardbutton) to how long the payload data
+/// can be (see the description for the `callback_data` field for an up-to-date value). If you
+/// need to store more data than that, consider storing the real data in some form of database,
+/// and a reference to that data's row in the button's payload.
+///
+/// Both the text and bytes data must be non-empty.
 pub fn inline<T: Into<String>, B: Into<Vec<u8>>>(text: T, bytes: B) -> Inline {
     Inline(
         tl::types::KeyboardButtonCallback {
