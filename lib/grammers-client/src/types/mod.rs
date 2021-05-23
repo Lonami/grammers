@@ -28,6 +28,7 @@ pub mod terms_of_service;
 pub mod update;
 
 pub use attributes::Attribute;
+pub use callback_query::CallbackQuery;
 pub use chat::{Channel, Chat, Group, PackedChat, Platform, RestrictionReason, User};
 pub use chat_map::ChatMap;
 pub(crate) use chat_map::Peer;
