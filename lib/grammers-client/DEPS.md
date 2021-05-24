@@ -70,3 +70,7 @@ Used by the examples to showcase how one may configure logging for more informat
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
+
+## pin-project-lite
+
+Used for Zero Cost Async Builders
