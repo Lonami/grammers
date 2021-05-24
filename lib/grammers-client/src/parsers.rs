@@ -8,6 +8,7 @@
 #![cfg(any(feature = "markdown", feature = "html"))]
 use grammers_tl_types as tl;
 
+#[cfg(feature = "html")]
 const CODE_LANG_PREFIX: &str = "language-";
 
 /// The length of a string, according to Telegram.
