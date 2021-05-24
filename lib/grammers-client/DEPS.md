@@ -73,4 +73,5 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 
 ## pin-project-lite
 
-Used for Zero Cost Async Builders
+Used for return custom types that `impl Future` so that the requests can be further configured
+without having to use `Box`.
