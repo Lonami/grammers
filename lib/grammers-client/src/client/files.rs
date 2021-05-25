@@ -12,14 +12,7 @@ use crate::Client;
 use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use std::{
-    io::SeekFrom,
-    path::Path,
-    sync::{
-        atomic::{AtomicI32, Ordering},
-        Arc,
-    },
-};
+use std::{io::SeekFrom, path::Path, sync::Arc};
 use tokio::{
     fs,
     io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
@@ -347,19 +340,25 @@ impl Client {
     }
 }
 
+struct PartStreamInner<S: AsyncRead + Unpin + Send + 'static> {
+    stream: S,
+    current_part: i32,
+}
+
 struct PartStream<S: AsyncRead + Unpin + Send + 'static> {
-    stream: Mutex<S>,
+    inner: Mutex<PartStreamInner<S>>,
     total_parts: i32,
-    current_part: AtomicI32,
 }
 
 impl<S: AsyncRead + Unpin + Send> PartStream<S> {
     fn new(stream: S, size: usize) -> Self {
         let total_parts = ((size + MAX_CHUNK_SIZE as usize - 1) / MAX_CHUNK_SIZE as usize) as i32;
         Self {
-            stream: Mutex::new(stream),
+            inner: Mutex::new(PartStreamInner {
+                stream,
+                current_part: 0,
+            }),
             total_parts,
-            current_part: AtomicI32::new(0),
         }
     }
 
@@ -368,18 +367,17 @@ impl<S: AsyncRead + Unpin + Send> PartStream<S> {
     }
 
     async fn next_part(&self) -> Result<Option<(i32, Vec<u8>)>, io::Error> {
-        let mut stream = self.stream.lock().await;
-        let current_part = self.current_part.fetch_add(1, Ordering::SeqCst);
-        if current_part >= self.total_parts {
+        let mut lock = self.inner.lock().await;
+        if lock.current_part >= self.total_parts {
             return Ok(None);
         }
         let mut read = 0;
         let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
 
         while read != buffer.len() {
-            let n = stream.read(&mut buffer[read..]).await?;
+            let n = lock.stream.read(&mut buffer[read..]).await?;
             if n == 0 {
-                if current_part == self.total_parts - 1 {
+                if lock.current_part == self.total_parts - 1 {
                     break;
                 } else {
                     return Err(io::Error::new(
@@ -397,6 +395,8 @@ impl<S: AsyncRead + Unpin + Send> PartStream<S> {
             buffer[..read].to_vec()
         };
 
-        Ok(Some((current_part, bytes)))
+        let res = Ok(Some((lock.current_part, bytes)));
+        lock.current_part += 1;
+        res
     }
 }
