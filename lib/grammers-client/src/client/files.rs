@@ -234,7 +234,7 @@ impl Client {
             for _ in 0..WORKER_COUNT {
                 let handle = self.clone();
                 let parts = Arc::clone(&parts);
-                let task = tokio::task::spawn(async move {
+                let task = async move {
                     while let Some((part, bytes)) = parts.next_part().await.unwrap() {
                         let ok = handle
                             .invoke(&tl::functions::upload::SaveBigFilePart {
@@ -254,7 +254,7 @@ impl Client {
                         }
                     }
                     Ok(())
-                });
+                };
                 tasks.push(task);
             }
 
