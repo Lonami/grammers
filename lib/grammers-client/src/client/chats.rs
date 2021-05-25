@@ -11,12 +11,14 @@
 use super::Client;
 use crate::types::chat::PackedType;
 use crate::types::{
-    chat::PackedChat, AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message,
-    Participant, Photo, User,
+    chat::PackedChat, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
+    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
+    Photo, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
+use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -440,10 +442,9 @@ impl Client {
                 self.set_banned_rights(chat, user)
                     .view_messages(false)
                     .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
-                    .invoke()
                     .await?;
 
-                self.set_banned_rights(chat, user).invoke().await
+                self.set_banned_rights(chat, user).await
             }
         } else if let Some(chat_id) = chat.to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
@@ -463,7 +464,7 @@ impl Client {
     /// Returns a new [`BannedRightsBuilder`] instance. Check out the documentation for that type
     /// to learn more about what restrictions can be applied.
     ///
-    /// Nothing is done until the call to [`BannedRightsBuilder::invoke`] is awaited, at which point it might result in
+    /// Nothing is done until it is awaited, at which point it might result in
     /// error if you do not have sufficient permissions to ban the user in the input chat.
     ///
     /// By default, the user has all rights, and you need to revoke those you want to take away
@@ -482,7 +483,6 @@ impl Client {
     /// let res = client
     ///     .set_banned_rights(&chat, &user)
     ///     .send_stickers(false)
-    ///     .invoke()
     ///     .await;
     ///
     /// match res {
@@ -492,8 +492,17 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_banned_rights(&mut self, channel: &Chat, user: &User) -> BannedRightsBuilder {
-        BannedRightsBuilder::new(self.clone(), channel, user)
+    pub fn set_banned_rights(
+        &mut self,
+        channel: &Chat,
+        user: &User,
+    ) -> BannedRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
+        BannedRightsBuilder::new(
+            self.clone(),
+            channel,
+            user,
+            BannedRightsBuilderInner::invoke,
+        )
     }
 
     /// Set the administrator rights for a specific user.
@@ -501,7 +510,7 @@ impl Client {
     /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
     /// type to learn more about what rights can be given to administrators.
     ///
-    /// Nothing is done until the call to [`AdminRightsBuilder::invoke`] is awaited, at which point
+    /// Nothing is done until it is awaited, at which point
     /// it might result in error if you do not have sufficient permissions to grant those rights
     /// to the other user.
     ///
@@ -523,13 +532,16 @@ impl Client {
     ///     .await?
     ///     .pin_messages(true)
     ///     .ban_users(true)
-    ///     .invoke()
     ///     .await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_admin_rights(&mut self, channel: &Chat, user: &User) -> AdminRightsBuilder {
-        AdminRightsBuilder::new(self.clone(), channel, user)
+    pub fn set_admin_rights(
+        &self,
+        channel: &Chat,
+        user: &User,
+    ) -> AdminRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
+        AdminRightsBuilder::new(self.clone(), channel, user, AdminRightsBuilderInner::invoke)
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
