@@ -198,13 +198,13 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client, some_vec: Vec<u8>) -> Result<(), Box<dyn std::error::Error + 'static>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client, some_vec: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// // In-memory `Vec<u8>` buffers can be used as async streams
     /// let size = some_vec.len();
     /// let mut stream = std::io::Cursor::new(some_vec);
-    /// let uploaded_file = client.upload_stream(stream, size, "sleep.jpg".to_string()).await?;
+    /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
     ///
     /// client.send_message(&chat, InputMessage::text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
@@ -212,9 +212,9 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::types::InputMessage
-    pub async fn upload_stream<S: AsyncRead + Unpin + Send + 'static>(
+    pub async fn upload_stream<S: AsyncRead + Unpin>(
         &self,
-        stream: S,
+        stream: &mut S,
         size: usize,
         name: String,
     ) -> Result<Uploaded, io::Error> {
@@ -226,10 +226,11 @@ impl Client {
         };
 
         let big_file = size > BIG_FILE_SIZE;
-        let parts = Arc::new(PartStream::new(stream, size));
+        let parts = PartStream::new(stream, size);
         let total_parts = parts.total_parts();
 
         if big_file {
+            let parts = Arc::new(parts);
             let mut tasks = Vec::with_capacity(WORKER_COUNT);
             for _ in 0..WORKER_COUNT {
                 let handle = self.clone();
@@ -335,22 +336,22 @@ impl Client {
         // files, so it's fine to unwrap.
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
-        self.upload_stream(file, size, name).await
+        self.upload_stream(&mut file, size, name).await
     }
 }
 
-struct PartStreamInner<S: AsyncRead + Unpin + Send + 'static> {
-    stream: S,
+struct PartStreamInner<'a, S: AsyncRead + Unpin> {
+    stream: &'a mut S,
     current_part: i32,
 }
 
-struct PartStream<S: AsyncRead + Unpin + Send + 'static> {
-    inner: AsyncMutex<PartStreamInner<S>>,
+struct PartStream<'a, S: AsyncRead + Unpin> {
+    inner: AsyncMutex<PartStreamInner<'a, S>>,
     total_parts: i32,
 }
 
-impl<S: AsyncRead + Unpin + Send> PartStream<S> {
-    fn new(stream: S, size: usize) -> Self {
+impl<'a, S: AsyncRead + Unpin> PartStream<'a, S> {
+    fn new(stream: &'a mut S, size: usize) -> Self {
         let total_parts = ((size + MAX_CHUNK_SIZE as usize - 1) / MAX_CHUNK_SIZE as usize) as i32;
         Self {
             inner: AsyncMutex::new(
