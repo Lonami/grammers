@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::types::{Media, Uploaded};
-use crate::utils::generate_random_id;
+use crate::utils::{generate_random_id, AsyncMutex};
 use crate::Client;
 use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
@@ -16,7 +16,6 @@ use std::{io::SeekFrom, path::Path, sync::Arc};
 use tokio::{
     fs,
     io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
-    sync::Mutex,
 };
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
@@ -346,7 +345,7 @@ struct PartStreamInner<S: AsyncRead + Unpin + Send + 'static> {
 }
 
 struct PartStream<S: AsyncRead + Unpin + Send + 'static> {
-    inner: Mutex<PartStreamInner<S>>,
+    inner: AsyncMutex<PartStreamInner<S>>,
     total_parts: i32,
 }
 
@@ -354,10 +353,13 @@ impl<S: AsyncRead + Unpin + Send> PartStream<S> {
     fn new(stream: S, size: usize) -> Self {
         let total_parts = ((size + MAX_CHUNK_SIZE as usize - 1) / MAX_CHUNK_SIZE as usize) as i32;
         Self {
-            inner: Mutex::new(PartStreamInner {
-                stream,
-                current_part: 0,
-            }),
+            inner: AsyncMutex::new(
+                "upload_stream",
+                PartStreamInner {
+                    stream,
+                    current_part: 0,
+                },
+            ),
             total_parts,
         }
     }
@@ -367,7 +369,7 @@ impl<S: AsyncRead + Unpin + Send> PartStream<S> {
     }
 
     async fn next_part(&self) -> Result<Option<(i32, Vec<u8>)>, io::Error> {
-        let mut lock = self.inner.lock().await;
+        let mut lock = self.inner.lock("read part").await;
         if lock.current_part >= self.total_parts {
             return Ok(None);
         }
