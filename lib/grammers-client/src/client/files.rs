@@ -235,7 +235,7 @@ impl Client {
                 let handle = self.clone();
                 let parts = Arc::clone(&parts);
                 let task = async move {
-                    while let Some((part, bytes)) = parts.next_part().await.unwrap() {
+                    while let Some((part, bytes)) = parts.next_part().await? {
                         let ok = handle
                             .invoke(&tl::functions::upload::SaveBigFilePart {
                                 file_id,
@@ -270,7 +270,7 @@ impl Client {
             ))
         } else {
             let mut md5 = md5::Context::new();
-            while let Some((part, bytes)) = parts.next_part().await.unwrap() {
+            while let Some((part, bytes)) = parts.next_part().await? {
                 md5.consume(&bytes);
                 let ok = self
                     .invoke(&tl::functions::upload::SaveFilePart {
