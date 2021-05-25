@@ -206,13 +206,13 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client, some_vec: Vec<u8>) -> Result<(), Box<dyn std::error::Error + 'static>> {
     /// use grammers_client::InputMessage;
     ///
     /// // In-memory `Vec<u8>` buffers can be used as async streams
     /// let size = some_vec.len();
     /// let mut stream = std::io::Cursor::new(some_vec);
-    /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
+    /// let uploaded_file = client.upload_stream(stream, size, "sleep.jpg".to_string()).await?;
     ///
     /// client.send_message(&chat, InputMessage::text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
