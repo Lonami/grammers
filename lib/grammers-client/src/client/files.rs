@@ -7,18 +7,21 @@
 // except according to those terms.
 
 use crate::types::{Media, Uploaded};
-use crate::utils::generate_random_id;
+use crate::utils::{generate_random_id, AsyncMutex};
 use crate::Client;
+use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use std::io::SeekFrom;
-use std::path::Path;
-use tokio::fs;
-use tokio::io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _};
+use std::{io::SeekFrom, path::Path, sync::Arc};
+use tokio::{
+    fs,
+    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
+};
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
+const WORKER_COUNT: usize = 4;
 
 pub struct DownloadIter {
     client: Client,
@@ -195,7 +198,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client, some_vec: &mut Vec<u8>) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client, some_vec: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// // In-memory `Vec<u8>` buffers can be used as async streams
@@ -223,71 +226,79 @@ impl Client {
         };
 
         let big_file = size > BIG_FILE_SIZE;
-        let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
-        let total_parts = ((size + buffer.len() - 1) / buffer.len()) as i32;
-        let mut md5 = md5::Context::new();
+        let parts = PartStream::new(stream, size);
+        let total_parts = parts.total_parts();
 
-        for part in 0..total_parts {
-            let mut read = 0;
-            while read != buffer.len() {
-                let n = stream.read(&mut buffer[read..]).await?;
-                if n == 0 {
-                    if part == total_parts - 1 {
-                        break;
-                    } else {
-                        return Err(io::Error::new(
-                            io::ErrorKind::UnexpectedEof,
-                            "reached EOF before reaching the last file part",
-                        ));
+        if big_file {
+            let parts = Arc::new(parts);
+            let mut tasks = Vec::with_capacity(WORKER_COUNT);
+            for _ in 0..WORKER_COUNT {
+                let handle = self.clone();
+                let parts = Arc::clone(&parts);
+                let task = async move {
+                    while let Some((part, bytes)) = parts.next_part().await? {
+                        let ok = handle
+                            .invoke(&tl::functions::upload::SaveBigFilePart {
+                                file_id,
+                                file_part: part,
+                                file_total_parts: total_parts,
+                                bytes,
+                            })
+                            .await
+                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                        if !ok {
+                            return Err(io::Error::new(
+                                io::ErrorKind::Other,
+                                "server failed to store uploaded data",
+                            ));
+                        }
                     }
+                    Ok(())
+                };
+                tasks.push(task);
+            }
+
+            try_join_all(tasks).await?;
+
+            Ok(Uploaded::from_raw(
+                tl::types::InputFileBig {
+                    id: file_id,
+                    parts: total_parts,
+                    name,
                 }
-                read += n;
-            }
-            let bytes = buffer[..read].to_vec();
-
-            let ok = if big_file {
-                self.invoke(&tl::functions::upload::SaveBigFilePart {
-                    file_id,
-                    file_part: part,
-                    file_total_parts: total_parts,
-                    bytes,
-                })
-                .await
-            } else {
-                md5.consume(&bytes);
-                self.invoke(&tl::functions::upload::SaveFilePart {
-                    file_id,
-                    file_part: part,
-                    bytes,
-                })
-                .await
-            }
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
-
-            if !ok {
-                return Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    "server failed to store uploaded data",
-                ));
-            }
-        }
-
-        Ok(Uploaded::from_raw(if big_file {
-            tl::types::InputFileBig {
-                id: file_id,
-                parts: total_parts,
-                name,
-            }
-            .into()
+                .into(),
+            ))
         } else {
-            tl::types::InputFile {
-                id: file_id,
-                parts: total_parts,
-                name,
-                md5_checksum: format!("{:x}", md5.compute()),
+            let mut md5 = md5::Context::new();
+            while let Some((part, bytes)) = parts.next_part().await? {
+                md5.consume(&bytes);
+                let ok = self
+                    .invoke(&tl::functions::upload::SaveFilePart {
+                        file_id,
+                        file_part: part,
+                        bytes,
+                    })
+                    .await
+                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+
+                if !ok {
+                    return Err(io::Error::new(
+                        io::ErrorKind::Other,
+                        "server failed to store uploaded data",
+                    ));
+                }
             }
-            .into()
-        }))
+            Ok(Uploaded::from_raw(
+                tl::types::InputFile {
+                    id: file_id,
+                    parts: total_parts,
+                    name,
+                    md5_checksum: format!("{:x}", md5.compute()),
+                }
+                .into(),
+            ))
+        }
     }
 
     /// Uploads a local file to Telegram servers.
@@ -326,5 +337,69 @@ impl Client {
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
         self.upload_stream(&mut file, size, name).await
+    }
+}
+
+struct PartStreamInner<'a, S: AsyncRead + Unpin> {
+    stream: &'a mut S,
+    current_part: i32,
+}
+
+struct PartStream<'a, S: AsyncRead + Unpin> {
+    inner: AsyncMutex<PartStreamInner<'a, S>>,
+    total_parts: i32,
+}
+
+impl<'a, S: AsyncRead + Unpin> PartStream<'a, S> {
+    fn new(stream: &'a mut S, size: usize) -> Self {
+        let total_parts = ((size + MAX_CHUNK_SIZE as usize - 1) / MAX_CHUNK_SIZE as usize) as i32;
+        Self {
+            inner: AsyncMutex::new(
+                "upload_stream",
+                PartStreamInner {
+                    stream,
+                    current_part: 0,
+                },
+            ),
+            total_parts,
+        }
+    }
+
+    fn total_parts(&self) -> i32 {
+        self.total_parts
+    }
+
+    async fn next_part(&self) -> Result<Option<(i32, Vec<u8>)>, io::Error> {
+        let mut lock = self.inner.lock("read part").await;
+        if lock.current_part >= self.total_parts {
+            return Ok(None);
+        }
+        let mut read = 0;
+        let mut buffer = vec![0; MAX_CHUNK_SIZE as usize];
+
+        while read != buffer.len() {
+            let n = lock.stream.read(&mut buffer[read..]).await?;
+            if n == 0 {
+                if lock.current_part == self.total_parts - 1 {
+                    break;
+                } else {
+                    return Err(io::Error::new(
+                        io::ErrorKind::UnexpectedEof,
+                        "reached EOF before reaching the last file part",
+                    ));
+                }
+            }
+            read += n;
+        }
+
+        let bytes = if read == buffer.len() {
+            buffer
+        } else {
+            buffer[..read].to_vec()
+        };
+
+        let res = Ok(Some((lock.current_part, bytes)));
+        lock.current_part += 1;
+        res
     }
 }
