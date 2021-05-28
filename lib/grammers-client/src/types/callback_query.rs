@@ -79,7 +79,7 @@ impl CallbackQuery {
         todo!()
     }
 
-    /// Answer the inline query.
+    /// Answer the callback query.
     pub fn answer(&mut self) -> Answer {
         Answer {
             request: tl::functions::messages::SetBotCallbackAnswer {
