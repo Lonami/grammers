@@ -1,4 +1,4 @@
-use super::{Chat, ChatMap};
+use super::{Chat, ChatMap, User};
 use crate::{client::Client, utils::generate_random_id, InputMessage};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -44,8 +44,9 @@ impl InlineQuery {
     }
 
     // User that sent the query.
-    pub fn sender(&self) -> &Chat {
-        self.chats
+    pub fn sender(&self) -> &User {
+        match self
+            .chats
             .get(
                 &tl::types::PeerUser {
                     user_id: self.query.user_id,
@@ -53,6 +54,10 @@ impl InlineQuery {
                 .into(),
             )
             .unwrap()
+        {
+            Chat::User(user) => user,
+            _ => unreachable!(),
+        }
     }
 
     // The text of the inline query.
