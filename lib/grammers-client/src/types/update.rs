@@ -40,7 +40,7 @@ impl Update {
                 CallbackQuery::new(client, query, chats),
             )),
             tl::enums::Update::BotInlineQuery(query) => {
-                Some(Self::InlineQuery(InlineQuery::new(client, query)))
+                Some(Self::InlineQuery(InlineQuery::new(client, query, chats)))
             }
             _ => None,
         }
