@@ -20,7 +20,7 @@ pub struct Answer {
 
 /// An inline query result.
 ///
-/// grammers currently supports results of the following types that implement [`Into<InlineResult>`]:
+/// The following types implement [`Into<InlineResult>`]:
 /// - [`Article`]
 pub struct InlineResult(tl::enums::InputBotInlineResult);
 
