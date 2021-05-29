@@ -44,7 +44,7 @@ impl InlineQuery {
     }
 
     // User that sent the query.
-    pub fn chat(&self) -> &Chat {
+    pub fn sender(&self) -> &Chat {
         self.chats
             .get(
                 &tl::types::PeerUser {
