@@ -201,7 +201,7 @@ impl RpcError {
     ///
     /// ```
     /// # let request_result = Result::<(), _>::Err(grammers_mtproto::mtp::RpcError {
-    /// #     code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None });
+    /// #     code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None, caused_by: None });
     /// #
     /// match request_result {
     ///     Err(rpc_err) if rpc_err.is("SESSION_PASSWORD_NEEDED") => panic!(),
