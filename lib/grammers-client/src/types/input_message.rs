@@ -119,7 +119,7 @@ impl InputMessage {
 
     /// Include the uploaded file as a photo in the message.
     ///
-    /// The server will compress the image and convert it to JPEG format if necessary.
+    /// The Telegram server will compress the image and convert it to JPEG format if necessary.
     ///
     /// The text will be the caption of the photo, which may be empty for no caption.
     pub fn photo(mut self, file: Uploaded) -> Self {
@@ -127,6 +127,23 @@ impl InputMessage {
             tl::types::InputMediaUploadedPhoto {
                 file: file.input_file,
                 stickers: None,
+                ttl_seconds: self.media_ttl,
+            }
+            .into(),
+        );
+        self
+    }
+
+    /// Include an external photo in the message.
+    ///
+    /// The Telegram server will download and compress the image and convert it to JPEG format if
+    /// necessary.
+    ///
+    /// The text will be the caption of the photo, which may be empty for no caption.
+    pub fn photo_url(mut self, url: impl Into<String>) -> Self {
+        self.media = Some(
+            tl::types::InputMediaPhotoExternal {
+                url: url.into(),
                 ttl_seconds: self.media_ttl,
             }
             .into(),
@@ -151,6 +168,24 @@ impl InputMessage {
                 mime_type,
                 attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
                 stickers: None,
+                ttl_seconds: self.media_ttl,
+            }
+            .into(),
+        );
+        self
+    }
+
+    /// Include an external file as a document in the message.
+    ///
+    /// You can use this to send videos, stickers, audios, or uncompressed photos.
+    ///
+    /// The Telegram server will be the one that downloads and includes the document as media.
+    ///
+    /// The text will be the caption of the document, which may be empty for no caption.
+    pub fn document_url(mut self, url: impl Into<String>) -> Self {
+        self.media = Some(
+            tl::types::InputMediaDocumentExternal {
+                url: url.into(),
                 ttl_seconds: self.media_ttl,
             }
             .into(),
