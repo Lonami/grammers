@@ -431,17 +431,22 @@ impl MessageBox {
     pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
         let entry = Entry::AccountWide;
         if self.getting_diff_for.contains(&entry) {
-            self.map
-                .get(&entry)
-                .map(|state| tl::functions::updates::GetDifference {
+            if let Some(state) = self.map.get(&entry) {
+                return Some(tl::functions::updates::GetDifference {
                     pts: state.pts,
                     pts_total_limit: None,
                     date: self.date,
                     qts: self.map[&Entry::SecretChats].pts,
-                })
-        } else {
-            None
+                });
+            } else {
+                // TODO investigate when/why/if this can happen
+                warn!("cannot getDifference as we're missing account pts");
+                self.getting_diff_for.remove(&entry);
+                self.possible_gaps.remove(&entry);
+                self.reset_deadline(entry, next_updates_deadline());
+            }
         }
+        None
     }
 
     pub fn apply_difference(
