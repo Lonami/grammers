@@ -111,8 +111,7 @@ impl Enqueuer {
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         debug!(
-            "enqueueing request {:x} ({}) to be serialized",
-            req_id,
+            "enqueueing request {} to be serialized",
             tl::name_for_id(req_id)
         );
 
@@ -176,8 +175,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         debug!(
-            "enqueueing request {:x} ({}) to be serialized",
-            req_id,
+            "enqueueing request {} to be serialized",
             tl::name_for_id(req_id)
         );
 
