@@ -162,8 +162,13 @@ impl MessageBox {
     ///
     /// Panics when attempting to reset the deadline for a non-existing entry.
     fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
-        self.map.get_mut(&entry).unwrap().deadline = deadline;
-        debug!("reset deadline {:?} for {:?}", deadline, entry);
+        if let Some(state) = self.map.get_mut(&entry) {
+            state.deadline = deadline;
+            debug!("reset deadline {:?} for {:?}", deadline, entry);
+        } else {
+            // TODO figure out why this happens
+            info!("did not reset deadline for {:?} as it had no entry", entry);
+        }
 
         if self.next_deadline == Some(entry) {
             // If the updated deadline was the closest one, recalculate the new minimum.
@@ -218,6 +223,13 @@ impl MessageBox {
         );
         self.date = state.date;
         self.seq = state.seq;
+    }
+
+    pub fn try_set_channel_state(&mut self, id: i32, pts: i32) {
+        self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
+            pts,
+            deadline: next_updates_deadline(),
+        });
     }
 }
 
@@ -580,6 +592,7 @@ impl MessageBox {
                     id
                 );
                 self.getting_diff_for.remove(&entry);
+                self.possible_gaps.remove(&entry);
                 self.reset_channel_deadline(id, None);
                 None
             }
@@ -592,7 +605,7 @@ impl MessageBox {
             // Remove the outdated `pts` entry from the map so that the next update can correct
             // it. Otherwise, it will spam that the access hash is missing.
             self.map.remove(&entry);
-            self.reset_channel_deadline(id, None);
+            self.possible_gaps.remove(&entry);
             None
         }
     }

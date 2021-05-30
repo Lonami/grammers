@@ -88,11 +88,21 @@ impl DialogIter {
             .map(|m| ((&m.msg.peer_id).into(), m))
             .collect::<HashMap<_, _>>();
 
-        self.buffer.extend(
-            dialogs
-                .into_iter()
-                .map(|dialog| Dialog::new(dialog, &mut messages, &chats)),
-        );
+        let mut message_box = self.client.0.message_box.lock("iter_dialogs");
+        self.buffer.extend(dialogs.into_iter().map(|dialog| {
+            match &dialog {
+                tl::enums::Dialog::Dialog(tl::types::Dialog {
+                    peer: tl::enums::Peer::Channel(channel),
+                    pts: Some(pts),
+                    ..
+                }) => {
+                    message_box.try_set_channel_state(channel.channel_id, *pts);
+                }
+                _ => {}
+            }
+            Dialog::new(dialog, &mut messages, &chats)
+        }));
+        drop(message_box);
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -116,6 +126,10 @@ impl DialogIter {
 /// Method implementations related to open conversations.
 impl Client {
     /// Returns a new iterator over the dialogs.
+    ///
+    /// While iterating, the update state for any broadcast channel or megagroup will be set if it was unknown before.
+    /// When the update state is set for these chats, the library can actively check to make sure it's not missing any
+    /// updates from them (as long as the queue limit for updates is larger than zero).
     ///
     /// # Examples
     ///
