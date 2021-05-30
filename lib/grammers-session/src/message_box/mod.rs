@@ -219,6 +219,13 @@ impl MessageBox {
         self.date = state.date;
         self.seq = state.seq;
     }
+
+    pub fn try_set_channel_state(&mut self, id: i32, pts: i32) {
+        self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
+            pts,
+            deadline: next_updates_deadline(),
+        });
+    }
 }
 
 // "Normal" updates flow (processing and detection of gaps).
