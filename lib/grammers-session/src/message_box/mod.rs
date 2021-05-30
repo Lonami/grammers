@@ -108,18 +108,52 @@ impl MessageBox {
 
     /// Return the next deadline when receiving updates should timeout.
     ///
-    /// When this deadline is met, it means that get difference needs to be called.
-    pub fn timeout_deadline(&self) -> Instant {
-        // Most of the time there will be zero or one gap in flight so finding the minimum is cheap.
-        // Gaps always have a very close timeout (next deadline *may* have an even smaller one, but
-        // it's still in the sub-second range).
-        if let Some(deadline) = self.possible_gaps.values().map(|gap| gap.deadline).min() {
-            deadline
-        } else if let Some(state) = self.next_deadline.and_then(|entry| self.map.get(&entry)) {
-            state.deadline
-        } else {
-            next_updates_deadline()
+    /// If a deadline expired, the corresponding entries will be marked as needing to get its difference.
+    /// While there are entries pending of getting their difference, this method returns the current instant.
+    pub fn verify_deadlines(&mut self) -> Instant {
+        let now = Instant::now();
+
+        // TODO we should enforce that reset_deadline when items are popped from here
+        if !self.getting_diff_for.is_empty() {
+            return now;
         }
+
+        let deadline = next_updates_deadline();
+
+        // Most of the time there will be zero or one gap in flight so finding the minimum is cheap.
+        let deadline =
+            if let Some(gap_deadline) = self.possible_gaps.values().map(|gap| gap.deadline).min() {
+                deadline.min(gap_deadline)
+            } else if let Some(state) = self.next_deadline.and_then(|entry| self.map.get(&entry)) {
+                deadline.min(state.deadline)
+            } else {
+                deadline
+            };
+
+        if now > deadline {
+            // Check all expired entries and add them to the list that needs getting difference.
+            self.getting_diff_for
+                .extend(self.possible_gaps.iter().filter_map(|(entry, gap)| {
+                    if now > gap.deadline {
+                        info!("gap was not resolved after waiting for {:?}", entry);
+                        Some(entry)
+                    } else {
+                        None
+                    }
+                }));
+
+            self.getting_diff_for
+                .extend(self.map.iter().filter_map(|(entry, state)| {
+                    if now > state.deadline {
+                        debug!("too much time has passed without updates for {:?}", entry);
+                        Some(entry)
+                    } else {
+                        None
+                    }
+                }));
+        }
+
+        deadline
     }
 
     /// Reset the deadline for the periods without updates for a given entry.
@@ -383,34 +417,8 @@ impl MessageBox {
 impl MessageBox {
     /// Return the request that needs to be made to get the difference, if any.
     pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
-        let now = Instant::now();
         let entry = Entry::AccountWide;
-        let get_diff = if self.getting_diff_for.contains(&Entry::AccountWide) {
-            true
-        } else if self
-            .possible_gaps
-            .get(&entry)
-            .map(|gap| gap.deadline > now)
-            .unwrap_or(false)
-        {
-            info!("gap was not resolved after waiting");
-            self.getting_diff_for.insert(entry);
-            self.possible_gaps.remove(&entry);
-            true
-        } else if self
-            .map
-            .get(&entry)
-            .map(|state| state.deadline > now)
-            .unwrap_or(false)
-        {
-            debug!("too much time has passed without updates");
-            self.getting_diff_for.insert(entry);
-            true
-        } else {
-            false
-        };
-
-        if get_diff {
+        if self.getting_diff_for.contains(&entry) {
             self.map
                 .get(&entry)
                 .map(|state| tl::functions::updates::GetDifference {
@@ -544,49 +552,48 @@ impl MessageBox {
         &mut self,
         chat_hashes: &ChatHashCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
-        let get_diff_for = self.getting_diff_for.iter().find_map(|&entry| match entry {
-            Entry::Channel(id) => Some((entry, id)),
-            _ => None,
-        });
+        let (entry, id) = self
+            .getting_diff_for
+            .iter()
+            .find_map(|&entry| match entry {
+                Entry::Channel(id) => Some((entry, id)),
+                _ => None,
+            })?;
 
-        if let Some((entry, id)) = get_diff_for {
-            if let Some(channel) = chat_hashes.get_input_channel(id) {
-                if let Some(state) = self.map.get(&entry) {
-                    Some(tl::functions::updates::GetChannelDifference {
-                        force: false,
-                        channel,
-                        filter: tl::enums::ChannelMessagesFilter::Empty,
-                        pts: state.pts,
-                        limit: if chat_hashes.is_self_bot() {
-                            defs::BOT_CHANNEL_DIFF_LIMIT
-                        } else {
-                            defs::USER_CHANNEL_DIFF_LIMIT
-                        },
-                    })
-                } else {
-                    // TODO investigate when/why/if this can happen
-                    warn!(
-                        "cannot getChannelDifference for {} as we're missing its pts",
-                        id
-                    );
-                    self.getting_diff_for.remove(&entry);
-                    self.reset_channel_deadline(id, None);
-                    None
-                }
+        if let Some(channel) = chat_hashes.get_input_channel(id) {
+            if let Some(state) = self.map.get(&entry) {
+                Some(tl::functions::updates::GetChannelDifference {
+                    force: false,
+                    channel,
+                    filter: tl::enums::ChannelMessagesFilter::Empty,
+                    pts: state.pts,
+                    limit: if chat_hashes.is_self_bot() {
+                        defs::BOT_CHANNEL_DIFF_LIMIT
+                    } else {
+                        defs::USER_CHANNEL_DIFF_LIMIT
+                    },
+                })
             } else {
+                // TODO investigate when/why/if this can happen
                 warn!(
-                    "cannot getChannelDifference for {} as we're missing its hash",
+                    "cannot getChannelDifference for {} as we're missing its pts",
                     id
                 );
                 self.getting_diff_for.remove(&entry);
-                // Remove the outdated `pts` entry from the map so that the next update can correct
-                // it. Otherwise, it will spam that the access hash is missing.
-                self.map.remove(&entry);
                 self.reset_channel_deadline(id, None);
                 None
             }
         } else {
-            todo!("make a separate method that fills getting_diff_for on timeout")
+            warn!(
+                "cannot getChannelDifference for {} as we're missing its hash",
+                id
+            );
+            self.getting_diff_for.remove(&entry);
+            // Remove the outdated `pts` entry from the map so that the next update can correct
+            // it. Otherwise, it will spam that the access hash is missing.
+            self.map.remove(&entry);
+            self.reset_channel_deadline(id, None);
+            None
         }
     }
 
