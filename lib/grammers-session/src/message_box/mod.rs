@@ -592,6 +592,7 @@ impl MessageBox {
                     id
                 );
                 self.getting_diff_for.remove(&entry);
+                self.possible_gaps.remove(&entry);
                 self.reset_channel_deadline(id, None);
                 None
             }
@@ -604,7 +605,7 @@ impl MessageBox {
             // Remove the outdated `pts` entry from the map so that the next update can correct
             // it. Otherwise, it will spam that the access hash is missing.
             self.map.remove(&entry);
-            self.reset_channel_deadline(id, None);
+            self.possible_gaps.remove(&entry);
             None
         }
     }
