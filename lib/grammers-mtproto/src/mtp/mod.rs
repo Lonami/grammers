@@ -141,6 +141,10 @@ pub struct RpcError {
 
     /// If the error contained an additional value, it will be present here.
     pub value: Option<u32>,
+
+    /// The constructor identifier of the request that triggered this error.
+    /// Won't be present if the error was artificially constructed.
+    pub caused_by: Option<u32>,
 }
 
 impl std::error::Error for RpcError {}
@@ -148,6 +152,9 @@ impl std::error::Error for RpcError {}
 impl fmt::Display for RpcError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "rpc error {}: {}", self.code, self.name)?;
+        if let Some(caused_by) = self.caused_by {
+            write!(f, " caused by {}", tl::name_for_id(caused_by))?;
+        }
         if let Some(value) = self.value {
             write!(f, " (value: {})", value)?;
         }
@@ -171,12 +178,14 @@ impl From<tl::types::RpcError> for RpcError {
                 name: error.error_message.replace(&to_remove, ""),
                 // Safe to unwrap, matched on digits
                 value: Some(value.parse().unwrap()),
+                caused_by: None,
             }
         } else {
             Self {
                 code: error.error_code,
                 name: error.error_message.clone(),
                 value: None,
+                caused_by: None,
             }
         }
     }
@@ -326,7 +335,8 @@ mod tests {
             RpcError {
                 code: 400,
                 name: "CHAT_INVALID".into(),
-                value: None
+                value: None,
+                caused_by: None,
             }
         );
 
@@ -338,7 +348,8 @@ mod tests {
             RpcError {
                 code: 420,
                 name: "FLOOD_WAIT".into(),
-                value: Some(31)
+                value: Some(31),
+                caused_by: None,
             }
         );
 
@@ -350,7 +361,8 @@ mod tests {
             RpcError {
                 code: 500,
                 name: "INTERDC_CALL_ERROR".into(),
-                value: Some(2)
+                value: Some(2),
+                caused_by: None,
             }
         );
     }

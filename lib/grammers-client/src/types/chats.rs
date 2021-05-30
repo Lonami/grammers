@@ -68,6 +68,7 @@ impl AdminRightsBuilderInner {
                 code: 400,
                 name: "PEER_ID_INVALID".to_string(),
                 value: None,
+                caused_by: None,
             }))
         }
     }
@@ -166,6 +167,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         code: 400,
                         name: "PEER_ID_INVALID".to_string(),
                         value: None,
+                        caused_by: None,
                     }))
                 }
             };
@@ -317,6 +319,7 @@ impl BannedRightsBuilderInner {
                     code: 400,
                     name: "CHAT_INVALID".to_string(),
                     value: None,
+                    caused_by: None,
                 }))
             }
         } else {
@@ -324,6 +327,7 @@ impl BannedRightsBuilderInner {
                 code: 400,
                 name: "PEER_ID_INVALID".to_string(),
                 value: None,
+                caused_by: None,
             }))
         }
     }
