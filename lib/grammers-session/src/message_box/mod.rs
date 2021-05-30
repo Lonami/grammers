@@ -162,8 +162,13 @@ impl MessageBox {
     ///
     /// Panics when attempting to reset the deadline for a non-existing entry.
     fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
-        self.map.get_mut(&entry).unwrap().deadline = deadline;
-        debug!("reset deadline {:?} for {:?}", deadline, entry);
+        if let Some(state) = self.map.get_mut(&entry) {
+            state.deadline = deadline;
+            debug!("reset deadline {:?} for {:?}", deadline, entry);
+        } else {
+            // TODO figure out why this happens
+            info!("did not reset deadline for {:?} as it had no entry", entry);
+        }
 
         if self.next_deadline == Some(entry) {
             // If the updated deadline was the closest one, recalculate the new minimum.
