@@ -119,7 +119,7 @@ impl InputMessage {
 
     /// Include the uploaded file as a photo in the message.
     ///
-    /// The server will compress the image and convert it to JPEG format if necessary.
+    /// The Telegram server will compress the image and convert it to JPEG format if necessary.
     ///
     /// The text will be the caption of the photo, which may be empty for no caption.
     pub fn photo(mut self, file: Uploaded) -> Self {
@@ -136,7 +136,7 @@ impl InputMessage {
 
     /// Include an external photo in the message.
     ///
-    /// The server will download and compress the image and convert it to JPEG format if
+    /// The Telegram server will download and compress the image and convert it to JPEG format if
     /// necessary.
     ///
     /// The text will be the caption of the photo, which may be empty for no caption.
@@ -178,6 +178,8 @@ impl InputMessage {
     /// Include an external file as a document in the message.
     ///
     /// You can use this to send videos, stickers, audios, or uncompressed photos.
+    ///
+    /// The Telegram server will be the one that downloads and includes the document as media.
     ///
     /// The text will be the caption of the document, which may be empty for no caption.
     pub fn document_url(mut self, url: impl Into<String>) -> Self {
