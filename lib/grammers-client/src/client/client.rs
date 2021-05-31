@@ -100,7 +100,7 @@ pub(crate) struct ClientInner {
     pub(crate) dc_id: Mutex<i32>,
     pub(crate) config: Config,
     pub(crate) message_box: Mutex<MessageBox>,
-    pub(crate) chat_hashes: ChatHashCache,
+    pub(crate) chat_hashes: Mutex<ChatHashCache>,
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     pub(crate) last_update_limit_warn: Mutex<Option<Instant>>,

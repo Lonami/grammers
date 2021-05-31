@@ -48,4 +48,33 @@ impl ChatHashCache {
             .into()
         })
     }
+
+    pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) {
+        // See https://core.telegram.org/api/min for "issues" with "min constructors".
+        use tl::enums::{Chat as C, User as U};
+        self.users.extend(users.iter().flat_map(|user| match user {
+            U::Empty(_) => None,
+            U::User(u) => u.access_hash.and_then(
+                |hash| {
+                    if u.min {
+                        None
+                    } else {
+                        Some((u.id, hash))
+                    }
+                },
+            ),
+        }));
+        self.channels
+            .extend(chats.iter().flat_map(|chat| match chat {
+                C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
+                C::Channel(c) => c.access_hash.and_then(|hash| {
+                    if c.min {
+                        None
+                    } else {
+                        Some((c.id, hash))
+                    }
+                }),
+                C::ChannelForbidden(c) => Some((c.id, c.access_hash)),
+            }));
+    }
 }

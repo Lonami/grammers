@@ -239,7 +239,7 @@ impl MessageBox {
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
-        chat_hashes: &ChatHashCache,
+        chat_hashes: &mut ChatHashCache,
     ) -> Result<
         (
             Vec<tl::enums::Update>,
@@ -452,6 +452,7 @@ impl MessageBox {
     pub fn apply_difference(
         &mut self,
         difference: tl::enums::updates::Difference,
+        chat_hashes: &mut ChatHashCache,
     ) -> (
         Vec<tl::enums::Update>,
         Vec<tl::enums::User>,
@@ -476,6 +477,7 @@ impl MessageBox {
                     diff.state
                 );
                 self.getting_diff_for.remove(&Entry::AccountWide);
+                chat_hashes.extend(&diff.users, &diff.chats);
                 self.apply_difference_type(diff)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
@@ -487,6 +489,7 @@ impl MessageBox {
                 intermediate_state: state,
             }) => {
                 debug!("handling partial difference {:?}", state);
+                chat_hashes.extend(&users, &chats);
                 self.apply_difference_type(tl::types::updates::Difference {
                     new_messages,
                     new_encrypted_messages,
@@ -619,6 +622,7 @@ impl MessageBox {
         &mut self,
         request: tl::functions::updates::GetChannelDifference,
         difference: tl::enums::updates::ChannelDifference,
+        chat_hashes: &mut ChatHashCache,
     ) -> (
         Vec<tl::enums::Update>,
         Vec<tl::enums::User>,
@@ -632,7 +636,7 @@ impl MessageBox {
 
         match difference {
             tl::enums::updates::ChannelDifference::Empty(diff) => {
-                assert!(!diff.r#final);
+                assert!(diff.r#final);
                 debug!(
                     "handling empty channel {} difference (pts = {}); no longer getting diff",
                     channel_id, diff.pts
@@ -644,7 +648,7 @@ impl MessageBox {
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
-                assert!(!diff.r#final);
+                assert!(diff.r#final);
                 info!(
                     "handling too long channel {} difference; no longer getting diff",
                     channel_id
@@ -659,6 +663,7 @@ impl MessageBox {
                         panic!("received a folder on channelDifferenceTooLong")
                     }
                 }
+                chat_hashes.extend(&diff.users, &diff.chats);
                 self.reset_channel_deadline(channel_id, diff.timeout);
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
@@ -695,6 +700,7 @@ impl MessageBox {
                     }
                     .into()
                 }));
+                chat_hashes.extend(&users, &chats);
                 self.reset_channel_deadline(channel_id, timeout);
 
                 (updates, users, chats)

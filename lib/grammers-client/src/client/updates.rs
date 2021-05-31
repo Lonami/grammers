@@ -56,7 +56,9 @@ impl Client {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
                 let mut message_box = self.0.message_box.lock("client.next_update/get_difference");
-                let (updates, users, chats) = message_box.apply_difference(response);
+                let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_difference");
+                let (updates, users, chats) =
+                    message_box.apply_difference(response, &mut chat_hashes);
                 // > Implementations [have] to postpone updates received via the socket while
                 // > filling gaps in the event and `Update` sequences, as well as avoid filling
                 // > gaps in the same sequence.
@@ -67,15 +69,23 @@ impl Client {
                 continue;
             }
 
-            if let Some(request) = message_box.get_channel_difference(&self.0.chat_hashes) {
+            if let Some(request) =
+                message_box.get_channel_difference(&self.0.chat_hashes.lock("client.next_update"))
+            {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
                 let mut message_box = self
                     .0
                     .message_box
                     .lock("client.next_update/get_channel_difference");
+
+                let mut chat_hashes = self
+                    .0
+                    .chat_hashes
+                    .lock("client.next_update/get_channel_difference");
+
                 let (updates, users, chats) =
-                    message_box.apply_channel_difference(request, response);
+                    message_box.apply_channel_difference(request, response, &mut chat_hashes);
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
@@ -101,8 +111,9 @@ impl Client {
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         let mut message_box = self.0.message_box.lock("client.process_socket_updates");
+        let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
         for updates in all_updates {
-            match message_box.process_updates(updates, &self.0.chat_hashes) {
+            match message_box.process_updates(updates, &mut chat_hashes) {
                 Ok(tuple) => {
                     result.0.extend(tuple.0);
                     result.1.extend(tuple.1);
