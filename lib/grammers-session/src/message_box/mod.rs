@@ -460,6 +460,9 @@ impl MessageBox {
     ) {
         self.reset_deadline(Entry::AccountWide, next_updates_deadline());
 
+        // TODO every time we insert into getting_diff_for, we probably want to clear gaps (same for channels)
+        self.possible_gaps.remove(&Entry::AccountWide);
+
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
                 debug!(
@@ -633,6 +636,9 @@ impl MessageBox {
             _ => panic!("request had wrong input channel"),
         };
         let entry = Entry::Channel(channel_id);
+
+        // TODO every time we insert into getting_diff_for, we probably want to clear gaps (same for accountwide)
+        self.possible_gaps.remove(&entry);
 
         match difference {
             tl::enums::updates::ChannelDifference::Empty(diff) => {
