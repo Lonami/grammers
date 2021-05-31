@@ -22,6 +22,7 @@ pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
+const CONNECTION_COUNT: usize = 3;
 
 pub struct DownloadIter {
     client: Client,
@@ -231,35 +232,44 @@ impl Client {
 
         if big_file {
             let parts = Arc::new(parts);
-            let mut tasks = Vec::with_capacity(WORKER_COUNT);
-            for _ in 0..WORKER_COUNT {
-                let handle = self.clone();
+            let mut connections = Vec::with_capacity(CONNECTION_COUNT);
+            for _ in 0..CONNECTION_COUNT {
                 let parts = Arc::clone(&parts);
-                let task = async move {
-                    while let Some((part, bytes)) = parts.next_part().await? {
-                        let ok = handle
-                            .invoke(&tl::functions::upload::SaveBigFilePart {
-                                file_id,
-                                file_part: part,
-                                file_total_parts: total_parts,
-                                bytes,
-                            })
-                            .await
-                            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+                let connection = async move {
+                    let mut tasks = Vec::with_capacity(WORKER_COUNT);
+                    let client = Client::connect(self.0.config.clone()).await.unwrap();
+                    for _ in 0..WORKER_COUNT {
+                        let handle = client.clone();
+                        let parts = Arc::clone(&parts);
+                        let task = async move {
+                            while let Some((part, bytes)) = parts.next_part().await? {
+                                let ok = handle
+                                    .invoke(&tl::functions::upload::SaveBigFilePart {
+                                        file_id,
+                                        file_part: part,
+                                        file_total_parts: total_parts,
+                                        bytes,
+                                    })
+                                    .await
+                                    .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
 
-                        if !ok {
-                            return Err(io::Error::new(
-                                io::ErrorKind::Other,
-                                "server failed to store uploaded data",
-                            ));
-                        }
+                                if !ok {
+                                    return Err(io::Error::new(
+                                        io::ErrorKind::Other,
+                                        "server failed to store uploaded data",
+                                    ));
+                                }
+                            }
+                            Ok(())
+                        };
+                        tasks.push(task);
                     }
-                    Ok(())
+                    try_join_all(tasks).await?;
+                    Ok::<(), io::Error>(())
                 };
-                tasks.push(task);
+                connections.push(connection);
             }
-
-            try_join_all(tasks).await?;
+            try_join_all(connections).await?;
 
             Ok(Uploaded::from_raw(
                 tl::types::InputFileBig {

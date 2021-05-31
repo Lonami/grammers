@@ -38,6 +38,12 @@ pub struct Session {
     session: Mutex<types::Session>,
 }
 
+impl Clone for Session {
+    fn clone(&self) -> Self {
+        Self::load(&self.save()).unwrap()
+    }
+}
+
 impl Session {
     pub fn new() -> Self {
         Self {

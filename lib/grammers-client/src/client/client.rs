@@ -21,6 +21,7 @@ const DEFAULT_LOCALE: &str = "en";
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
+#[derive(Clone)]
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
@@ -42,6 +43,7 @@ pub struct Config {
 
 /// Optional initialization parameters, required when initializing a connection to Telegram's
 /// API.
+#[derive(Clone)]
 pub struct InitParams {
     pub device_model: String,
     pub system_version: String,
