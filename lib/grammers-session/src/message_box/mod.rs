@@ -239,7 +239,7 @@ impl MessageBox {
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
-        chat_hashes: &ChatHashCache,
+        chat_hashes: &mut ChatHashCache,
     ) -> Result<
         (
             Vec<tl::enums::Update>,

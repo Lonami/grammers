@@ -166,7 +166,7 @@ pub(super) fn update_short_sent_message(
 
 pub(super) fn adapt(
     updates: tl::enums::Updates,
-    chat_hashes: &ChatHashCache,
+    chat_hashes: &mut ChatHashCache,
 ) -> Result<tl::types::UpdatesCombined, Gap> {
     Ok(match updates {
         // > `updatesTooLong` indicates that there are too many events pending to be pushed
@@ -207,10 +207,16 @@ pub(super) fn adapt(
         // > [the] `seq` attribute, which indicates the remote `Updates` state after the
         // > generation of the `Updates`, and `seq_start` indicates the remote `Updates` state
         // > after the first of the `Updates` in the packet is generated
-        tl::enums::Updates::Combined(combined) => combined,
+        tl::enums::Updates::Combined(combined) => {
+            chat_hashes.extend(&combined.users, &combined.chats);
+            combined
+        }
         // > [the] `seq_start` attribute is omitted, because it is assumed that it is always
         // > equal to `seq`.
-        tl::enums::Updates::Updates(updates) => self::updates(updates),
+        tl::enums::Updates::Updates(updates) => {
+            chat_hashes.extend(&updates.users, &updates.chats);
+            self::updates(updates)
+        }
         // Even though we lack fields like the message text, it still needs to be handled, so
         // that the `pts` can be kept consistent.
         tl::enums::Updates::UpdateShortSentMessage(short) => update_short_sent_message(short),

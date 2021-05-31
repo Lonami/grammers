@@ -151,7 +151,7 @@ impl Client {
             dc_id: Mutex::new("client.dc_id", dc_id),
             config,
             message_box: Mutex::new("client.message_box", message_box),
-            chat_hashes: ChatHashCache::new(),
+            chat_hashes: Mutex::new("client.chat_hashes", ChatHashCache::new()),
             last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
             updates: Mutex::new("client.updates", updates),
             request_tx: Mutex::new("client.request_tx", request_tx),

@@ -67,7 +67,9 @@ impl Client {
                 continue;
             }
 
-            if let Some(request) = message_box.get_channel_difference(&self.0.chat_hashes) {
+            if let Some(request) =
+                message_box.get_channel_difference(&self.0.chat_hashes.lock("client.next_update"))
+            {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
                 let mut message_box = self
@@ -101,8 +103,9 @@ impl Client {
 
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         let mut message_box = self.0.message_box.lock("client.process_socket_updates");
+        let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
         for updates in all_updates {
-            match message_box.process_updates(updates, &self.0.chat_hashes) {
+            match message_box.process_updates(updates, &mut chat_hashes) {
                 Ok(tuple) => {
                     result.0.extend(tuple.0);
                     result.1.extend(tuple.1);
