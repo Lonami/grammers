@@ -632,7 +632,7 @@ impl MessageBox {
 
         match difference {
             tl::enums::updates::ChannelDifference::Empty(diff) => {
-                assert!(!diff.r#final);
+                assert!(diff.r#final);
                 debug!(
                     "handling empty channel {} difference (pts = {}); no longer getting diff",
                     channel_id, diff.pts
@@ -644,7 +644,7 @@ impl MessageBox {
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
-                assert!(!diff.r#final);
+                assert!(diff.r#final);
                 info!(
                     "handling too long channel {} difference; no longer getting diff",
                     channel_id
