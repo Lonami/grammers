@@ -18,6 +18,7 @@ use std::collections::VecDeque;
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::oneshot::error::TryRecvError;
+use tokio::sync::Notify;
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -148,6 +149,7 @@ impl Client {
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             sender: AsyncMutex::new("client.sender", sender),
+            stepping_done: Notify::new(),
             dc_id: Mutex::new("client.dc_id", dc_id),
             config,
             message_box: Mutex::new("client.message_box", message_box),
@@ -251,6 +253,7 @@ impl Client {
             Ok(mut sender) => {
                 // Sender was unlocked, we're the ones that will perform the network step.
                 let updates = sender.step().await?;
+                self.0.stepping_done.notify_waiters();
                 self.process_socket_updates(updates);
 
                 // TODO request cancellation if this is Err
@@ -261,10 +264,7 @@ impl Client {
                 // Someone else is already performing the network step. Wait for the step to
                 // complete and return immediately without stepping again. The caller wants
                 // *one* step to complete, but it doesn't care *who* completes it.
-                tokio::task::yield_now().await;
-                self.0.sender.lock("client.step").await;
-                // TODO figure out and document why (or if) this yield is necessary
-                tokio::task::yield_now().await;
+                self.0.stepping_done.notified().await;
                 Ok(())
             }
         }
