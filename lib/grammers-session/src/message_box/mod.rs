@@ -13,11 +13,12 @@ use crate::message_box::defs::PossibleGap;
 use crate::UpdateState;
 pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
-use defs::{PtsInfo, State, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
+use defs::{PtsInfo, ResetDeadline, State, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
+use std::mem;
 use std::time::{Duration, Instant};
 
 fn next_updates_deadline() -> Instant {
@@ -34,6 +35,7 @@ impl MessageBox {
             next_deadline: None,
             possible_gaps: HashMap::new(),
             getting_diff_for: HashSet::new(),
+            reset_deadlines_for: HashSet::new(),
         }
     }
 
@@ -68,6 +70,7 @@ impl MessageBox {
             next_deadline: Some(Entry::AccountWide),
             possible_gaps: HashMap::new(),
             getting_diff_for: HashSet::new(),
+            reset_deadlines_for: HashSet::new(),
         }
     }
 
@@ -202,6 +205,17 @@ impl MessageBox {
         );
     }
 
+    /// Reset all the deadlines in `reset_deadlines_for` and then empty the set.
+    fn apply_deadlines_reset(&mut self) {
+        let next_deadline = next_updates_deadline();
+        let mut reset_deadlines_for = mem::take(&mut self.reset_deadlines_for);
+        reset_deadlines_for
+            .iter()
+            .for_each(|&entry| self.reset_deadline(entry, next_deadline));
+        reset_deadlines_for.clear();
+        self.reset_deadlines_for = reset_deadlines_for;
+    }
+
     // Note: calling this method is **really** important, or we'll start fetching updates from
     // scratch.
     pub fn set_state(&mut self, state: tl::enums::updates::State) {
@@ -265,21 +279,6 @@ impl MessageBox {
             }
         };
 
-        // TODO this should be done *after* we've made sure all entries are inserted
-        // As soon as we receive an update of any form related to messages (has `PtsInfo`),
-        // the "no updates" period for that entry is reset.
-        //
-        // Build a `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
-        let update_deadlines = updates
-            .iter()
-            .flat_map(|update| PtsInfo::from_update(&update).map(|info| info.entry))
-            .collect::<HashSet<_>>();
-
-        let next_deadline = next_updates_deadline();
-        update_deadlines
-            .into_iter()
-            .for_each(|entry| self.reset_deadline(entry, next_deadline));
-
         // > For all the other [not `updates` or `updatesCombined`] `Updates` type constructors
         // > there is no need to check `seq` or change a local state.
         if seq_start != NO_SEQ {
@@ -313,8 +312,10 @@ impl MessageBox {
 
         let mut result = updates
             .into_iter()
-            .filter_map(|u| self.apply_pts_info(u))
+            .filter_map(|u| self.apply_pts_info(u, ResetDeadline::Yes))
             .collect::<Vec<_>>();
+
+        self.apply_deadlines_reset();
 
         if !self.possible_gaps.is_empty() {
             // For each update in possible gaps, see if the gap has been resolved already.
@@ -333,7 +334,7 @@ impl MessageBox {
                     let update = self.possible_gaps.get_mut(&key).unwrap().updates.remove(0);
                     // If this fails to apply, it will get re-inserted at the end.
                     // All should fail, so the order will be preserved (it would've cycled once).
-                    if let Some(update) = self.apply_pts_info(update) {
+                    if let Some(update) = self.apply_pts_info(update, ResetDeadline::No) {
                         result.push(update);
                     }
                 }
@@ -353,12 +354,24 @@ impl MessageBox {
     ///
     /// If the update can be applied, it is returned; otherwise, the update is stored in a
     /// possible gap and `None` is returned.
-    fn apply_pts_info(&mut self, update: tl::enums::Update) -> Option<tl::enums::Update> {
+    fn apply_pts_info(
+        &mut self,
+        update: tl::enums::Update,
+        reset_deadline: ResetDeadline,
+    ) -> Option<tl::enums::Update> {
         let pts = match PtsInfo::from_update(&update) {
             Some(pts) => pts,
             // No pts means that the update can be applied in any order.
             None => return Some(update),
         };
+
+        // As soon as we receive an update of any form related to messages (has `PtsInfo`),
+        // the "no updates" period for that entry is reset.
+        //
+        // Build the `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
+        if reset_deadline == ResetDeadline::Yes {
+            self.reset_deadlines_for.insert(pts.entry);
+        }
 
         let local_pts = if let Some(state) = self.map.get(&pts.entry) {
             let local_pts = state.pts;

@@ -65,6 +65,10 @@ pub struct MessageBox {
 
     /// For which entries are we currently getting difference.
     pub(super) getting_diff_for: HashSet<Entry>,
+
+    /// Temporarily stores which entries should have their update deadline reset.
+    /// Stored in the message box in order to reuse the allocation.
+    pub(super) reset_deadlines_for: HashSet<Entry>,
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
@@ -101,3 +105,9 @@ pub(super) struct PossibleGap {
 }
 
 pub struct Gap;
+
+#[derive(PartialEq)]
+pub(super) enum ResetDeadline {
+    No,
+    Yes,
+}
