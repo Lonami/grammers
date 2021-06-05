@@ -39,7 +39,7 @@ dependencies, including this one.
 
 As far as I know, this code has not been audited, so if, for any reason, you're using this crate
 where security is critical, I strongly encourage you to review at least `grammers-crypto` and the
-authentication part of `grammers-mtproto`. I am not a security export, although I trust my code
+authentication part of `grammers-mtproto`. I am not a security expert, although I trust my code
 enough to use it myself.
 
 If you know about some published audit for this crate, please let me know, so that I can link it

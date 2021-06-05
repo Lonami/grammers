@@ -32,10 +32,16 @@ pub(super) const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Entry {
     /// Account-wide `pts`.
+    ///
+    /// This includes private conversations (one-to-one) and small group chats.
     AccountWide,
     /// Account-wide `qts`.
+    ///
+    /// This includes only "secret" one-to-one chats.
     SecretChats,
     /// Channel-specific `pts`.
+    ///
+    /// This includes "megagroup", "broadcast" and "supergroup" channels.
     Channel(i32),
 }
 

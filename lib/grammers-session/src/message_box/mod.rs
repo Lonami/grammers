@@ -5,6 +5,23 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! This module deals with correct handling of updates, including gaps, and knowing when the code
+//! should "get difference" (the set of updates that the client should know by now minus the set
+//! of updates that it actually knows).
+//!
+//! Each chat has its own [`Entry`] in the [`MessageBox`] (this `struct` is the "entry point").
+//! At any given time, the message box may be either getting difference for them (entry is in
+//! [`MessageBox::getting_diff_for`]) or not. If not getting difference, a possible gap may be
+//! found for the updates (entry is in [`MessageBox::possible_gaps`]). Otherwise, the entry is
+//! on its happy path.
+//!
+//! Gaps are cleared when they are either resolved on their own (by waiting for a short time)
+//! or because we got the difference for the corresponding entry.
+//!
+//! While there are entries for which their difference must be fetched,
+//! [`MessageBox::check_deadlines`] will always return [`Instant::now`], since "now" is the time
+//! to get the difference.
 mod adaptor;
 mod defs;
 
@@ -27,6 +44,9 @@ fn next_updates_deadline() -> Instant {
 
 /// Creation, querying, and setting base state.
 impl MessageBox {
+    /// Create a new, empty [`MessageBox`].
+    ///
+    /// This is the only way it may return `true` from [`MessageBox::is_empty`].
     pub fn new() -> Self {
         Self {
             map: HashMap::new(),
@@ -39,6 +59,7 @@ impl MessageBox {
         }
     }
 
+    /// Create a [`MessageBox`] from a previously known update state.
     pub fn load(state: UpdateState) -> Self {
         let deadline = next_updates_deadline();
         let mut map = HashMap::with_capacity(2 + state.channels.len());
@@ -75,6 +96,8 @@ impl MessageBox {
     }
 
     /// Return the current state in a format that sessions understand.
+    ///
+    /// This should be used for persisting the state.
     pub fn session_state(&self) -> UpdateState {
         UpdateState {
             pts: self
@@ -113,7 +136,7 @@ impl MessageBox {
     ///
     /// If a deadline expired, the corresponding entries will be marked as needing to get its difference.
     /// While there are entries pending of getting their difference, this method returns the current instant.
-    pub fn verify_deadlines(&mut self) -> Instant {
+    pub fn check_deadlines(&mut self) -> Instant {
         let now = Instant::now();
 
         // TODO we should enforce that reset_deadline when items are popped from here
@@ -161,9 +184,7 @@ impl MessageBox {
 
     /// Reset the deadline for the periods without updates for a given entry.
     ///
-    /// It also updates the next deadline time to be accurate the closest deadline.
-    ///
-    /// Panics when attempting to reset the deadline for a non-existing entry.
+    /// It also updates the next deadline time to reflect the new closest deadline.
     fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
         if let Some(state) = self.map.get_mut(&entry) {
             state.deadline = deadline;
@@ -216,8 +237,10 @@ impl MessageBox {
         self.reset_deadlines_for = reset_deadlines_for;
     }
 
-    // Note: calling this method is **really** important, or we'll start fetching updates from
-    // scratch.
+    /// Sets the update state.
+    ///
+    /// Should be called right after login if [`MessageBox::new`] was used, otherwise undesirable
+    /// updates will be fetched.
     pub fn set_state(&mut self, state: tl::enums::updates::State) {
         let deadline = next_updates_deadline();
         let state: tl::types::updates::State = state.into();
@@ -239,6 +262,9 @@ impl MessageBox {
         self.seq = state.seq;
     }
 
+    /// Like [`MessageBox::set_state`], but for channels. Useful when getting dialogs.
+    ///
+    /// The update state will only be updated if no entry was known previously.
     pub fn try_set_channel_state(&mut self, id: i32, pts: i32) {
         self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
             pts,
@@ -457,6 +483,7 @@ impl MessageBox {
         None
     }
 
+    /// Similar to [`MessageBox::process_updates`], but using the result from getting difference.
     pub fn apply_difference(
         &mut self,
         difference: tl::enums::updates::Difference,
@@ -629,6 +656,7 @@ impl MessageBox {
         }
     }
 
+    /// Similar to [`MessageBox::process_updates`], but using the result from getting difference.
     pub fn apply_channel_difference(
         &mut self,
         request: tl::functions::updates::GetChannelDifference,

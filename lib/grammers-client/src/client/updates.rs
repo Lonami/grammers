@@ -91,7 +91,7 @@ impl Client {
                 continue;
             }
 
-            let deadline = message_box.verify_deadlines();
+            let deadline = message_box.check_deadlines();
             drop(message_box);
             tokio::select! {
                 _ = self.step() => {
