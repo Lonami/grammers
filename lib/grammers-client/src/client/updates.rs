@@ -59,12 +59,7 @@ impl Client {
                 let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_difference");
                 let (updates, users, chats) =
                     message_box.apply_difference(response, &mut chat_hashes);
-                // > Implementations [have] to postpone updates received via the socket while
-                // > filling gaps in the event and `Update` sequences, as well as avoid filling
-                // > gaps in the same sequence.
-                //
-                // Basically, don't `step`, simply repeatedly get difference until we're done.
-                // TODO ^ but that's wrong because invoke necessarily steps
+
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }

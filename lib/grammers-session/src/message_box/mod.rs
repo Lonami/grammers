@@ -276,6 +276,17 @@ impl MessageBox {
 // "Normal" updates flow (processing and detection of gaps).
 impl MessageBox {
     /// Process an update and return what should be done with it.
+    ///
+    /// Updates corresponding to entries for which their difference is currently being fetched
+    /// will be ignored. While according to the [updates' documentation]:
+    ///
+    /// > Implementations [have] to postpone updates received via the socket while
+    /// > filling gaps in the event and `Update` sequences, as well as avoid filling
+    /// > gaps in the same sequence.
+    ///
+    /// In practice, these updates should have also been retrieved through getting difference.
+    ///
+    /// [updates documentation] https://core.telegram.org/api/updates
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
@@ -374,7 +385,8 @@ impl MessageBox {
     /// Tries to apply the input update if its `PtsInfo` follows the correct order.
     ///
     /// If the update can be applied, it is returned; otherwise, the update is stored in a
-    /// possible gap and `None` is returned.
+    /// possible gap (unless it was already handled or would be handled through getting
+    /// difference) and `None` is returned.
     fn apply_pts_info(
         &mut self,
         update: tl::enums::Update,
@@ -392,6 +404,14 @@ impl MessageBox {
         // Build the `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
         if reset_deadline == ResetDeadline::Yes {
             self.reset_deadlines_for.insert(pts.entry);
+        }
+
+        if self.getting_diff_for.contains(&pts.entry) {
+            debug!(
+                "skipping update for {:?} (getting difference, count {:?}, remote {:?})",
+                pts.entry, pts.pts_count, pts.pts
+            );
+            return None;
         }
 
         let local_pts = if let Some(state) = self.map.get(&pts.entry) {
