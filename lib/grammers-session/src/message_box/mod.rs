@@ -254,14 +254,8 @@ impl MessageBox {
         &mut self,
         updates: tl::enums::Updates,
         chat_hashes: &mut ChatHashCache,
-    ) -> Result<
-        (
-            Vec<tl::enums::Update>,
-            Vec<tl::enums::User>,
-            Vec<tl::enums::Chat>,
-        ),
-        Gap,
-    > {
+        result: &mut Vec<tl::enums::Update>,
+    ) -> Result<(Vec<tl::enums::User>, Vec<tl::enums::Chat>), Gap> {
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
         let tl::types::UpdatesCombined {
@@ -291,7 +285,7 @@ impl MessageBox {
                         "skipping updates that were already handled at seq = {}",
                         self.seq
                     );
-                    return Ok((Vec::new(), users, chats));
+                    return Ok((users, chats));
                 }
                 Ordering::Less => {
                     debug!(
@@ -310,10 +304,11 @@ impl MessageBox {
             }
         }
 
-        let mut result = updates
-            .into_iter()
-            .filter_map(|u| self.apply_pts_info(u, ResetDeadline::Yes))
-            .collect::<Vec<_>>();
+        result.extend(
+            updates
+                .into_iter()
+                .filter_map(|u| self.apply_pts_info(u, ResetDeadline::Yes)),
+        );
 
         self.apply_deadlines_reset();
 
@@ -347,7 +342,7 @@ impl MessageBox {
             }
         }
 
-        Ok((result, users, chats))
+        Ok((users, chats))
     }
 
     /// Tries to apply the input update if its `PtsInfo` follows the correct order.

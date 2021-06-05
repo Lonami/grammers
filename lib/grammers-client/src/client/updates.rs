@@ -112,12 +112,12 @@ impl Client {
         let mut result = (Vec::new(), Vec::new(), Vec::new());
         let mut message_box = self.0.message_box.lock("client.process_socket_updates");
         let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
+
         for updates in all_updates {
-            match message_box.process_updates(updates, &mut chat_hashes) {
-                Ok(tuple) => {
-                    result.0.extend(tuple.0);
-                    result.1.extend(tuple.1);
-                    result.2.extend(tuple.2);
+            match message_box.process_updates(updates, &mut chat_hashes, &mut result.0) {
+                Ok((users, chats)) => {
+                    result.1.extend(users);
+                    result.2.extend(chats);
                 }
                 Err(_) => return,
             }
