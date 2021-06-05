@@ -139,7 +139,6 @@ impl MessageBox {
     pub fn check_deadlines(&mut self) -> Instant {
         let now = Instant::now();
 
-        // TODO we should enforce that reset_deadline when items are popped from here
         if !self.getting_diff_for.is_empty() {
             return now;
         }
@@ -271,6 +270,26 @@ impl MessageBox {
             deadline: next_updates_deadline(),
         });
     }
+
+    /// Begin getting difference for the given entry.
+    ///
+    /// Clears any previous gaps.
+    fn begin_get_diff(&mut self, entry: Entry) {
+        self.getting_diff_for.insert(entry);
+        self.possible_gaps.remove(&entry);
+    }
+
+    /// Finish getting difference for the given entry.
+    ///
+    /// It also resets the deadline.
+    fn end_get_diff(&mut self, entry: Entry) {
+        self.getting_diff_for.remove(&entry);
+        self.reset_deadline(entry, next_updates_deadline());
+        assert!(
+            !self.possible_gaps.contains_key(&entry),
+            "gaps should be created while getting difference"
+        );
+    }
 }
 
 // "Normal" updates flow (processing and detection of gaps).
@@ -305,7 +324,7 @@ impl MessageBox {
         } = match adaptor::adapt(updates, chat_hashes) {
             Ok(combined) => combined,
             Err(Gap) => {
-                self.getting_diff_for.insert(Entry::AccountWide);
+                self.begin_get_diff(Entry::AccountWide);
                 return Err(Gap);
             }
         };
@@ -329,7 +348,7 @@ impl MessageBox {
                         "gap detected (local seq {}, remote seq {})",
                         self.seq, seq_start
                     );
-                    self.getting_diff_for.insert(Entry::AccountWide);
+                    self.begin_get_diff(Entry::AccountWide);
                     return Err(Gap);
                 }
             }
@@ -411,6 +430,8 @@ impl MessageBox {
                 "skipping update for {:?} (getting difference, count {:?}, remote {:?})",
                 pts.entry, pts.pts_count, pts.pts
             );
+            // Note: early returning here also prevents gap from being inserted (which they should
+            // not be while getting difference).
             return None;
         }
 
@@ -495,9 +516,7 @@ impl MessageBox {
             } else {
                 // TODO investigate when/why/if this can happen
                 warn!("cannot getDifference as we're missing account pts");
-                self.getting_diff_for.remove(&entry);
-                self.possible_gaps.remove(&entry);
-                self.reset_deadline(entry, next_updates_deadline());
+                self.end_get_diff(entry);
             }
         }
         None
@@ -513,11 +532,6 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
-        self.reset_deadline(Entry::AccountWide, next_updates_deadline());
-
-        // TODO every time we insert into getting_diff_for, we probably want to clear gaps (same for channels)
-        self.possible_gaps.remove(&Entry::AccountWide);
-
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
                 debug!(
@@ -526,7 +540,7 @@ impl MessageBox {
                 );
                 self.date = diff.date;
                 self.seq = diff.seq;
-                self.getting_diff_for.remove(&Entry::AccountWide);
+                self.end_get_diff(Entry::AccountWide);
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::Difference::Difference(diff) => {
@@ -534,7 +548,7 @@ impl MessageBox {
                     "handling full difference {:?}; no longer getting diff",
                     diff.state
                 );
-                self.getting_diff_for.remove(&Entry::AccountWide);
+                self.end_get_diff(Entry::AccountWide);
                 chat_hashes.extend(&diff.users, &diff.chats);
                 self.apply_difference_type(diff)
             }
@@ -564,7 +578,7 @@ impl MessageBox {
                 );
                 // TODO when are deadlines reset if we update the map??
                 self.map.get_mut(&Entry::AccountWide).unwrap().pts = diff.pts;
-                self.getting_diff_for.remove(&Entry::AccountWide);
+                self.end_get_diff(Entry::AccountWide);
                 (Vec::new(), Vec::new(), Vec::new())
             }
         }
@@ -594,7 +608,7 @@ impl MessageBox {
             tl::enums::Update::ChannelTooLong(c) => {
                 // `c.pts`, if any, is the channel's current `pts`; we do not need this.
                 info!("got {:?} during getDifference", c);
-                self.getting_diff_for.insert(Entry::Channel(c.channel_id));
+                self.begin_get_diff(Entry::Channel(c.channel_id));
             }
             _ => {}
         });
@@ -657,9 +671,7 @@ impl MessageBox {
                     "cannot getChannelDifference for {} as we're missing its pts",
                     id
                 );
-                self.getting_diff_for.remove(&entry);
-                self.possible_gaps.remove(&entry);
-                self.reset_channel_deadline(id, None);
+                self.end_get_diff(entry);
                 None
             }
         } else {
@@ -667,11 +679,10 @@ impl MessageBox {
                 "cannot getChannelDifference for {} as we're missing its hash",
                 id
             );
-            self.getting_diff_for.remove(&entry);
+            self.end_get_diff(entry);
             // Remove the outdated `pts` entry from the map so that the next update can correct
             // it. Otherwise, it will spam that the access hash is missing.
             self.map.remove(&entry);
-            self.possible_gaps.remove(&entry);
             None
         }
     }
@@ -693,7 +704,6 @@ impl MessageBox {
         };
         let entry = Entry::Channel(channel_id);
 
-        // TODO every time we insert into getting_diff_for, we probably want to clear gaps (same for accountwide)
         self.possible_gaps.remove(&entry);
 
         match difference {
@@ -703,10 +713,8 @@ impl MessageBox {
                     "handling empty channel {} difference (pts = {}); no longer getting diff",
                     channel_id, diff.pts
                 );
-                self.getting_diff_for.remove(&entry);
+                self.end_get_diff(entry);
                 self.map.get_mut(&entry).unwrap().pts = diff.pts;
-                self.reset_channel_deadline(channel_id, diff.timeout);
-
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
@@ -748,7 +756,7 @@ impl MessageBox {
                         "handling channel {} difference; no longer getting diff",
                         channel_id
                     );
-                    self.getting_diff_for.remove(&entry);
+                    self.end_get_diff(entry);
                 } else {
                     debug!("handling channel {} difference", channel_id);
                 }
