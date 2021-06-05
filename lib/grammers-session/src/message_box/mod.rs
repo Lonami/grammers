@@ -176,6 +176,13 @@ impl MessageBox {
                         None
                     }
                 }));
+
+            // When extending `getting_diff_for`, it's important to have the moral equivalent of
+            // `begin_get_diff` (that is, clear possible gaps if we're now getting difference).
+            let possible_gaps = &mut self.possible_gaps;
+            self.getting_diff_for.iter().for_each(|entry| {
+                possible_gaps.remove(entry);
+            });
         }
 
         deadline
@@ -287,7 +294,7 @@ impl MessageBox {
         self.reset_deadline(entry, next_updates_deadline());
         assert!(
             !self.possible_gaps.contains_key(&entry),
-            "gaps should be created while getting difference"
+            "gaps shouldn't be created while getting difference"
         );
     }
 }
