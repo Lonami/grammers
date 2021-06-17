@@ -424,7 +424,6 @@ impl Client {
     ///
     /// [`InputMessage`]: crate::InputMessage
     // TODO don't require nasty InputPeer
-    // TODO Media
     pub async fn edit_message(
         &self,
         chat: &Chat,
@@ -436,7 +435,7 @@ impl Client {
             peer: chat.to_input_peer(),
             id: message_id,
             message: Some(new_message.text),
-            media: None,
+            media: new_message.media,
             reply_markup: new_message.reply_markup,
             entities: Some(new_message.entities),
             schedule_date: new_message.schedule_date,
