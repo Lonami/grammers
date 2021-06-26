@@ -18,22 +18,22 @@ markdown = ["pulldown-cmark"]
 html = ["html5ever"]
 
 [dependencies]
+chrono = "0.4.19"
+futures-util = "0.3.15"
 grammers-crypto = { path = "../grammers-crypto", version = "0.3.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.3.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.3.0" }
 grammers-session = { path = "../grammers-session", version = "0.3.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.3.0", features = ["tl-mtproto"] }
-os_info = { version = "3.0.4", default_features = false }
-locate-locale = "0.1.0"
-pulldown-cmark = { version = "0.8.0", default-features = false, optional = true }
 html5ever = { version = "0.25.1", optional = true }
-tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time"] }
+locate-locale = "0.1.0"
 log = "0.4.14"
 md5 = "0.7.0"
 mime_guess = "2.0.3"
-chrono = "0.4.19"
+os_info = { version = "3.0.4", default_features = false }
 pin-project-lite = "0.2"
-futures-util = "0.3.15"
+pulldown-cmark = { version = "0.8.0", default-features = false, optional = true }
+tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time"] }
 
 [dev-dependencies]
 simple_logger = "1.11.0"

@@ -1,5 +1,7 @@
 [workspace]
 members = [
+    "bin/scrape-docs",
+    "bin/tl-to-json",
     "lib/grammers",
     "lib/grammers-client",
     "lib/grammers-crypto",
@@ -9,8 +11,6 @@ members = [
     "lib/grammers-tl-gen",
     "lib/grammers-tl-parser",
     "lib/grammers-tl-types",
-    "bin/scrape-docs",
-    "bin/tl-to-json",
 ]
 
 [patch.crates-io]
