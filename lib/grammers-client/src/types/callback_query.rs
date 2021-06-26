@@ -9,6 +9,7 @@ use crate::{types, Client};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::convert::TryInto;
+use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
 
@@ -165,5 +166,15 @@ impl<'a> Answer<'a> {
             .client
             .send_message(&chat, message.reply_to(Some(self.query.query.msg_id)))
             .await
+    }
+}
+
+impl fmt::Debug for CallbackQuery {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("CallbackQuery")
+            .field("data", &self.data())
+            .field("sender", &self.sender())
+            .field("chat", &self.chat())
+            .finish()
     }
 }

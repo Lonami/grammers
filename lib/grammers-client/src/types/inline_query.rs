@@ -9,6 +9,7 @@ use super::{Chat, ChatMap, User};
 use crate::{client::Client, utils::generate_random_id, InputMessage};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use std::fmt;
 use std::sync::Arc;
 
 /// Represents an inline query update, which occurs when you sign in as a bot and a user sends an
@@ -204,5 +205,14 @@ impl From<Article> for InlineResult {
                 ),
             },
         ))
+    }
+}
+
+impl fmt::Debug for InlineQuery {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("InlineQuery")
+            .field("text", &self.text())
+            .field("sender", &self.sender())
+            .finish()
     }
 }

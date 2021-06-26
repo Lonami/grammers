@@ -11,6 +11,7 @@ use crate::ChatMap;
 use crate::{types, Client};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use std::fmt;
 use std::io;
 use std::path::Path;
 use std::sync::Arc;
@@ -492,5 +493,40 @@ impl Message {
         }
 
         None
+    }
+}
+
+impl fmt::Debug for Message {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Message")
+            .field("id", &self.id())
+            .field("outgoing", &self.outgoing())
+            .field("date", &self.date())
+            .field("text", &self.text())
+            .field("chat", &self.chat())
+            .field("sender", &self.sender())
+            .field("reply_to_message_id", &self.reply_to_message_id())
+            .field("via_bot_id", &self.via_bot_id())
+            .field("media", &self.media())
+            .field("mentioned", &self.mentioned())
+            .field("media_unread", &self.media_unread())
+            .field("silent", &self.silent())
+            .field("post", &self.post())
+            .field("from_scheduled", &self.from_scheduled())
+            .field("edit_hide", &self.edit_hide())
+            .field("pinned", &self.pinned())
+            .field("forward_header", &self.forward_header())
+            .field("reply_header", &self.reply_header())
+            .field("reply_markup", &self.reply_markup())
+            .field("fmt_entities", &self.fmt_entities())
+            .field("view_count", &self.view_count())
+            .field("forward_count", &self.forward_count())
+            .field("reply_count", &self.reply_count())
+            .field("edit_date", &self.edit_date())
+            .field("post_author", &self.post_author())
+            .field("grouped_id", &self.grouped_id())
+            .field("restriction_reason", &self.restriction_reason())
+            .field("action", &self.action())
+            .finish()
     }
 }
