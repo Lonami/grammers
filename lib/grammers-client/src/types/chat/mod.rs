@@ -133,8 +133,8 @@ impl PackedChat {
             PackedType::Broadcast | PackedType::Gigagroup => Chat::Channel(Channel::from_raw(
                 tl::types::ChannelForbidden {
                     id: self.id,
-                    broadcast: false,
-                    megagroup: true,
+                    broadcast: true,
+                    megagroup: false,
                     access_hash: self.access_hash.unwrap_or(0),
                     title: String::new(),
                     until_date: None,
