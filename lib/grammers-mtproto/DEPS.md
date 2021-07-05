@@ -37,3 +37,7 @@ Used for the input and output buffers.
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
+
+## log
+
+Used to help debug what's going on at the MTP level (such as when future salts are asked for).

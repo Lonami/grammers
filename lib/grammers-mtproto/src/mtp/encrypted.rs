@@ -10,8 +10,20 @@ use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
+use log::info;
 use std::mem;
-use std::time::{SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+/// How many future salts to fetch or have stored at a given time.
+///
+/// Not an `usize` because the API expects a signed `i32`. Should be more than two because the
+/// code expects to fetch more salts when going from two to one.
+const NUM_FUTURE_SALTS: i32 = 64;
+
+/// When switching to a different salt, how many seconds must have passed since its `valid_since`.
+///
+/// Used to prevent small fluctuations in the system clock.
+const SALT_USE_DELAY: i32 = 60;
 
 static UPDATE_IDS: [u32; 6] = [
     tl::types::UpdateShortMessage::CONSTRUCTOR_ID,
@@ -45,8 +57,14 @@ pub struct Encrypted {
     /// The time offset from the server's time, in seconds.
     time_offset: i32,
 
-    /// The current salt to be used when encrypting payload.
-    salt: i64,
+    /// Salts that may be used when encrypting payload, sorted by valid date descending (so the last one is the one
+    /// that can be used now).
+    salts: Vec<tl::types::FutureSalt>,
+
+    /// The `now` received from future salts along with the instant when it occured.
+    ///
+    /// Used to accurately determine when salts become valid.
+    start_salt_time: Option<(i32, Instant)>,
 
     /// The secure, random identifier for this instance.
     client_id: i64,
@@ -108,7 +126,12 @@ impl Builder {
         Encrypted {
             auth_key: AuthKey::from_bytes(auth_key),
             time_offset: self.time_offset,
-            salt: self.first_salt,
+            salts: vec![tl::types::FutureSalt {
+                valid_since: 0,
+                valid_until: i32::MAX,
+                salt: self.first_salt,
+            }],
+            start_salt_time: None,
             client_id: {
                 let mut buffer = [0u8; 8];
                 getrandom(&mut buffer).expect("failed to generate a secure client_id");
@@ -207,7 +230,12 @@ impl Encrypted {
 
         {
             let mut tmp = Vec::with_capacity(HEADER_LEN);
-            self.salt.serialize(&mut tmp); // 8 bytes
+            self.salts
+                .last()
+                .map(|s| s.salt)
+                .unwrap_or(0)
+                .serialize(&mut tmp); // 8 bytes
+
             self.client_id.serialize(&mut tmp); // 8 bytes
             self.buffer[0..tmp.len()].copy_from_slice(&tmp)
         }
@@ -572,7 +600,29 @@ impl Encrypted {
                     MsgId(x.bad_msg_id),
                     Err(RequestError::BadMessage { code: x.error_code }),
                 ));
-                self.salt = x.new_server_salt;
+
+                self.salts.clear();
+                self.salts.push(tl::types::FutureSalt {
+                    valid_since: 0,
+                    valid_until: i32::MAX,
+                    salt: x.new_server_salt,
+                });
+
+                // Try enqueuing a request to get future salts, in order to prevent this from happening for longer.
+                if self
+                    .push(
+                        &tl::functions::GetFutureSalts {
+                            num: NUM_FUTURE_SALTS,
+                        }
+                        .to_bytes(),
+                    )
+                    .is_some()
+                {
+                    info!("got bad salt; asking for more salts");
+                } else {
+                    info!("got bad salt, but cannot ask for future salts because buffer is full");
+                }
+
                 return Ok(());
             }
         };
@@ -792,6 +842,12 @@ impl Encrypted {
 
         self.rpc_results
             .push((MsgId(salts.req_msg_id), Ok(message.body)));
+
+        self.start_salt_time = Some((salts.now, Instant::now()));
+        self.salts = salts.salts.0;
+        self.salts.sort_by_key(|salt| -salt.valid_since);
+        info!("got {} future salts", self.salts.len());
+
         Ok(())
     }
 
@@ -897,7 +953,12 @@ impl Encrypted {
         let new_session = tl::enums::NewSession::from_bytes(&message.body)?;
         match new_session {
             tl::enums::NewSession::Created(x) => {
-                self.salt = x.server_salt;
+                self.salts.clear();
+                self.salts.push(tl::types::FutureSalt {
+                    valid_since: 0,
+                    valid_until: i32::MAX,
+                    salt: x.server_salt,
+                });
             }
         }
         Ok(())
@@ -1090,6 +1151,25 @@ impl Mtp for Encrypted {
             })
             .to_bytes();
             self.serialize_msg(&body, false);
+        }
+
+        // Check to see if the next salt can be used already. If it can, drop the current one and,
+        // if the next salt is the last one, fetch more.
+        if let Some((start_secs, start_instant)) = self.start_salt_time {
+            if let Some(salt) = self.salts.get(self.salts.len() - 2) {
+                let now = start_secs + start_instant.elapsed().as_secs() as i32;
+                if now >= salt.valid_since + SALT_USE_DELAY {
+                    self.salts.pop();
+                    if self.salts.len() == 1 {
+                        info!("only one future salt remaining; asking for more salts");
+                        let body = tl::functions::GetFutureSalts {
+                            num: NUM_FUTURE_SALTS,
+                        }
+                        .to_bytes();
+                        self.serialize_msg(&body, true);
+                    }
+                }
+            }
         }
 
         // Serialize `MAXIMUM_LENGTH` requests at most.
