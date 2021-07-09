@@ -6,7 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::types;
 use chrono::{DateTime, NaiveDateTime, Utc};
+use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use log::trace;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -51,6 +53,34 @@ pub(crate) fn extract_password_parameters(
         tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
     };
     (salt1, salt2, g, p)
+}
+
+/// Get a `Chat`, no matter what.
+///
+/// If necessary, `access_hash` of `0` will be returned, but *something* will be returned.
+pub(crate) fn always_find_entity(
+    peer: &tl::enums::Peer,
+    map: &types::ChatMap,
+    client: &crate::Client,
+) -> types::Chat {
+    map.get(peer).cloned().unwrap_or_else(|| {
+        let (id, ty) = match peer {
+            tl::enums::Peer::User(user) => (user.user_id, PackedType::User),
+            tl::enums::Peer::Chat(chat) => (chat.chat_id, PackedType::Chat),
+            tl::enums::Peer::Channel(channel) => (channel.channel_id, PackedType::Broadcast),
+        };
+        let packed = client
+            .0
+            .chat_hashes
+            .lock("always_find_entity")
+            .get(id)
+            .unwrap_or_else(|| PackedChat {
+                ty,
+                id,
+                access_hash: None,
+            });
+        types::Chat::unpack(packed)
+    })
 }
 
 pub(crate) struct Mutex<T: ?Sized> {

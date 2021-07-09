@@ -9,6 +9,7 @@ mod channel;
 mod group;
 mod user;
 
+use grammers_session::PackedType;
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
@@ -138,6 +139,41 @@ impl Chat {
             Self::User(user) => user.pack(),
             Self::Group(chat) => chat.pack(),
             Self::Channel(channel) => channel.pack(),
+        }
+    }
+
+    pub(crate) fn unpack(packed: PackedChat) -> Self {
+        match packed.ty {
+            PackedType::User | PackedType::Bot => {
+                let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
+                user.0.access_hash = packed.access_hash;
+                Chat::User(user)
+            }
+            PackedType::Chat => Chat::Group(Group::from_raw(
+                tl::types::ChatEmpty { id: packed.id }.into(),
+            )),
+            PackedType::Megagroup => Chat::Group(Group::from_raw(
+                tl::types::ChannelForbidden {
+                    id: packed.id,
+                    broadcast: false,
+                    megagroup: true,
+                    access_hash: packed.access_hash.unwrap_or(0),
+                    title: String::new(),
+                    until_date: None,
+                }
+                .into(),
+            )),
+            PackedType::Broadcast | PackedType::Gigagroup => Chat::Channel(Channel::from_raw(
+                tl::types::ChannelForbidden {
+                    id: packed.id,
+                    broadcast: true,
+                    megagroup: false,
+                    access_hash: packed.access_hash.unwrap_or(0),
+                    title: String::new(),
+                    until_date: None,
+                }
+                .into(),
+            )),
         }
     }
 }

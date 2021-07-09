@@ -225,8 +225,7 @@ impl Message {
                     None
                 }
             })
-            .and_then(|from| self.chats.get(from))
-            .cloned()
+            .map(|from| utils::always_find_entity(from, &self.chats, &self.client))
     }
 
     /// The chat where this message was sent to.
@@ -234,7 +233,7 @@ impl Message {
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
     pub fn chat(&self) -> types::Chat {
-        self.chats.get(&self.msg.peer_id).cloned().unwrap()
+        utils::always_find_entity(&self.msg.peer_id, &self.chats, &self.client)
     }
 
     /// If this message was forwarded from a previous message, return the header with information
