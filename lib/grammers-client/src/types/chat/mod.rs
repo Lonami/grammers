@@ -13,7 +13,6 @@ use grammers_tl_types as tl;
 
 pub use channel::Channel;
 pub use grammers_session::PackedChat;
-use grammers_session::PackedType;
 pub use group::Group;
 pub use user::{Platform, RestrictionReason, User};
 
@@ -119,14 +118,6 @@ impl Chat {
         }
     }
 
-    fn access_hash(&self) -> Option<i64> {
-        match self {
-            Self::User(user) => user.access_hash(),
-            Self::Group(group) => group.access_hash(),
-            Self::Channel(channel) => channel.access_hash(),
-        }
-    }
-
     /// Return the name of this chat.
     ///
     /// For private conversations (users), this is their first name. For groups and channels,
@@ -143,34 +134,10 @@ impl Chat {
 
     /// Pack this chat into a smaller representation that can be loaded later.
     pub fn pack(&self) -> PackedChat {
-        let ty = match self {
-            Self::User(user) => {
-                if user.is_bot() {
-                    PackedType::Bot
-                } else {
-                    PackedType::User
-                }
-            }
-            Self::Group(chat) => {
-                if chat.is_megagroup() {
-                    PackedType::Megagroup
-                } else {
-                    PackedType::Chat
-                }
-            }
-            Self::Channel(channel) => {
-                if channel.0.gigagroup {
-                    PackedType::Gigagroup
-                } else {
-                    PackedType::Broadcast
-                }
-            }
-        };
-
-        PackedChat {
-            ty,
-            id: self.id(),
-            access_hash: self.access_hash(),
+        match self {
+            Self::User(user) => user.pack(),
+            Self::Group(chat) => chat.pack(),
+            Self::Channel(channel) => channel.pack(),
         }
     }
 }

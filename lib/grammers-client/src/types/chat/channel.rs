@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -108,6 +109,19 @@ impl Channel {
 
     pub(crate) fn access_hash(&self) -> Option<i64> {
         self.0.access_hash
+    }
+
+    /// Pack this channel into a smaller representation that can be loaded later.
+    pub fn pack(&self) -> PackedChat {
+        PackedChat {
+            ty: if self.0.gigagroup {
+                PackedType::Gigagroup
+            } else {
+                PackedType::Broadcast
+            },
+            id: self.id(),
+            access_hash: self.access_hash(),
+        }
     }
 
     /// Return the title of this channel.

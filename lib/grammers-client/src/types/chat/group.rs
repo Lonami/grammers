@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -148,6 +149,19 @@ impl Group {
             Chat::Forbidden(_) => None,
             Chat::Channel(chat) => chat.access_hash,
             Chat::ChannelForbidden(chat) => Some(chat.access_hash),
+        }
+    }
+
+    /// Pack this group into a smaller representation that can be loaded later.
+    pub fn pack(&self) -> PackedChat {
+        PackedChat {
+            ty: if self.is_megagroup() {
+                PackedType::Megagroup
+            } else {
+                PackedType::Chat
+            },
+            id: self.id(),
+            access_hash: self.access_hash(),
         }
     }
 
