@@ -5,13 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
 /// In-memory chat cache, mapping peers to their respective access hashes.
 pub struct ChatHashCache {
-    users: HashMap<i32, i64>,
-    channels: HashMap<i32, i64>,
+    // As far as I've observed, user, chat and channel IDs cannot collide,
+    // but it will be an interesting moment if they ever do.
+    hash_map: HashMap<i32, (i64, PackedType)>,
     self_id: Option<i32>,
     self_bot: bool,
 }
@@ -19,8 +21,7 @@ pub struct ChatHashCache {
 impl ChatHashCache {
     pub fn new(self_user: Option<(i32, bool)>) -> Self {
         Self {
-            users: HashMap::new(),
-            channels: HashMap::new(),
+            hash_map: HashMap::new(),
             self_id: self_user.map(|user| user.0),
             self_bot: self_user.map(|user| user.1).unwrap_or(false),
         }
@@ -35,51 +36,67 @@ impl ChatHashCache {
         self.self_bot
     }
 
-    pub fn set_self_user(&mut self, id: i32, bot: bool) {
-        self.self_id = Some(id);
-        self.self_bot = bot;
+    pub fn set_self_user(&mut self, user: PackedChat) {
+        self.self_bot = match user.ty {
+            PackedType::User => false,
+            PackedType::Bot => true,
+            _ => panic!("tried to set self-user without providing user type"),
+        };
+        self.self_id = Some(user.id);
     }
 
-    pub fn contains_user(&self, user_id: i32) -> bool {
-        self.users.contains_key(&user_id)
-    }
-
-    pub fn get_input_channel(&self, channel_id: i32) -> Option<tl::enums::InputChannel> {
-        self.channels.get(&channel_id).map(|&access_hash| {
-            tl::types::InputChannel {
-                channel_id,
-                access_hash,
-            }
-            .into()
+    pub fn get(&self, id: i32) -> Option<PackedChat> {
+        self.hash_map.get(&id).map(|&(hash, ty)| PackedChat {
+            ty,
+            id,
+            access_hash: Some(hash),
         })
     }
 
     pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) {
         // See https://core.telegram.org/api/min for "issues" with "min constructors".
         use tl::enums::{Chat as C, User as U};
-        self.users.extend(users.iter().flat_map(|user| match user {
-            U::Empty(_) => None,
-            U::User(u) => u.access_hash.and_then(
-                |hash| {
+        self.hash_map
+            .extend(users.iter().flat_map(|user| match user {
+                U::Empty(_) => None,
+                U::User(u) => u.access_hash.and_then(|hash| {
                     if u.min {
                         None
                     } else {
-                        Some((u.id, hash))
+                        let ty = if u.bot {
+                            PackedType::Bot
+                        } else {
+                            PackedType::User
+                        };
+                        Some((u.id, (hash, ty)))
                     }
-                },
-            ),
-        }));
-        self.channels
+                }),
+            }));
+        self.hash_map
             .extend(chats.iter().flat_map(|chat| match chat {
                 C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
                 C::Channel(c) => c.access_hash.and_then(|hash| {
                     if c.min {
                         None
                     } else {
-                        Some((c.id, hash))
+                        let ty = if c.megagroup {
+                            PackedType::Megagroup
+                        } else if c.gigagroup {
+                            PackedType::Gigagroup
+                        } else {
+                            PackedType::Broadcast
+                        };
+                        Some((c.id, (hash, ty)))
                     }
                 }),
-                C::ChannelForbidden(c) => Some((c.id, c.access_hash)),
+                C::ChannelForbidden(c) => {
+                    let ty = if c.megagroup {
+                        PackedType::Megagroup
+                    } else {
+                        PackedType::Broadcast
+                    };
+                    Some((c.id, (c.access_hash, ty)))
+                }
             }));
     }
 }

@@ -186,7 +186,7 @@ pub(super) fn adapt(
             // about the chat so that [min constructors][0] can be used.
             //
             // [0]: https://core.telegram.org/api/min
-            if !chat_hashes.contains_user(short.user_id) {
+            if chat_hashes.get(short.user_id).is_none() {
                 info!("no hash for user {} known, treating as gap", short.user_id);
                 return Err(Gap);
             }

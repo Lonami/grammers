@@ -89,7 +89,7 @@ impl Client {
         self.0
             .chat_hashes
             .lock("client.complete_login")
-            .set_self_user(user.id(), user.is_bot());
+            .set_self_user(user.pack());
 
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(state) => {

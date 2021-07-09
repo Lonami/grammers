@@ -659,7 +659,14 @@ impl MessageBox {
                 _ => None,
             })?;
 
-        if let Some(channel) = chat_hashes.get_input_channel(id) {
+        if let Some(packed) = chat_hashes.get(id) {
+            let channel = tl::types::InputChannel {
+                channel_id: packed.id,
+                access_hash: packed
+                    .access_hash
+                    .expect("chat_hashes had chat without hash"),
+            }
+            .into();
             if let Some(state) = self.map.get(&entry) {
                 Some(tl::functions::updates::GetChannelDifference {
                     force: false,
