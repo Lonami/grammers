@@ -9,13 +9,12 @@
 //! Methods related to users, groups and channels.
 
 use super::Client;
-use crate::types::chat::PackedType;
 use crate::types::{
-    chat::PackedChat, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
-    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
-    Photo, User,
+    chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
+    BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::future::Future;

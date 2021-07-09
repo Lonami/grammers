@@ -5,11 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-mod chat_hash_cache;
+mod chat;
 mod generated;
 mod message_box;
 
-pub use chat_hash_cache::ChatHashCache;
+pub use chat::{ChatHashCache, PackedChat, PackedType};
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
