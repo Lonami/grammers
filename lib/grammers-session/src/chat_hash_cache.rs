@@ -17,12 +17,12 @@ pub struct ChatHashCache {
 }
 
 impl ChatHashCache {
-    pub fn new() -> Self {
+    pub fn new(self_user: Option<(i32, bool)>) -> Self {
         Self {
             users: HashMap::new(),
             channels: HashMap::new(),
-            self_id: None,
-            self_bot: false,
+            self_id: self_user.map(|user| user.0),
+            self_bot: self_user.map(|user| user.1).unwrap_or(false),
         }
     }
 
@@ -33,6 +33,11 @@ impl ChatHashCache {
 
     pub fn is_self_bot(&self) -> bool {
         self.self_bot
+    }
+
+    pub fn set_self_user(&mut self, id: i32, bot: bool) {
+        self.self_id = Some(id);
+        self.self_bot = bot;
     }
 
     pub fn contains_user(&self, user_id: i32) -> bool {

@@ -151,6 +151,16 @@ impl Session {
         self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
     }
 
+    /// Returns the stored self user and whether it's a `bot`, or `None` if missing.
+    pub fn get_user(&self) -> Option<(i32, bool)> {
+        self.session
+            .lock()
+            .unwrap()
+            .user
+            .as_ref()
+            .map(|enums::User::User(user)| (user.id, user.bot))
+    }
+
     pub fn get_state(&self) -> Option<UpdateState> {
         let session = self.session.lock().unwrap();
         let enums::UpdateState::State(state) = session.state.as_ref()?;

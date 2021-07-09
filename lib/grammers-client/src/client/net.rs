@@ -145,6 +145,8 @@ impl Client {
             config.params.update_queue_limit = None;
         }
 
+        let self_user = config.session.get_user();
+
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
@@ -153,7 +155,7 @@ impl Client {
             dc_id: Mutex::new("client.dc_id", dc_id),
             config,
             message_box: Mutex::new("client.message_box", message_box),
-            chat_hashes: Mutex::new("client.chat_hashes", ChatHashCache::new()),
+            chat_hashes: Mutex::new("client.chat_hashes", ChatHashCache::new(self_user)),
             last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
             updates: Mutex::new("client.updates", updates),
             request_tx: Mutex::new("client.request_tx", request_tx),
