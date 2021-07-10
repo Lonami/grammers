@@ -285,3 +285,9 @@ impl User {
         self.0.lang_code.as_deref()
     }
 }
+
+impl From<User> for PackedChat {
+    fn from(chat: User) -> Self {
+        chat.pack()
+    }
+}

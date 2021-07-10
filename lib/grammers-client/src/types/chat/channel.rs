@@ -129,3 +129,9 @@ impl Channel {
         self.0.title.as_str()
     }
 }
+
+impl From<Channel> for PackedChat {
+    fn from(chat: Channel) -> Self {
+        chat.pack()
+    }
+}
