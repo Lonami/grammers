@@ -583,7 +583,7 @@ impl Client {
     ///
     /// ```
     /// # async fn f(packed_chat: grammers_client::types::chat::PackedChat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let chat = client.unpack_chat(&packed_chat).await?;
+    /// let chat = client.unpack_chat(packed_chat).await?;
     ///
     /// println!("Found chat: {}", chat.name());
     /// # Ok(())
