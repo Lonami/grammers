@@ -75,7 +75,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
 
             // First check special-case.
             if data == "done" {
-                query.answer().edit("Glad you liked it 👍".into()).await?;
+                query.answer().edit("Glad you liked it 👍").await?;
                 return Ok(());
             }
 
@@ -88,7 +88,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
                 query
                     .answer()
                     .edit(
-                        InputMessage::text(&format!("S{} much fibonacci 🔢", os))
+                        InputMessage::from(format!("S{} much fibonacci 🔢", os))
                             .reply_markup(&fib_markup(a, b)),
                     )
                     .await?;

@@ -369,7 +369,10 @@ impl Message {
     /// replying to it.
     ///
     /// Shorthand for `Client::send_message`.
-    pub async fn respond(&self, message: types::InputMessage) -> Result<Self, InvocationError> {
+    pub async fn respond<M: Into<InputMessage>>(
+        &self,
+        message: M,
+    ) -> Result<Self, InvocationError> {
         self.client.send_message(&self.chat(), message).await
     }
 
@@ -377,7 +380,8 @@ impl Message {
     /// it. This methods overrides the `reply_to` on the `InputMessage` to point to `self`.
     ///
     /// Shorthand for `Client::send_message`.
-    pub async fn reply(&self, message: types::InputMessage) -> Result<Self, InvocationError> {
+    pub async fn reply<M: Into<InputMessage>>(&self, message: M) -> Result<Self, InvocationError> {
+        let message = message.into();
         self.client
             .send_message(&self.chat(), message.reply_to(Some(self.msg.id)))
             .await
@@ -400,7 +404,10 @@ impl Message {
     /// Edit this message to change its text or media.
     ///
     /// Shorthand for `Client::edit_message`.
-    pub async fn edit(&mut self, new_message: types::InputMessage) -> Result<(), InvocationError> {
+    pub async fn edit<M: Into<InputMessage>>(
+        &mut self,
+        new_message: M,
+    ) -> Result<(), InvocationError> {
         self.client
             .edit_message(&self.chat(), self.msg.id, new_message)
             .await

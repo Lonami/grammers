@@ -37,7 +37,7 @@ impl Client {
     ///     // Echo incoming messages and ignore everything else
     ///     match update {
     ///         Update::NewMessage(mut message) if !message.outgoing() => {
-    ///             message.respond(message.text().into()).await?;
+    ///             message.respond(message.text()).await?;
     ///         }
     ///         _ => {}
     ///     }

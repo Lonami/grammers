@@ -147,13 +147,13 @@ pub struct Article {
 }
 
 impl Article {
-    pub fn new(title: impl Into<String>, input_message: InputMessage) -> Self {
+    pub fn new<S: Into<String>, M: Into<InputMessage>>(title: S, input_message: M) -> Self {
         Self {
             title: title.into(),
             description: None,
             url: None,
             thumb_url: None,
-            input_message,
+            input_message: input_message.into(),
         }
     }
 

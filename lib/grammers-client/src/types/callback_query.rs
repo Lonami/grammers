@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::{types, Client};
+use crate::{types, Client, InputMessage};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::convert::TryInto;
@@ -132,7 +132,7 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also edit the message that contained the button.
-    pub async fn edit(self, new_message: types::InputMessage) -> Result<(), InvocationError> {
+    pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let chat = self.query.chat();
         let msg_id = self.query.query.msg_id;
@@ -143,9 +143,9 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also respond in the chat where the button was clicked.
-    pub async fn respond(
+    pub async fn respond<M: Into<InputMessage>>(
         self,
-        message: types::InputMessage,
+        message: M,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let chat = self.query.chat();
@@ -153,12 +153,13 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also reply to the message that contained the button.
-    pub async fn reply(
+    pub async fn reply<M: Into<InputMessage>>(
         self,
-        message: types::InputMessage,
+        message: M,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let chat = self.query.chat();
+        let message = message.into();
         self.query
             .client
             .send_message(chat, message.reply_to(Some(self.query.query.msg_id)))

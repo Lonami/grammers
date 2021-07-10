@@ -26,7 +26,7 @@ async fn handle_update(client: Client, update: Update) -> Result {
         Update::NewMessage(message) if !message.outgoing() => {
             let chat = message.chat();
             println!("Responding to {}", chat.name());
-            client.send_message(&chat, message.text().into()).await?;
+            client.send_message(&chat, message.text()).await?;
         }
         _ => {}
     }

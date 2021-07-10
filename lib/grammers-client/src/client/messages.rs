@@ -339,7 +339,7 @@ impl Client {
     ///
     /// ```
     /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.send_message(&chat, "Boring text message :-(".into()).await?;
+    /// client.send_message(&chat, "Boring text message :-(").await?;
     ///
     /// use grammers_client::InputMessage;
     ///
@@ -349,12 +349,13 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    pub async fn send_message<C: Into<PackedChat>>(
+    pub async fn send_message<C: Into<PackedChat>, M: Into<types::InputMessage>>(
         &self,
         chat: C,
-        message: types::InputMessage,
+        message: M,
     ) -> Result<Message, InvocationError> {
         let chat = chat.into();
+        let message = message.into();
         let random_id = generate_random_id();
         let updates = if let Some(media) = message.media.clone() {
             self.invoke(&tl::functions::messages::SendMedia {
@@ -419,19 +420,20 @@ impl Client {
     /// ```
     /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let old_message_id = 123;
-    /// client.edit_message(&chat, old_message_id, "New text message".into()).await?;
+    /// client.edit_message(&chat, old_message_id, "New text message").await?;
     /// # Ok(())
     /// # }
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
     // TODO don't require nasty InputPeer
-    pub async fn edit_message<C: Into<PackedChat>>(
+    pub async fn edit_message<C: Into<PackedChat>, M: Into<types::InputMessage>>(
         &self,
         chat: C,
         message_id: i32,
-        new_message: types::InputMessage,
+        new_message: M,
     ) -> Result<(), InvocationError> {
+        let new_message = new_message.into();
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
             peer: chat.into().to_input_peer(),
