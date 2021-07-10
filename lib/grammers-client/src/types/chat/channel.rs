@@ -79,36 +79,9 @@ impl Channel {
         }
     }
 
-    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
-        tl::types::PeerChannel {
-            channel_id: self.0.id,
-        }
-        .into()
-    }
-
-    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
-        tl::types::InputPeerChannel {
-            channel_id: self.0.id,
-            access_hash: self.0.access_hash.unwrap_or(0),
-        }
-        .into()
-    }
-
-    pub(crate) fn to_input(&self) -> tl::enums::InputChannel {
-        tl::types::InputChannel {
-            channel_id: self.0.id,
-            access_hash: self.0.access_hash.unwrap_or(0),
-        }
-        .into()
-    }
-
     /// Return the unique identifier for this channel.
     pub fn id(&self) -> i32 {
         self.0.id
-    }
-
-    pub(crate) fn access_hash(&self) -> Option<i64> {
-        self.0.access_hash
     }
 
     /// Pack this channel into a smaller representation that can be loaded later.
@@ -120,7 +93,7 @@ impl Channel {
                 PackedType::Broadcast
             },
             id: self.id(),
-            access_hash: self.access_hash(),
+            access_hash: self.0.access_hash,
         }
     }
 

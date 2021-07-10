@@ -422,7 +422,8 @@ impl Message {
     /// Unlike `Client::mark_as_read`, this method only will mark the chat as read up to
     /// this message, not the entire chat.
     pub async fn mark_as_read(&mut self) -> Result<(), InvocationError> {
-        if let Some(channel) = self.chat().to_input_channel() {
+        let chat = self.chat().pack();
+        if let Some(channel) = chat.try_to_input_channel() {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
                     channel,
@@ -433,7 +434,7 @@ impl Message {
         } else {
             self.client
                 .invoke(&tl::functions::messages::ReadHistory {
-                    peer: self.chat().to_input_peer(),
+                    peer: chat.to_input_peer(),
                     max_id: self.msg.id,
                 })
                 .await

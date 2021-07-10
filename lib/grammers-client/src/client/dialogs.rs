@@ -117,7 +117,10 @@ impl DialogIter {
                 self.request.offset_date = last_message.msg.date;
                 self.request.offset_id = last_message.msg.id;
             }
-            self.request.offset_peer = self.buffer[self.buffer.len() - 1].chat().to_input_peer();
+            self.request.offset_peer = self.buffer[self.buffer.len() - 1]
+                .chat()
+                .pack()
+                .to_input_peer();
         }
 
         Ok(self.pop_item())

@@ -106,26 +106,6 @@ impl User {
         })
     }
 
-    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
-        tl::types::PeerUser { user_id: self.0.id }.into()
-    }
-
-    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
-        tl::types::InputPeerUser {
-            user_id: self.0.id,
-            access_hash: self.0.access_hash.unwrap_or(0),
-        }
-        .into()
-    }
-
-    pub(crate) fn to_input(&self) -> tl::enums::InputUser {
-        tl::types::InputUser {
-            user_id: self.0.id,
-            access_hash: self.0.access_hash.unwrap_or(0),
-        }
-        .into()
-    }
-
     /// Return the unique identifier for this user.
     pub fn id(&self) -> i32 {
         self.0.id

@@ -51,79 +51,6 @@ impl Group {
         }
     }
 
-    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
-        use tl::enums::Chat;
-
-        match &self.0 {
-            Chat::Empty(chat) => tl::types::PeerChat { chat_id: chat.id }.into(),
-            Chat::Chat(chat) => tl::types::PeerChat { chat_id: chat.id }.into(),
-            Chat::Forbidden(chat) => tl::types::PeerChat { chat_id: chat.id }.into(),
-            Chat::Channel(chat) => tl::types::PeerChannel {
-                channel_id: chat.id,
-            }
-            .into(),
-            Chat::ChannelForbidden(chat) => tl::types::PeerChannel {
-                channel_id: chat.id,
-            }
-            .into(),
-        }
-    }
-
-    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
-        use tl::enums::Chat as C;
-
-        match &self.0 {
-            C::Empty(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
-            C::Chat(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
-            C::Forbidden(chat) => tl::types::InputPeerChat { chat_id: chat.id }.into(),
-            C::Channel(chat) => tl::types::InputPeerChannel {
-                channel_id: chat.id,
-                // TODO don't unwrap_or 0
-                access_hash: chat.access_hash.unwrap_or(0),
-            }
-            .into(),
-            C::ChannelForbidden(chat) => tl::types::InputPeerChannel {
-                channel_id: chat.id,
-                access_hash: chat.access_hash,
-            }
-            .into(),
-        }
-    }
-
-    pub(crate) fn to_input_channel(&self) -> Option<tl::enums::InputChannel> {
-        use tl::enums::Chat as C;
-
-        match &self.0 {
-            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
-            C::Channel(chat) => Some(
-                tl::types::InputChannel {
-                    channel_id: chat.id,
-                    // TODO don't unwrap_or 0
-                    access_hash: chat.access_hash.unwrap_or(0),
-                }
-                .into(),
-            ),
-            C::ChannelForbidden(chat) => Some(
-                tl::types::InputChannel {
-                    channel_id: chat.id,
-                    access_hash: chat.access_hash,
-                }
-                .into(),
-            ),
-        }
-    }
-
-    pub(crate) fn to_chat_id(&self) -> Option<i32> {
-        use tl::enums::Chat as C;
-
-        match &self.0 {
-            C::Empty(chat) => Some(chat.id),
-            C::Chat(chat) => Some(chat.id),
-            C::Forbidden(chat) => Some(chat.id),
-            C::Channel(_) | C::ChannelForbidden(_) => None,
-        }
-    }
-
     /// Return the unique identifier for this group.
     ///
     /// Note that if this group is migrated to a megagroup, both this group and the new one will
@@ -140,28 +67,25 @@ impl Group {
         }
     }
 
-    pub(crate) fn access_hash(&self) -> Option<i64> {
-        use tl::enums::Chat;
-
-        match &self.0 {
-            Chat::Empty(_) => None,
-            Chat::Chat(_) => None,
-            Chat::Forbidden(_) => None,
-            Chat::Channel(chat) => chat.access_hash,
-            Chat::ChannelForbidden(chat) => Some(chat.access_hash),
-        }
-    }
-
     /// Pack this group into a smaller representation that can be loaded later.
     pub fn pack(&self) -> PackedChat {
+        use tl::enums::Chat;
+        let (id, access_hash) = match &self.0 {
+            Chat::Empty(chat) => (chat.id, None),
+            Chat::Chat(chat) => (chat.id, None),
+            Chat::Forbidden(chat) => (chat.id, None),
+            Chat::Channel(chat) => (chat.id, chat.access_hash),
+            Chat::ChannelForbidden(chat) => (chat.id, Some(chat.access_hash)),
+        };
+
         PackedChat {
             ty: if self.is_megagroup() {
                 PackedType::Megagroup
             } else {
                 PackedType::Chat
             },
-            id: self.id(),
-            access_hash: self.access_hash(),
+            id,
+            access_hash,
         }
     }
 

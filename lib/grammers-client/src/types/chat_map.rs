@@ -47,7 +47,7 @@ impl ChatMap {
                 .into_iter()
                 .map(Chat::from_user)
                 .chain(chats.into_iter().map(Chat::from_chat))
-                .map(|chat| ((&chat.to_peer()).into(), chat))
+                .map(|chat| ((&chat.pack().to_peer()).into(), chat))
                 .collect(),
         })
     }
@@ -61,7 +61,7 @@ impl ChatMap {
 
     pub fn single(chat: Chat) -> Arc<Self> {
         let mut map = HashMap::new();
-        map.insert((&chat.to_peer()).into(), chat);
+        map.insert((&chat.pack().to_peer()).into(), chat);
         Arc::new(Self { map })
     }
 

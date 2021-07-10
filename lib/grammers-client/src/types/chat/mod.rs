@@ -63,46 +63,6 @@ impl Chat {
         }
     }
 
-    pub(crate) fn to_peer(&self) -> tl::enums::Peer {
-        match self {
-            Self::User(user) => user.to_peer(),
-            Self::Group(group) => group.to_peer(),
-            Self::Channel(channel) => channel.to_peer(),
-        }
-    }
-
-    pub(crate) fn to_input_peer(&self) -> tl::enums::InputPeer {
-        match self {
-            Self::User(user) => user.to_input_peer(),
-            Self::Group(group) => group.to_input_peer(),
-            Self::Channel(channel) => channel.to_input_peer(),
-        }
-    }
-
-    pub(crate) fn to_input_user(&self) -> Option<tl::enums::InputUser> {
-        match self {
-            Self::User(user) => Some(user.to_input()),
-            Self::Group(_) => None,
-            Self::Channel(_) => None,
-        }
-    }
-
-    pub(crate) fn to_input_channel(&self) -> Option<tl::enums::InputChannel> {
-        match self {
-            Self::User(_) => None,
-            Self::Group(group) => group.to_input_channel(),
-            Self::Channel(channel) => Some(channel.to_input()),
-        }
-    }
-
-    pub(crate) fn to_chat_id(&self) -> Option<i32> {
-        match self {
-            Self::User(_) => None,
-            Self::Group(group) => group.to_chat_id(),
-            Self::Channel(_) => None,
-        }
-    }
-
     /// Return the unique identifier for this chat.
     ///
     /// Every account will see the same identifier for the same chat.

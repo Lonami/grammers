@@ -7,7 +7,7 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
-use crate::types::{Chat, IterBuffer, Message};
+use crate::types::{IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ChatMap, Client};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
@@ -313,7 +313,7 @@ impl GlobalSearchIter {
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = last.chat().to_input_peer();
+            self.request.offset_peer = last.chat().pack().to_input_peer();
             self.request.offset_id = last.msg.id;
         }
 
@@ -566,10 +566,10 @@ impl Client {
         /// Helper method to fetch a single message by its input message.
         async fn get_message(
             client: &Client,
-            chat: &Chat,
+            chat: PackedChat,
             id: tl::enums::InputMessage,
         ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
-            if let Some(channel) = chat.to_input_channel() {
+            if let Some(channel) = chat.try_to_input_channel() {
                 client
                     .invoke(&tl::functions::channels::GetMessages {
                         id: vec![id],
@@ -586,7 +586,7 @@ impl Client {
         }
 
         // TODO shouldn't this method take in a message id anyway?
-        let chat = message.chat();
+        let chat = message.chat().pack();
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -595,13 +595,13 @@ impl Client {
         let input_id =
             tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.msg.id });
 
-        let (res, filter_req) = match get_message(self, &chat, input_id).await {
+        let (res, filter_req) = match get_message(self, chat, input_id).await {
             Ok(tup) => tup,
             Err(_) => {
                 let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
                     id: reply_to_message_id,
                 });
-                get_message(self, &chat, input_id).await?
+                get_message(self, chat, input_id).await?
             }
         };
 
@@ -737,7 +737,7 @@ impl Client {
         let mut map = messages
             .into_iter()
             .flat_map(|m| Message::new(self, m, &chats))
-            .filter(|m| m.chat().to_peer() == chat.to_peer())
+            .filter(|m| m.chat().pack() == chat)
             .map(|m| (m.msg.id, m))
             .collect::<HashMap<_, _>>();
 
@@ -787,7 +787,7 @@ impl Client {
         Ok(messages
             .into_iter()
             .flat_map(|m| Message::new(self, m, &chats))
-            .find(|m| m.chat().to_peer() == chat.to_peer()))
+            .find(|m| m.chat().pack() == chat))
     }
 
     /// Pin a message in the chat. This will not notify any users.
