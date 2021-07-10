@@ -10,6 +10,7 @@ use crate::utils;
 use crate::ChatMap;
 use crate::{types, Client};
 use grammers_mtsender::InvocationError;
+use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::fmt;
 use std::io;
@@ -95,7 +96,7 @@ impl Message {
         client: &Client,
         updates: tl::types::UpdateShortSentMessage,
         input: InputMessage,
-        chat: &Chat,
+        chat: PackedChat,
     ) -> Self {
         Self {
             msg: tl::types::Message {
@@ -137,7 +138,7 @@ impl Message {
             },
             action: None,
             client: client.clone(),
-            chats: ChatMap::single(chat),
+            chats: ChatMap::single(Chat::unpack(chat)),
         }
     }
 

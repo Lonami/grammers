@@ -11,6 +11,7 @@ use crate::types::{Chat, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ChatMap, Client};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
@@ -130,7 +131,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
 impl MessageIter {
-    fn new(client: &Client, peer: &Chat) -> Self {
+    fn new(client: &Client, peer: PackedChat) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
@@ -182,7 +183,7 @@ impl MessageIter {
 pub type SearchIter = IterBuffer<tl::functions::messages::Search, Message>;
 
 impl SearchIter {
-    fn new(client: &Client, peer: &Chat) -> Self {
+    fn new(client: &Client, peer: PackedChat) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
             client,
@@ -348,11 +349,12 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    pub async fn send_message(
+    pub async fn send_message<C: Into<PackedChat>>(
         &self,
-        chat: &Chat,
+        chat: C,
         message: types::InputMessage,
     ) -> Result<Message, InvocationError> {
+        let chat = chat.into();
         let random_id = generate_random_id();
         let updates = if let Some(media) = message.media.clone() {
             self.invoke(&tl::functions::messages::SendMedia {
@@ -424,15 +426,15 @@ impl Client {
     ///
     /// [`InputMessage`]: crate::InputMessage
     // TODO don't require nasty InputPeer
-    pub async fn edit_message(
+    pub async fn edit_message<C: Into<PackedChat>>(
         &self,
-        chat: &Chat,
+        chat: C,
         message_id: i32,
         new_message: types::InputMessage,
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
-            peer: chat.to_input_peer(),
+            peer: chat.into().to_input_peer(),
             id: message_id,
             message: Some(new_message.text),
             media: new_message.media,
@@ -475,13 +477,13 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_messages(
+    pub async fn delete_messages<C: Into<PackedChat>>(
         &self,
-        chat: &Chat,
+        chat: C,
         message_ids: &[i32],
     ) -> Result<usize, InvocationError> {
         let tl::enums::messages::AffectedMessages::Messages(affected) =
-            if let Some(channel) = chat.to_input_channel() {
+            if let Some(channel) = chat.into().try_to_input_channel() {
                 self.invoke(&tl::functions::channels::DeleteMessages {
                     channel,
                     id: message_ids.to_vec(),
@@ -522,21 +524,21 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn forward_messages(
+    pub async fn forward_messages<C: Into<PackedChat>, S: Into<PackedChat>>(
         &self,
-        destination: &Chat,
+        destination: C,
         message_ids: &[i32],
-        source: &Chat,
+        source: S,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         // TODO let user customize more options
         let request = tl::functions::messages::ForwardMessages {
             silent: false,
             background: false,
             with_my_score: false,
-            from_peer: source.to_input_peer(),
+            from_peer: source.into().to_input_peer(),
             id: message_ids.to_vec(),
             random_id: generate_random_ids(message_ids.len()),
-            to_peer: destination.to_input_peer(),
+            to_peer: destination.into().to_input_peer(),
             schedule_date: None,
         };
         let result = self.invoke(&request).await?;
@@ -637,8 +639,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_messages(&self, chat: &Chat) -> MessageIter {
-        MessageIter::new(self, chat)
+    pub fn iter_messages<C: Into<PackedChat>>(&self, chat: C) -> MessageIter {
+        MessageIter::new(self, chat.into())
     }
 
     /// Iterate over the messages that match certain search criteria.
@@ -658,8 +660,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn search_messages(&self, chat: &Chat) -> SearchIter {
-        SearchIter::new(self, chat)
+    pub fn search_messages<C: Into<PackedChat>>(&self, chat: C) -> SearchIter {
+        SearchIter::new(self, chat.into())
     }
 
     /// Iterate over the messages that match certain search criteria, without being restricted to
@@ -703,17 +705,18 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_messages_by_id(
+    pub async fn get_messages_by_id<C: Into<PackedChat>>(
         &self,
-        chat: &Chat,
+        chat: C,
         message_ids: &[i32],
     ) -> Result<Vec<Option<Message>>, InvocationError> {
+        let chat = chat.into();
         let id = message_ids
             .iter()
             .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
             .collect();
 
-        let result = if let Some(channel) = chat.to_input_channel() {
+        let result = if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::GetMessages { channel, id })
                 .await
         } else {
@@ -755,14 +758,15 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_pinned_message(
+    pub async fn get_pinned_message<C: Into<PackedChat>>(
         &self,
-        chat: &Chat,
+        chat: C,
     ) -> Result<Option<Message>, InvocationError> {
+        let chat = chat.into();
         // TODO return types::Message and print its text in the example
         let id = vec![tl::enums::InputMessage::Pinned];
 
-        let result = if let Some(channel) = chat.to_input_channel() {
+        let result = if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::GetMessages { channel, id })
                 .await
         } else {
@@ -798,8 +802,12 @@ impl Client {
     /// # }
     /// ```
     // TODO return produced Option<service message>
-    pub async fn pin_message(&self, chat: &Chat, message_id: i32) -> Result<(), InvocationError> {
-        self.update_pinned(chat, message_id, true).await
+    pub async fn pin_message<C: Into<PackedChat>>(
+        &self,
+        chat: C,
+        message_id: i32,
+    ) -> Result<(), InvocationError> {
+        self.update_pinned(chat.into(), message_id, true).await
     }
 
     /// Unpin a message from the chat.
@@ -813,11 +821,20 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpin_message(&self, chat: &Chat, message_id: i32) -> Result<(), InvocationError> {
-        self.update_pinned(chat, message_id, false).await
+    pub async fn unpin_message<C: Into<PackedChat>>(
+        &self,
+        chat: C,
+        message_id: i32,
+    ) -> Result<(), InvocationError> {
+        self.update_pinned(chat.into(), message_id, false).await
     }
 
-    async fn update_pinned(&self, chat: &Chat, id: i32, pin: bool) -> Result<(), InvocationError> {
+    async fn update_pinned(
+        &self,
+        chat: PackedChat,
+        id: i32,
+        pin: bool,
+    ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UpdatePinnedMessage {
             silent: true,
             unpin: !pin,
@@ -839,9 +856,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpin_all_messages(&self, chat: &Chat) -> Result<(), InvocationError> {
+    pub async fn unpin_all_messages<C: Into<PackedChat>>(
+        &self,
+        chat: C,
+    ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UnpinAllMessages {
-            peer: chat.to_input_peer(),
+            peer: chat.into().to_input_peer(),
         })
         .await?;
         Ok(())

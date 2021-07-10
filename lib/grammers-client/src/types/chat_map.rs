@@ -59,9 +59,9 @@ impl ChatMap {
         })
     }
 
-    pub fn single(chat: &Chat) -> Arc<Self> {
+    pub fn single(chat: Chat) -> Arc<Self> {
         let mut map = HashMap::new();
-        map.insert((&chat.to_peer()).into(), chat.clone());
+        map.insert((&chat.to_peer()).into(), chat);
         Arc::new(Self { map })
     }
 

@@ -37,8 +37,8 @@ pub enum ParticipantIter {
 }
 
 impl ParticipantIter {
-    fn new(client: &Client, chat: &Chat) -> Self {
-        if let Some(channel) = chat.to_input_channel() {
+    fn new(client: &Client, chat: PackedChat) -> Self {
+        if let Some(channel) = chat.try_to_input_channel() {
             Self::Channel(IterBuffer::from_request(
                 client,
                 MAX_PARTICIPANT_LIMIT,
@@ -50,7 +50,7 @@ impl ParticipantIter {
                     hash: 0,
                 },
             ))
-        } else if let Some(chat_id) = chat.to_chat_id() {
+        } else if let Some(chat_id) = chat.try_to_chat_id() {
             Self::Chat {
                 client: client.clone(),
                 chat_id,
@@ -201,8 +201,8 @@ pub enum ProfilePhotoIter {
 }
 
 impl ProfilePhotoIter {
-    fn new(client: &Client, chat: &Chat) -> Self {
-        if let Some(user_id) = chat.to_input_user() {
+    fn new(client: &Client, chat: PackedChat) -> Self {
+        if let Some(user_id) = chat.try_to_input_user() {
             Self::User(IterBuffer::from_request(
                 client,
                 MAX_PHOTO_LIMIT,
@@ -401,8 +401,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_participants(&self, chat: &Chat) -> ParticipantIter {
-        ParticipantIter::new(self, chat)
+    pub fn iter_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantIter {
+        ParticipantIter::new(self, chat.into())
     }
 
     /// Kicks the participant from the chat.
@@ -427,13 +427,17 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn kick_participant(
+    pub async fn kick_participant<C: Into<PackedChat>, U: Into<PackedChat>>(
         &mut self,
-        chat: &Chat,
-        user: &User,
+        chat: C,
+        user: U,
     ) -> Result<(), InvocationError> {
-        if let Some(channel) = chat.to_input_channel() {
-            if user.is_self() {
+        let chat = chat.into();
+        let user = user.into();
+        if let Some(channel) = chat.try_to_input_channel() {
+            // TODO should PackedChat also know about is user self?
+            let self_id = self.0.chat_hashes.lock("client.kick_participant").self_id();
+            if user.id == self_id {
                 self.invoke(&tl::functions::channels::LeaveChannel { channel })
                     .await
                     .map(drop)
@@ -445,10 +449,10 @@ impl Client {
 
                 self.set_banned_rights(chat, user).await
             }
-        } else if let Some(chat_id) = chat.to_chat_id() {
+        } else if let Some(chat_id) = chat.try_to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id,
-                user_id: user.to_input(),
+                user_id: user.to_input_user_lossy(),
                 revoke_history: false,
             })
             .await
@@ -491,15 +495,15 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_banned_rights(
+    pub fn set_banned_rights<C: Into<PackedChat>, U: Into<PackedChat>>(
         &mut self,
-        channel: &Chat,
-        user: &User,
+        channel: C,
+        user: U,
     ) -> BannedRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
         BannedRightsBuilder::new(
             self.clone(),
-            channel,
-            user,
+            channel.into(),
+            user.into(),
             BannedRightsBuilderInner::invoke,
         )
     }
@@ -535,12 +539,17 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_admin_rights(
+    pub fn set_admin_rights<C: Into<PackedChat>, U: Into<PackedChat>>(
         &self,
-        channel: &Chat,
-        user: &User,
+        channel: C,
+        user: U,
     ) -> AdminRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
-        AdminRightsBuilder::new(self.clone(), channel, user, AdminRightsBuilderInner::invoke)
+        AdminRightsBuilder::new(
+            self.clone(),
+            channel.into(),
+            user.into(),
+            AdminRightsBuilderInner::invoke,
+        )
     }
 
     /// Iterate over the history of profile photos for the given user or chat.
@@ -564,11 +573,11 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_profile_photos(&self, chat: &Chat) -> ProfilePhotoIter {
-        ProfilePhotoIter::new(self, chat)
+    pub fn iter_profile_photos<C: Into<PackedChat>>(&self, chat: C) -> ProfilePhotoIter {
+        ProfilePhotoIter::new(self, chat.into())
     }
 
-    /// Convert a [`PackedChat`] back into a [`Chat`]
+    /// Convert a [`PackedChat`] back into a [`Chat`].
     ///
     /// # Example
     ///
@@ -580,7 +589,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpack_chat(&mut self, packed_chat: &PackedChat) -> Result<Chat, InvocationError> {
+    pub async fn unpack_chat(&mut self, packed_chat: PackedChat) -> Result<Chat, InvocationError> {
         Ok(match packed_chat.ty {
             PackedType::User | PackedType::Bot => {
                 let mut res = self

@@ -5,9 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Chat, ChatMap, Dialog, IterBuffer, Message};
+use crate::types::{ChatMap, Dialog, IterBuffer, Message};
 use crate::Client;
 use grammers_mtsender::InvocationError;
+use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
@@ -166,12 +167,16 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog(&mut self, chat: &Chat) -> Result<(), InvocationError> {
-        if let Some(channel) = chat.to_input_channel() {
+    pub async fn delete_dialog<C: Into<PackedChat>>(
+        &mut self,
+        chat: C,
+    ) -> Result<(), InvocationError> {
+        let chat = chat.into();
+        if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::LeaveChannel { channel })
                 .await
                 .map(drop)
-        } else if let Some(chat_id) = chat.to_chat_id() {
+        } else if let Some(chat_id) = chat.try_to_chat_id() {
             // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id,
@@ -206,8 +211,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read(&mut self, chat: &Chat) -> Result<(), InvocationError> {
-        if let Some(channel) = chat.to_input_channel() {
+    pub async fn mark_as_read<C: Into<PackedChat>>(
+        &mut self,
+        chat: C,
+    ) -> Result<(), InvocationError> {
+        let chat = chat.into();
+        if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::ReadHistory { channel, max_id: 0 })
                 .await
                 .map(drop)
@@ -231,9 +240,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn clear_mentions(&mut self, chat: &Chat) -> Result<(), InvocationError> {
+    pub async fn clear_mentions<C: Into<PackedChat>>(
+        &mut self,
+        chat: C,
+    ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {
-            peer: chat.to_input_peer(),
+            peer: chat.into().to_input_peer(),
         })
         .await
         .map(drop)

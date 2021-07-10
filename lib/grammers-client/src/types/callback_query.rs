@@ -134,12 +134,11 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit(self, new_message: types::InputMessage) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        // TODO remove mut requirement (and clone)
-        let chat = self.query.chat().clone();
+        let chat = self.query.chat();
         let msg_id = self.query.query.msg_id;
         self.query
             .client
-            .edit_message(&chat, msg_id, new_message)
+            .edit_message(chat, msg_id, new_message)
             .await
     }
 
@@ -149,9 +148,8 @@ impl<'a> Answer<'a> {
         message: types::InputMessage,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        // TODO remove mut requirement (and clone)
-        let chat = self.query.chat().clone();
-        self.query.client.send_message(&chat, message).await
+        let chat = self.query.chat();
+        self.query.client.send_message(chat, message).await
     }
 
     /// [`Self::send`] the answer, and also reply to the message that contained the button.
@@ -160,11 +158,10 @@ impl<'a> Answer<'a> {
         message: types::InputMessage,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        // TODO remove mut requirement (and clone)
-        let chat = self.query.chat().clone();
+        let chat = self.query.chat();
         self.query
             .client
-            .send_message(&chat, message.reply_to(Some(self.query.query.msg_id)))
+            .send_message(chat, message.reply_to(Some(self.query.query.msg_id)))
             .await
     }
 }

@@ -5,10 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Chat, IterBuffer, User};
+use crate::types::IterBuffer;
 use crate::utils::generate_random_id;
 use crate::Client;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 50;
@@ -24,14 +25,14 @@ pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResu
 impl InlineResult {
     /// Send this inline result to the specified chat.
     // TODO return the produced message
-    pub async fn send(&mut self, chat: &Chat) -> Result<(), InvocationError> {
+    pub async fn send<C: Into<PackedChat>>(&mut self, chat: C) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SendInlineBotResult {
                 silent: false,
                 background: false,
                 clear_draft: false,
                 hide_via: false,
-                peer: chat.to_input_peer(),
+                peer: chat.into().to_input_peer(),
                 reply_to_msg_id: None,
                 random_id: generate_random_id(),
                 query_id: self.query_id,
@@ -64,12 +65,12 @@ impl InlineResult {
 }
 
 impl InlineResultIter {
-    fn new(client: &Client, bot: &User, query: &str) -> Self {
+    fn new(client: &Client, bot: PackedChat, query: &str) -> Self {
         Self::from_request(
             client,
             MAX_LIMIT,
             tl::functions::messages::GetInlineBotResults {
-                bot: bot.to_input(),
+                bot: bot.to_input_user_lossy(),
                 peer: tl::enums::InputPeer::Empty,
                 geo_point: None,
                 query: query.to_string(),
@@ -82,8 +83,8 @@ impl InlineResultIter {
     ///
     /// Some bots use this information to return different results depending on the type of the
     /// chat, and some even "need" it to give useful results.
-    pub fn chat(mut self, chat: &Chat) -> Self {
-        self.request.peer = chat.to_input_peer();
+    pub fn chat<C: Into<PackedChat>>(mut self, chat: C) -> Self {
+        self.request.peer = chat.into().to_input_peer();
         self
     }
 
@@ -129,6 +130,9 @@ impl Client {
     ///
     /// The return value is used like any other async iterator, by repeatedly calling `next`.
     ///
+    /// Executing the query will fail if the input chat does not actually represent a bot account
+    /// supporting inline mode.
+    ///
     /// # Examples
     ///
     /// ```
@@ -142,7 +146,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn inline_query(&self, bot: &User, query: &str) -> InlineResultIter {
-        InlineResultIter::new(self, bot, query)
+    pub fn inline_query<C: Into<PackedChat>>(&self, bot: C, query: &str) -> InlineResultIter {
+        InlineResultIter::new(self, bot.into(), query)
     }
 }
