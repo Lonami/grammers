@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_tl_types as tl;
 use std::fmt;
 
 #[repr(u8)]
@@ -91,6 +92,80 @@ impl PackedChat {
             self.ty,
             PackedType::Megagroup | PackedType::Broadcast | PackedType::Gigagroup
         )
+    }
+
+    pub fn to_peer(&self) -> tl::enums::Peer {
+        match self.ty {
+            PackedType::User | PackedType::Bot => tl::types::PeerUser { user_id: self.id }.into(),
+            PackedType::Chat => tl::types::PeerChat { chat_id: self.id }.into(),
+            PackedType::Megagroup | PackedType::Broadcast | PackedType::Gigagroup => {
+                tl::types::PeerChannel {
+                    channel_id: self.id,
+                }
+                .into()
+            }
+        }
+    }
+
+    pub fn to_input_peer(&self) -> tl::enums::InputPeer {
+        match self.ty {
+            PackedType::User | PackedType::Bot => tl::types::InputPeerUser {
+                user_id: self.id,
+                access_hash: self.access_hash.unwrap_or(0),
+            }
+            .into(),
+            PackedType::Chat => tl::types::InputPeerChat { chat_id: self.id }.into(),
+            PackedType::Megagroup | PackedType::Broadcast | PackedType::Gigagroup => {
+                tl::types::InputPeerChannel {
+                    channel_id: self.id,
+                    access_hash: self.access_hash.unwrap_or(0),
+                }
+                .into()
+            }
+        }
+    }
+
+    pub fn try_to_input_user(&self) -> Option<tl::enums::InputUser> {
+        match self.ty {
+            PackedType::User | PackedType::Bot => Some(
+                tl::types::InputUser {
+                    user_id: self.id,
+                    access_hash: self.access_hash.unwrap_or(0),
+                }
+                .into(),
+            ),
+            _ => None,
+        }
+    }
+
+    pub fn to_input_user_lossy(&self) -> tl::enums::InputUser {
+        self.try_to_input_user().unwrap_or_else(|| {
+            tl::types::InputUser {
+                user_id: 0,
+                access_hash: 0,
+            }
+            .into()
+        })
+    }
+
+    pub fn try_to_chat_id(&self) -> Option<i32> {
+        match self.ty {
+            PackedType::Chat => Some(self.id),
+            _ => None,
+        }
+    }
+
+    pub fn try_to_input_channel(&self) -> Option<tl::enums::InputChannel> {
+        match self.ty {
+            PackedType::Megagroup | PackedType::Broadcast | PackedType::Gigagroup => Some(
+                tl::types::InputChannel {
+                    channel_id: self.id,
+                    access_hash: self.access_hash.unwrap_or(0),
+                }
+                .into(),
+            ),
+            _ => None,
+        }
     }
 }
 
