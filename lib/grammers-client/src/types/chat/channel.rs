@@ -135,3 +135,9 @@ impl From<Channel> for PackedChat {
         chat.pack()
     }
 }
+
+impl From<&Channel> for PackedChat {
+    fn from(chat: &Channel) -> Self {
+        chat.pack()
+    }
+}

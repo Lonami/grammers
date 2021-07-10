@@ -291,3 +291,9 @@ impl From<User> for PackedChat {
         chat.pack()
     }
 }
+
+impl From<&User> for PackedChat {
+    fn from(chat: &User) -> Self {
+        chat.pack()
+    }
+}

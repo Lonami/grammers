@@ -183,3 +183,9 @@ impl From<Chat> for PackedChat {
         chat.pack()
     }
 }
+
+impl From<&Chat> for PackedChat {
+    fn from(chat: &Chat) -> Self {
+        chat.pack()
+    }
+}
