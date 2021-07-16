@@ -64,11 +64,12 @@ impl Client {
                 continue;
             }
 
-            if let Some(request) =
-                message_box.get_channel_difference(&self.0.chat_hashes.lock("client.next_update"))
-            {
+            let chat_hashes = self.0.chat_hashes.lock("client.next_update");
+            if let Some(request) = message_box.get_channel_difference(&chat_hashes) {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
+                drop(chat_hashes);
+
                 let mut message_box = self
                     .0
                     .message_box
@@ -85,6 +86,7 @@ impl Client {
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
+            drop(chat_hashes);
 
             let deadline = message_box.check_deadlines();
             drop(message_box);
