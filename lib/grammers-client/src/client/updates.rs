@@ -64,7 +64,11 @@ impl Client {
                 continue;
             }
 
-            let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_channel_difference");
+            let mut chat_hashes = self
+                .0
+                .chat_hashes
+                .lock("client.next_update/get_channel_difference");
+
             if let Some(request) = message_box.get_channel_difference(&chat_hashes) {
                 drop(message_box);
                 let response = self.invoke(&request).await?;
