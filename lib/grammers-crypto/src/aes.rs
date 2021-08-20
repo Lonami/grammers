@@ -12,7 +12,6 @@ use aes::cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher};
 pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
     assert!(plaintext.len() % 16 == 0);
     let mut ciphertext = vec![0; plaintext.len()];
-    assert!(ciphertext.len() % 16 == 0);
 
     let key = GenericArray::from_slice(key);
     let cipher = aes::Aes256::new(&key);
@@ -49,38 +48,32 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
 
 /// Decrypt the input ciphertext using the AES-IGE mode.
 pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    assert!(ciphertext.len() % 16 == 0);
-    let mut plaintext = vec![0; ciphertext.len()];
-    assert!(plaintext.len() % 16 == 0);
+    let size = ciphertext.len();
+    assert!(size % 16 == 0);
+    let mut plaintext = vec![0; size];
 
     let key = GenericArray::from_slice(key);
     let cipher = aes::Aes256::new(&key);
-
     let mut iv = *iv;
-    let (iv1, iv2) = iv.split_at_mut(16);
-    assert!(iv1.len() == 16);
-    assert!(iv2.len() == 16);
 
     for (ciphertext_block, plaintext_block) in ciphertext.chunks(16).zip(plaintext.chunks_mut(16)) {
-        // block = block XOR iv2
         let plaintext_block = GenericArray::from_mut_slice(plaintext_block);
-        plaintext_block
-            .iter_mut()
-            .zip(ciphertext_block.iter().zip(iv2.iter()))
-            .for_each(|(x, (a, b))| *x = a ^ b);
+        // block = block XOR iv2
+        for i in 0..16 {
+            plaintext_block[i] = ciphertext_block[i] ^ iv[i + 16];
+        }
 
         // block = decrypt(block);
         cipher.decrypt_block(plaintext_block);
 
         // block = block XOR iv1
-        plaintext_block
-            .iter_mut()
-            .zip(iv1.iter())
-            .for_each(|(x, a)| *x ^= a);
+        for i in 0..16 {
+            plaintext_block[i] ^= iv[i];
+        }
 
         // save plaintext and adjust iv
-        iv1.clone_from_slice(ciphertext_block);
-        iv2.clone_from_slice(plaintext_block);
+        iv[0..16].copy_from_slice(ciphertext_block);
+        iv[16..32].copy_from_slice(plaintext_block);
     }
 
     plaintext
