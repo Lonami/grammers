@@ -217,6 +217,7 @@ impl Client {
         stream: &mut S,
         size: usize,
         name: String,
+        connections: usize
     ) -> Result<Uploaded, io::Error> {
         let file_id = generate_random_id();
         let name = if name.is_empty() {
@@ -231,8 +232,8 @@ impl Client {
 
         if big_file {
             let parts = Arc::new(parts);
-            let mut tasks = Vec::with_capacity(WORKER_COUNT);
-            for _ in 0..WORKER_COUNT {
+            let mut tasks = Vec::with_capacity(connections);
+            for _ in 0..connections {
                 let handle = self.clone();
                 let parts = Arc::clone(&parts);
                 let task = async move {
@@ -336,7 +337,7 @@ impl Client {
         // files, so it's fine to unwrap.
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
-        self.upload_stream(&mut file, size, name).await
+        self.upload_stream(&mut file, size, name, WORKER_COUNT).await
     }
 }
 

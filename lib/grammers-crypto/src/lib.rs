@@ -115,10 +115,7 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
         // "Note that MTProto 2.0 requires from 12 to 1024 bytes of padding"
         // "[...] the resulting message length be divisible by 16 bytes"
         let padding_len = determine_padding_v2_length(plaintext.len());
-        let mut buffer = Vec::with_capacity(plaintext.len() + padding_len);
-        buffer.extend(plaintext);
-        buffer.extend(&random_padding[..padding_len]);
-        buffer
+        vec![plaintext, &random_padding[..padding_len]].concat()
     };
 
     // Encryption is done by the client

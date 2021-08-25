@@ -22,21 +22,20 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
     assert!(iv2.len() == 16);
 
     for (plaintext_block, ciphertext_block) in plaintext.chunks(16).zip(ciphertext.chunks_mut(16)) {
+        assert!(plaintext_block.len() == 16);
         // block = block XOR iv1
-        let ciphertext_block = GenericArray::from_mut_slice(ciphertext_block);
-        ciphertext_block
-            .iter_mut()
-            .zip(plaintext_block.iter().zip(iv1.iter()))
-            .for_each(|(x, (a, b))| *x = a ^ b);
-
+        for i in 0..ciphertext_block.len() {
+            ciphertext_block[i] = plaintext_block[i] ^ iv1[i];
+        }
+        
         // block = encrypt(block);
+        let ciphertext_block = GenericArray::from_mut_slice(ciphertext_block);
         cipher.encrypt_block(ciphertext_block);
 
         // block = block XOR iv2
-        ciphertext_block
-            .iter_mut()
-            .zip(iv2.iter())
-            .for_each(|(x, a)| *x ^= a);
+        for i in 0..ciphertext_block.len() {
+            ciphertext_block[i] ^= iv2[i];
+        }
 
         // save ciphertext and adjust iv
         iv1.copy_from_slice(ciphertext_block);
