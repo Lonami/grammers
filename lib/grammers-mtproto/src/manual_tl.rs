@@ -204,7 +204,9 @@ impl GzipPacked {
     pub fn new(unpacked_data: &[u8]) -> Self {
         // Use uncompressed gzip for large chunks, because it's significantly faster
         if unpacked_data.len() > 1024 * 64 {
-            Self { packed_data: GzipPacked::raw_deflate(unpacked_data) }
+            Self {
+                packed_data: GzipPacked::raw_deflate(unpacked_data),
+            }
         } else {
             let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
             // Safe to unwrap, in-memory data should not fail
@@ -231,7 +233,7 @@ impl GzipPacked {
         let header = GzBuilder::new();
         let mut hasher = Hasher::new();
         hasher.update(&data);
-    
+
         // Header
         let mut buf = Vec::with_capacity(14 + data.len() + (data.len() / 65535) * 5);
         buf.extend(&header.into_header());
@@ -242,7 +244,7 @@ impl GzipPacked {
             // 0xffff - size as u16
             // 0x0000 complement of size (reverse bits)
             buf.append(&mut vec![0u8, 255, 255, 0, 0]);
-            buf.extend(&data[offset..offset+65535]);
+            buf.extend(&data[offset..offset + 65535]);
             offset += 65535;
         }
         let len = (data.len() - offset) as u16;
@@ -259,7 +261,6 @@ impl GzipPacked {
         buf.extend(&(data.len() as u32).to_le_bytes());
         buf
     }
-    
 }
 
 impl Identifiable for GzipPacked {

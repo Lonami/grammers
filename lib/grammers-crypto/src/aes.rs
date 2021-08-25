@@ -27,7 +27,7 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
         for i in 0..ciphertext_block.len() {
             ciphertext_block[i] = plaintext_block[i] ^ iv1[i];
         }
-        
+
         // block = encrypt(block);
         let ciphertext_block = GenericArray::from_mut_slice(ciphertext_block);
         cipher.encrypt_block(ciphertext_block);

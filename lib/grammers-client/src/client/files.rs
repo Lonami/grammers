@@ -217,7 +217,7 @@ impl Client {
         stream: &mut S,
         size: usize,
         name: String,
-        connections: usize
+        connections: usize,
     ) -> Result<Uploaded, io::Error> {
         let file_id = generate_random_id();
         let name = if name.is_empty() {
@@ -337,7 +337,8 @@ impl Client {
         // files, so it's fine to unwrap.
         let name = path.file_name().unwrap().to_string_lossy().to_string();
 
-        self.upload_stream(&mut file, size, name, WORKER_COUNT).await
+        self.upload_stream(&mut file, size, name, WORKER_COUNT)
+            .await
     }
 }
 
