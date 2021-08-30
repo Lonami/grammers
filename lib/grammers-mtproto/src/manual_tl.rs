@@ -8,11 +8,9 @@
 
 //! This module contains additional, manual structures for some TL types.
 use crate::mtp;
-use crc32fast::Hasher;
 use flate2::write::{GzDecoder, GzEncoder};
 use flate2::Compression;
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
-use gzip_header::GzBuilder;
 use std::io::Write;
 
 /// This struct represents the following TL definition:
@@ -202,18 +200,11 @@ pub(crate) struct GzipPacked {
 
 impl GzipPacked {
     pub fn new(unpacked_data: &[u8]) -> Self {
-        // Use uncompressed gzip for large chunks, because it's significantly faster
-        if unpacked_data.len() > 1024 * 64 {
-            Self {
-                packed_data: GzipPacked::raw_deflate(unpacked_data),
-            }
-        } else {
-            let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
-            // Safe to unwrap, in-memory data should not fail
-            encoder.write_all(unpacked_data).unwrap();
-            let packed_data = encoder.finish().unwrap();
-            Self { packed_data }
-        }
+        let mut encoder = GzEncoder::new(Vec::new(), Compression::best());
+        // Safe to unwrap, in-memory data should not fail
+        encoder.write_all(unpacked_data).unwrap();
+        let packed_data = encoder.finish().unwrap();
+        Self { packed_data }
     }
 
     pub fn decompress(&self) -> Result<Vec<u8>, mtp::DeserializeError> {
@@ -225,41 +216,6 @@ impl GzipPacked {
         decoder
             .finish()
             .map_err(|_| mtp::DeserializeError::DecompressionFailed)
-    }
-
-    /// Create uncompressed gzip
-    fn raw_deflate(data: &[u8]) -> Vec<u8> {
-        // CRC32 hash of uncompressed
-        let header = GzBuilder::new();
-        let mut hasher = Hasher::new();
-        hasher.update(&data);
-
-        // Header
-        let mut buf = Vec::with_capacity(14 + data.len() + (data.len() / 65535) * 5);
-        buf.extend(&header.into_header());
-        let mut offset = 0;
-        while data.len() - offset > 65535 {
-            // Deflate header:
-            // 0 - not end
-            // 0xffff - size as u16
-            // 0x0000 complement of size (reverse bits)
-            buf.append(&mut vec![0u8, 255, 255, 0, 0]);
-            buf.extend(&data[offset..offset + 65535]);
-            offset += 65535;
-        }
-        let len = (data.len() - offset) as u16;
-        // Deflate header:
-        // 1 - end
-        // size as u16
-        // complement of size (reverse bits)
-        buf.push(1);
-        buf.extend(&len.to_le_bytes());
-        buf.extend(&(65535 ^ len).to_le_bytes());
-        buf.extend(&data[offset..]);
-        // GZip trailer = CRC32 + Length
-        buf.extend(&hasher.finalize().to_le_bytes());
-        buf.extend(&(data.len() as u32).to_le_bytes());
-        buf
     }
 }
 

@@ -43,7 +43,8 @@ static UPDATE_IDS: [u32; 6] = [
 pub struct Builder {
     time_offset: i32,
     first_salt: i64,
-    compression_threshold: Option<usize>,
+    min_compression_threshold: Option<usize>,
+    max_compression_threshold: Option<usize>,
 }
 
 /// An implementation of the [Mobile Transport Protocol] for ciphertext
@@ -87,7 +88,8 @@ pub struct Encrypted {
     /// If present, the threshold in bytes at which a message will be
     /// considered large enough to attempt compressing it. Otherwise,
     /// outgoing messages will never be compressed.
-    compression_threshold: Option<usize>,
+    min_compression_threshold: Option<usize>,
+    max_compression_threshold: Option<usize>,
 
     /// Temporary result bodies to Remote Procedure Calls.
     rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
@@ -114,9 +116,15 @@ impl Builder {
         self
     }
 
-    /// Configures the compression threshold for outgoing messages.
-    pub fn compression_threshold(mut self, threshold: Option<usize>) -> Self {
-        self.compression_threshold = threshold;
+    /// Configures the min compression threshold for outgoing messages.
+    pub fn min_compression_threshold(mut self, threshold: Option<usize>) -> Self {
+        self.min_compression_threshold = threshold;
+        self
+    }
+
+    /// Configures the max compression threshold for outgoing messages.
+    pub fn max_compression_threshold(mut self, threshold: Option<usize>) -> Self {
+        self.max_compression_threshold = threshold;
         self
     }
 
@@ -140,7 +148,8 @@ impl Builder {
             sequence: 0,
             last_msg_id: 0,
             pending_ack: vec![],
-            compression_threshold: self.compression_threshold,
+            min_compression_threshold: self.min_compression_threshold,
+            max_compression_threshold: self.max_compression_threshold,
             rpc_results: Vec::new(),
             updates: Vec::new(),
             buffer: Vec::new(),
@@ -154,7 +163,8 @@ impl Encrypted {
     pub fn build() -> Builder {
         Builder {
             time_offset: 0,
-            compression_threshold: crate::DEFAULT_COMPRESSION_THRESHOLD,
+            min_compression_threshold: crate::DEFAULT_COMPRESSION_THRESHOLD,
+            max_compression_threshold: crate::DEFAULT_MAX_COMPRESSION_THRESHOLD,
             first_salt: 0,
         }
     }
@@ -1191,14 +1201,15 @@ impl Mtp for Encrypted {
         // content-related, which means we can apply compression.
         let mut body = request;
         let compressed;
-        if let Some(threshold) = self.compression_threshold {
-            if request.len() >= threshold {
-                compressed = manual_tl::GzipPacked::new(&request).to_bytes();
-                if compressed.len() < request.len() {
-                    body = &compressed;
-                }
+        let min_threshold = self.min_compression_threshold.unwrap_or(usize::MAX);
+        let max_threshold = self.max_compression_threshold.unwrap_or(usize::MAX);
+        if request.len() >= min_threshold && request.len() <= max_threshold {
+            compressed = manual_tl::GzipPacked::new(&request).to_bytes();
+            if compressed.len() < request.len() {
+                body = &compressed;
             }
         }
+        
 
         let new_size = self.buffer.len() + body.len() + manual_tl::Message::SIZE_OVERHEAD;
         if new_size >= manual_tl::MessageContainer::MAXIMUM_SIZE {
@@ -1306,7 +1317,8 @@ mod tests {
     #[test]
     fn ensure_correct_multi_serialization() {
         let mut mtproto = Encrypted::build()
-            .compression_threshold(None)
+            .min_compression_threshold(None)
+            .max_compression_threshold(None)
             .finish(auth_key());
 
         assert!(mtproto.push(REQUEST).is_some());
@@ -1337,7 +1349,8 @@ mod tests {
     #[test]
     fn ensure_correct_single_large_serialization() {
         let mut mtproto = Encrypted::build()
-            .compression_threshold(None)
+            .min_compression_threshold(None)
+            .max_compression_threshold(None)
             .finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
@@ -1351,7 +1364,8 @@ mod tests {
     #[test]
     fn ensure_correct_multi_large_serialization() {
         let mut mtproto = Encrypted::build()
-            .compression_threshold(None)
+            .min_compression_threshold(None)
+            .max_compression_threshold(None)
             .finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
@@ -1384,7 +1398,8 @@ mod tests {
     fn ensure_no_compression_is_honored() {
         // A large vector of null bytes should compress
         let mut mtproto = Encrypted::build()
-            .compression_threshold(None)
+            .min_compression_threshold(None)
+            .max_compression_threshold(None)
             .finish(auth_key());
 
         mtproto.push(&vec![0; 512 * 1024]);
@@ -1398,7 +1413,8 @@ mod tests {
         {
             // High threshold not reached, should not compress
             let mut mtproto = Encrypted::build()
-                .compression_threshold(Some(768 * 1024))
+                .min_compression_threshold(Some(768 * 1024))
+                .max_compression_threshold(None)
                 .finish(auth_key());
             mtproto.push(&vec![0; 512 * 1024]);
             let buffer = mtproto.finalize_plain();
@@ -1407,7 +1423,8 @@ mod tests {
         {
             // Low threshold is exceeded, should compress
             let mut mtproto = Encrypted::build()
-                .compression_threshold(Some(256 * 1024))
+                .min_compression_threshold(Some(256 * 1024))
+                .max_compression_threshold(None)
                 .finish(auth_key());
             mtproto.push(&vec![0; 512 * 1024]);
             let buffer = mtproto.finalize_plain();

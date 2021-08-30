@@ -21,6 +21,7 @@ mod utils;
 
 /// The default compression threshold to be used.
 pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
+pub const DEFAULT_MAX_COMPRESSION_THRESHOLD: Option<usize> = None;
 
 /// A Message Identifier.
 ///

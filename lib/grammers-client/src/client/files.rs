@@ -204,7 +204,7 @@ impl Client {
     /// // In-memory `Vec<u8>` buffers can be used as async streams
     /// let size = some_vec.len();
     /// let mut stream = std::io::Cursor::new(some_vec);
-    /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
+    /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string(), 4).await?;
     ///
     /// client.send_message(&chat, InputMessage::text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
