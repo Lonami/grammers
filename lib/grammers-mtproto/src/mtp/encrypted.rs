@@ -1209,7 +1209,6 @@ impl Mtp for Encrypted {
                 body = &compressed;
             }
         }
-        
 
         let new_size = self.buffer.len() + body.len() + manual_tl::Message::SIZE_OVERHEAD;
         if new_size >= manual_tl::MessageContainer::MAXIMUM_SIZE {
