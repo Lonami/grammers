@@ -119,7 +119,11 @@ impl Client {
     /// # }
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let dc_id = config.session.user_dc().unwrap_or(DEFAULT_DC);
+        let dc_id = config
+            .session
+            .get_user()
+            .map(|u| u.dc)
+            .unwrap_or(DEFAULT_DC);
         let (sender, request_tx) = connect_sender(dc_id, &config).await?;
         let message_box = if config.params.catch_up {
             if let Some(state) = config.session.get_state() {
@@ -155,7 +159,10 @@ impl Client {
             dc_id: Mutex::new("client.dc_id", dc_id),
             config,
             message_box: Mutex::new("client.message_box", message_box),
-            chat_hashes: Mutex::new("client.chat_hashes", ChatHashCache::new(self_user)),
+            chat_hashes: Mutex::new(
+                "client.chat_hashes",
+                ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
+            ),
             last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
             updates: Mutex::new("client.updates", updates),
             request_tx: Mutex::new("client.request_tx", request_tx),

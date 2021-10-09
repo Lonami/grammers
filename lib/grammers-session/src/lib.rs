@@ -10,6 +10,7 @@ mod generated;
 mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
+pub use generated::types::User;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
@@ -84,18 +85,8 @@ impl Session {
         })
     }
 
-    pub fn user_dc(&self) -> Option<i32> {
-        self.session
-            .lock()
-            .unwrap()
-            .user
-            .as_ref()
-            .map(|enums::User::User(user)| user.dc)
-    }
-
     pub fn signed_in(&self) -> bool {
-        // We can only know the user DC if we successfully signed in.
-        self.user_dc().is_some()
+        self.session.lock().unwrap().user.is_some()
     }
 
     pub fn dc_auth_key(&self, dc_id: i32) -> Option<[u8; 256]> {
@@ -148,17 +139,17 @@ impl Session {
     }
 
     pub fn set_user(&self, id: i32, dc: i32, bot: bool) {
-        self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
+        self.session.lock().unwrap().user = Some(User { id, dc, bot }.into())
     }
 
-    /// Returns the stored self user and whether it's a `bot`, or `None` if missing.
-    pub fn get_user(&self) -> Option<(i32, bool)> {
+    /// Returns the stored user
+    pub fn get_user(&self) -> Option<User> {
         self.session
             .lock()
             .unwrap()
             .user
             .as_ref()
-            .map(|enums::User::User(user)| (user.id, user.bot))
+            .map(|enums::User::User(user)| user.clone())
     }
 
     pub fn get_state(&self) -> Option<UpdateState> {
