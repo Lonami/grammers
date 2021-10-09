@@ -10,6 +10,7 @@ mod generated;
 mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
+pub use generated::types::User;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
@@ -138,11 +139,11 @@ impl Session {
     }
 
     pub fn set_user(&self, id: i32, dc: i32, bot: bool) {
-        self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
+        self.session.lock().unwrap().user = Some(User { id, dc, bot }.into())
     }
 
     /// Returns the stored user
-    pub fn get_user(&self) -> Option<types::User> {
+    pub fn get_user(&self) -> Option<User> {
         self.session
             .lock()
             .unwrap()
