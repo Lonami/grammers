@@ -93,6 +93,15 @@ impl Session {
             .map(|enums::User::User(user)| user.dc)
     }
 
+    pub fn is_bot(&self) -> Option<bool> {
+        self.session
+            .lock()
+            .unwrap()
+            .user
+            .as_ref()
+            .map(|enums::User::User(user)| user.bot)
+    }
+
     pub fn signed_in(&self) -> bool {
         // We can only know the user DC if we successfully signed in.
         self.user_dc().is_some()
