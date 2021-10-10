@@ -12,8 +12,12 @@ use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
 use crate::{ignore_type, Config};
-use grammers_tl_parser::tl::{Definition, Type};
+use grammers_tl_parser::tl::{Definition, ParameterType, Type};
+use std::collections::HashSet;
 use std::io::{self, Write};
+
+/// Types that implement Copy from builtin_type
+const COPY_TYPES: [&'static str; 5] = ["bool", "f64", "i32", "i64", "u32"];
 
 /// Writes an enumeration listing all types such as the following rust code:
 ///
@@ -65,6 +69,99 @@ fn write_enum<W: Write>(
         }
 
         writeln!(file, "),")?;
+    }
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
+/// Writes impl for getting common fields from enum variants
+///
+/// ```ignore
+/// enum Enum {
+///     A { id: i64, other: i64 },
+///     B { id: i64 }
+/// }
+///
+/// impl Enum {
+///     pub fn id(&self) -> i64 {
+///         self.id
+///     }
+/// }
+/// ```
+fn write_common_field_impl<W: Write>(
+    file: &mut W,
+    indent: &str,
+    ty: &Type,
+    metadata: &Metadata,
+    _config: &Config,
+) -> io::Result<()> {
+    // Don't generate if only one type
+    let definitions = metadata.defs_with_type(ty);
+    if definitions.len() <= 1 {
+        return Ok(());
+    }
+    // Get common parameters
+    let mut common_params = HashSet::new();
+    for (i, d) in definitions.iter().enumerate() {
+        // Filter out Options and flags parameters
+        let params: HashSet<_> = d
+            .params
+            .iter()
+            .filter(|p| match p.ty {
+                ParameterType::Flags => false,
+                ParameterType::Normal { .. } => {
+                    !rustifier::parameters::qual_name(p).contains("Option<")
+                }
+            })
+            .collect();
+        // Faster
+        if params.is_empty() {
+            return Ok(());
+        }
+        // Do intersection
+        if i == 0 {
+            common_params = params;
+            continue;
+        }
+        common_params = common_params.intersection(&params).map(|p| *p).collect();
+    }
+    if common_params.len() == 0 {
+        return Ok(());
+    }
+    // Write impl
+    writeln!(
+        file,
+        "{}impl {} {{",
+        indent,
+        rustifier::types::type_name(ty)
+    )?;
+    for param in common_params {
+        let qual_name = rustifier::parameters::qual_name(param);
+        writeln!(
+            file,
+            "{}    pub fn {}(&self) -> {} {{\n{}        match self {{",
+            indent,
+            rustifier::parameters::attr_name(param),
+            qual_name,
+            indent,
+        )?;
+        // Match cases
+        for d in definitions {
+            writeln!(
+                file,
+                "{}            Self::{}(i) => i.{}{},",
+                indent,
+                rustifier::definitions::variant_name(d),
+                rustifier::parameters::attr_name(param),
+                // Clone non Copy types
+                if COPY_TYPES.contains(&qual_name.as_ref()) {
+                    ""
+                } else {
+                    ".clone()"
+                }
+            )?;
+        }
+        writeln!(file, "{}        }}\n{}    }}", indent, indent)?;
     }
     writeln!(file, "{}}}", indent)?;
     Ok(())
@@ -262,6 +359,7 @@ fn write_definition<W: Write>(
     config: &Config,
 ) -> io::Result<()> {
     write_enum(file, indent, ty, metadata, config)?;
+    write_common_field_impl(file, indent, ty, metadata, config)?;
     write_serializable(file, indent, ty, metadata)?;
     write_deserializable(file, indent, ty, metadata)?;
     if config.impl_from_type {

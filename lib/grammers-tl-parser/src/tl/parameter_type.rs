@@ -12,7 +12,7 @@ use crate::errors::ParamParseError;
 use crate::tl::{Flag, Type};
 
 /// A parameter type.
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq, Hash)]
 pub enum ParameterType {
     /// This parameter represents a flags field (`u32`).
     Flags,
