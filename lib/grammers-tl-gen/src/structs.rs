@@ -15,6 +15,9 @@ use crate::{ignore_type, Config};
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 
+/// Types that implement Copy from builtin_type
+const COPY_TYPES: [&'static str; 5] = ["bool", "f64", "i32", "i64", "u32"];
+
 /// Get the list of generic parameters:
 ///
 /// ```ignore
@@ -87,6 +90,66 @@ fn write_struct<W: Write>(
                     indent,
                     rustifier::parameters::attr_name(param),
                     rustifier::parameters::qual_name(param),
+                )?;
+            }
+        }
+    }
+    writeln!(file, "{}}}", indent)?;
+    Ok(())
+}
+
+/// Defines `impl` to get values from fields from the struct
+/// See #33 for idea
+///
+/// ```ignore
+/// #[allow(dead_code)]
+/// impl Name {
+///     pub fn field(&self) -> FieldType {
+///         &self.field
+///     }
+/// }
+/// ```
+fn write_impl<W: Write>(
+    file: &mut W,
+    indent: &str,
+    def: &Definition,
+    _metadata: &Metadata,
+    _config: &Config,
+) -> io::Result<()> {
+    writeln!(
+        file,
+        // allow dead_code for grammers-session, because some tl types are private
+        "{}#[allow(dead_code)]\n{}impl{} {}{} {{",
+        indent,
+        indent,
+        get_generic_param_list(def, true),
+        rustifier::definitions::type_name(def),
+        get_generic_param_list(def, false)
+    )?;
+    for param in def.params.iter() {
+        match param.ty {
+            ParameterType::Flags => {}
+            ParameterType::Normal { .. } => {
+                let qual_name = rustifier::parameters::qual_name(param);
+                // For generics return borrowed value because they don't have to implement Clone
+                let prefix = if qual_name.len() == 1 { "&" } else { "" };
+                writeln!(
+                    file,
+                    "{}    pub fn {}(&self) -> {}{} {{\n{}        {}self.{}{}\n{}    }}",
+                    indent,
+                    rustifier::parameters::attr_name(param),
+                    prefix,
+                    qual_name,
+                    indent,
+                    prefix,
+                    rustifier::parameters::attr_name(param),
+                    // .clone() for !Copy types and generics
+                    if !COPY_TYPES.contains(&qual_name.as_str()) && prefix.is_empty() {
+                        ".clone()"
+                    } else {
+                        ""
+                    },
+                    indent
                 )?;
             }
         }
@@ -470,6 +533,7 @@ fn write_definition<W: Write>(
     config: &Config,
 ) -> io::Result<()> {
     write_struct(file, indent, def, metadata, config)?;
+    write_impl(file, indent, def, metadata, config)?;
     write_identifiable(file, indent, def, metadata)?;
     write_serializable(file, indent, def, metadata)?;
     if def.category == Category::Types || config.deserializable_functions {
