@@ -14,6 +14,7 @@ use grammers_tl_types as tl;
 use pin_project_lite::pin_project;
 use std::{
     future::Future,
+    marker::PhantomPinned,
     mem::drop,
     pin::Pin,
     task::{Context, Poll},
@@ -84,7 +85,8 @@ pin_project! {
         inner: Option<AdminRightsBuilderInner>,
         gen: AdminFutGen<F>,
         #[pin]
-        fut: Option<F>
+        fut: Option<F>,
+        _phantom: PhantomPinned
     }
 }
 
@@ -132,6 +134,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
             }),
             gen,
             fut: None,
+            _phantom: PhantomPinned,
         }
     }
 
@@ -351,7 +354,8 @@ pin_project! {
         inner: Option<BannedRightsBuilderInner>,
         gen: BannedFutGen<F>,
         #[pin]
-        fut: Option<F>
+        fut: Option<F>,
+        _phantom: PhantomPinned
     }
 }
 
@@ -400,6 +404,7 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
             }),
             gen,
             fut: None,
+            _phantom: PhantomPinned,
         }
     }
 
