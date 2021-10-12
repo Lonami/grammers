@@ -61,7 +61,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
         plaintext_block
             .iter_mut()
             .zip(ciphertext_block)
-            .zip(iv1.as_ref())
+            .zip(iv2.as_ref())
             .for_each(|((a, x), b)| *a = x ^ b);
 
         // block = decrypt(block);
@@ -71,7 +71,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
         // block = block XOR iv1
         plaintext_block
             .iter_mut()
-            .zip(iv2.as_ref())
+            .zip(iv1.as_ref())
             .for_each(|(a, b)| *a ^= b);
 
         // save plaintext and adjust iv
