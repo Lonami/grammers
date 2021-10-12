@@ -12,16 +12,20 @@ use crate::Client;
 use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use tokio::sync::mpsc::unbounded_channel;
+use std::time::Duration;
 use std::{io::SeekFrom, path::Path, sync::Arc};
 use tokio::{
     fs,
-    io::{self, AsyncRead, AsyncReadExt as _, AsyncSeekExt as _, AsyncWriteExt as _},
+    io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
 };
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
+// milliseconds
+const RATE_LIMIT_DELAY: u64 = 250;
 
 pub struct DownloadIter {
     client: Client,
@@ -84,21 +88,33 @@ impl DownloadIter {
         use tl::enums::upload::File;
 
         // TODO handle FILE_MIGRATE and maybe FILEREF_UPGRADE_NEEDED
-        match self.client.invoke(&self.request).await? {
-            File::File(f) => {
-                if f.bytes.len() < self.request.limit as usize {
-                    self.done = true;
-                    if f.bytes.is_empty() {
-                        return Ok(None);
+        let mut retries = 0;
+        loop {
+            break match self.client.invoke(&self.request).await {
+                Ok(File::File(f)) => {
+                    if f.bytes.len() < self.request.limit as usize {
+                        self.done = true;
+                        if f.bytes.is_empty() {
+                            return Ok(None);
+                        }
                     }
-                }
 
-                self.request.offset += self.request.limit;
-                Ok(Some(f.bytes))
-            }
-            File::CdnRedirect(_) => {
-                panic!("API returned File::CdnRedirect even though cdn_supported = false");
-            }
+                    self.request.offset += self.request.limit;
+                    Ok(Some(f.bytes))
+                }
+                Ok(File::CdnRedirect(_)) => {
+                    panic!("API returned File::CdnRedirect even though cdn_supported = false");
+                },
+                Err(InvocationError::Rpc(err)) => {
+                    if err.code == 420 && retries < 3 {
+                        tokio::time::sleep(Duration::from_millis(RATE_LIMIT_DELAY)).await;
+                        retries += 1;
+                        continue;
+                    }
+                    Err(InvocationError::Rpc(err))
+                },
+                Err(e) => Err(e)
+            };
         }
     }
 }
@@ -171,6 +187,103 @@ impl Client {
             file.write_all(&chunk).await?;
         }
 
+        Ok(())
+    }
+
+    /// Downloads a `Document` to specified path using multiple connections
+    /// 
+    /// # Panics
+    /// If `media` isn't `Document`
+    pub async fn download_media_concurrent<P: AsRef<Path>>(
+        &self,
+        media: &Media,
+        path: P,
+        workers: usize
+    ) -> Result<(), io::Error> {
+        let document = match media {
+            Media::Document(document) => document,
+            _ => panic!("Only Document type is supported!")
+        };
+        let size = document.size();
+        let location = media.to_input_location().unwrap();
+        // Allocate
+        let mut file = fs::File::create(path).await?;
+        file.set_len(size as u64).await?;
+        file.seek(SeekFrom::Start(0)).await?;
+
+        // Start workers
+        let (tx, mut rx) = unbounded_channel();
+        let part_index = Arc::new(tokio::sync::Mutex::new(0));
+        let mut tasks = vec![];
+        for _ in 0..workers {
+            let location = location.clone();
+            let tx = tx.clone();
+            let part_index = part_index.clone();
+            let client = self.clone();
+            let task = tokio::task::spawn(async move {
+                let mut retry_offset = None;
+                loop {
+                    // Calculate file offset
+                    let offset = {
+                        if let Some(offset) = retry_offset {
+                            retry_offset = None;
+                            offset
+                        } else {
+                            let mut i = part_index.lock().await;
+                            *i += 1;
+                            MAX_CHUNK_SIZE * (*i - 1)
+                        }
+                    };
+                    if offset > size {
+                        break;
+                    }
+                    // Fetch from telegram
+                    let res = client.invoke(&tl::functions::upload::GetFile {
+                        precise: true,
+                        cdn_supported: false,
+                        location: location.clone(),
+                        offset,
+                        limit: MAX_CHUNK_SIZE,
+                    }).await;
+                    match res {
+                        Ok(tl::enums::upload::File::File(file)) => {
+                            tx.send((offset as u64, file.bytes)).unwrap();
+                        },
+                        Ok(tl::enums::upload::File::CdnRedirect(_)) => {
+                            panic!("API returned File::CdnRedirect even though cdn_supported = false");
+                        },
+                        Err(InvocationError::Rpc(err)) => {
+                            // Retry on rate limit
+                            if err.code == 420 {
+                                tokio::time::sleep(Duration::from_millis(RATE_LIMIT_DELAY)).await;
+                                retry_offset = Some(offset);
+                                continue;
+                            }
+                            return Err(InvocationError::Rpc(err));
+                        },
+                        Err(e) => return Err(e)
+                    }
+                }
+                Ok::<(), InvocationError>(())
+            });
+            tasks.push(task);
+        }
+        drop(tx);
+
+        // File write loop
+        let mut pos = 0;
+        while let Some((offset, data)) = rx.recv().await {
+            if offset != pos {
+                file.seek(SeekFrom::Start(offset)).await?;
+            }
+            file.write_all(&data).await?;
+            pos = offset + data.len() as u64;
+        }
+
+        // Check if all tasks finished succesfully
+        for task in tasks {
+            task.await?.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        }
         Ok(())
     }
 

@@ -33,7 +33,7 @@ mime_guess = "2.0.3"
 os_info = { version = "3.0.4", default_features = false }
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.8.0", default-features = false, optional = true }
-tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time"] }
+tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time", "sync"] }
 
 [dev-dependencies]
 simple_logger = "1.11.0"
