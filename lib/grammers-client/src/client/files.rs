@@ -12,9 +12,9 @@ use crate::Client;
 use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use tokio::sync::mpsc::unbounded_channel;
 use std::time::Duration;
 use std::{io::SeekFrom, path::Path, sync::Arc};
+use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
     fs,
     io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
@@ -104,7 +104,7 @@ impl DownloadIter {
                 }
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
-                },
+                }
                 Err(InvocationError::Rpc(err)) => {
                     if err.code == 420 && retries < 3 {
                         tokio::time::sleep(Duration::from_millis(RATE_LIMIT_DELAY)).await;
@@ -112,8 +112,8 @@ impl DownloadIter {
                         continue;
                     }
                     Err(InvocationError::Rpc(err))
-                },
-                Err(e) => Err(e)
+                }
+                Err(e) => Err(e),
             };
         }
     }
@@ -191,18 +191,18 @@ impl Client {
     }
 
     /// Downloads a `Document` to specified path using multiple connections
-    /// 
+    ///
     /// # Panics
     /// If `media` isn't `Document`
     pub async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
         media: &Media,
         path: P,
-        workers: usize
+        workers: usize,
     ) -> Result<(), io::Error> {
         let document = match media {
             Media::Document(document) => document,
-            _ => panic!("Only Document type is supported!")
+            _ => panic!("Only Document type is supported!"),
         };
         let size = document.size();
         let location = media.to_input_location().unwrap();
@@ -238,20 +238,24 @@ impl Client {
                         break;
                     }
                     // Fetch from telegram
-                    let res = client.invoke(&tl::functions::upload::GetFile {
-                        precise: true,
-                        cdn_supported: false,
-                        location: location.clone(),
-                        offset,
-                        limit: MAX_CHUNK_SIZE,
-                    }).await;
+                    let res = client
+                        .invoke(&tl::functions::upload::GetFile {
+                            precise: true,
+                            cdn_supported: false,
+                            location: location.clone(),
+                            offset,
+                            limit: MAX_CHUNK_SIZE,
+                        })
+                        .await;
                     match res {
                         Ok(tl::enums::upload::File::File(file)) => {
                             tx.send((offset as u64, file.bytes)).unwrap();
-                        },
+                        }
                         Ok(tl::enums::upload::File::CdnRedirect(_)) => {
-                            panic!("API returned File::CdnRedirect even though cdn_supported = false");
-                        },
+                            panic!(
+                                "API returned File::CdnRedirect even though cdn_supported = false"
+                            );
+                        }
                         Err(InvocationError::Rpc(err)) => {
                             // Retry on rate limit
                             if err.code == 420 {
@@ -260,8 +264,8 @@ impl Client {
                                 continue;
                             }
                             return Err(InvocationError::Rpc(err));
-                        },
-                        Err(e) => return Err(e)
+                        }
+                        Err(e) => return Err(e),
                     }
                 }
                 Ok::<(), InvocationError>(())
@@ -282,7 +286,8 @@ impl Client {
 
         // Check if all tasks finished succesfully
         for task in tasks {
-            task.await?.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+            task.await?
+                .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
         }
         Ok(())
     }
