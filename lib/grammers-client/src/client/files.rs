@@ -105,13 +105,13 @@ impl DownloadIter {
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
                 }
-                Err(InvocationError::Rpc(err)) => {
-                    if err.code == 420 && retries < RATE_LIMIT_RETRIES {
-                        tokio::time::sleep(RATE_LIMIT_DELAY).await;
-                        retries += 1;
-                        continue;
-                    }
-                    Err(InvocationError::Rpc(err))
+                // Rate limit hit
+                Err(InvocationError::Rpc(err))
+                    if err.code == 420 && retries < RATE_LIMIT_RETRIES =>
+                {
+                    tokio::time::sleep(RATE_LIMIT_DELAY).await;
+                    retries += 1;
+                    continue;
                 }
                 Err(e) => Err(e),
             };
@@ -162,8 +162,16 @@ impl Client {
         media: &Media,
         path: P,
     ) -> Result<(), io::Error> {
-        let mut download = self.iter_download(media);
+        // Concurrent downloader
+        if let Media::Document(document) = media {
+            if document.size() as usize > BIG_FILE_SIZE {
+                return self
+                    .download_media_concurrent(media, path, WORKER_COUNT)
+                    .await;
+            }
+        }
 
+        let mut download = self.iter_download(media);
         Client::load(path, &mut download).await
     }
 
@@ -191,17 +199,7 @@ impl Client {
     }
 
     /// Downloads a `Document` to specified path using multiple connections
-    ///
-    /// # Example
-    /// ```ignore
-    /// async fn f(media: grammers_client::types::Media, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    ///     client.download_media_concurrent(&media, "/home/username/photos/holidays.mp4", 4).await?;
-    /// }
-    /// ```
-    ///
-    /// # Panics
-    /// If `media` isn't `Document`
-    pub async fn download_media_concurrent<P: AsRef<Path>>(
+    async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
         media: &Media,
         path: P,
