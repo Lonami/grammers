@@ -29,7 +29,7 @@ async fn async_main() -> Result<()> {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let api_hash = env!("TG_HASH").to_string();
 
-    let (mut client, _authorized) = Client::builder(api_id, &api_hash)
+    let (client, _authorized) = Client::builder(api_id, &api_hash)
         .interactive(true)
         .show_password_hint(true)
         .session_file(SESSION_FILE)?
