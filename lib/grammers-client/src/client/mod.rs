@@ -7,6 +7,7 @@
 // except according to those terms.
 pub mod auth;
 pub mod bots;
+pub mod builder;
 pub mod chats;
 pub mod client;
 pub mod dialogs;
