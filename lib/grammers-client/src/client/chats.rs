@@ -646,7 +646,7 @@ impl Client {
     ///
     /// # Panics
     /// Panics if chat isn't channel or chat, and if user isn't user
-    pub async fn participant_permissions<C: Into<PackedChat>, U: Into<PackedChat>>(
+    pub async fn get_permissions<C: Into<PackedChat>, U: Into<PackedChat>>(
         &mut self,
         chat: C,
         user: U,
