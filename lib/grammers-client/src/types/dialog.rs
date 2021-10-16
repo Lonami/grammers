@@ -10,6 +10,7 @@ use super::{Chat, ChatMap, Message, Peer};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
+#[derive(Debug, Clone)]
 pub struct Dialog {
     pub dialog: tl::enums::Dialog,
     pub chat: Chat,
