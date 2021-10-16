@@ -17,6 +17,7 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
+use std::fmt;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
@@ -640,4 +641,154 @@ impl Client {
             }
         })
     }
+
+    /// Get permissions of participant `user` from chat `chat`.
+    ///
+    /// # Panics
+    /// Panics if chat isn't channel or chat, and if user isn't user
+    pub async fn participant_permissions<C: Into<PackedChat>, U: Into<PackedChat>>(
+        &mut self,
+        chat: C,
+        user: U,
+    ) -> Result<ParticipantPermissions, ParticipantPermissionsError> {
+        let chat = chat.into();
+        let user = user.into();
+        if user.try_to_input_user().is_none() {
+            panic!("User parameter not user!");
+        }
+
+        // Get by chat
+        if let Some(chat_id) = chat.try_to_chat_id() {
+            // Get user id
+            let user = user.try_to_input_user().unwrap();
+            let user_id = match user {
+                tl::enums::InputUser::User(user) => user.user_id,
+                tl::enums::InputUser::FromMessage(user) => user.user_id,
+                tl::enums::InputUser::UserSelf => {
+                    let me = self.get_me().await?;
+                    me.id()
+                }
+                tl::enums::InputUser::Empty => unreachable!(),
+            };
+
+            // Get chat and find user
+            let chat = self
+                .invoke(&tl::functions::messages::GetFullChat { chat_id })
+                .await?;
+            let tl::enums::messages::ChatFull::Full(chat) = chat;
+            if let tl::enums::ChatFull::Full(chat) = chat.full_chat {
+                if let tl::enums::ChatParticipants::Participants(participants) = chat.participants {
+                    for participant in participants.participants {
+                        if participant.user_id() == user_id {
+                            return Ok(ParticipantPermissions::Chat(participant));
+                        }
+                    }
+                }
+            }
+            return Err(ParticipantPermissionsError::UserNotInChat);
+        }
+
+        // Get by channel
+        let participant = self
+            .invoke(&tl::functions::channels::GetParticipant {
+                channel: chat.try_to_input_channel().unwrap(),
+                participant: user.to_input_peer(),
+            })
+            .await?;
+        let tl::enums::channels::ChannelParticipant::Participant(participant) = participant;
+        let permissions = ParticipantPermissions::Channel(participant.participant);
+        Ok(permissions)
+    }
 }
+
+#[derive(Debug, Clone)]
+pub enum ParticipantPermissions {
+    Channel(tl::enums::ChannelParticipant),
+    Chat(tl::enums::ChatParticipant),
+}
+
+impl ParticipantPermissions {
+    /// Whether the user is the creator of the chat or not.
+    pub fn is_creator(&self) -> bool {
+        match self {
+            Self::Channel(tl::enums::ChannelParticipant::Creator(_)) => true,
+            Self::Chat(tl::enums::ChatParticipant::Creator(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Whether the user is an administrator of the chat or not. The creator also counts as begin an administrator, since they have all permissions.
+    pub fn is_admin(&self) -> bool {
+        self.is_creator()
+            || match self {
+                Self::Channel(tl::enums::ChannelParticipant::Admin(_)) => true,
+                Self::Chat(tl::enums::ChatParticipant::Admin(_)) => true,
+                _ => false,
+            }
+    }
+
+    /// Whether the user is banned in the chat.
+    pub fn is_banned(&self) -> bool {
+        match self {
+            Self::Channel(tl::enums::ChannelParticipant::Banned(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Whether the user left the chat.
+    pub fn has_left(&self) -> bool {
+        match self {
+            Self::Channel(tl::enums::ChannelParticipant::Left(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Whether the user is a normal user of the chat (not administrator, but not banned either, and has no restrictions applied).
+    pub fn has_default_permissions(&self) -> bool {
+        match self {
+            Self::Channel(tl::enums::ChannelParticipant::Participant(_)) => true,
+            Self::Channel(tl::enums::ChannelParticipant::ParticipantSelf(_)) => true,
+            Self::Chat(tl::enums::ChatParticipant::Participant(_)) => true,
+            _ => false,
+        }
+    }
+
+    /// Whether the administrator can add new administrators with the same or less permissions than them.
+    pub fn add_admins(&self) -> bool {
+        if !self.is_admin() {
+            return false;
+        }
+        match self {
+            Self::Channel(tl::enums::ChannelParticipant::Admin(participant)) => {
+                let tl::enums::ChatAdminRights::Rights(rights) = &participant.admin_rights;
+                rights.add_admins
+            }
+            Self::Channel(tl::enums::ChannelParticipant::Creator(_)) => true,
+            Self::Chat(_) => self.is_creator(),
+            _ => false,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub enum ParticipantPermissionsError {
+    InvocationError(InvocationError),
+    UserNotInChat,
+}
+
+impl fmt::Display for ParticipantPermissionsError {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::InvocationError(e) => write!(f, "Invocation error: {}", e),
+            Self::UserNotInChat => write!(f, "User is not present in chat!"),
+        }
+    }
+}
+
+impl From<InvocationError> for ParticipantPermissionsError {
+    fn from(e: InvocationError) -> Self {
+        ParticipantPermissionsError::InvocationError(e)
+    }
+}
+
+impl std::error::Error for ParticipantPermissionsError {}
