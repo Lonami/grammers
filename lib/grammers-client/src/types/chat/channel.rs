@@ -80,8 +80,15 @@ impl Channel {
     }
 
     /// Return the unique identifier for this channel.
+    #[inline]
     pub fn id(&self) -> i32 {
         self.0.id
+    }
+
+    /// Return access hash for this channel
+    #[inline]
+    pub fn access_hash(&self) -> Option<i64> {
+        self.0.access_hash
     }
 
     /// Pack this channel into a smaller representation that can be loaded later.
@@ -93,7 +100,7 @@ impl Channel {
                 PackedType::Broadcast
             },
             id: self.id(),
-            access_hash: self.0.access_hash,
+            access_hash: self.access_hash(),
         }
     }
 

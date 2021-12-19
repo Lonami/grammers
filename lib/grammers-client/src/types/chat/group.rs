@@ -67,16 +67,20 @@ impl Group {
         }
     }
 
+    /// Return the access hash for this group.
+    pub fn access_hash(&self) -> Option<i64> {
+        use tl::enums::Chat;
+
+        match &self.0 {
+            Chat::Empty(_) | Chat::Chat(_) | Chat::Forbidden(_) => None,
+            Chat::Channel(chat) => chat.access_hash,
+            Chat::ChannelForbidden(chat) => Some(chat.access_hash),
+        }
+    }
+
     /// Pack this group into a smaller representation that can be loaded later.
     pub fn pack(&self) -> PackedChat {
-        use tl::enums::Chat;
-        let (id, access_hash) = match &self.0 {
-            Chat::Empty(chat) => (chat.id, None),
-            Chat::Chat(chat) => (chat.id, None),
-            Chat::Forbidden(chat) => (chat.id, None),
-            Chat::Channel(chat) => (chat.id, chat.access_hash),
-            Chat::ChannelForbidden(chat) => (chat.id, Some(chat.access_hash)),
-        };
+        let (id, access_hash) = (self.id(), self.access_hash());
 
         PackedChat {
             ty: if self.is_megagroup() {

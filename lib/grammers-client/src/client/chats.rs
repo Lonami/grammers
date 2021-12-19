@@ -21,6 +21,7 @@ use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+use tl::enums;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
@@ -404,6 +405,67 @@ impl Client {
     /// ```
     pub fn iter_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantIter {
         ParticipantIter::new(self, chat.into())
+    }
+
+    /// Joins a given chat.
+    ///
+    /// Chat must be either a [`Channel`][chat] variant or a [`Group`][chat] variant.
+    ///
+    /// When used to join a [`User`][chat] variant an error is produced.
+    ///
+    /// Joining a chat of which the user is already a participant will result in an error.
+    ///
+    /// [chat]: crate::types::chat::Chat
+    ///
+    /// # Examples
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // resolve @TelegramTips into a `Chat`
+    /// let chat = client.resolve_username("TelegramTips").await?.expect("chat exists");
+    ///
+    /// client.join_chat(&chat);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn join_chat<T: Into<PackedChat>>(&mut self, chat: T) -> Result<(), InvocationError> {
+        self.invoke(&match chat.into().try_to_input_channel() {
+            Some(channel) => tl::functions::channels::JoinChannel { channel },
+            None => return Ok(()),
+        })
+        .await
+        .map(drop)
+    }
+
+    /// Leaves a given chat
+    ///
+    /// Chat must be either a [`Channel`][chat] variant or a [`Group`][chat] variant.
+    ///
+    /// When used to join a [`User`][chat] variant an error is produced.
+    ///
+    /// Leaving a chat without being a participant will also result in an error.
+    ///
+    /// [chat]: crate::types::chat::Chat
+    ///
+    /// # Examples
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    ///
+    /// let chat = client.resolve_username("TelegramTips").await?.expect("chat exists");
+    ///
+    /// client.leave_chat(&chat);
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn leave_chat<T: Into<PackedChat>>(
+        &mut self,
+        chat: T,
+    ) -> Result<(), InvocationError> {
+        self.invoke(&match chat.into().try_to_input_channel() {
+            Some(channel) => tl::functions::channels::LeaveChannel { channel },
+            None => return Ok(()),
+        })
+        .await
+        .map(drop)
     }
 
     /// Kicks the participant from the chat.

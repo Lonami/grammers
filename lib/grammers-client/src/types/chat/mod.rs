@@ -79,6 +79,15 @@ impl Chat {
         }
     }
 
+    /// Return the access hash for this chat
+    pub fn access_hash(&self) -> Option<i64> {
+        match self {
+            Self::User(user) => user.access_hash(),
+            Self::Group(grp) => grp.access_hash(),
+            Self::Channel(chan) => chan.access_hash(),
+        }
+    }
+
     /// Return the name of this chat.
     ///
     /// For private conversations (users), this is their first name. For groups and channels,
