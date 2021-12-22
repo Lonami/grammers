@@ -43,7 +43,7 @@ pub(super) fn update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesC
 
 pub(super) fn update_short_message(
     short: tl::types::UpdateShortMessage,
-    self_id: i32,
+    self_id: i64,
 ) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
         update: tl::types::UpdateNewMessage {
@@ -57,6 +57,7 @@ pub(super) fn update_short_message(
                 legacy: false,
                 edit_hide: false,
                 pinned: false,
+                noforwards: false,
                 id: short.id,
                 from_id: Some(
                     tl::types::PeerUser {
@@ -109,6 +110,7 @@ pub(super) fn update_short_chat_message(
                 legacy: false,
                 edit_hide: false,
                 pinned: false,
+                noforwards: false,
                 id: short.id,
                 from_id: Some(
                     tl::types::PeerUser {
@@ -231,7 +233,7 @@ fn message_peer(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
     }
 }
 
-fn message_channel_id(message: &tl::enums::Message) -> Option<i32> {
+fn message_channel_id(message: &tl::enums::Message) -> Option<i64> {
     match message {
         tl::enums::Message::Empty(_) => None,
         tl::enums::Message::Message(m) => match &m.peer_id {
@@ -442,6 +444,14 @@ impl PtsInfo {
                 entry: Entry::SecretChats,
             }),
             BotStopped(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            GroupCallConnection(_) => None,
+            BotCommands(_) => None,
+            PendingJoinRequests(_) => None,
+            BotChatInviteRequester(u) => Some(Self {
                 pts: u.qts,
                 pts_count: 0,
                 entry: Entry::SecretChats,

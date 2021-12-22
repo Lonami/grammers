@@ -306,7 +306,9 @@ mod tests {
 
     #[test]
     fn check_def_numeric_variant_name() {
-        let def = "inputBotInlineMessageID64 = inputBotInlineMessageID".parse().unwrap();
+        let def = "inputBotInlineMessageID64 = inputBotInlineMessageID"
+            .parse()
+            .unwrap();
         let name = definitions::variant_name(&def);
         assert_eq!(name, "Id64");
     }

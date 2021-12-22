@@ -222,6 +222,8 @@ impl Client {
                 allow_flashcall: false,
                 current_number: false,
                 allow_app_hash: false,
+                allow_missed_call: false,
+                logout_tokens: None,
             }
             .into(),
         };
@@ -498,7 +500,7 @@ impl Client {
     ///
     /// ```
     /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// if client.sign_out().await? {
+    /// if client.sign_out().await.is_ok() {
     ///     println!("Signed out successfully!");
     /// } else {
     ///     println!("No user was signed in, so nothing has changed...");
@@ -506,7 +508,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn sign_out(&mut self) -> Result<bool, InvocationError> {
+    pub async fn sign_out(&mut self) -> Result<tl::enums::auth::LoggedOut, InvocationError> {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
 

@@ -27,7 +27,7 @@ pub enum PackedType {
 /// A packed chat
 pub struct PackedChat {
     pub ty: PackedType,
-    pub id: i32,
+    pub id: i64,
     pub access_hash: Option<i64>,
 }
 
@@ -35,21 +35,21 @@ impl PackedChat {
     /// Serialize the packed chat into a new buffer and return its bytes.
     pub fn to_bytes(&self) -> Vec<u8> {
         let mut res = if let Some(access_hash) = self.access_hash {
-            let mut res = vec![0; 14];
-            res[6..14].copy_from_slice(&access_hash.to_le_bytes());
+            let mut res = vec![0; 18];
+            res[10..18].copy_from_slice(&access_hash.to_le_bytes());
             res
         } else {
-            vec![0; 6]
+            vec![0; 10]
         };
         res[0] = self.ty as u8;
         res[1] = res.len() as u8;
-        res[2..6].copy_from_slice(&self.id.to_le_bytes());
+        res[2..10].copy_from_slice(&self.id.to_le_bytes());
         res
     }
 
     /// Deserialize the buffer into a packed chat
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ()> {
-        if buf.len() != 6 && buf.len() != 14 {
+        if buf.len() != 10 && buf.len() != 18 {
             return Err(());
         }
         if buf[1] as usize != buf.len() {
@@ -64,10 +64,12 @@ impl PackedChat {
             0b0011_1000 => PackedType::Gigagroup,
             _ => return Err(()),
         };
-        let id = i32::from_le_bytes([buf[2], buf[3], buf[4], buf[5]]);
-        let access_hash = if buf[1] == 14 {
+        let id = i64::from_le_bytes([
+            buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8], buf[9],
+        ]);
+        let access_hash = if buf[1] == 18 {
             Some(i64::from_le_bytes([
-                buf[6], buf[7], buf[8], buf[9], buf[10], buf[11], buf[12], buf[13],
+                buf[10], buf[11], buf[12], buf[13], buf[14], buf[15], buf[16], buf[17],
             ]))
         } else {
             None
@@ -148,7 +150,7 @@ impl PackedChat {
         })
     }
 
-    pub fn try_to_chat_id(&self) -> Option<i32> {
+    pub fn try_to_chat_id(&self) -> Option<i64> {
         match self.ty {
             PackedType::Chat => Some(self.id),
             _ => None,

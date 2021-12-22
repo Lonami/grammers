@@ -55,7 +55,7 @@ impl Group {
     ///
     /// Note that if this group is migrated to a megagroup, both this group and the new one will
     /// exist as separate chats, with different identifiers.
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> i64 {
         use tl::enums::Chat;
 
         match &self.0 {

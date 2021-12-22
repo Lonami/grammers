@@ -65,6 +65,7 @@ impl Message {
                     legacy: msg.legacy,
                     edit_hide: false,
                     pinned: false,
+                    noforwards: false,
                     id: msg.id,
                     from_id: msg.from_id,
                     peer_id: msg.peer_id,
@@ -109,6 +110,7 @@ impl Message {
                 legacy: false,
                 edit_hide: false,
                 pinned: false,
+                noforwards: false, // TODO true if channel has noforwads?
                 id: updates.id,
                 from_id: None, // TODO self
                 peer_id: chat.to_peer(),
@@ -244,7 +246,7 @@ impl Message {
     }
 
     /// If this message was sent @via some inline bot, return the bot's user identifier.
-    pub fn via_bot_id(&self) -> Option<i32> {
+    pub fn via_bot_id(&self) -> Option<i64> {
         self.msg.via_bot_id
     }
 

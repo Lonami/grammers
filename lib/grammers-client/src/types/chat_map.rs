@@ -13,9 +13,9 @@ use std::sync::Arc;
 /// Hashable `Peer`.
 #[derive(Hash, PartialEq, Eq)]
 pub(crate) enum Peer {
-    User(i32),
-    Chat(i32),
-    Channel(i32),
+    User(i64),
+    Chat(i64),
+    Channel(i64),
 }
 
 impl From<&tl::enums::Peer> for Peer {
@@ -75,7 +75,7 @@ impl ChatMap {
         self.map.remove(&peer.into())
     }
 
-    pub(crate) fn remove_user(&mut self, user_id: i32) -> Option<User> {
+    pub(crate) fn remove_user(&mut self, user_id: i64) -> Option<User> {
         self.map
             .remove(&Peer::User(user_id))
             .map(|chat| match chat {

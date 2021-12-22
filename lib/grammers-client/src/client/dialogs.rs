@@ -195,6 +195,8 @@ impl Client {
                 revoke: false,
                 peer: chat.to_input_peer(),
                 max_id: 0,
+                min_date: None,
+                max_date: None,
             })
             .await
             .map(drop)
