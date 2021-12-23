@@ -36,6 +36,6 @@ pulldown-cmark = { version = "0.8.0", default-features = false, optional = true 
 tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time", "sync"] }
 
 [dev-dependencies]
-simple_logger = "1.11.0"
+simple_logger = { version = "1.11.0", default-features = false, features = ["colors"] }
 tokio = { version = "1.5.0", features = ["rt", "signal"] }
 toml = "0.5.8"
