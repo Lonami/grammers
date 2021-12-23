@@ -38,6 +38,7 @@ impl InlineResult {
                 query_id: self.query_id,
                 id: self.id().to_string(),
                 schedule_date: None,
+                send_as: None,
             })
             .await
             .map(drop)

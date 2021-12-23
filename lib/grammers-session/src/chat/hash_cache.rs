@@ -13,13 +13,13 @@ use std::collections::HashMap;
 pub struct ChatHashCache {
     // As far as I've observed, user, chat and channel IDs cannot collide,
     // but it will be an interesting moment if they ever do.
-    hash_map: HashMap<i32, (i64, PackedType)>,
-    self_id: Option<i32>,
+    hash_map: HashMap<i64, (i64, PackedType)>,
+    self_id: Option<i64>,
     self_bot: bool,
 }
 
 impl ChatHashCache {
-    pub fn new(self_user: Option<(i32, bool)>) -> Self {
+    pub fn new(self_user: Option<(i64, bool)>) -> Self {
         Self {
             hash_map: HashMap::new(),
             self_id: self_user.map(|user| user.0),
@@ -27,7 +27,7 @@ impl ChatHashCache {
         }
     }
 
-    pub fn self_id(&self) -> i32 {
+    pub fn self_id(&self) -> i64 {
         self.self_id
             .expect("tried to query self_id before it's known")
     }
@@ -45,7 +45,7 @@ impl ChatHashCache {
         self.self_id = Some(user.id);
     }
 
-    pub fn get(&self, id: i32) -> Option<PackedChat> {
+    pub fn get(&self, id: i64) -> Option<PackedChat> {
         self.hash_map.get(&id).map(|&(hash, ty)| PackedChat {
             ty,
             id,

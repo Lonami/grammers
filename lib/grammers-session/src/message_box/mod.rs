@@ -222,7 +222,7 @@ impl MessageBox {
     }
 
     /// Convenience to reset a channel's deadline, with optional timeout.
-    fn reset_channel_deadline(&mut self, channel_id: i32, timeout: Option<i32>) {
+    fn reset_channel_deadline(&mut self, channel_id: i64, timeout: Option<i32>) {
         self.reset_deadline(
             Entry::Channel(channel_id),
             Instant::now()
@@ -271,7 +271,7 @@ impl MessageBox {
     /// Like [`MessageBox::set_state`], but for channels. Useful when getting dialogs.
     ///
     /// The update state will only be updated if no entry was known previously.
-    pub fn try_set_channel_state(&mut self, id: i32, pts: i32) {
+    pub fn try_set_channel_state(&mut self, id: i64, pts: i32) {
         self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
             pts,
             deadline: next_updates_deadline(),

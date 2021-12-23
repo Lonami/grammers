@@ -12,7 +12,7 @@ use grammers_tl_types as tl;
 #[derive(Clone, Debug, PartialEq)]
 pub struct Normal {
     date: i32,
-    inviter_id: Option<i32>,
+    inviter_id: Option<i64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -24,8 +24,8 @@ pub struct Creator {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Admin {
     can_edit: bool,
-    inviter_id: Option<i32>,
-    promoted_by: Option<i32>,
+    inviter_id: Option<i64>,
+    promoted_by: Option<i64>,
     date: i32,
     permissions: Permissions,
     rank: Option<String>,
@@ -34,7 +34,7 @@ pub struct Admin {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Banned {
     left: bool,
-    kicked_by: i32,
+    kicked_by: i64,
     date: i32,
     restrictions: Restrictions,
 }
@@ -64,7 +64,7 @@ impl Normal {
         utils::date(self.date)
     }
 
-    pub fn inviter_id(&self) -> Option<i32> {
+    pub fn inviter_id(&self) -> Option<i64> {
         self.inviter_id
     }
 }
@@ -84,11 +84,11 @@ impl Admin {
         self.can_edit
     }
 
-    pub fn inviter_id(&self) -> Option<i32> {
+    pub fn inviter_id(&self) -> Option<i64> {
         self.inviter_id
     }
 
-    pub fn promoted_by(&self) -> Option<i32> {
+    pub fn promoted_by(&self) -> Option<i64> {
         self.promoted_by
     }
 
@@ -110,7 +110,7 @@ impl Banned {
         self.left
     }
 
-    pub fn kicked_by(&self) -> i32 {
+    pub fn kicked_by(&self) -> i64 {
         self.kicked_by
     }
 

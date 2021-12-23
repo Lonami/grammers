@@ -71,7 +71,7 @@ impl Chat {
     /// megagroups. If this happens, both the old small group chat and the new megagroup
     /// exist as separate chats with different identifiers, but they are linked with a
     /// property.
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> i64 {
         match self {
             Self::User(user) => user.id(),
             Self::Group(group) => group.id(),

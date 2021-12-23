@@ -32,7 +32,7 @@ pub struct UpdateState {
     pub qts: i32,
     pub date: i32,
     pub seq: i32,
-    pub channels: HashMap<i32, i32>,
+    pub channels: HashMap<i64, i32>,
 }
 
 pub struct Session {
@@ -138,7 +138,7 @@ impl Session {
         );
     }
 
-    pub fn set_user(&self, id: i32, dc: i32, bot: bool) {
+    pub fn set_user(&self, id: i64, dc: i32, bot: bool) {
         self.session.lock().unwrap().user = Some(User { id, dc, bot }.into())
     }
 

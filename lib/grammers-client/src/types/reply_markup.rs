@@ -150,6 +150,7 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
                 .into()
             })
             .collect(),
+        placeholder: None,
     })
 }
 
@@ -193,6 +194,7 @@ pub fn force_reply() -> ForceReply {
     ForceReply(tl::types::ReplyKeyboardForceReply {
         single_use: false,
         selective: false,
+        placeholder: None,
     })
 }
 

@@ -30,7 +30,7 @@ pub enum ParticipantIter {
     Empty,
     Chat {
         client: Client,
-        chat_id: i32,
+        chat_id: i64,
         buffer: VecDeque<Participant>,
         total: Option<usize>,
     },
