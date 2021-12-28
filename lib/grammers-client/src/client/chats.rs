@@ -138,7 +138,7 @@ impl ParticipantIter {
                     Participants(p) => (p.count, p.participants, p.users),
                     NotModified => panic!("API returned Dialogs::NotModified even though hash = 0"),
                 };
-                iter.last_chunk = participants.len() < iter.request.limit as usize;//iter.request.limit
+                iter.last_chunk = participants.len() < iter.request.limit as usize;
 
                 // Don't bother updating offsets if this is the last time stuff has to be fetched.
                 if !iter.last_chunk && !iter.buffer.is_empty() {
@@ -149,11 +149,11 @@ impl ParticipantIter {
                 let mut chats = ChatMap::new(users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
 
-                // iter.buffer.extend(
-                //     participants
-                //         .into_iter()
-                //         .map(|p| Participant::from_raw_channel(chats, p)),
-                // );
+                iter.buffer.extend(
+                    participants
+                        .into_iter()
+                        .map(|p| Participant::from_raw_channel(chats, p)),
+                );
 
                 iter.total = Some(count as usize);
                 Ok(count as usize)
@@ -705,6 +705,18 @@ impl Client {
         Ok(permissions)
     }
 
+    /// get all members of chat
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # let channel = tl::types::InputChannel {
+    ///       channel_id: group.id(),
+    ///       access_hash: group.pack().access_hash.unwrap_or(0),
+    /// }.into();
+    /// let filter = tl::enums::ChannelParticipantsFilter::ChannelParticipantsRecent;
+    /// # let members = client_handle.get_chat_members(channel, filter).await;
+    /// ```
     pub async fn get_chat_members(&self, channel: tl::enums::InputChannel, filter: tl::enums::ChannelParticipantsFilter) -> Vec<tl::enums::User> {
         use tl::enums::channels::ChannelParticipants::*;
 
