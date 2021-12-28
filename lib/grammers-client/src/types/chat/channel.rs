@@ -59,13 +59,13 @@ impl Channel {
                         call_not_empty: false,
                         fake: false,
                         gigagroup: false,
+                        noforwards: false,
                         id: channel.id,
                         access_hash: Some(channel.access_hash),
                         title: channel.title,
                         username: None,
                         photo: tl::enums::ChatPhoto::Empty,
                         date: 0,
-                        version: 0,
                         restriction_reason: None,
                         admin_rights: None,
                         banned_rights: None,
@@ -80,7 +80,7 @@ impl Channel {
     }
 
     /// Return the unique identifier for this channel.
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> i64 {
         self.0.id
     }
 

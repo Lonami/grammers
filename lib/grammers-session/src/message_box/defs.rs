@@ -42,7 +42,7 @@ pub(crate) enum Entry {
     /// Channel-specific `pts`.
     ///
     /// This includes "megagroup", "broadcast" and "supergroup" channels.
-    Channel(i32),
+    Channel(i64),
 }
 
 /// Represents a "message box" (event `pts` for a specific entry).

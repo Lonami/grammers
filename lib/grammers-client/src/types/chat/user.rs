@@ -107,7 +107,7 @@ impl User {
     }
 
     /// Return the unique identifier for this user.
-    pub fn id(&self) -> i32 {
+    pub fn id(&self) -> i64 {
         self.0.id
     }
 

@@ -374,6 +374,7 @@ impl Client {
                     Some(message.entities.clone())
                 },
                 schedule_date: message.schedule_date,
+                send_as: None,
             })
             .await
         } else {
@@ -393,6 +394,7 @@ impl Client {
                     Some(message.entities.clone())
                 },
                 schedule_date: message.schedule_date,
+                send_as: None,
             })
             .await
         }?;
@@ -537,11 +539,14 @@ impl Client {
             silent: false,
             background: false,
             with_my_score: false,
+            drop_author: false,
+            drop_media_captions: false,
             from_peer: source.into().to_input_peer(),
             id: message_ids.to_vec(),
             random_id: generate_random_ids(message_ids.len()),
             to_peer: destination.into().to_input_peer(),
             schedule_date: None,
+            send_as: None,
         };
         let result = self.invoke(&request).await?;
         Ok(map_random_ids_to_messages(self, &request.random_id, result))

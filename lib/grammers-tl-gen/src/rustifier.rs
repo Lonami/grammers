@@ -98,7 +98,7 @@ pub mod definitions {
         };
 
         match variant {
-            "" => {
+            "" | _ if variant.chars().all(char::is_numeric) => {
                 // Use the name from the last uppercase letter
                 &name[name
                     .as_bytes()
@@ -302,6 +302,15 @@ mod tests {
         let def = "inputPeerSelf = InputPeer".parse().unwrap();
         let name = definitions::variant_name(&def);
         assert_eq!(name, "PeerSelf");
+    }
+
+    #[test]
+    fn check_def_numeric_variant_name() {
+        let def = "inputBotInlineMessageID64 = inputBotInlineMessageID"
+            .parse()
+            .unwrap();
+        let name = definitions::variant_name(&def);
+        assert_eq!(name, "Id64");
     }
 
     // Type methods

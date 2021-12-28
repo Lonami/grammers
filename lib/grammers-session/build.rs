@@ -23,8 +23,8 @@ fn main() -> std::io::Result<()> {
     let definitions = parse_tl_file(
         r#"
         dataCenter flags:# id:int ipv4:flags.0?int ipv6:flags.1?int128 port:int auth:flags.2?bytes = DataCenter;
-        user id:int dc:int bot:Bool = User;
-        channelState channel_id:int pts:int = ChannelState;
+        user id:long dc:int bot:Bool = User;
+        channelState channel_id:long pts:int = ChannelState;
         updateState pts:int qts:int date:int seq:int channels:Vector<ChannelState> = UpdateState;
         session flags:# dcs:Vector<DataCenter> user:flags.0?User state:flags.1?UpdateState = Session;
         "#,
