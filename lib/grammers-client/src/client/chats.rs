@@ -138,7 +138,7 @@ impl ParticipantIter {
                     Participants(p) => (p.count, p.participants, p.users),
                     NotModified => panic!("API returned Dialogs::NotModified even though hash = 0"),
                 };
-                iter.last_chunk = participants.len() < iter.request.limit as usize;
+                iter.last_chunk = participants.len() < iter.request.limit as usize;//iter.request.limit
 
                 // Don't bother updating offsets if this is the last time stuff has to be fetched.
                 if !iter.last_chunk && !iter.buffer.is_empty() {
@@ -149,11 +149,11 @@ impl ParticipantIter {
                 let mut chats = ChatMap::new(users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
 
-                iter.buffer.extend(
-                    participants
-                        .into_iter()
-                        .map(|p| Participant::from_raw_channel(chats, p)),
-                );
+                // iter.buffer.extend(
+                //     participants
+                //         .into_iter()
+                //         .map(|p| Participant::from_raw_channel(chats, p)),
+                // );
 
                 iter.total = Some(count as usize);
                 Ok(count as usize)
@@ -703,6 +703,48 @@ impl Client {
         let tl::enums::channels::ChannelParticipant::Participant(participant) = participant;
         let permissions = ParticipantPermissions::Channel(participant.participant);
         Ok(permissions)
+    }
+
+    pub async fn get_chat_members(&self, channel: tl::enums::InputChannel, filter: tl::enums::ChannelParticipantsFilter) -> Vec<tl::enums::User> {
+        use tl::enums::channels::ChannelParticipants::*;
+
+        let mut request = tl::functions::channels::GetParticipants {
+            channel,
+            filter,
+            offset: 0,
+            limit: MAX_PARTICIPANT_LIMIT as i32,
+            hash: 0,
+        };
+        let mut chat_members: Vec<tl::enums::User> = vec![];
+        loop {
+            match self.invoke(&request).await {
+                Ok(res) => {
+                    match res {
+                        Participants(p) => {
+                            for elem in p.users {
+                                chat_members.push(elem);
+                            }
+                            
+                            if request.offset >= p.count {
+                                break;
+                            }else {
+                
+                                if request.limit >= p.count {
+                                    break;
+                                }else if (request.offset + request.limit) >= p.count {
+                                    break;
+                                }else {
+                                    request.offset += request.limit;
+                                }
+                            }
+                        }
+                        NotModified => {},
+                    }
+                }
+                Err(_) => {}
+            }
+        }
+        chat_members
     }
 }
 
