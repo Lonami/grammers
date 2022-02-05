@@ -73,6 +73,11 @@ impl InlineQuery {
         self.query.query.as_str()
     }
 
+    // The offset of the inline query.
+    pub fn offset(&self) -> &str {
+        self.query.offset.as_str()
+    }
+
     /// Answer the inline query.
     // TODO: add example
     pub fn answer(&self, results: impl IntoIterator<Item = InlineResult>) -> Answer {
