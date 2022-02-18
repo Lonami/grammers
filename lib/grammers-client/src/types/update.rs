@@ -21,6 +21,9 @@ pub enum Update {
     /// Occurs whenever you sign in as a bot and a user sends an inline query such as
     /// `@bot query`.
     InlineQuery(InlineQuery),
+    /// Raw events are not actual events.
+    /// Instead, they are the raw Update object that Telegram sends. You normally shouldn’t need these.
+    Raw(tl::enums::Update),
 }
 
 impl Update {
@@ -43,7 +46,7 @@ impl Update {
             tl::enums::Update::BotInlineQuery(query) => {
                 Some(Self::InlineQuery(InlineQuery::new(client, query, chats)))
             }
-            _ => None,
+            update => Some(Self::Raw(update)),
         }
     }
 }
