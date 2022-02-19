@@ -15,6 +15,8 @@ use std::sync::Arc;
 pub enum Update {
     /// Occurs whenever a new text message or a message with media is produced.
     NewMessage(Message),
+    /// Occurs when a message is updated.
+    MessageUpdated(Message),
     /// Occurs when Telegram calls back into your bot because an inline callback button was
     /// pressed.
     CallbackQuery(CallbackQuery),
@@ -34,6 +36,9 @@ impl Update {
     ) -> Option<Self> {
         match update {
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {
+                Message::new(client, message, chats).map(Self::NewMessage)
+            }
+            tl::enums::Update::EditMessage(tl::types::UpdateEditMessage { message, .. }) => {
                 Message::new(client, message, chats).map(Self::NewMessage)
             }
             tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
