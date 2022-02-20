@@ -92,8 +92,9 @@ impl Client {
             let deadline = message_box.check_deadlines();
             drop(message_box);
             tokio::select! {
-                _ = self.step() => {
-                    log::trace!("stepped")
+                step = self.step() => {
+                    log::trace!("stepped");
+                    step?
                 }
                 _ = sleep_until(deadline.into()) => {
                     log::trace!("slept")
