@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{CallbackQuery, ChatMap, InlineQuery, Message};
-use crate::Client;
+use crate::{types::MessageDeletion, Client};
 use grammers_tl_types as tl;
 use std::sync::Arc;
 
@@ -17,6 +17,8 @@ pub enum Update {
     NewMessage(Message),
     /// Occurs when a message is updated.
     MessageEdited(Message),
+    /// Occurs when a message is deleted.
+    MessageDeleted(MessageDeletion),
     /// Occurs when Telegram calls back into your bot because an inline callback button was
     /// pressed.
     CallbackQuery(CallbackQuery),
@@ -41,6 +43,16 @@ impl Update {
             tl::enums::Update::EditMessage(tl::types::UpdateEditMessage { message, .. }) => {
                 Message::new(client, message, chats).map(Self::NewMessage)
             }
+            tl::enums::Update::DeleteMessages(tl::types::UpdateDeleteMessages {
+                messages, ..
+            }) => Some(Self::MessageDeleted(MessageDeletion::new(messages))),
+            tl::enums::Update::DeleteChannelMessages(tl::types::UpdateDeleteChannelMessages {
+                messages,
+                channel_id,
+                ..
+            }) => Some(Self::MessageDeleted(MessageDeletion::new_with_channel(
+                messages, channel_id,
+            ))),
             tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
                 message,
                 ..
