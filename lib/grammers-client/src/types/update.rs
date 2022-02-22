@@ -16,7 +16,7 @@ pub enum Update {
     /// Occurs whenever a new text message or a message with media is produced.
     NewMessage(Message),
     /// Occurs when a message is updated.
-    MessageUpdated(Message),
+    MessageEdited(Message),
     /// Occurs when Telegram calls back into your bot because an inline callback button was
     /// pressed.
     CallbackQuery(CallbackQuery),
