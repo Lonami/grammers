@@ -77,7 +77,11 @@ impl CallbackQuery {
 
     /// Load the `Message` that contains the pressed inline button.
     pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
-        todo!()
+        Ok(self.client
+            .get_message_by_id(self.chat(), self.query.msg_id)
+            .await?
+            .unwrap()
+        )
     }
 
     /// Answer the callback query.
