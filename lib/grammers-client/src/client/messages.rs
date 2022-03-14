@@ -771,12 +771,7 @@ impl Client {
     ) -> Result<Option<Message>, InvocationError> {
         let mut response = self.get_messages_by_id(chat, &[message_id]).await?;
 
-        Ok(Some(response
-                .pop()
-                .unwrap()
-                .unwrap()
-            )
-        )
+        Ok(Some(response.pop().unwrap().unwrap()))
     }
 
 
