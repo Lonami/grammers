@@ -751,7 +751,9 @@ impl Client {
         Ok(message_ids.iter().map(|id| map.remove(id)).collect())
     }
 
-    /// Get a message using your ID.
+    /// Fetch a single message by ID.
+    ///
+    /// This is cheaper than [`Client::get_messages_by_id`].
     ///
     /// # Examples
     ///
