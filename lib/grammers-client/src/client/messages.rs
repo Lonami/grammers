@@ -751,32 +751,6 @@ impl Client {
         Ok(message_ids.iter().map(|id| map.remove(id)).collect())
     }
 
-    /// Fetch a single message by ID.
-    ///
-    /// This is cheaper than [`Client::get_messages_by_id`].
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let message_id = 123;
-    ///
-    /// let message = client.get_message_by_id(&chat, message_id).await?;
-    /// println!("{}", message.text());
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn get_message_by_id<C: Into<PackedChat>>(
-        &self,
-        chat: C,
-        message_id: i32,
-    ) -> Result<Option<Message>, InvocationError> {
-        let mut response = self.get_messages_by_id(chat, &[message_id]).await?;
-
-        Ok(Some(response.pop().unwrap().unwrap()))
-    }
-
-
     /// Get the latest pin from a chat.
     ///
     /// # Examples

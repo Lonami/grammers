@@ -79,8 +79,9 @@ impl CallbackQuery {
     pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
         Ok(self
             .client
-            .get_message_by_id(self.chat(), self.query.msg_id)
+            .get_messages_by_id(self.chat(), &[self.query.msg_id])
             .await?
+            .get(0)
             .unwrap())
     }
 

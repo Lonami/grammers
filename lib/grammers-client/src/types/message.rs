@@ -474,8 +474,9 @@ impl Message {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
-            .get_message_by_id(&self.chat(), self.msg.id)
+            .get_messages_by_id(&self.chat(), &[self.msg.id])
             .await?
+            .get(0)
             .unwrap();
         todo!("actually mutate self after get_message_by_id returns `Message`")
     }
