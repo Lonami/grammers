@@ -81,7 +81,8 @@ impl CallbackQuery {
             .client
             .get_messages_by_id(self.chat(), &[self.query.msg_id])
             .await?
-            .get(0)
+            .pop()
+            .unwrap()
             .unwrap())
     }
 

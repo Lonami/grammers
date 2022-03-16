@@ -476,9 +476,10 @@ impl Message {
         self.client
             .get_messages_by_id(&self.chat(), &[self.msg.id])
             .await?
-            .get(0)
+            .pop()
+            .unwrap()
             .unwrap();
-        todo!("actually mutate self after get_message_by_id returns `Message`")
+        todo!("actually mutate self after get_messages_by_id returns `Message`")
     }
 
     /// Download the message media in this message if applicable.
