@@ -21,6 +21,7 @@ pub enum SignInError {
         terms_of_service: Option<TermsOfService>,
     },
     PasswordRequired(PasswordToken),
+    EmptyLoginToken,
     InvalidCode,
     InvalidPassword,
     Other(InvocationError),
@@ -293,6 +294,9 @@ impl Client {
     /// # }
     /// ```
     pub async fn sign_in(&mut self, token: &LoginToken, code: &str) -> Result<User, SignInError> {
+        if token.is_empty(){
+            return Err(SignInError::EmptyLoginToken)
+        }
         match self
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
