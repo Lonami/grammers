@@ -35,6 +35,7 @@ impl fmt::Display for SignInError {
                 terms_of_service: tos,
             } => write!(f, "sign in error: sign up required: {:?}", tos),
             PasswordRequired(_password) => write!(f, "2fa password required"),
+            EmptyLoginToken => write!(f, "empty login token"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
