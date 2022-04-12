@@ -96,7 +96,7 @@ async fn real_main() -> Result<()> {
             .children()
             .take_while(|elem| elem.is(Name("p")))
             .for_each(|elem| {
-                documentation.description.push_str(&elem.text());
+                documentation.description.push_str(&elem.inner_html());
                 documentation.description.push('\n');
             });
         documentation.description = documentation.description.trim().to_string();
@@ -104,14 +104,14 @@ async fn real_main() -> Result<()> {
         iter_table(&doc, "parameters", 3, |chunk| {
             documentation
                 .parameters
-                .insert(chunk[0].text(), chunk[2].text());
+                .insert(chunk[0].text(), chunk[2].inner_html());
         });
         iter_table(&doc, "possible-errors", 3, |chunk| {
             documentation.errors.insert(
                 chunk[1].text(),
                 TlError {
                     code: chunk[0].text().parse().unwrap(),
-                    description: chunk[2].text(),
+                    description: chunk[2].inner_html(),
                 },
             );
         });
