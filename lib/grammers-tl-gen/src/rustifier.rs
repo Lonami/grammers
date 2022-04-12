@@ -17,7 +17,7 @@
 //! * `item_path` for use as a qualified item path (`Vec::<u8>`).
 //! * `attr_name` for use as an attribute name (`foo_bar: ()`).
 
-use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
+use grammers_tl_parser::tl::{Parameter, ParameterType, Type};
 
 /// Get the rusty type name for a certain definition, excluding namespace.
 ///
@@ -70,16 +70,18 @@ fn rusty_type_name(name: &str) -> String {
 }
 
 pub mod definitions {
+    use crate::GeneratableDefinition;
+
     use super::*;
 
-    pub fn type_name(def: &Definition) -> String {
-        rusty_type_name(&def.name)
+    pub fn type_name(def: &GeneratableDefinition) -> String {
+        rusty_type_name(&def.parsed.name)
     }
 
-    pub fn qual_name(def: &Definition) -> String {
+    pub fn qual_name(def: &GeneratableDefinition) -> String {
         let mut result = String::new();
         result.push_str("crate::types::");
-        def.namespace.iter().for_each(|ns| {
+        def.parsed.namespace.iter().for_each(|ns| {
             result.push_str(ns);
             result.push_str("::");
         });
@@ -87,9 +89,9 @@ pub mod definitions {
         result
     }
 
-    pub fn variant_name(def: &Definition) -> String {
+    pub fn variant_name(def: &GeneratableDefinition) -> String {
         let name = type_name(def);
-        let ty_name = types::type_name(&def.ty);
+        let ty_name = types::type_name(&def.parsed.ty);
 
         let variant = if name.starts_with(&ty_name) {
             &name[ty_name.len()..]

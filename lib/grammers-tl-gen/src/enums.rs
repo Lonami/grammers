@@ -8,11 +8,11 @@
 
 //! Code to generate Rust's `enum`'s from TL definitions.
 
-use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
+use crate::{grouper, GeneratableDefinition};
 use crate::{ignore_type, Config};
-use grammers_tl_parser::tl::{Definition, ParameterType, Type};
+use grammers_tl_parser::tl::{ParameterType, Type};
 use std::collections::HashSet;
 use std::io::{self, Write};
 
@@ -53,7 +53,7 @@ fn write_enum<W: Write>(
         )?;
 
         // Variant with no struct since it has no data and it only adds noise
-        if d.params.is_empty() {
+        if d.parsed.params.is_empty() {
             writeln!(file, ",")?;
             continue;
         } else {
@@ -105,6 +105,7 @@ fn write_common_field_impl<W: Write>(
     for (i, d) in definitions.iter().enumerate() {
         // Filter out Options and flags parameters
         let params: HashSet<_> = d
+            .parsed
             .params
             .iter()
             .filter(|p| match p.ty {
@@ -208,7 +209,11 @@ fn write_serializable<W: Write>(
             "{}            Self::{}{} => {{",
             indent,
             rustifier::definitions::variant_name(d),
-            if d.params.is_empty() { "" } else { "(x)" },
+            if d.parsed.params.is_empty() {
+                ""
+            } else {
+                "(x)"
+            },
         )?;
         writeln!(
             file,
@@ -216,7 +221,7 @@ fn write_serializable<W: Write>(
             indent,
             rustifier::definitions::qual_name(d)
         )?;
-        if !d.params.is_empty() {
+        if !d.parsed.params.is_empty() {
             writeln!(file, "{}                x.serialize(buf)", indent)?;
         }
         writeln!(file, "{}            }},", indent)?;
@@ -269,7 +274,7 @@ fn write_deserializable<W: Write>(
             rustifier::definitions::variant_name(d),
         )?;
 
-        if d.params.is_empty() {
+        if d.parsed.params.is_empty() {
             writeln!(file, ",")?;
             continue;
         } else {
@@ -325,7 +330,11 @@ fn write_impl_from<W: Write>(
             file,
             "{}    fn from({}x: {}) -> Self {{",
             indent,
-            if def.params.is_empty() { "_" } else { "" },
+            if def.parsed.params.is_empty() {
+                "_"
+            } else {
+                ""
+            },
             rustifier::definitions::qual_name(def),
         )?;
         write!(
@@ -336,7 +345,7 @@ fn write_impl_from<W: Write>(
             rustifier::definitions::variant_name(def),
         )?;
 
-        if def.params.is_empty() {
+        if def.parsed.params.is_empty() {
             writeln!(file)?;
         } else if metadata.is_recursive_def(def) {
             writeln!(file, "(Box::new(x))")?;
@@ -371,7 +380,7 @@ fn write_definition<W: Write>(
 /// Write the entire module dedicated to enums.
 pub(crate) fn write_enums_mod<W: Write>(
     mut file: &mut W,
-    definitions: &[Definition],
+    definitions: &[GeneratableDefinition],
     metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {

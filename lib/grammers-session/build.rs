@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config};
+use grammers_tl_gen::{generate_rust_code, Config, GeneratableDefinition};
 use grammers_tl_parser::parse_tl_file;
 use std::env;
 use std::fs::File;
@@ -31,6 +31,7 @@ fn main() -> std::io::Result<()> {
     )
     .into_iter()
     .map(Result::unwrap)
+    .map(|d| GeneratableDefinition {docs:None,parsed:d})
     .collect::<Vec<_>>();
 
     let config = Config {

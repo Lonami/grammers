@@ -8,44 +8,46 @@
 
 //! Several functions to group definitions by a certain criteria.
 
-use grammers_tl_parser::tl::{Category, Definition, Type};
+use grammers_tl_parser::tl::{Category, Type};
 use std::collections::HashMap;
+
+use crate::GeneratableDefinition;
 
 /// Group the input vector by namespace, filtering by a certain category.
 pub(crate) fn group_by_ns(
-    definitions: &[Definition],
+    definitions: &[GeneratableDefinition],
     category: Category,
-) -> HashMap<String, Vec<&Definition>> {
+) -> HashMap<String, Vec<&GeneratableDefinition>> {
     let mut result = HashMap::new();
     definitions
         .iter()
-        .filter(|d| d.category == category)
+        .filter(|d| d.parsed.category == category)
         .for_each(|d| {
             // We currently only handle zero or one namespace.
-            assert!(d.namespace.len() <= 1);
-            let ns = d.namespace.get(0).map(|x| &x[..]).unwrap_or("");
+            assert!(d.parsed.namespace.len() <= 1);
+            let ns = d.parsed.namespace.get(0).map(|x| &x[..]).unwrap_or("");
             result.entry(ns.into()).or_insert_with(Vec::new).push(d);
         });
 
     for (_, vec) in result.iter_mut() {
-        vec.sort_by_key(|d| &d.name);
+        vec.sort_by_key(|d| &d.parsed.name);
     }
     result
 }
 
 /// Similar to `group_by_ns`, but for the definition types.
-pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&Type>> {
+pub(crate) fn group_types_by_ns(definitions: &[GeneratableDefinition]) -> HashMap<Option<String>, Vec<&Type>> {
     let mut result = HashMap::new();
     definitions
         .iter()
-        .filter(|d| d.category == Category::Types && !d.ty.generic_ref)
+        .filter(|d| d.parsed.category == Category::Types && !d.parsed.ty.generic_ref)
         .for_each(|d| {
             // We currently only handle zero or one namespace.
-            assert!(d.namespace.len() <= 1);
+            assert!(d.parsed.namespace.len() <= 1);
             result
-                .entry(d.namespace.get(0).map(Clone::clone))
+                .entry(d.parsed.namespace.get(0).map(Clone::clone))
                 .or_insert_with(Vec::new)
-                .push(&d.ty);
+                .push(&d.parsed.ty);
         });
 
     for (_, vec) in result.iter_mut() {

@@ -1,20 +1,21 @@
 [package]
-name = "grammers-tl-gen"
-version = "0.3.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+categories = []
 description = """
 Rust code generator from Telegram's API definitions.
 """
-homepage = "https://github.com/Lonami/grammers"
 documentation = "https://docs.rs/grammers-tl-gen"
-repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
-categories = []
 edition = "2018"
+homepage = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+license = "MIT OR Apache-2.0"
+name = "grammers-tl-gen"
+repository = "https://github.com/Lonami/grammers"
+version = "0.3.0"
 
 [dependencies]
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.0.1" }
+grammers-tl-parser = {path = "../grammers-tl-parser", version = "1.0.1"}
+serde = {version = "1.0.136", features = ["derive"]}
 
 [dev-dependencies]
 toml = "0.5.8"
