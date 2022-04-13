@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use futures::stream::{self, StreamExt};
+use regex::Regex;
 use select::document::Document;
 use select::node::Node;
 use select::predicate::{Attr, Element, Name};
@@ -82,6 +83,8 @@ async fn real_main() -> Result<()> {
             .text()
             .await
             .map_err(|_| tuple.clone())?;
+        let re = Regex::new(r#"href="(?P<p>/.+)""#).unwrap();
+        let body = re.replace_all(&body, r#"href="https://core.telegram.org$p""#);
 
         let doc = Document::from(body.as_ref());
         let mut documentation = Documentation {
@@ -118,7 +121,7 @@ async fn real_main() -> Result<()> {
 
         Ok(Item {
             name,
-            url_path,
+            url_path:format!("https://core.telegram.org{}",url_path),
             documentation,
         })
     }
