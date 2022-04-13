@@ -121,7 +121,7 @@ async fn real_main() -> Result<()> {
 
         Ok(Item {
             name,
-            url_path:format!("https://core.telegram.org{}",url_path),
+            url_path: format!("https://core.telegram.org{}", url_path),
             documentation,
         })
     }
