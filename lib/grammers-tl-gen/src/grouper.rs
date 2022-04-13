@@ -36,7 +36,9 @@ pub(crate) fn group_by_ns(
 }
 
 /// Similar to `group_by_ns`, but for the definition types.
-pub(crate) fn group_types_by_ns(definitions: &[GeneratableDefinition]) -> HashMap<Option<String>, Vec<&Type>> {
+pub(crate) fn group_types_by_ns(
+    definitions: &[GeneratableDefinition],
+) -> HashMap<Option<String>, Vec<&Type>> {
     let mut result = HashMap::new();
     definitions
         .iter()

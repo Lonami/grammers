@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config};
+use grammers_tl_gen::{generate_rust_code, Config, GeneratableDefinition};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::io;
@@ -30,7 +30,13 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
     let mut file = Vec::new();
     generate_rust_code(
         &mut file,
-        &definitions,
+        &definitions
+            .into_iter()
+            .map(|d| GeneratableDefinition {
+                docs: None,
+                parsed: d,
+            })
+            .collect::<Vec<_>>(),
         LAYER,
         &Config {
             gen_name_for_id: false,

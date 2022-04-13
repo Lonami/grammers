@@ -14,10 +14,14 @@ mod metadata;
 mod rustifier;
 mod structs;
 
-use grammers_tl_parser::tl::{Category, Definition, Type};
+use grammers_tl_parser::{
+    errors::ParseError,
+    tl::{Category, Definition, Type},
+};
 use std::{
     collections::BTreeMap,
     io::{self, Write},
+    str::FromStr,
 };
 
 pub struct Config {
@@ -52,6 +56,18 @@ pub struct GeneratableDefinition {
     pub parsed: Definition,
     pub docs: Option<DocumentationItem>,
 }
+impl FromStr for GeneratableDefinition {
+    type Err = ParseError;
+
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let def = Definition::from_str(s)?;
+        Ok(GeneratableDefinition {
+            docs: None,
+            parsed: def,
+        })
+    }
+}
+
 #[derive(Debug, Clone, PartialEq, serde::Deserialize)]
 pub struct TlError {
     pub code: i32,

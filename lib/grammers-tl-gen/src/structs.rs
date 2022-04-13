@@ -8,9 +8,9 @@
 
 //! Code to generate Rust's `struct`'s from TL definitions.
 
-use crate::{grouper, GeneratableDefinition};
 use crate::metadata::Metadata;
 use crate::rustifier;
+use crate::{grouper, GeneratableDefinition};
 use crate::{ignore_type, Config};
 use grammers_tl_parser::tl::{Category, ParameterType};
 use std::io::{self, Write};
@@ -60,6 +60,33 @@ fn write_struct<W: Write>(
     _metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {
+    if let Some(docs) = &def.docs {
+        writeln!(
+            file,
+            "{}/// {}",
+            indent,
+            docs.documentation.description.replace("\n", "<br>")
+        )?;
+
+        writeln!(
+            file,
+            r#"{}/// generated based on <a href="{link}">{name}</a>"#,
+            indent,
+            name = docs.name,
+            link = docs.url_path
+        )?;
+        writeln!(file, "{}///", indent,)?;
+
+        if docs.documentation.errors.len() > 0 {
+            writeln!(file, "{}/// possible errors (these are not all the possible errors, and some may no longer apply):<br>", indent)?;
+
+            writeln!(
+                    file,
+                    "{}/// <table><thead><tr><th>error</th><th>code</th><th>description</th></tr></thead>{}</table>",
+                    indent, docs.documentation.errors.iter().map(|(name,error)|format!("<tr><td>{}</td><td>{}</td><td>{}</td></tr>",name,error.code,error.description)).collect::<Vec<_>>().join(" ")
+                )?;
+        }
+    }
     // Define struct
     if config.impl_debug {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
@@ -81,6 +108,14 @@ fn write_struct<W: Write>(
                 // Flags are computed on-the-fly, not stored
             }
             ParameterType::Normal { .. } => {
+                if let Some(docs) = &def.docs {
+                    writeln!(
+                        file,
+                        "{}    /// {}",
+                        &indent,
+                        docs.documentation.parameters.get(&param.name).unwrap()
+                    )?;
+                }
                 writeln!(
                     file,
                     "{}    pub {}: {},",
@@ -385,7 +420,11 @@ fn write_rpc<W: Write>(
         "{}    type Return = {}{};",
         indent,
         rustifier::types::qual_name(&def.parsed.ty),
-        if def.parsed.ty.generic_ref { "::Return" } else { "" },
+        if def.parsed.ty.generic_ref {
+            "::Return"
+        } else {
+            ""
+        },
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
@@ -437,7 +476,11 @@ fn write_impl_from<W: Write>(
         indent,
         cls = rustifier::types::qual_name(&def.parsed.ty),
         name = rustifier::definitions::variant_name(def),
-        data = if def.parsed.params.is_empty() { "" } else { "(x)" },
+        data = if def.parsed.params.is_empty() {
+            ""
+        } else {
+            "(x)"
+        },
         ok = if infallible { "" } else { "Ok(" },
         deref = if metadata.is_recursive_def(def) {
             "*"
@@ -449,7 +492,11 @@ fn write_impl_from<W: Write>(
         } else {
             "x"
         },
-        body = if def.parsed.params.is_empty() { " {}" } else { "" },
+        body = if def.parsed.params.is_empty() {
+            " {}"
+        } else {
+            ""
+        },
         paren = if infallible { "" } else { ")" },
     )?;
     if !infallible {
@@ -552,10 +599,9 @@ pub(crate) fn write_category_mod<W: Write>(
             writeln!(file, "{}use std::convert::TryFrom;", indent)?;
         }
 
-        for definition in grouped[key]
-            .iter()
-            .filter(|def| def.parsed.category == Category::Functions || !ignore_type(&def.parsed.ty))
-        {
+        for definition in grouped[key].iter().filter(|def| {
+            def.parsed.category == Category::Functions || !ignore_type(&def.parsed.ty)
+        }) {
             write_definition(&mut file, indent, definition, metadata, config)?;
         }
 
