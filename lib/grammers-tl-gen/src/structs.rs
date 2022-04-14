@@ -70,7 +70,7 @@ fn write_struct<W: Write>(
 
         writeln!(
             file,
-            r#"{}/// generated based on <a href="{link}">{name}</a>"#,
+             r#"{}/// <em>(documentation extracted from <a href="{link}">{name}</a>)</em>"#,
             indent,
             name = docs.name,
             link = docs.url_path
@@ -78,7 +78,7 @@ fn write_struct<W: Write>(
         writeln!(file, "{}///", indent,)?;
 
         if docs.documentation.errors.len() > 0 {
-            writeln!(file, "{}/// possible errors (these are not all the possible errors, and some may no longer apply):<br>", indent)?;
+             writeln!(file, "{}/// Known RPC errors (note that this list may be incomplete or outdated):<br>", indent)?;
 
             writeln!(
                     file,

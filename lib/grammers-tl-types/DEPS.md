@@ -10,11 +10,11 @@ Used to parse the `.tl` files provided by Telegram's open source projects.
 
 ## serde
 
-used to parse json from docs generated based on scraped data
+Used to load documentation for the definitions from a JSON file.
 
 ## serde_json
 
-used to parse json from docs generated based on scraped data
+Used to load documentation for the definitions from a JSON file.
 
 ## toml
 
