@@ -40,8 +40,14 @@ async fn async_main() -> Result {
         .init()
         .unwrap();
 
-    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
+    let api_id = env::var("TG_ID")
+        .expect("Expected TG_ID environment variable")
+        .parse()
+        .expect("TG_ID invalid");
+    let api_hash = env::var("TG_HASH")
+        .expect("Expected TG_HASH environment variable")
+        .to_string();
+
     let token = env::args().skip(1).next().expect("token missing");
 
     println!("Connecting to Telegram...");
