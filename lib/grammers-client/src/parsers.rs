@@ -11,6 +11,9 @@ use grammers_tl_types as tl;
 #[cfg(feature = "html")]
 const CODE_LANG_PREFIX: &str = "language-";
 
+#[cfg(any(feature = "markdown", feature = "html"))]
+const MENTION_URL_PREFIX: &str = "tg://user?id=";
+
 /// The length of a string, according to Telegram.
 ///
 /// Telegram considers the length of the string with surrogate pairs.
@@ -119,15 +122,15 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
 
         // [text link](https://example.com) or [user mention](tg://user?id=12345678)
         Event::Start(Tag::Link(_kind, url, _title)) => {
-            if url.starts_with("tg://user?id") {
-                let user_id = url[13..].parse::<i64>().unwrap();
+            if url.starts_with(MENTION_URL_PREFIX) {
+                let user_id = url[MENTION_URL_PREFIX.len()..].parse::<i64>().unwrap();
                 push_entity!(MessageEntityMentionName(offset, user_id = user_id) => entities);
             } else {
                 push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
             }
         }
         Event::End(Tag::Link(_kindd, url, _title)) => {
-            if url.starts_with("tg://user?id") {
+            if url.starts_with(MENTION_URL_PREFIX) {
                 update_entity_len!(MentionName(offset) => entities);
             } else {
                 update_entity_len!(TextUrl(offset) => entities);
@@ -246,8 +249,8 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             .map(|a| a.value.to_string())
                             .unwrap_or_else(|| "".to_string());
 
-                        if url.starts_with("tg://user?id") {
-                            let user_id = url[13..].parse::<i64>().unwrap();
+                        if url.starts_with(MENTION_URL_PREFIX) {
+                            let user_id = url[MENTION_URL_PREFIX.len()..].parse::<i64>().unwrap();
                             push_entity!(MessageEntityMentionName(self.offset, user_id = user_id)
                                 => self.entities);
                         } else {
