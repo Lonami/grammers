@@ -119,10 +119,19 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
 
         // [text link](https://example.com)
         Event::Start(Tag::Link(_kind, url, _title)) => {
-            push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
+            if url.starts_with("tg://user?id") {
+                let user_id = url[13..].parse::<i64>().unwrap();
+                push_entity!(MessageEntityMentionName(offset, user_id = user_id) => entities);
+            } else {
+                push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
+            }
         }
-        Event::End(Tag::Link(_kindd, _url, _title)) => {
-            update_entity_len!(TextUrl(offset) => entities);
+        Event::End(Tag::Link(_kindd, url, _title)) => {
+            if url.starts_with("tg://user?id") {
+                update_entity_len!(MentionName(offset) => entities);
+            } else {
+                update_entity_len!(TextUrl(offset) => entities);
+            }
         }
 
         // ```lang\npre```
@@ -237,8 +246,14 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             .map(|a| a.value.to_string())
                             .unwrap_or_else(|| "".to_string());
 
-                        push_entity!(MessageEntityTextUrl(self.offset, url = url)
-                            => self.entities);
+                        if url.starts_with("tg://user?id") {
+                            let user_id = url[13..].parse::<i64>().unwrap();
+                            push_entity!(MessageEntityMentionName(self.offset, user_id = user_id)
+                                => self.entities);
+                        } else {
+                            push_entity!(MessageEntityTextUrl(self.offset, url = url)
+                                => self.entities);
+                        }
                     }
                     _ => {}
                 },
@@ -277,7 +292,15 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         update_entity_len!(Pre(self.offset) => self.entities);
                     }
                     TAG_A => {
-                        update_entity_len!(TextUrl(self.offset) => self.entities);
+                        match self.entities.iter_mut().rev().next() {
+                            // If the previous url is a mention, don't close with `</a>`;
+                            Some(tl::enums::MessageEntity::MentionName(_)) => {
+                                update_entity_len!(MentionName(self.offset) => self.entities);
+                            }
+                            _ => {
+                                update_entity_len!(TextUrl(self.offset) => self.entities);
+                            }
+                        }
                     }
                     _ => {}
                 },
@@ -364,12 +387,13 @@ mod tests {
     fn parse_all_entities_markdown() {
         let (text, entities) = parse_markdown_message(
             "Some **bold** (__strong__), *italics* (_cursive_), inline `code`, \
-            a\n```rust\npre\n```\nblock, and [links](https://example.com)",
+            a\n```rust\npre\n```\nblock, a [link](https://example.com), and \
+            [mentions](tg://user?id=10885151)",
         );
 
         assert_eq!(
             text,
-            "Some bold (strong), italics (cursive), inline code, apre\nblock, and links"
+            "Some bold (strong), italics (cursive), inline code, a\n\npre\nblock, a link, and mentions"
         );
         assert_eq!(
             entities,
@@ -400,15 +424,21 @@ mod tests {
                 }
                 .into(),
                 tl::types::MessageEntityPre {
-                    offset: 53,
+                    offset: 55,
                     length: 4,
                     language: "rust".to_string()
                 }
                 .into(),
                 tl::types::MessageEntityTextUrl {
                     offset: 68,
-                    length: 5,
+                    length: 4,
                     url: "https://example.com".to_string()
+                }
+                .into(),
+                tl::types::MessageEntityMentionName {
+                    offset: 78,
+                    length: 8,
+                    user_id: 10885151
                 }
                 .into(),
             ]
@@ -495,12 +525,13 @@ mod tests {
         let (text, entities) = parse_html_message(
             "Some <b>bold</b> (<strong>strong</strong>), <i>italics</i> \
             (<em>cursive</em>), inline <code>code</code>, a <pre>pre</pre> \
-            block, and <a href=\"https://example.com\">links</a>",
+            block, a <a href=\"https://example.com\">link</a>, and \
+            <a href=\"tg://user?id=10885151\">mentions</a>",
         );
 
         assert_eq!(
             text,
-            "Some bold (strong), italics (cursive), inline code, a pre block, and links"
+            "Some bold (strong), italics (cursive), inline code, a pre block, a link, and mentions"
         );
         assert_eq!(
             entities,
@@ -537,9 +568,15 @@ mod tests {
                 }
                 .into(),
                 tl::types::MessageEntityTextUrl {
-                    offset: 69,
-                    length: 5,
+                    offset: 67,
+                    length: 4,
                     url: "https://example.com".to_string()
+                }
+                .into(),
+                tl::types::MessageEntityMentionName {
+                    offset: 77,
+                    length: 8,
+                    user_id: 10885151
                 }
                 .into(),
             ]
