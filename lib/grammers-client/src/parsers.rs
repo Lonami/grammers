@@ -117,7 +117,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             update_entity_len!(Italic(offset) => entities);
         }
 
-        // [text link](https://example.com)
+        // [text link](https://example.com) or [user mention](tg://user?id=12345678)
         Event::Start(Tag::Link(_kind, url, _title)) => {
             if url.starts_with("tg://user?id") {
                 let user_id = url[13..].parse::<i64>().unwrap();
@@ -388,7 +388,7 @@ mod tests {
         let (text, entities) = parse_markdown_message(
             "Some **bold** (__strong__), *italics* (_cursive_), inline `code`, \
             a\n```rust\npre\n```\nblock, a [link](https://example.com), and \
-            [mentions](tg://user?id=10885151)",
+            [mentions](tg://user?id=12345678)",
         );
 
         assert_eq!(
@@ -438,7 +438,7 @@ mod tests {
                 tl::types::MessageEntityMentionName {
                     offset: 78,
                     length: 8,
-                    user_id: 10885151
+                    user_id: 12345678
                 }
                 .into(),
             ]
@@ -526,7 +526,7 @@ mod tests {
             "Some <b>bold</b> (<strong>strong</strong>), <i>italics</i> \
             (<em>cursive</em>), inline <code>code</code>, a <pre>pre</pre> \
             block, a <a href=\"https://example.com\">link</a>, and \
-            <a href=\"tg://user?id=10885151\">mentions</a>",
+            <a href=\"tg://user?id=12345678\">mentions</a>",
         );
 
         assert_eq!(
@@ -576,7 +576,7 @@ mod tests {
                 tl::types::MessageEntityMentionName {
                     offset: 77,
                     length: 8,
-                    user_id: 10885151
+                    user_id: 12345678
                 }
                 .into(),
             ]
