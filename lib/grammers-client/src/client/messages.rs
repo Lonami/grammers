@@ -65,6 +65,27 @@ fn map_random_ids_to_messages(
     }
 }
 
+fn parse_mention_entities(client: &Client, mut entities: Vec<tl::enums::MessageEntity>) -> Option<Vec<tl::enums::MessageEntity>> {
+    if entities.is_empty() {
+        None
+    } else {
+        for entitie in entities.iter_mut() {
+            if let tl::enums::MessageEntity::MentionName(mention_name) = entitie {
+                if let Some(packed_user) = client.0.chat_hashes.lock("messages.parse_mention_entities").get(mention_name.user_id) {
+                    *entitie = tl::types::InputMessageEntityMentionName {
+                        offset: entitie.offset(),
+                        length: entitie.length(),
+                        user_id: packed_user.to_input_user_lossy(),
+                    }
+                    .into()
+                }
+            }
+        }
+
+        Some(entities)
+    }
+}
+
 const MAX_LIMIT: usize = 100;
 
 impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Message> {
@@ -357,6 +378,7 @@ impl Client {
         let chat = chat.into();
         let message = message.into();
         let random_id = generate_random_id();
+        let entities = parse_mention_entities(self, message.entities.clone());
         let updates = if let Some(media) = message.media.clone() {
             self.invoke(&tl::functions::messages::SendMedia {
                 silent: message.silent,
@@ -368,11 +390,7 @@ impl Client {
                 message: message.text.clone(),
                 random_id,
                 reply_markup: message.reply_markup.clone(),
-                entities: if message.entities.is_empty() {
-                    None
-                } else {
-                    Some(message.entities.clone())
-                },
+                entities,
                 schedule_date: message.schedule_date,
                 send_as: None,
             })
@@ -388,11 +406,7 @@ impl Client {
                 message: message.text.clone(),
                 random_id,
                 reply_markup: message.reply_markup.clone(),
-                entities: if message.entities.is_empty() {
-                    None
-                } else {
-                    Some(message.entities.clone())
-                },
+                entities,
                 schedule_date: message.schedule_date,
                 send_as: None,
             })
