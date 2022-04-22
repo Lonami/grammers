@@ -65,13 +65,21 @@ fn map_random_ids_to_messages(
     }
 }
 
-fn parse_mention_entities(client: &Client, mut entities: Vec<tl::enums::MessageEntity>) -> Option<Vec<tl::enums::MessageEntity>> {
+fn parse_mention_entities(
+    client: &Client,
+    mut entities: Vec<tl::enums::MessageEntity>,
+) -> Option<Vec<tl::enums::MessageEntity>> {
     if entities.is_empty() {
         None
     } else {
         for entitie in entities.iter_mut() {
             if let tl::enums::MessageEntity::MentionName(mention_name) = entitie {
-                if let Some(packed_user) = client.0.chat_hashes.lock("messages.parse_mention_entities").get(mention_name.user_id) {
+                if let Some(packed_user) = client
+                    .0
+                    .chat_hashes
+                    .lock("messages.parse_mention_entities")
+                    .get(mention_name.user_id)
+                {
                     *entitie = tl::types::InputMessageEntityMentionName {
                         offset: mention_name.offset,
                         length: mention_name.length,
