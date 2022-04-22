@@ -73,8 +73,8 @@ fn parse_mention_entities(client: &Client, mut entities: Vec<tl::enums::MessageE
             if let tl::enums::MessageEntity::MentionName(mention_name) = entitie {
                 if let Some(packed_user) = client.0.chat_hashes.lock("messages.parse_mention_entities").get(mention_name.user_id) {
                     *entitie = tl::types::InputMessageEntityMentionName {
-                        offset: entitie.offset(),
-                        length: entitie.length(),
+                        offset: mention_name.offset,
+                        length: mention_name.length,
                         user_id: packed_user.to_input_user_lossy(),
                     }
                     .into()
@@ -450,6 +450,7 @@ impl Client {
         new_message: M,
     ) -> Result<(), InvocationError> {
         let new_message = new_message.into();
+        let entities = parse_mention_entities(self, new_message.entities);
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
             peer: chat.into().to_input_peer(),
@@ -457,7 +458,7 @@ impl Client {
             message: Some(new_message.text),
             media: new_message.media,
             reply_markup: new_message.reply_markup,
-            entities: Some(new_message.entities),
+            entities,
             schedule_date: new_message.schedule_date,
         })
         .await?;
