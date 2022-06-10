@@ -5,10 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use std::sync::Arc;
+
+use grammers_tl_types as tl;
+
 use super::{CallbackQuery, ChatMap, InlineQuery, Message};
 use crate::{types::MessageDeletion, Client};
-use grammers_tl_types as tl;
-use std::sync::Arc;
 
 #[non_exhaustive]
 #[derive(Debug)]
@@ -19,14 +21,19 @@ pub enum Update {
     MessageEdited(Message),
     /// Occurs when a message is deleted.
     MessageDeleted(MessageDeletion),
-    /// Occurs when Telegram calls back into your bot because an inline callback button was
-    /// pressed.
+    /// Occurs when Telegram calls back into your bot because an inline callback
+    /// button was pressed.
     CallbackQuery(CallbackQuery),
-    /// Occurs whenever you sign in as a bot and a user sends an inline query such as
-    /// `@bot query`.
+    /// Occurs whenever you sign in as a bot and a user sends an inline query
+    /// such as `@bot query`.
     InlineQuery(InlineQuery),
     /// Raw events are not actual events.
-    /// Instead, they are the raw Update object that Telegram sends. You normally shouldn’t need these.
+    /// Instead, they are the raw Update object that Telegram sends. You
+    /// normally shouldn’t need these.
+    ///
+    /// **NOTE**: the library can split raw updates into actual `Update`
+    /// variants so use this only as the workaround when such variant is not
+    /// available yet.
     Raw(tl::enums::Update),
 }
 
@@ -41,7 +48,7 @@ impl Update {
                 Message::new(client, message, chats).map(Self::NewMessage)
             }
             tl::enums::Update::EditMessage(tl::types::UpdateEditMessage { message, .. }) => {
-                Message::new(client, message, chats).map(Self::NewMessage)
+                Message::new(client, message, chats).map(Self::MessageEdited)
             }
             tl::enums::Update::DeleteMessages(tl::types::UpdateDeleteMessages {
                 messages, ..
