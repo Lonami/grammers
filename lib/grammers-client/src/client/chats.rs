@@ -311,8 +311,42 @@ impl ProfilePhotoIter {
     }
 }
 
+const MIN_CHANNEL_ID: i32 = -1002147483647;
+const MAX_CHANNEL_ID: i32 = -1000000000000;
+const MIN_CHAT_ID: i32 = -2147483647;
+const MAX_USER_ID_OLD: i32 = 2147483647;
+const MAX_USER_ID: i32 = 999999999999;
+enum PeerType {
+    Chat,
+    Channel,
+    User,
+}
+
 /// Method implementations related to dealing with chats or other users.
 impl Client {
+
+    pub async fn get_chat(&mut self, chat_id: &str) {
+        if let Ok(peer_id) = chat_id.parse::<i32>() {
+
+        }else {
+            let peer = self.invoke(&tl::functions::)
+        }
+    }
+
+    pub async fn get_peer_type(peer_id: i32) -> Result<PeerType, String> {
+        if peer_id < 0 {
+            if MIN_CHAT_ID <= peer_id {
+                return Ok(PeerType::Chat);
+            }
+
+            if MIN_CHANNEL_ID <= peer_id && peer_id < MAX_CHANNEL_ID {
+                return Ok(PeerType::Channel);
+            }
+        }else if 0 < peer_id && peer_id <= MAX_USER_ID {
+            return Ok(PeerType::User);
+        }
+        Err(format!("Peer id invalid: {}", peer_id))
+    }
     /// Resolves a username into the chat that owns it, if any.
     ///
     /// Note that this method is expensive to call, and can quickly cause long flood waits.
