@@ -7,7 +7,6 @@
 // except according to those terms.
 pub mod auth;
 pub mod bots;
-pub mod chat;
 pub mod chats;
 pub mod client;
 pub mod dialogs;
@@ -15,6 +14,9 @@ pub mod files;
 pub mod messages;
 pub mod net;
 pub mod updates;
+pub mod user;
+pub mod chat;
+pub mod channel;
 
 pub use auth::SignInError;
 pub(crate) use client::ClientInner;
