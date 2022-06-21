@@ -14,6 +14,7 @@ use std::sync::Arc;
 
 /// Represents an inline query update, which occurs when you sign in as a bot and a user sends an
 /// inline query such as `@bot query`.
+#[derive(Clone)]
 pub struct InlineQuery {
     query: tl::types::UpdateBotInlineQuery,
     client: Client,

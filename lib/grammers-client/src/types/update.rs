@@ -11,7 +11,7 @@ use grammers_tl_types as tl;
 use std::sync::Arc;
 
 #[non_exhaustive]
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum Update {
     /// Occurs whenever a new text message or a message with media is produced.
     NewMessage(Message),

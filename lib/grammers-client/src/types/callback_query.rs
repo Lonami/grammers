@@ -19,6 +19,7 @@ use std::time::Duration;
 /// You should always [`CallbackQuery::answer`] these queries, even if you have no data to display
 /// to the user, because otherwise they will think the bot is non-responsive (the button spinner
 /// will timeout).
+#[derive(Clone)]
 pub struct CallbackQuery {
     pub(crate) query: tl::types::UpdateBotCallbackQuery,
     pub(crate) client: Client,
