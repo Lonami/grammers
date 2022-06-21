@@ -41,5 +41,5 @@ mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
-pub use client::{Client, Config, InitParams, SignInError};
+pub use client::{Client, Config, Filters, InitParams, SignInError};
 pub use types::{button, reply_markup, ChatMap, InputMessage, Update};

@@ -311,8 +311,6 @@ impl ProfilePhotoIter {
     }
 }
 
-
-
 /// Method implementations related to dealing with chats or other users.
 impl Client {
     /// Resolves a username into the chat that owns it, if any.
@@ -705,60 +703,6 @@ impl Client {
         let tl::enums::channels::ChannelParticipant::Participant(participant) = participant;
         let permissions = ParticipantPermissions::Channel(participant.participant);
         Ok(permissions)
-    }
-
-    /// get all members of chat
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # let channel = tl::types::InputChannel {
-    ///       channel_id: group.id(),
-    ///       access_hash: group.pack().access_hash.unwrap_or(0),
-    /// }.into();
-    /// let filter = tl::enums::ChannelParticipantsFilter::ChannelParticipantsRecent;
-    /// # let members = client_handle.get_chat_members(channel, filter).await;
-    /// ```
-    pub async fn get_chat_members(&self, channel: tl::enums::InputChannel, filter: tl::enums::ChannelParticipantsFilter) -> Vec<tl::enums::User> {
-        use tl::enums::channels::ChannelParticipants::*;
-
-        let mut request = tl::functions::channels::GetParticipants {
-            channel,
-            filter,
-            offset: 0,
-            limit: MAX_PARTICIPANT_LIMIT as i32,
-            hash: 0,
-        };
-        let mut chat_members: Vec<tl::enums::User> = vec![];
-        loop {
-            match self.invoke(&request).await {
-                Ok(res) => {
-                    match res {
-                        Participants(p) => {
-                            for elem in p.users {
-                                chat_members.push(elem);
-                            }
-                            
-                            if request.offset >= p.count {
-                                break;
-                            }else {
-                
-                                if request.limit >= p.count {
-                                    break;
-                                }else if (request.offset + request.limit) >= p.count {
-                                    break;
-                                }else {
-                                    request.offset += request.limit;
-                                }
-                            }
-                        }
-                        NotModified => {},
-                    }
-                }
-                Err(_) => {}
-            }
-        }
-        chat_members
     }
 }
 
