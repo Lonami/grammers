@@ -1,16 +1,15 @@
 use super::Client;
-use grammers_tl_types::{
-    enums::messages::ChatFull,
-    functions::messages::GetFullChat,
-};
-use anyhow::{ Result, anyhow};
+use grammers_mtsender::InvocationError;
+use grammers_tl_types as tl;
 
 impl Client {
-
-    pub async fn get_full_chat(&mut self, chat_id: i64) -> Result<ChatFull> {
-        let chat_full = self.invoke(&GetFullChat { chat_id })
-            .await
-            .map_err(|e| anyhow!("get full chat error: {}", e.to_string()))?;
+    pub async fn get_full_chat(
+        &mut self,
+        chat_id: i64,
+    ) -> Result<tl::enums::messages::ChatFull, InvocationError> {
+        let chat_full = self
+            .invoke(&tl::functions::messages::GetFullChat { chat_id })
+            .await?;
 
         Ok(chat_full)
     }

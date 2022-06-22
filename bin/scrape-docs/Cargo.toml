@@ -6,7 +6,7 @@ edition = "2018"
 
 [dependencies]
 reqwest = "0.11.3"
-tokio = { version = "1.5.0", features = ["full"] }
+tokio = { version = "1.19.2", features = ["full"] }
 select = "0.5.0"
 serde = { version = "1.0.125", features = ["derive"] }
 serde_json = "1.0.64"

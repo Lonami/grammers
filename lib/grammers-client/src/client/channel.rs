@@ -1,57 +1,52 @@
 use super::Client;
-use anyhow::{anyhow, Result};
-use grammers_tl_types::{
-    enums::{
-        channels::ChannelParticipants::{NotModified, Participants},
-        messages::ChatFull,
-        ChannelParticipantsFilter,
-        InputChannel::Channel,
-        User,
-    },
-    functions::channels::{GetFullChannel, GetParticipants},
-    types::InputChannel,
-};
+use grammers_mtsender::InvocationError;
+use grammers_session::PackedChat;
+use grammers_tl_types as tl;
 
 impl Client {
     const MAX_PARTICIPANT_LIMIT: usize = 200;
 
-    pub async fn get_full_channel(&mut self, channel_id: i64) -> Result<ChatFull> {
-        let input_channel = InputChannel {
-            channel_id,
-            access_hash: 0i64,
+    pub async fn get_full_channel<C: Into<PackedChat>>(
+        &mut self,
+        chat: C,
+    ) -> Result<tl::enums::messages::ChatFull, InvocationError> {
+        let chat = chat.into();
+        let input_channel = tl::types::InputChannel {
+            channel_id: chat.id,
+            access_hash: chat.access_hash.unwrap_or(0i64),
         };
         let chat_full = self
-            .invoke(&GetFullChannel {
-                channel: Channel(input_channel),
+            .invoke(&tl::functions::channels::GetFullChannel {
+                channel: tl::enums::InputChannel::Channel(input_channel),
             })
-            .await
-            .map_err(|e| anyhow!("get full channel error: {}", e.to_string()))?;
+            .await?;
 
         Ok(chat_full)
     }
 
-    pub async fn get_chat_members(
+    pub async fn get_chat_members<C: Into<PackedChat>>(
         &self,
-        channel_id: i64,
-        filter: ChannelParticipantsFilter,
-    ) -> Result<Vec<User>> {
-        let input_channel = InputChannel {
-            channel_id,
-            access_hash: 0i64,
+        chat: C,
+        filter: tl::enums::ChannelParticipantsFilter,
+    ) -> Result<Vec<tl::enums::User>, InvocationError> {
+        let chat = chat.into();
+        let input_channel = tl::types::InputChannel {
+            channel_id: chat.id,
+            access_hash: chat.access_hash.unwrap_or(0i64),
         };
 
-        let mut request = GetParticipants {
-            channel: Channel(input_channel),
+        let mut request = tl::functions::channels::GetParticipants {
+            channel: tl::enums::InputChannel::Channel(input_channel),
             filter,
             offset: 0,
             limit: Self::MAX_PARTICIPANT_LIMIT as i32,
             hash: 0,
         };
-        let mut chat_members: Vec<User> = vec![];
+        let mut chat_members: Vec<tl::enums::User> = vec![];
         loop {
             let res = self.invoke(&request).await?;
             match res {
-                Participants(p) => {
+                tl::enums::channels::ChannelParticipants::Participants(p) => {
                     for elem in p.users {
                         chat_members.push(elem);
                     }
@@ -67,7 +62,7 @@ impl Client {
                         }
                     }
                 }
-                NotModified => {}
+                tl::enums::channels::ChannelParticipants::NotModified => {}
             }
         }
         Ok(chat_members)
