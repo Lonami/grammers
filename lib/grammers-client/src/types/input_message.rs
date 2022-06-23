@@ -308,7 +308,9 @@ impl InputMessage {
     /// message contents and entities.
     ///
     /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links.
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
     #[cfg(feature = "markdown")]
     pub fn markdown<T: AsRef<str>>(s: T) -> Self {
         let (text, entities) = crate::parsers::parse_markdown_message(s.as_ref());
@@ -323,7 +325,9 @@ impl InputMessage {
     /// message contents and entities.
     ///
     /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links.
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
     #[cfg(feature = "html")]
     pub fn html<T: AsRef<str>>(s: T) -> Self {
         let (text, entities) = crate::parsers::parse_html_message(s.as_ref());

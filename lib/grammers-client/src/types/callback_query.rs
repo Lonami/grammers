@@ -19,6 +19,7 @@ use std::time::Duration;
 /// You should always [`CallbackQuery::answer`] these queries, even if you have no data to display
 /// to the user, because otherwise they will think the bot is non-responsive (the button spinner
 /// will timeout).
+#[derive(Clone)]
 pub struct CallbackQuery {
     pub(crate) query: tl::types::UpdateBotCallbackQuery,
     pub(crate) client: Client,
@@ -77,7 +78,13 @@ impl CallbackQuery {
 
     /// Load the `Message` that contains the pressed inline button.
     pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
-        todo!()
+        Ok(self
+            .client
+            .get_messages_by_id(self.chat(), &[self.query.msg_id])
+            .await?
+            .pop()
+            .unwrap()
+            .unwrap())
     }
 
     /// Answer the callback query.
