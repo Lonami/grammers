@@ -1,0 +1,16 @@
+[package]
+name = "grammers"
+version = "0.1.0"
+authors = ["Lonami Exo <totufals@hotmail.com>"]
+license = "MIT OR Apache-2.0"
+description = """
+A messaging application for Telegram.
+"""
+homepage = "https://github.com/Lonami/grammers"
+repository = "https://github.com/Lonami/grammers"
+keywords = ["telegram", "tl"]
+categories = []
+edition = "2018"
+
+[dependencies]
+grammers-client = "0.1.0"
