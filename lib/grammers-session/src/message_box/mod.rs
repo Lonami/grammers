@@ -290,7 +290,9 @@ impl MessageBox {
     ///
     /// It also resets the deadline.
     fn end_get_diff(&mut self, entry: Entry) {
-        self.getting_diff_for.remove(&entry);
+        if !self.getting_diff_for.remove(&entry) {
+            panic!("Called end_get_diff on an entry which was not getting diff for");
+        };
         self.reset_deadline(entry, next_updates_deadline());
         assert!(
             !self.possible_gaps.contains_key(&entry),
@@ -539,25 +541,30 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
+        let finish: bool;
+        let result;
+
         match difference {
             tl::enums::updates::Difference::Empty(diff) => {
                 debug!(
                     "handling empty difference (date = {}, seq = {}); no longer getting diff",
                     diff.date, diff.seq
                 );
+                finish = true;
                 self.date = diff.date;
                 self.seq = diff.seq;
                 self.end_get_diff(Entry::AccountWide);
-                (Vec::new(), Vec::new(), Vec::new())
+                result = (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::Difference::Difference(diff) => {
                 debug!(
                     "handling full difference {:?}; no longer getting diff",
                     diff.state
                 );
+                finish = true;
                 self.end_get_diff(Entry::AccountWide);
                 chat_hashes.extend(&diff.users, &diff.chats);
-                self.apply_difference_type(diff)
+                result = self.apply_difference_type(diff)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
                 new_messages,
@@ -568,27 +575,46 @@ impl MessageBox {
                 intermediate_state: state,
             }) => {
                 debug!("handling partial difference {:?}", state);
+                finish = false;
                 chat_hashes.extend(&users, &chats);
-                self.apply_difference_type(tl::types::updates::Difference {
+                result = self.apply_difference_type(tl::types::updates::Difference {
                     new_messages,
                     new_encrypted_messages,
                     other_updates,
                     chats,
                     users,
                     state,
-                })
+                });
             }
             tl::enums::updates::Difference::TooLong(diff) => {
                 debug!(
                     "handling too-long difference (pts = {}); no longer getting diff",
                     diff.pts
                 );
-                // TODO when are deadlines reset if we update the map??
+                finish = true;
+                // the deadline will be reset once the diff ends
                 self.map.get_mut(&Entry::AccountWide).unwrap().pts = diff.pts;
-                self.end_get_diff(Entry::AccountWide);
-                (Vec::new(), Vec::new(), Vec::new())
+                result = (Vec::new(), Vec::new(), Vec::new())
             }
         }
+
+        if finish {
+            let account = self.getting_diff_for.get(&Entry::AccountWide).is_some();
+            let secret = self.getting_diff_for.get(&Entry::SecretChats).is_some();
+
+            if !account && !secret {
+                panic!("Should not be applying the difference when neither account or secret was diff was active")
+            }
+
+            if account {
+                self.end_get_diff(Entry::AccountWide);
+            }
+            if secret {
+                self.end_get_diff(Entry::SecretChats);
+            }
+        }
+
+        result
     }
 
     fn apply_difference_type(
