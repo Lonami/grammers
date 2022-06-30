@@ -37,6 +37,7 @@ use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::mem;
 use std::time::{Duration, Instant};
+use tl::enums::InputChannel;
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT
@@ -822,4 +823,39 @@ impl MessageBox {
             }
         }
     }
+
+    // Return type is just a hack to use `?`
+    pub fn end_channel_difference(
+        &mut self,
+        request: &tl::functions::updates::GetChannelDifference,
+        reason: PrematureEndReason,
+    ) -> Option<()> {
+        let channel_id = channel_id(request)?;
+        let entry = Entry::Channel(channel_id);
+        match reason {
+            PrematureEndReason::TemporaryServerIssues => {
+                self.possible_gaps.remove(&entry);
+                self.end_get_diff(entry);
+            }
+            PrematureEndReason::Banned => {
+                self.possible_gaps.remove(&entry);
+                self.end_get_diff(entry);
+                self.map.remove(&entry);
+            }
+        }
+        Some(())
+    }
+}
+
+pub fn channel_id(request: &tl::functions::updates::GetChannelDifference) -> Option<i64> {
+    match request.channel {
+        InputChannel::Channel(ref c) => Some(c.channel_id),
+        InputChannel::FromMessage(ref c) => Some(c.channel_id),
+        InputChannel::Empty => None,
+    }
+}
+
+pub enum PrematureEndReason {
+    TemporaryServerIssues,
+    Banned,
 }

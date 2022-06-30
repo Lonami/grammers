@@ -12,6 +12,7 @@ mod message_box;
 pub use chat::{ChatHashCache, PackedChat, PackedType};
 pub use generated::types::User;
 pub use generated::LAYER as VERSION;
+pub use message_box::{PrematureEndReason, channel_id};
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::MessageBox;
