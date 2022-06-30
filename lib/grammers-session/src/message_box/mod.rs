@@ -808,7 +808,7 @@ impl MessageBox {
 
                 self.map.get_mut(&entry).unwrap().pts = pts;
                 updates.extend(new_messages.into_iter().map(|message| {
-                    tl::types::UpdateNewMessage {
+                    tl::types::UpdateNewChannelMessage {
                         message,
                         pts: NO_SEQ,
                         pts_count: NO_SEQ,
