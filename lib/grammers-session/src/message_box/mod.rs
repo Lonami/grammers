@@ -513,19 +513,24 @@ impl MessageBox {
 impl MessageBox {
     /// Return the request that needs to be made to get the difference, if any.
     pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
-        let entry = Entry::AccountWide;
-        if self.getting_diff_for.contains(&entry) {
-            if let Some(state) = self.map.get(&entry) {
-                return Some(tl::functions::updates::GetDifference {
-                    pts: state.pts,
-                    pts_total_limit: None,
-                    date: self.date,
-                    qts: self.map[&Entry::SecretChats].pts,
-                });
-            } else {
-                // TODO investigate when/why/if this can happen
-                warn!("cannot getDifference as we're missing account pts");
-                self.end_get_diff(entry);
+        for entry in [Entry::AccountWide, Entry::SecretChats] {
+            if self.getting_diff_for.contains(&entry) {
+                if let Some(_state) = self.map.get(&entry) {
+                    return Some(tl::functions::updates::GetDifference {
+                        pts: self.map[&Entry::AccountWide].pts,
+                        pts_total_limit: None,
+                        date: self.date,
+                        qts: if self.map.contains_key(&Entry::SecretChats) {
+                            self.map[&Entry::SecretChats].pts
+                        } else {
+                            NO_SEQ
+                        },
+                    });
+                } else {
+                    // TODO investigate when/why/if this can happen
+                    warn!("cannot getDifference as we're missing account pts");
+                    self.end_get_diff(entry);
+                }
             }
         }
         None
