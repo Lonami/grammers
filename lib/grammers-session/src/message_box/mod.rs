@@ -421,6 +421,11 @@ impl MessageBox {
         update: tl::enums::Update,
         reset_deadline: ResetDeadline,
     ) -> Option<tl::enums::Update> {
+        if let tl::enums::Update::ChannelTooLong(u) = update {
+            self.begin_get_diff(Entry::Channel(u.channel_id));
+            return None;
+        }
+
         let pts = match PtsInfo::from_update(&update) {
             Some(pts) => pts,
             // No pts means that the update can be applied in any order.
