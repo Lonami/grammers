@@ -203,14 +203,12 @@ impl MessageBox {
 
         if self.next_deadline == Some(entry) {
             // If the updated deadline was the closest one, recalculate the new minimum.
-            self.next_deadline = Some(
-                *self
-                    .map
-                    .iter()
-                    .min_by_key(|(_, state)| state.deadline)
-                    .unwrap()
-                    .0,
-            );
+            // TODO figure out when reset_deadline may be called while self.map is empty
+            self.next_deadline = self
+                .map
+                .iter()
+                .min_by_key(|(_, state)| state.deadline)
+                .map(|i| *i.0);
         } else if self
             .next_deadline
             .map(|e| deadline < self.map[&e].deadline)
