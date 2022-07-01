@@ -15,7 +15,7 @@ pub use generated::LAYER as VERSION;
 pub use message_box::{PrematureEndReason, channel_id};
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
-pub use message_box::MessageBox;
+pub use message_box::{MessageBox, Gap};
 use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};

@@ -542,11 +542,14 @@ impl MessageBox {
         &mut self,
         difference: tl::enums::updates::Difference,
         chat_hashes: &mut ChatHashCache,
-    ) -> (
-        Vec<tl::enums::Update>,
-        Vec<tl::enums::User>,
-        Vec<tl::enums::Chat>,
-    ) {
+    ) -> Result<
+        (
+            Vec<tl::enums::Update>,
+            Vec<tl::enums::User>,
+            Vec<tl::enums::Chat>,
+        ),
+        Gap,
+    > {
         let finish: bool;
         let result;
 
@@ -570,7 +573,7 @@ impl MessageBox {
                 finish = true;
                 self.end_get_diff(Entry::AccountWide);
                 chat_hashes.extend(&diff.users, &diff.chats);
-                result = self.apply_difference_type(diff)
+                result = self.apply_difference_type(diff, chat_hashes)?
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
                 new_messages,
@@ -583,14 +586,17 @@ impl MessageBox {
                 debug!("handling partial difference {:?}", state);
                 finish = false;
                 chat_hashes.extend(&users, &chats);
-                result = self.apply_difference_type(tl::types::updates::Difference {
-                    new_messages,
-                    new_encrypted_messages,
-                    other_updates,
-                    chats,
-                    users,
-                    state,
-                });
+                result = self.apply_difference_type(
+                    tl::types::updates::Difference {
+                        new_messages,
+                        new_encrypted_messages,
+                        other_updates,
+                        chats,
+                        users,
+                        state,
+                    },
+                    chat_hashes,
+                )?;
             }
             tl::enums::updates::Difference::TooLong(diff) => {
                 debug!(
@@ -620,7 +626,7 @@ impl MessageBox {
             }
         }
 
-        result
+        Ok(result)
     }
 
     fn apply_difference_type(
@@ -628,31 +634,38 @@ impl MessageBox {
         tl::types::updates::Difference {
             new_messages,
             new_encrypted_messages,
-            other_updates: mut updates,
+            other_updates: updates,
             chats,
             users,
             state: tl::enums::updates::State::State(state),
         }: tl::types::updates::Difference,
-    ) -> (
-        Vec<tl::enums::Update>,
-        Vec<tl::enums::User>,
-        Vec<tl::enums::Chat>,
-    ) {
+        chat_hashes: &mut ChatHashCache,
+    ) -> Result<
+        (
+            Vec<tl::enums::Update>,
+            Vec<tl::enums::User>,
+            Vec<tl::enums::Chat>,
+        ),
+        Gap,
+    > {
         self.map.get_mut(&Entry::AccountWide).unwrap().pts = state.pts;
         self.map.get_mut(&Entry::SecretChats).unwrap().pts = state.qts;
         self.date = state.date;
         self.seq = state.seq;
 
-        updates.iter().for_each(|u| match u {
-            tl::enums::Update::ChannelTooLong(c) => {
-                // `c.pts`, if any, is the channel's current `pts`; we do not need this.
-                info!("got {:?} during getDifference", c);
-                self.begin_get_diff(Entry::Channel(c.channel_id));
-            }
-            _ => {}
+        // other_updates can contain things like UpdateChannelTooLong and UpdateNewChannelMessage.
+        // We need to process those as if they were socket updates to discard any we have already handled.
+        let mut result_updates = vec![];
+        let us = tl::enums::Updates::Updates(tl::types::Updates {
+            updates,
+            users: users.clone(),
+            chats: chats.clone(),
+            date: 1,
+            seq: NO_SEQ,
         });
+        self.process_updates(us, chat_hashes, &mut result_updates)?;
 
-        updates.extend(
+        result_updates.extend(
             new_messages
                 .into_iter()
                 .map(|message| {
@@ -672,7 +685,7 @@ impl MessageBox {
                 })),
         );
 
-        (updates, users, chats)
+        Ok((result_updates, users, chats))
     }
 }
 
@@ -739,11 +752,14 @@ impl MessageBox {
         request: tl::functions::updates::GetChannelDifference,
         difference: tl::enums::updates::ChannelDifference,
         chat_hashes: &mut ChatHashCache,
-    ) -> (
-        Vec<tl::enums::Update>,
-        Vec<tl::enums::User>,
-        Vec<tl::enums::Chat>,
-    ) {
+    ) -> Result<
+        (
+            Vec<tl::enums::Update>,
+            Vec<tl::enums::User>,
+            Vec<tl::enums::Chat>,
+        ),
+        Gap,
+    > {
         let channel_id = match request.channel {
             tl::enums::InputChannel::Channel(c) => c.channel_id,
             _ => panic!("request had wrong input channel"),
@@ -761,7 +777,7 @@ impl MessageBox {
                 );
                 self.end_get_diff(entry);
                 self.map.get_mut(&entry).unwrap().pts = diff.pts;
-                (Vec::new(), Vec::new(), Vec::new())
+                Ok((Vec::new(), Vec::new(), Vec::new()))
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
                 assert!(diff.r#final);
@@ -784,7 +800,7 @@ impl MessageBox {
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
                 // expect all updates to be fetched. Instead, nothing is returned.
-                (Vec::new(), Vec::new(), Vec::new())
+                Ok((Vec::new(), Vec::new(), Vec::new()))
             }
             tl::enums::updates::ChannelDifference::Difference(
                 tl::types::updates::ChannelDifference {
@@ -792,7 +808,7 @@ impl MessageBox {
                     pts,
                     timeout,
                     new_messages,
-                    other_updates: mut updates,
+                    other_updates: updates,
                     chats,
                     users,
                 },
@@ -808,7 +824,18 @@ impl MessageBox {
                 }
 
                 self.map.get_mut(&entry).unwrap().pts = pts;
-                updates.extend(new_messages.into_iter().map(|message| {
+                chat_hashes.extend(&users, &chats);
+                let mut result_updates = vec![];
+                let us = tl::enums::Updates::Updates(tl::types::Updates {
+                    updates,
+                    users: users.clone(),
+                    chats: chats.clone(),
+                    date: 1,
+                    seq: NO_SEQ,
+                });
+                self.process_updates(us, chat_hashes, &mut result_updates)?;
+
+                result_updates.extend(new_messages.into_iter().map(|message| {
                     tl::types::UpdateNewChannelMessage {
                         message,
                         pts: NO_SEQ,
@@ -816,10 +843,9 @@ impl MessageBox {
                     }
                     .into()
                 }));
-                chat_hashes.extend(&users, &chats);
                 self.reset_channel_deadline(channel_id, timeout);
 
-                (updates, users, chats)
+                Ok((result_updates, users, chats))
             }
         }
     }
