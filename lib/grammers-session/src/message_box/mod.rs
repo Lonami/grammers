@@ -536,7 +536,10 @@ impl MessageBox {
         for entry in [Entry::AccountWide, Entry::SecretChats] {
             if self.getting_diff_for.contains(&entry) {
                 if self.map.get(&entry).is_none() {
-                    panic!("Should not try to get difference for an entry {:?} without known state", entry);
+                    panic!(
+                        "Should not try to get difference for an entry {:?} without known state",
+                        entry
+                    );
                 }
 
                 return Some(tl::functions::updates::GetDifference {
@@ -742,13 +745,10 @@ impl MessageBox {
                     },
                 })
             } else {
-                // TODO investigate when/why/if this can happen
-                warn!(
-                    "cannot getChannelDifference for {} as we're missing its pts",
-                    id
+                panic!(
+                    "Should not try to get difference for an entry {:?} without known state",
+                    entry
                 );
-                self.end_get_diff(entry);
-                None
             }
         } else {
             warn!(
