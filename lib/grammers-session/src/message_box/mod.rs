@@ -204,11 +204,13 @@ impl MessageBox {
         if self.next_deadline == Some(entry) {
             // If the updated deadline was the closest one, recalculate the new minimum.
             // TODO figure out when reset_deadline may be called while self.map is empty
-            self.next_deadline = self
-                .map
-                .iter()
-                .min_by_key(|(_, state)| state.deadline)
-                .map(|i| *i.0);
+            self.next_deadline = Some(
+                self.map
+                    .iter()
+                    .min_by_key(|(_, state)| state.deadline)
+                    .map(|i| *i.0)
+                    .expect("deadline should exist"),
+            );
         } else if self
             .next_deadline
             .map(|e| deadline < self.map[&e].deadline)
@@ -277,10 +279,22 @@ impl MessageBox {
         });
     }
 
-    /// Begin getting difference for the given entry.
+    /// Try to begin getting difference for the given entry.
+    /// Fails if the entry does not have a previously-known state that can be used to get its difference.
     ///
     /// Clears any previous gaps.
-    fn begin_get_diff(&mut self, entry: Entry) {
+    fn try_begin_get_diff(&mut self, entry: Entry) {
+        if self.map.get(&entry).is_none() {
+            // Won't actually be able to get difference for this entry if we don't have a pts to start off from.
+            if self.possible_gaps.get(&entry).is_some() {
+                log::error!(
+                    "Should not have a possible_gap for an entry {:?} not in the state map",
+                    entry
+                );
+            }
+            return;
+        }
+
         self.getting_diff_for.insert(entry);
         self.possible_gaps.remove(&entry);
     }
@@ -332,7 +346,7 @@ impl MessageBox {
         } = match adaptor::adapt(updates, chat_hashes) {
             Ok(combined) => combined,
             Err(Gap) => {
-                self.begin_get_diff(Entry::AccountWide);
+                self.try_begin_get_diff(Entry::AccountWide);
                 return Err(Gap);
             }
         };
@@ -356,7 +370,7 @@ impl MessageBox {
                         "gap detected (local seq {}, remote seq {})",
                         self.seq, seq_start
                     );
-                    self.begin_get_diff(Entry::AccountWide);
+                    self.try_begin_get_diff(Entry::AccountWide);
                     return Err(Gap);
                 }
             }
@@ -420,7 +434,7 @@ impl MessageBox {
         reset_deadline: ResetDeadline,
     ) -> Option<tl::enums::Update> {
         if let tl::enums::Update::ChannelTooLong(u) = update {
-            self.begin_get_diff(Entry::Channel(u.channel_id));
+            self.try_begin_get_diff(Entry::Channel(u.channel_id));
             return None;
         }
 
