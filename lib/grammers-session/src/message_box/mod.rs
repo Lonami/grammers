@@ -488,7 +488,7 @@ impl MessageBox {
         } else {
             // No previous `pts` known, and because this update has to be "right" (it's the first one) our
             // `local_pts` must be one less.
-            pts.pts - 1
+            pts.pts - pts.pts_count
         };
 
         // For example, when we're in a channel, we immediately receive:
