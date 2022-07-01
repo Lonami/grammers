@@ -197,8 +197,7 @@ impl MessageBox {
             state.deadline = deadline;
             debug!("reset deadline {:?} for {:?}", deadline, entry);
         } else {
-            // TODO figure out why this happens
-            info!("did not reset deadline for {:?} as it had no entry", entry);
+            panic!("did not reset deadline for {:?} as it had no entry", entry);
         }
 
         if self.next_deadline == Some(entry) {
@@ -448,6 +447,8 @@ impl MessageBox {
         // the "no updates" period for that entry is reset.
         //
         // Build the `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
+        //
+        // By the time this method returns, self.map will have an entry for which we can reset its deadline.
         if reset_deadline == ResetDeadline::Yes {
             self.reset_deadlines_for.insert(pts.entry);
         }
