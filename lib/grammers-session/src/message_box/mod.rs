@@ -496,20 +496,21 @@ impl MessageBox {
             pts.pts - pts.pts_count
         };
 
-        // For example, when we're in a channel, we immediately receive:
+        // In a channel, we may immediately receive:
         // * ReadChannelInbox (pts = X)
         // * NewChannelMessage (pts = X, pts_count = 1)
         //
-        // Notice how both `pts` are the same. If we stored the one from the first, then the second one would
-        // be considered "already handled" and ignored, which is not desirable. Instead, advance local `pts`
-        // by `pts_count` (which is 0 for updates not directly related to messages, like reading inbox).
+        // Notice how both `pts` are the same. The first one however would've triggered a gap
+        // because `local_pts` + `pts_count` of 0 would be less than `remote_pts`. So there is
+        // no risk by setting the `local_pts` to match the `remote_pts` here of missing the new
+        // message.
         self.map
             .entry(pts.entry)
             .or_insert_with(|| State {
-                pts: local_pts + pts.pts_count,
+                pts: pts.pts,
                 deadline: next_updates_deadline(),
             })
-            .pts = local_pts + pts.pts_count;
+            .pts = pts.pts;
 
         Some(update)
     }
