@@ -6,6 +6,7 @@ use grammers_tl_types as tl;
 impl Client {
     const MAX_PARTICIPANT_LIMIT: usize = 200;
 
+    /// get full channel
     pub async fn get_full_channel<C: Into<PackedChat>>(
         &mut self,
         chat: C,
@@ -24,6 +25,7 @@ impl Client {
         Ok(chat_full)
     }
 
+    /// get chat members
     pub async fn get_chat_members<C: Into<PackedChat>>(
         &self,
         chat: C,
