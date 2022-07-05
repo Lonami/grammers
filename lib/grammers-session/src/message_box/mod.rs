@@ -581,7 +581,6 @@ impl MessageBox {
                 finish = true;
                 self.date = diff.date;
                 self.seq = diff.seq;
-                self.end_get_diff(Entry::AccountWide);
                 result = (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::Difference::Difference(diff) => {
@@ -590,7 +589,6 @@ impl MessageBox {
                     diff.state
                 );
                 finish = true;
-                self.end_get_diff(Entry::AccountWide);
                 chat_hashes.extend(&diff.users, &diff.chats);
                 result = self.apply_difference_type(diff, chat_hashes)?
             }
@@ -634,7 +632,7 @@ impl MessageBox {
             let secret = self.getting_diff_for.get(&Entry::SecretChats).is_some();
 
             if !account && !secret {
-                panic!("Should not be applying the difference when neither account or secret was diff was active")
+                panic!("Should not be applying the difference when neither account or secret diff was active")
             }
 
             if account {
