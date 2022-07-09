@@ -4,7 +4,7 @@
 ///
 /// When `MessageDeletion#channel_id` is Some, it means the message was deleted
 /// from a channel.
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub struct MessageDeletion {
     pub(crate) channel_id: Option<i64>,
     pub(crate) messages: Vec<i32>,
