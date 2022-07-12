@@ -282,9 +282,9 @@ impl MessageBox {
     ///
     /// Clears any previous gaps.
     fn try_begin_get_diff(&mut self, entry: Entry) {
-        if self.map.get(&entry).is_none() {
+        if !self.map.contains_key(&entry) {
             // Won't actually be able to get difference for this entry if we don't have a pts to start off from.
-            if self.possible_gaps.get(&entry).is_some() {
+            if self.possible_gaps.contains_key(&entry) {
                 log::error!(
                     "Should not have a possible_gap for an entry {:?} not in the state map",
                     entry
@@ -534,7 +534,7 @@ impl MessageBox {
     pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
         for entry in [Entry::AccountWide, Entry::SecretChats] {
             if self.getting_diff_for.contains(&entry) {
-                if self.map.get(&entry).is_none() {
+                if !self.map.contains_key(&entry) {
                     panic!(
                         "Should not try to get difference for an entry {:?} without known state",
                         entry
@@ -590,7 +590,7 @@ impl MessageBox {
                 );
                 finish = true;
                 chat_hashes.extend(&diff.users, &diff.chats);
-                result = self.apply_difference_type(diff, chat_hashes)?
+                result = self.apply_difference_type(diff, chat_hashes)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
                 new_messages,
@@ -613,7 +613,7 @@ impl MessageBox {
                         state,
                     },
                     chat_hashes,
-                )?;
+                )
             }
             tl::enums::updates::Difference::TooLong(diff) => {
                 debug!(
@@ -628,8 +628,8 @@ impl MessageBox {
         }
 
         if finish {
-            let account = self.getting_diff_for.get(&Entry::AccountWide).is_some();
-            let secret = self.getting_diff_for.get(&Entry::SecretChats).is_some();
+            let account = self.getting_diff_for.contains(&Entry::AccountWide);
+            let secret = self.getting_diff_for.contains(&Entry::SecretChats);
 
             if !account && !secret {
                 panic!("Should not be applying the difference when neither account or secret diff was active")
@@ -657,14 +657,11 @@ impl MessageBox {
             state: tl::enums::updates::State::State(state),
         }: tl::types::updates::Difference,
         chat_hashes: &mut ChatHashCache,
-    ) -> Result<
-        (
-            Vec<tl::enums::Update>,
-            Vec<tl::enums::User>,
-            Vec<tl::enums::Chat>,
-        ),
-        Gap,
-    > {
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
         self.map.get_mut(&Entry::AccountWide).unwrap().pts = state.pts;
         self.map.get_mut(&Entry::SecretChats).unwrap().pts = state.qts;
         self.date = state.date;
@@ -680,7 +677,8 @@ impl MessageBox {
             date: 1,
             seq: NO_SEQ,
         });
-        self.process_updates(us, chat_hashes, &mut result_updates)?;
+        self.process_updates(us, chat_hashes, &mut result_updates)
+            .expect("gap is detected while applying difference");
 
         result_updates.extend(
             new_messages
@@ -702,7 +700,7 @@ impl MessageBox {
                 })),
         );
 
-        Ok((result_updates, users, chats))
+        (result_updates, users, chats)
     }
 }
 
@@ -847,7 +845,8 @@ impl MessageBox {
                     date: 1,
                     seq: NO_SEQ,
                 });
-                self.process_updates(us, chat_hashes, &mut result_updates)?;
+                self.process_updates(us, chat_hashes, &mut result_updates)
+                    .expect("gap is detected while applying channel difference");
 
                 result_updates.extend(new_messages.into_iter().map(|message| {
                     tl::types::UpdateNewChannelMessage {

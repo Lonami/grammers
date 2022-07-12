@@ -110,6 +110,7 @@ pub(super) struct PossibleGap {
     pub(super) updates: Vec<tl::enums::Update>,
 }
 
+#[derive(Debug)]
 pub struct Gap;
 
 #[derive(PartialEq)]
