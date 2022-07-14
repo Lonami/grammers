@@ -285,7 +285,7 @@ impl MessageBox {
         if !self.map.contains_key(&entry) {
             // Won't actually be able to get difference for this entry if we don't have a pts to start off from.
             if self.possible_gaps.contains_key(&entry) {
-                log::error!(
+                panic!(
                     "Should not have a possible_gap for an entry {:?} not in the state map",
                     entry
                 );
@@ -561,14 +561,11 @@ impl MessageBox {
         &mut self,
         difference: tl::enums::updates::Difference,
         chat_hashes: &mut ChatHashCache,
-    ) -> Result<
-        (
-            Vec<tl::enums::Update>,
-            Vec<tl::enums::User>,
-            Vec<tl::enums::Chat>,
-        ),
-        Gap,
-    > {
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
         let finish: bool;
         let result;
 
@@ -643,7 +640,7 @@ impl MessageBox {
             }
         }
 
-        Ok(result)
+        result
     }
 
     fn apply_difference_type(
@@ -764,14 +761,11 @@ impl MessageBox {
         request: tl::functions::updates::GetChannelDifference,
         difference: tl::enums::updates::ChannelDifference,
         chat_hashes: &mut ChatHashCache,
-    ) -> Result<
-        (
-            Vec<tl::enums::Update>,
-            Vec<tl::enums::User>,
-            Vec<tl::enums::Chat>,
-        ),
-        Gap,
-    > {
+    ) -> (
+        Vec<tl::enums::Update>,
+        Vec<tl::enums::User>,
+        Vec<tl::enums::Chat>,
+    ) {
         let channel_id = match request.channel {
             tl::enums::InputChannel::Channel(c) => c.channel_id,
             _ => panic!("request had wrong input channel"),
@@ -789,7 +783,7 @@ impl MessageBox {
                 );
                 self.end_get_diff(entry);
                 self.map.get_mut(&entry).unwrap().pts = diff.pts;
-                Ok((Vec::new(), Vec::new(), Vec::new()))
+                (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
                 assert!(diff.r#final);
@@ -812,7 +806,7 @@ impl MessageBox {
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
                 // expect all updates to be fetched. Instead, nothing is returned.
-                Ok((Vec::new(), Vec::new(), Vec::new()))
+                (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::Difference(
                 tl::types::updates::ChannelDifference {
@@ -858,31 +852,30 @@ impl MessageBox {
                 }));
                 self.reset_channel_deadline(channel_id, timeout);
 
-                Ok((result_updates, users, chats))
+                (result_updates, users, chats)
             }
         }
     }
 
-    // Return type is just a hack to use `?`
     pub fn end_channel_difference(
         &mut self,
         request: &tl::functions::updates::GetChannelDifference,
         reason: PrematureEndReason,
-    ) -> Option<()> {
-        let channel_id = channel_id(request)?;
-        let entry = Entry::Channel(channel_id);
-        match reason {
-            PrematureEndReason::TemporaryServerIssues => {
-                self.possible_gaps.remove(&entry);
-                self.end_get_diff(entry);
+    ) {
+        if let Some(channel_id) = channel_id(request) {
+            let entry = Entry::Channel(channel_id);
+            match reason {
+                PrematureEndReason::TemporaryServerIssues => {
+                    self.possible_gaps.remove(&entry);
+                    self.end_get_diff(entry);
+                }
+                PrematureEndReason::Banned => {
+                    self.possible_gaps.remove(&entry);
+                    self.end_get_diff(entry);
+                    self.map.remove(&entry);
+                }
             }
-            PrematureEndReason::Banned => {
-                self.possible_gaps.remove(&entry);
-                self.end_get_diff(entry);
-                self.map.remove(&entry);
-            }
-        }
-        Some(())
+        };
     }
 }
 

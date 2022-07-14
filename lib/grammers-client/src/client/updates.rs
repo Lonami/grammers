@@ -58,15 +58,8 @@ impl Client {
                 let response = self.invoke(&request).await?;
                 let mut message_box = self.0.message_box.lock("client.next_update/get_difference");
                 let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_difference");
-                let apply_difference_result =
+                let (updates, users, chats) =
                     message_box.apply_difference(response, &mut chat_hashes);
-                let (updates, users, chats) = match apply_difference_result {
-                    Ok((updates, users, chats)) => (updates, users, chats),
-                    Err(grammers_session::Gap) => {
-                        log::error!("Error during apply_difference: there's a gap");
-                        continue;
-                    }
-                };
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
@@ -136,15 +129,7 @@ impl Client {
                         .chat_hashes
                         .lock("client.next_update/get_channel_difference");
 
-                    let apply_channel_difference_result =
-                        message_box.apply_channel_difference(request, response, &mut chat_hashes);
-                    match apply_channel_difference_result {
-                        Ok((updates, users, chats)) => (updates, users, chats),
-                        Err(grammers_session::Gap) => {
-                            log::error!("Error during apply_channel_difference: there's a gap");
-                            continue;
-                        }
-                    }
+                    message_box.apply_channel_difference(request, response, &mut chat_hashes)
                 };
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
