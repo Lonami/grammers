@@ -65,7 +65,7 @@ fn map_random_ids_to_messages(
     }
 }
 
-fn parse_mention_entities(
+pub(crate) fn parse_mention_entities(
     client: &Client,
     mut entities: Vec<tl::enums::MessageEntity>,
 ) -> Option<Vec<tl::enums::MessageEntity>> {
