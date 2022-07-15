@@ -5,9 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::IterBuffer;
+use crate::client::messages::parse_mention_entities;
 use crate::utils::generate_random_id;
 use crate::Client;
+use crate::{types::IterBuffer, InputMessage};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
@@ -149,5 +150,25 @@ impl Client {
     /// ```
     pub fn inline_query<C: Into<PackedChat>>(&self, bot: C, query: &str) -> InlineResultIter {
         InlineResultIter::new(self, bot.into(), query)
+    }
+
+    pub async fn edit_inline_message<M: Into<InputMessage>>(
+        &self,
+        message_id: tl::enums::InputBotInlineMessageId,
+        input_message: M,
+    ) -> Result<bool, InvocationError> {
+        let message: InputMessage = input_message.into();
+        let entities = parse_mention_entities(self, message.entities);
+        let result = self
+            .invoke(&tl::functions::messages::EditInlineBotMessage {
+                id: message_id,
+                message: Some(message.text),
+                media: message.media,
+                entities,
+                no_webpage: message.link_preview,
+                reply_markup: message.reply_markup,
+            })
+            .await?;
+        Ok(result)
     }
 }
