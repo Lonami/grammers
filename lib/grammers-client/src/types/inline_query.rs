@@ -165,7 +165,9 @@ impl Article {
         }
     }
 
-    /// Unique id of the result.
+    /// Unique identifier of the result.
+    ///
+    /// By default, a random string will be used.
     pub fn id(mut self, result_id: impl Into<String>) -> Self {
         self.id = Some(result_id.into());
         self
