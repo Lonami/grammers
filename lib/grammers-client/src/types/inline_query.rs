@@ -230,3 +230,15 @@ impl fmt::Debug for InlineQuery {
             .finish()
     }
 }
+
+impl fmt::Debug for Article {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.debug_struct("Article")
+            .field("id", &self.id)
+            .field("title", &self.title)
+            .field("description", &self.description)
+            .field("url", &self.url)
+            .field("thumb_url", &self.thumb_url)
+            .finish()
+    }
+}
