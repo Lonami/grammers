@@ -165,7 +165,7 @@ impl Client {
                 message: Some(message.text),
                 media: message.media,
                 entities,
-                no_webpage: !message.link_preview,
+                no_webpage: message.link_preview,
                 reply_markup: message.reply_markup,
             })
             .await?;
