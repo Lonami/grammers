@@ -145,6 +145,7 @@ impl Answer {
 }
 
 pub struct Article {
+    id: Option<String>,
     title: String,
     description: Option<String>,
     url: Option<String>,
@@ -155,12 +156,19 @@ pub struct Article {
 impl Article {
     pub fn new<S: Into<String>, M: Into<InputMessage>>(title: S, input_message: M) -> Self {
         Self {
+            id: None,
             title: title.into(),
             description: None,
             url: None,
             thumb_url: None,
             input_message: input_message.into(),
         }
+    }
+
+    /// Unique id of the result.
+    pub fn id(mut self, result_id: impl Into<String>) -> Self {
+        self.id = Some(result_id.into());
+        self
     }
 
     /// Short description of the result.
@@ -186,7 +194,7 @@ impl From<Article> for InlineResult {
     fn from(article: Article) -> Self {
         Self(tl::enums::InputBotInlineResult::Result(
             tl::types::InputBotInlineResult {
-                id: generate_random_id().to_string(),
+                id: article.id.unwrap_or(generate_random_id().to_string()),
                 r#type: "article".into(),
                 title: Some(article.title),
                 description: article.description,
