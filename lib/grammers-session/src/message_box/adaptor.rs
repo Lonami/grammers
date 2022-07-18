@@ -459,6 +459,13 @@ impl PtsInfo {
                 entry: Entry::SecretChats,
             }),
             MessageReactions(_) => None,
+
+            // LAYER 143
+            AttachMenuBots => None,
+            WebViewResultSent(_) => None,
+            BotMenuButton(_) => None,
+            SavedRingtones => None,
+            TranscribedAudio(_) => None,
         }
     }
 }

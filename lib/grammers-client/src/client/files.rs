@@ -75,7 +75,7 @@ impl DownloadIter {
     /// skip less data, modify the `chunk_size` before calling this method, and then reset it to
     /// any value you want.
     pub fn skip_chunks(mut self, n: i32) -> Self {
-        self.request.offset += self.request.limit * n;
+        self.request.offset += (self.request.limit * n) as i64;
         self
     }
 
@@ -99,7 +99,7 @@ impl DownloadIter {
                         }
                     }
 
-                    self.request.offset += self.request.limit;
+                    self.request.offset += self.request.limit as i64;
                     Ok(Some(f.bytes))
                 }
                 Ok(File::CdnRedirect(_)) => {
@@ -230,7 +230,7 @@ impl Client {
                 let mut retry_counter = 0;
                 loop {
                     // Calculate file offset
-                    let offset = {
+                    let offset: i64 = {
                         if let Some(offset) = retry_offset {
                             retry_offset = None;
                             offset
@@ -238,7 +238,7 @@ impl Client {
                             retry_counter = 0;
                             let mut i = part_index.lock().await;
                             *i += 1;
-                            MAX_CHUNK_SIZE * (*i - 1)
+                            (MAX_CHUNK_SIZE * (*i - 1)) as i64
                         }
                     };
                     if offset > size {
