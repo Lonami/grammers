@@ -462,7 +462,7 @@ impl MessageBox {
             return None;
         }
 
-        let local_pts = if let Some(state) = self.map.get(&pts.entry) {
+        if let Some(state) = self.map.get(&pts.entry) {
             let local_pts = state.pts;
             match (local_pts + pts.pts_count).cmp(&pts.pts) {
                 // Apply
@@ -474,7 +474,6 @@ impl MessageBox {
                         pts.pts_count,
                         pts.pts
                     );
-                    local_pts
                 }
                 // Ignore
                 Ordering::Greater => {
@@ -502,11 +501,9 @@ impl MessageBox {
                     return None;
                 }
             }
-        } else {
-            // No previous `pts` known, and because this update has to be "right" (it's the first one) our
-            // `local_pts` must be one less.
-            pts.pts - pts.pts_count
-        };
+        }
+        // else, there is no previous `pts` known, and because this update has to be "right"
+        // (it's the first one) our `local_pts` must be `pts - pts_count`.
 
         // In a channel, we may immediately receive:
         // * ReadChannelInbox (pts = X)
