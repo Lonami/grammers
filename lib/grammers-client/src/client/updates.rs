@@ -11,7 +11,8 @@
 use super::Client;
 use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-pub use grammers_session::UpdateState;
+use grammers_session::channel_id;
+pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::warn;
 use std::sync::Arc;
@@ -69,7 +70,53 @@ impl Client {
                 message_box.get_channel_difference(&chat_hashes)
             } {
                 drop(message_box);
-                let response = self.invoke(&request).await?;
+                let maybe_response = self.invoke(&request).await;
+
+                let response = match maybe_response {
+                    Ok(r) => r,
+                    Err(e) if e.is("PERSISTENT_TIMESTAMP_OUTDATED") => {
+                        // According to Telegram's docs:
+                        // "Channel internal replication issues, try again later (treat this like an RPC_CALL_FAIL)."
+                        // We can treat this as "empty difference" and not update the local pts.
+                        // Then this same call will be retried when another gap is detected or timeout expires.
+                        //
+                        // Another option would be to literally treat this like an RPC_CALL_FAIL and retry after a few
+                        // seconds, but if Telegram is having issues it's probably best to wait for it to send another
+                        // update (hinting it may be okay now) and retry then.
+                        //
+                        // This is a bit hacky because MessageBox doesn't really have a way to "not update" the pts.
+                        // Instead we manually extract the previously-known pts and use that.
+                        log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
+
+                        let mut message_box = self
+                            .0
+                            .message_box
+                            .lock("client.next_update/end_channel_difference");
+
+                        message_box.end_channel_difference(
+                            &request,
+                            PrematureEndReason::TemporaryServerIssues,
+                        );
+                        continue;
+                    }
+                    Err(e) if e.is("CHANNEL_PRIVATE") => {
+                        log::info!(
+                            "Account is now banned in {} so we can no longer fetch updates from it",
+                            channel_id(&request)
+                                .map(|i| i.to_string())
+                                .unwrap_or("empty channel".into())
+                        );
+
+                        let mut message_box = self
+                            .0
+                            .message_box
+                            .lock("client.next_update/end_channel_difference");
+
+                        message_box.end_channel_difference(&request, PrematureEndReason::Banned);
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                };
 
                 let (updates, users, chats) = {
                     let mut message_box = self
