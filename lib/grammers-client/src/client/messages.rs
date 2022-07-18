@@ -401,6 +401,7 @@ impl Client {
                 entities,
                 schedule_date: message.schedule_date,
                 send_as: None,
+                noforwards: false,
             })
             .await
         } else {
@@ -417,6 +418,7 @@ impl Client {
                 entities,
                 schedule_date: message.schedule_date,
                 send_as: None,
+                noforwards: false,
             })
             .await
         }?;
@@ -570,6 +572,7 @@ impl Client {
             to_peer: destination.into().to_input_peer(),
             schedule_date: None,
             send_as: None,
+            noforwards: false,
         };
         let result = self.invoke(&request).await?;
         Ok(map_random_ids_to_messages(self, &request.random_id, result))
