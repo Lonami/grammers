@@ -13,7 +13,7 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transport;
 use grammers_mtsender::connect;
-use grammers_tl_types::{enums, functions, Deserializable, RemoteCall};
+use grammers_tl_types::{enums, functions, Deserializable, RemoteCall, LAYER};
 use log;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
@@ -34,7 +34,21 @@ fn test_invoke_encrypted_method() {
             .await
             .unwrap();
 
-        let mut rx = enqueuer.enqueue(&functions::help::GetNearestDc {});
+        let mut rx = enqueuer.enqueue(&functions::InvokeWithLayer {
+            layer: LAYER,
+            query: functions::InitConnection {
+                api_id: 1,
+                device_model: "Test".to_string(),
+                system_version: "0.1".to_string(),
+                app_version: "0.1".to_string(),
+                system_lang_code: "en".to_string(),
+                lang_pack: "".to_string(),
+                lang_code: "".to_string(),
+                proxy: None,
+                params: None,
+                query: functions::help::GetNearestDc {},
+            },
+        });
         loop {
             sender.step().await.unwrap();
             if let Ok(response) = rx.try_recv() {
