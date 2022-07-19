@@ -58,6 +58,7 @@ pub(super) fn update_short_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                reactions: None,
                 id: short.id,
                 from_id: Some(
                     tl::types::PeerUser {
@@ -111,6 +112,7 @@ pub(super) fn update_short_chat_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                reactions: None,
                 id: short.id,
                 from_id: Some(
                     tl::types::PeerUser {
@@ -456,6 +458,14 @@ impl PtsInfo {
                 pts_count: 0,
                 entry: Entry::SecretChats,
             }),
+            MessageReactions(_) => None,
+
+            // LAYER 143
+            AttachMenuBots => None,
+            WebViewResultSent(_) => None,
+            BotMenuButton(_) => None,
+            SavedRingtones => None,
+            TranscribedAudio(_) => None,
         }
     }
 }

@@ -60,6 +60,8 @@ impl Channel {
                         fake: false,
                         gigagroup: false,
                         noforwards: false,
+                        join_request: false,
+                        join_to_send: false,
                         id: channel.id,
                         access_hash: Some(channel.access_hash),
                         title: channel.title,

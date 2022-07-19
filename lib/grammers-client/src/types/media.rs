@@ -231,7 +231,7 @@ impl Document {
 
     /// The size of the file.
     /// returns 0 if the document is empty.
-    pub fn size(&self) -> i32 {
+    pub fn size(&self) -> i64 {
         match self.document.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => d.size,
             _ => 0,
