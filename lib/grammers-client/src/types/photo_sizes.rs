@@ -115,7 +115,7 @@ impl PhotoSize {
             }
             PhotoSize::Cached(size) => {
                 let mut file = fs::File::create(path).await.unwrap();
-                file.write(&size.bytes).await.unwrap();
+                file.write_all(&size.bytes).await.unwrap();
             }
             PhotoSize::Stripped(size) => {
                 // Based on https://core.tlgr.org/api/files#stripped-thumbnails
@@ -184,7 +184,7 @@ impl PhotoSize {
                 real.append(&mut footer);
 
                 let mut file = fs::File::create(path).await.unwrap();
-                file.write(&real).await.unwrap();
+                file.write_all(&real).await.unwrap();
             }
             PhotoSize::Progressive(_) => {
                 // Nothing
@@ -216,7 +216,7 @@ impl PhotoSize {
                     path
                 );
                 let mut file = fs::File::create(path).await.unwrap();
-                file.write(res.as_bytes()).await.unwrap();
+                file.write_all(res.as_bytes()).await.unwrap();
             }
         };
     }
