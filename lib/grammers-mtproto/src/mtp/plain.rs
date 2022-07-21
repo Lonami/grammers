@@ -31,6 +31,7 @@ pub struct Plain {
     buffer: Vec<u8>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Plain {
     pub fn new() -> Self {
         Self { buffer: Vec::new() }

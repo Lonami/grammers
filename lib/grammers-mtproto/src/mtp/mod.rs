@@ -167,7 +167,7 @@ impl From<tl::types::RpcError> for RpcError {
         // Extract the numeric value in the error, if any
         if let Some(value) = error
             .error_message
-            .split(|c: char| !c.is_digit(10))
+            .split(|c: char| !c.is_ascii_digit())
             .find(|s| !s.is_empty())
         {
             let mut to_remove = String::with_capacity(1 + value.len());

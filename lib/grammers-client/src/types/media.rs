@@ -133,7 +133,7 @@ impl Photo {
             P::Photo(photo) => photo
                 .sizes
                 .iter()
-                .map(|x| PhotoSize::make_from(&x, &photo, self.client.clone()))
+                .map(|x| PhotoSize::make_from(x, photo, self.client.clone()))
                 .collect(),
         }
     }

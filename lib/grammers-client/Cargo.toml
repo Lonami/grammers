@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-client"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["mtproto", "telegram", "tl"]
 categories = ["api-bindings"]
-edition = "2018"
+edition = "2021"
 
 [features]
 markdown = ["pulldown-cmark"]

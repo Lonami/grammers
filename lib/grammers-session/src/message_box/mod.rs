@@ -43,6 +43,7 @@ fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT
 }
 
+#[allow(clippy::new_without_default)]
 /// Creation, querying, and setting base state.
 impl MessageBox {
     /// Create a new, empty [`MessageBox`].
@@ -564,9 +565,7 @@ impl MessageBox {
         Vec<tl::enums::Chat>,
     ) {
         let finish: bool;
-        let result;
-
-        match difference {
+        let result = match difference {
             tl::enums::updates::Difference::Empty(diff) => {
                 debug!(
                     "handling empty difference (date = {}, seq = {}); no longer getting diff",
@@ -575,7 +574,7 @@ impl MessageBox {
                 finish = true;
                 self.date = diff.date;
                 self.seq = diff.seq;
-                result = (Vec::new(), Vec::new(), Vec::new())
+                (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::Difference::Difference(diff) => {
                 debug!(
@@ -584,7 +583,7 @@ impl MessageBox {
                 );
                 finish = true;
                 chat_hashes.extend(&diff.users, &diff.chats);
-                result = self.apply_difference_type(diff, chat_hashes)
+                self.apply_difference_type(diff, chat_hashes)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
                 new_messages,
@@ -597,7 +596,7 @@ impl MessageBox {
                 debug!("handling partial difference {:?}", state);
                 finish = false;
                 chat_hashes.extend(&users, &chats);
-                result = self.apply_difference_type(
+                self.apply_difference_type(
                     tl::types::updates::Difference {
                         new_messages,
                         new_encrypted_messages,
@@ -617,9 +616,9 @@ impl MessageBox {
                 finish = true;
                 // the deadline will be reset once the diff ends
                 self.map.get_mut(&Entry::AccountWide).unwrap().pts = diff.pts;
-                result = (Vec::new(), Vec::new(), Vec::new())
+                (Vec::new(), Vec::new(), Vec::new())
             }
-        }
+        };
 
         if finish {
             let account = self.getting_diff_for.contains(&Entry::AccountWide);

@@ -14,7 +14,7 @@ pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
     let mut ciphertext = vec![0; plaintext.len()];
 
     let key = GenericArray::from_slice(key);
-    let cipher = aes::Aes256::new(&key);
+    let cipher = aes::Aes256::new(key);
 
     let mut iv = *iv;
     let (iv1, iv2) = iv.split_at_mut(16);
@@ -52,7 +52,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
     let mut plaintext = vec![0; size];
 
     let key = GenericArray::from_slice(key);
-    let cipher = aes::Aes256::new(&key);
+    let cipher = aes::Aes256::new(key);
     let mut iv = *iv;
     let (iv1, iv2) = iv.split_at_mut(16);
 

@@ -185,7 +185,7 @@ impl Client {
                         .set_state(state);
                     client.sync_update_state();
                 }
-                Err(_) => {
+                Err(_err) => {
                     // The account may no longer actually be logged in, or it can rarely fail.
                     // `message_box` will try to correct its state as updates arrive.
                 }

@@ -29,6 +29,7 @@ pub struct Intermediate {
     init: bool,
 }
 
+#[allow(clippy::new_without_default)]
 impl Intermediate {
     pub fn new() -> Self {
         Self { init: false }

@@ -48,6 +48,7 @@ impl PackedChat {
     }
 
     /// Deserialize the buffer into a packed chat
+    #[allow(clippy::result_unit_err)]
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ()> {
         if buf.len() != 10 && buf.len() != 18 {
             return Err(());

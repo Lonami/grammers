@@ -16,6 +16,7 @@ use std::fmt;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
+#[allow(clippy::large_enum_variant)]
 pub enum SignInError {
     SignUpRequired {
         terms_of_service: Option<TermsOfService>,
@@ -99,7 +100,7 @@ impl Client {
                     .set_state(state);
                 self.sync_update_state();
             }
-            Err(_) => {
+            Err(_err) => {
                 // In the extremely rare case where this happens, there's not much we can do.
                 // `message_box` will try to correct its state as updates arrive.
             }
@@ -365,7 +366,7 @@ impl Client {
     ///     Ok(user) => user,
     ///     Ok(_) => panic!("Sign in required"),
     ///     Err(err) => {
-    ///         panic!("Failed to sign in as a user :(\n{}");
+    ///         panic!("Failed to sign in as a user :(\n{err}");
     ///     }
     /// };
     /// # Ok(())

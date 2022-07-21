@@ -66,7 +66,7 @@ impl DownloadIter {
     /// Panics if `size` is not divisible by `MIN_CHUNK_SIZE`, or if `size` is not in contained in
     /// the range `MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE`.
     pub fn chunk_size(mut self, size: i32) -> Self {
-        assert!(MIN_CHUNK_SIZE <= size && size <= MAX_CHUNK_SIZE && size % MIN_CHUNK_SIZE == 0);
+        assert!((MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&size) && size % MIN_CHUNK_SIZE == 0);
         self.request.limit = size as i32;
         self
     }

@@ -91,7 +91,7 @@ pub fn name_for_id(id: u32) -> &'static str {{
         )?;
     }
 
-    let metadata = metadata::Metadata::new(&definitions);
+    let metadata = metadata::Metadata::new(definitions);
     structs::write_category_mod(file, Category::Types, definitions, &metadata, config)?;
     structs::write_category_mod(file, Category::Functions, definitions, &metadata, config)?;
     enums::write_enums_mod(file, definitions, &metadata, config)?;

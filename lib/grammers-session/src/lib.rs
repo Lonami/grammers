@@ -40,6 +40,7 @@ pub struct Session {
     session: Mutex<types::Session>,
 }
 
+#[allow(clippy::new_without_default)]
 impl Session {
     pub fn new() -> Self {
         Self {
@@ -76,7 +77,7 @@ impl Session {
     pub fn load(data: &[u8]) -> Result<Self, Error> {
         Ok(Self {
             session: Mutex::new(
-                enums::Session::from_bytes(&data)
+                enums::Session::from_bytes(data)
                     .map_err(|e| match e {
                         DeserializeError::UnexpectedEof => Error::MalformedData,
                         DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,

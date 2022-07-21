@@ -159,13 +159,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
         let rx = self.enqueue_body(request.to_bytes());
-        Ok(self.step_until_receive(rx).await?)
+        self.step_until_receive(rx).await
     }
 
     /// Like `invoke` but raw data.
     async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
         let rx = self.enqueue_body(body);
-        Ok(self.step_until_receive(rx).await?)
+        self.step_until_receive(rx).await
     }
 
     fn enqueue_body(
@@ -410,7 +410,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let result = self.mtp.deserialize(&self.mtp_buffer)?;
 
         updates.extend(result.updates.iter().filter_map(|update| {
-            match tl::enums::Updates::from_bytes(&update) {
+            match tl::enums::Updates::from_bytes(update) {
                 Ok(u) => Some(u),
                 Err(e) => {
                     warn!(
@@ -545,5 +545,5 @@ pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     addr: A,
     auth_key: [u8; 256],
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
-    Ok(Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await?)
+    Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
 }

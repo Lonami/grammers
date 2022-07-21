@@ -17,7 +17,7 @@ use std::collections::HashSet;
 use std::io::{self, Write};
 
 /// Types that implement Copy from builtin_type
-const COPY_TYPES: [&'static str; 5] = ["bool", "f64", "i32", "i64", "u32"];
+const COPY_TYPES: [&str; 7] = ["bool", "f64", "i32", "i64", "u32", "[u8; 16]", "[u8; 32]"];
 
 /// Writes an enumeration listing all types such as the following rust code:
 ///
@@ -63,7 +63,7 @@ fn write_enum<W: Write>(
         if metadata.is_recursive_def(d) {
             write!(file, "Box<")?;
         }
-        write!(file, "{}", rustifier::definitions::qual_name(&d))?;
+        write!(file, "{}", rustifier::definitions::qual_name(d))?;
         if metadata.is_recursive_def(d) {
             write!(file, ">")?;
         }
@@ -123,9 +123,9 @@ fn write_common_field_impl<W: Write>(
             common_params = params;
             continue;
         }
-        common_params = common_params.intersection(&params).map(|p| *p).collect();
+        common_params = common_params.intersection(&params).copied().collect();
     }
-    if common_params.len() == 0 {
+    if common_params.is_empty() {
         return Ok(());
     }
     // Write impl

@@ -170,7 +170,7 @@ impl FromStr for Definition {
                         },
                     ..
                 }) if generic_ref => {
-                    if generic_ref && !type_defs.contains(&name) {
+                    if generic_ref && !type_defs.contains(name) {
                         Some(Err(ParseError::InvalidParam(ParamParseError::MissingDef)))
                     } else {
                         Some(Ok(p.unwrap()))
@@ -186,7 +186,7 @@ impl FromStr for Definition {
                         },
                     ..
                 }) => {
-                    if !flag_defs.contains(&&name) {
+                    if !flag_defs.contains(name) {
                         Some(Err(ParseError::InvalidParam(ParamParseError::MissingDef)))
                     } else {
                         Some(Ok(p.unwrap()))

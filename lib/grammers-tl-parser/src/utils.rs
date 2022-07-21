@@ -36,10 +36,10 @@ pub(crate) fn infer_id(definition: &str) -> u32 {
     let mut representation = definition
         .replace(":bytes ", ": string")
         .replace("?bytes ", "? string")
-        .replace("<", " ")
-        .replace(">", "")
-        .replace("{", "")
-        .replace("}", "");
+        .replace('<', " ")
+        .replace('>', "")
+        .replace('{', "")
+        .replace('}', "");
 
     // Remove r" \w+:flags\.\d+\?true"
     while let Some(pos) = representation.find("?true") {

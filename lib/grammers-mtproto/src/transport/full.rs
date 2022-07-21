@@ -31,6 +31,7 @@ pub struct Full {
     recv_seq: u32,
 }
 
+#[allow(clippy::new_without_default)]
 impl Full {
     pub fn new() -> Self {
         Self {

@@ -74,7 +74,7 @@ pub(crate) fn always_find_entity(
             .chat_hashes
             .lock("always_find_entity")
             .get(id)
-            .unwrap_or_else(|| PackedChat {
+            .unwrap_or(PackedChat {
                 ty,
                 id,
                 access_hash: None,

@@ -481,7 +481,7 @@ impl Encrypted {
                     self.updates.push(body.to_vec());
                 }
             }
-            Err(_) => {
+            Err(_err) => {
                 // Failing is fine, it likely means the update was bad and eventually there will
                 // be a gap to fill.
             }
@@ -1193,7 +1193,7 @@ impl Mtp for Encrypted {
         let compressed;
         if let Some(threshold) = self.compression_threshold {
             if request.len() >= threshold {
-                compressed = manual_tl::GzipPacked::new(&request).to_bytes();
+                compressed = manual_tl::GzipPacked::new(request).to_bytes();
                 if compressed.len() < request.len() {
                     body = &compressed;
                 }
