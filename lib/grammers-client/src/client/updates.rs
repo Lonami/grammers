@@ -104,7 +104,7 @@ impl Client {
                             "Account is now banned in {} so we can no longer fetch updates from it",
                             channel_id(&request)
                                 .map(|i| i.to_string())
-                                .unwrap_or("empty channel".into())
+                                .unwrap_or_else(|| "empty channel".into())
                         );
 
                         let mut message_box = self

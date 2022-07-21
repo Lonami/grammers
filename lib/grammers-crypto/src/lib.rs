@@ -139,7 +139,7 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
     };
 
     // Calculate the key
-    let (key, iv) = calc_key(&auth_key, &msg_key, side);
+    let (key, iv) = calc_key(auth_key, &msg_key, side);
 
     let ciphertext = { aes::ige_encrypt(&padded_plaintext, &key, &iv) };
 
@@ -188,7 +188,7 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
         buffer
     };
 
-    let (key, iv) = calc_key(&auth_key, &msg_key, Side::Server);
+    let (key, iv) = calc_key(auth_key, &msg_key, Side::Server);
     let plaintext = decrypt_ige(&ciphertext[24..], &key, &iv);
 
     // https://core.telegram.org/mtproto/security_guidelines#mtproto-encrypted-messages

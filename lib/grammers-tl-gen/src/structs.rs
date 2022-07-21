@@ -408,7 +408,7 @@ fn write_impl_from<W: Write>(
     metadata: &Metadata,
 ) -> io::Result<()> {
     let infallible = metadata.defs_with_type(&def.ty).len() == 1;
-    let type_name = rustifier::definitions::type_name(&def);
+    let type_name = rustifier::definitions::type_name(def);
 
     writeln!(
         file,

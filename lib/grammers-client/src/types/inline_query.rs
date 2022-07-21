@@ -196,7 +196,9 @@ impl From<Article> for InlineResult {
     fn from(article: Article) -> Self {
         Self(tl::enums::InputBotInlineResult::Result(
             tl::types::InputBotInlineResult {
-                id: article.id.unwrap_or(generate_random_id().to_string()),
+                id: article
+                    .id
+                    .unwrap_or_else(|| generate_random_id().to_string()),
                 r#type: "article".into(),
                 title: Some(article.title),
                 description: article.description,

@@ -138,7 +138,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
         }
     }
 
-    fn inner_mut<'a>(&'a mut self) -> &'a mut AdminRightsBuilderInner {
+    fn inner_mut(&mut self) -> &mut AdminRightsBuilderInner {
         // Unwrap safety: AdminRightsBuilderInner should never be None unless polled after being
         // resolved
         self.inner.as_mut().unwrap()
@@ -159,11 +159,11 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
             match user.participant {
                 tl::enums::ChannelParticipant::Creator(c) => {
                     s.rights = c.admin_rights.into();
-                    s.rank = c.rank.unwrap_or_else(String::new);
+                    s.rank = c.rank.unwrap_or_default();
                 }
                 tl::enums::ChannelParticipant::Admin(a) => {
                     s.rights = a.admin_rights.into();
-                    s.rank = a.rank.unwrap_or_else(String::new);
+                    s.rank = a.rank.unwrap_or_default();
                 }
                 _ => (),
             }
@@ -408,7 +408,7 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
         }
     }
 
-    fn inner_mut<'a>(&'a mut self) -> &'a mut BannedRightsBuilderInner {
+    fn inner_mut(&mut self) -> &mut BannedRightsBuilderInner {
         // Unwrap safety: AdminRightsBuilderInner should never be None unless polled after being
         // resolved
         self.inner.as_mut().unwrap()
@@ -426,11 +426,9 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
                     participant: s.peer.clone(),
                 })
                 .await?;
-            match user.participant {
-                tl::enums::ChannelParticipant::Banned(u) => {
-                    s.rights = u.banned_rights.into();
-                }
-                _ => (),
+
+            if let tl::enums::ChannelParticipant::Banned(u) = user.participant {
+                s.rights = u.banned_rights.into();
             }
         }
 

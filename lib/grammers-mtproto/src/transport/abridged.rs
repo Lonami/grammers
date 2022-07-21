@@ -38,6 +38,7 @@ pub struct Abridged {
     init: bool,
 }
 
+#[allow(clippy::new_without_default)]
 impl Abridged {
     pub fn new() -> Self {
         Self { init: false }

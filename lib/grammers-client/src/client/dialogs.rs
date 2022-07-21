@@ -91,15 +91,13 @@ impl DialogIter {
 
         let mut message_box = self.client.0.message_box.lock("iter_dialogs");
         self.buffer.extend(dialogs.into_iter().map(|dialog| {
-            match &dialog {
-                tl::enums::Dialog::Dialog(tl::types::Dialog {
-                    peer: tl::enums::Peer::Channel(channel),
-                    pts: Some(pts),
-                    ..
-                }) => {
-                    message_box.try_set_channel_state(channel.channel_id, *pts);
-                }
-                _ => {}
+            if let tl::enums::Dialog::Dialog(tl::types::Dialog {
+                peer: tl::enums::Peer::Channel(channel),
+                pts: Some(pts),
+                ..
+            }) = &dialog
+            {
+                message_box.try_set_channel_state(channel.channel_id, *pts);
             }
             Dialog::new(dialog, &mut messages, &chats)
         }));

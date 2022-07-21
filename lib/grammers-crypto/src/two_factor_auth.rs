@@ -39,7 +39,7 @@ pub fn calculate_2fa(
     password: impl AsRef<[u8]>,
 ) -> (Vec<u8>, Vec<u8>) {
     // Prepare our parameters
-    let big_p = BigUint::from_bytes_be(&p);
+    let big_p = BigUint::from_bytes_be(p);
 
     let g_b = pad_to_256(&g_b);
     let a = pad_to_256(&a);
@@ -65,7 +65,7 @@ pub fn calculate_2fa(
     let u = BigUint::from_bytes_be(&u);
 
     // x := PH2(password, salt1, salt2)
-    let x = ph2(&password, &salt1, &salt2);
+    let x = ph2(&password, salt1, salt2);
     let x = BigUint::from_bytes_be(&x);
 
     // v := pow(g, x) mod p
