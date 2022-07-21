@@ -365,7 +365,7 @@ impl Client {
     ///     Ok(user) => user,
     ///     Ok(_) => panic!("Sign in required"),
     ///     Err(err) => {
-    ///         panic!("Failed to sign in as a user :(\n{}");
+    ///         panic!("Failed to sign in as a user :(\n{err}");
     ///     }
     /// };
     /// # Ok(())
