@@ -107,6 +107,7 @@ pub mod definitions {
                     .rposition(|c| c.is_ascii_uppercase())
                     .unwrap_or(0)..]
             }
+            // Note: this intentionally handles the empty string case too.
             _ if variant.chars().all(char::is_numeric) => {
                 // Use the name from the last uppercase letter
                 &name[name
