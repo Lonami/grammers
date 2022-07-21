@@ -1,26 +1,28 @@
 [package]
-name = "grammers-tl-types"
-version = "0.3.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+categories = ["data-structures", "encoding"]
 description = """
 Rust definitions for Telegram's API types and functions.
 """
-homepage = "https://github.com/Lonami/grammers"
 documentation = "https://docs.rs/grammers-tl-types"
-repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
-categories = ["data-structures", "encoding"]
 edition = "2018"
+homepage = "https://github.com/Lonami/grammers"
 include = [
-    "build.rs",
-    "src/*.rs",
-    "tl/*.tl",
+  "build.rs",
+  "src/*.rs",
+  "tl/*.tl",
 ]
+keywords = ["telegram", "tl"]
+license = "MIT OR Apache-2.0"
+name = "grammers-tl-types"
+repository = "https://github.com/Lonami/grammers"
+version = "0.3.0"
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.3.0" }
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.0.1" }
+grammers-tl-gen = {path = "../grammers-tl-gen", version = "0.3.0"}
+grammers-tl-parser = {path = "../grammers-tl-parser", version = "1.0.1"}
+serde = {version = "1.0.136", features = ["derive"]}
+serde_json = "1.0.79"
 
 [dev-dependencies]
 toml = "0.5.8"

@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config};
+use grammers_tl_gen::{generate_rust_code, Config, DocumentationItem, GeneratableDefinition};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::env;
@@ -66,6 +66,27 @@ fn main() -> std::io::Result<()> {
         }
         definitions
     };
+    let docs = std::fs::read_to_string("./tl/docs.json")
+        .ok()
+        .map(|s| serde_json::from_str::<Vec<DocumentationItem>>(&s).ok())
+        .flatten();
+
+    if docs.is_none() {
+        eprintln!("Not compiling documentation");
+    }
+
+    let mut result = Vec::with_capacity(definitions.len());
+    for def in definitions {
+        let doc = docs
+            .as_ref()
+            .map(|docs| docs.iter().find(|doc| def.full_name() == doc.name))
+            .flatten()
+            .cloned();
+        result.push(GeneratableDefinition {
+            docs: doc,
+            parsed: def,
+        })
+    }
 
     let mut file = BufWriter::new(File::create(
         Path::new(&env::var("OUT_DIR").unwrap()).join("generated.rs"),
@@ -79,7 +100,7 @@ fn main() -> std::io::Result<()> {
         impl_from_type: cfg!(feature = "impl-from-type"),
     };
 
-    generate_rust_code(&mut file, &definitions, layer, &config)?;
+    generate_rust_code(&mut file, &result, layer, &config)?;
     file.flush()?;
     Ok(())
 }

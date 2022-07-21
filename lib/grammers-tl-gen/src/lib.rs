@@ -14,8 +14,15 @@ mod metadata;
 mod rustifier;
 mod structs;
 
-use grammers_tl_parser::tl::{Category, Definition, Type};
-use std::io::{self, Write};
+use grammers_tl_parser::{
+    errors::ParseError,
+    tl::{Category, Definition, Type},
+};
+use std::{
+    collections::BTreeMap,
+    io::{self, Write},
+    str::FromStr,
+};
 
 pub struct Config {
     pub gen_name_for_id: bool,
@@ -44,10 +51,45 @@ const SPECIAL_CASED_TYPES: [&str; 1] = ["Bool"];
 fn ignore_type(ty: &Type) -> bool {
     SPECIAL_CASED_TYPES.iter().any(|&x| x == ty.name)
 }
+#[derive(Debug, PartialEq)]
+pub struct GeneratableDefinition {
+    pub parsed: Definition,
+    pub docs: Option<DocumentationItem>,
+}
+impl FromStr for GeneratableDefinition {
+    type Err = ParseError;
 
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        let def = Definition::from_str(s)?;
+        Ok(GeneratableDefinition {
+            docs: None,
+            parsed: def,
+        })
+    }
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct TlError {
+    pub code: i32,
+    pub description: String,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct Documentation {
+    pub description: String,
+    pub parameters: BTreeMap<String, String>,
+    pub errors: BTreeMap<String, TlError>,
+}
+
+#[derive(Debug, Clone, PartialEq, serde::Deserialize)]
+pub struct DocumentationItem {
+    pub name: String,
+    pub url_path: String,
+    pub documentation: Documentation,
+}
 pub fn generate_rust_code(
     file: &mut impl Write,
-    definitions: &[Definition],
+    definitions: &[GeneratableDefinition],
     layer: i32,
     config: &Config,
 ) -> io::Result<()> {
@@ -78,7 +120,12 @@ pub fn name_for_id(id: u32) -> &'static str {{
         "#
         )?;
         for def in definitions {
-            writeln!(file, r#"        0x{:x} => "{}","#, def.id, def.full_name())?;
+            writeln!(
+                file,
+                r#"        0x{:x} => "{}","#,
+                def.parsed.id,
+                def.parsed.full_name()
+            )?;
         }
 
         writeln!(

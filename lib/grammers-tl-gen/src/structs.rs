@@ -8,11 +8,11 @@
 
 //! Code to generate Rust's `struct`'s from TL definitions.
 
-use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
+use crate::{grouper, GeneratableDefinition};
 use crate::{ignore_type, Config};
-use grammers_tl_parser::tl::{Category, Definition, ParameterType};
+use grammers_tl_parser::tl::{Category, ParameterType};
 use std::io::{self, Write};
 
 /// Get the list of generic parameters:
@@ -20,9 +20,9 @@ use std::io::{self, Write};
 /// ```ignore
 /// <X, Y>
 /// ```
-fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
+fn get_generic_param_list(def: &GeneratableDefinition, declaring: bool) -> String {
     let mut result = String::new();
-    for param in def.params.iter() {
+    for param in def.parsed.params.iter() {
         match param.ty {
             ParameterType::Flags => {}
             ParameterType::Normal { ref ty, .. } => {
@@ -56,10 +56,37 @@ fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
 fn write_struct<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     _metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {
+    if let Some(docs) = &def.docs {
+        writeln!(
+            file,
+            "{}/// {}",
+            indent,
+            docs.documentation.description.replace("\n", "<br>")
+        )?;
+
+        writeln!(
+            file,
+            r#"{}/// generated based on <a href="{link}">{name}</a>"#,
+            indent,
+            name = docs.name,
+            link = docs.url_path
+        )?;
+        writeln!(file, "{}///", indent,)?;
+
+        if docs.documentation.errors.len() > 0 {
+            writeln!(file, "{}/// possible errors (these are not all the possible errors, and some may no longer apply):<br>", indent)?;
+
+            writeln!(
+                    file,
+                    "{}/// <table><thead><tr><th>error</th><th>code</th><th>description</th></tr></thead>{}</table>",
+                    indent, docs.documentation.errors.iter().map(|(name,error)|format!("<tr><td>{}</td><td>{}</td><td>{}</td></tr>",name,error.code,error.description)).collect::<Vec<_>>().join(" ")
+                )?;
+        }
+    }
     // Define struct
     if config.impl_debug {
         writeln!(file, "{}#[derive(Debug)]", indent)?;
@@ -75,12 +102,20 @@ fn write_struct<W: Write>(
     )?;
 
     writeln!(file)?;
-    for param in def.params.iter() {
+    for param in def.parsed.params.iter() {
         match param.ty {
             ParameterType::Flags => {
                 // Flags are computed on-the-fly, not stored
             }
             ParameterType::Normal { .. } => {
+                if let Some(docs) = &def.docs {
+                    writeln!(
+                        file,
+                        "{}    /// {}",
+                        &indent,
+                        docs.documentation.parameters.get(&param.name).unwrap()
+                    )?;
+                }
                 writeln!(
                     file,
                     "{}    pub {}: {},",
@@ -105,7 +140,7 @@ fn write_struct<W: Write>(
 fn write_identifiable<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -119,7 +154,7 @@ fn write_identifiable<W: Write>(
     writeln!(
         file,
         "{}    const CONSTRUCTOR_ID: u32 = {};",
-        indent, def.id
+        indent, def.parsed.id
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
@@ -137,7 +172,7 @@ fn write_identifiable<W: Write>(
 fn write_serializable<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -152,14 +187,14 @@ fn write_serializable<W: Write>(
         file,
         "{}    fn serialize(&self, {}buf: crate::serialize::Buffer) {{",
         indent,
-        if def.category == Category::Types && def.params.is_empty() {
+        if def.parsed.category == Category::Types && def.parsed.params.is_empty() {
             "_"
         } else {
             ""
         }
     )?;
 
-    match def.category {
+    match def.parsed.category {
         Category::Types => {
             // Bare types should not write their `CONSTRUCTOR_ID`.
         }
@@ -174,14 +209,14 @@ fn write_serializable<W: Write>(
         }
     }
 
-    for param in def.params.iter() {
+    for param in def.parsed.params.iter() {
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
                 write!(file, "(0u32")?;
 
                 // Compute flags as a single expression
-                for p in def.params.iter() {
+                for p in def.parsed.params.iter() {
                     match &p.ty {
                         ParameterType::Normal {
                             ty,
@@ -249,7 +284,7 @@ fn write_serializable<W: Write>(
 fn write_deserializable<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -264,10 +299,10 @@ fn write_deserializable<W: Write>(
         file,
         "{}    fn deserialize({}buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {{",
         indent,
-        if def.params.is_empty() { "_" } else { "" }
+        if def.parsed.params.is_empty() { "_" } else { "" }
     )?;
 
-    for (i, param) in def.params.iter().enumerate() {
+    for (i, param) in def.parsed.params.iter().enumerate() {
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
@@ -307,7 +342,7 @@ fn write_deserializable<W: Write>(
                         //
                         // This will only potentially happen while
                         // deserializing functions anyway.
-                        if i == def.params.len() - 1 {
+                        if i == def.parsed.params.len() - 1 {
                             writeln!(
                                 file,
                                 "{{ let mut tmp = Vec::new(); buf.read_to_end(&mut tmp)?; tmp }}"
@@ -344,7 +379,7 @@ fn write_deserializable<W: Write>(
         rustifier::definitions::type_name(def)
     )?;
 
-    for param in def.params.iter() {
+    for param in def.parsed.params.iter() {
         write!(file, "{}            ", indent)?;
         match &param.ty {
             ParameterType::Flags => {}
@@ -369,7 +404,7 @@ fn write_deserializable<W: Write>(
 fn write_rpc<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     _metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
@@ -384,8 +419,12 @@ fn write_rpc<W: Write>(
         file,
         "{}    type Return = {}{};",
         indent,
-        rustifier::types::qual_name(&def.ty),
-        if def.ty.generic_ref { "::Return" } else { "" },
+        rustifier::types::qual_name(&def.parsed.ty),
+        if def.parsed.ty.generic_ref {
+            "::Return"
+        } else {
+            ""
+        },
     )?;
     writeln!(file, "{}}}", indent)?;
     Ok(())
@@ -404,10 +443,10 @@ fn write_rpc<W: Write>(
 fn write_impl_from<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     metadata: &Metadata,
 ) -> io::Result<()> {
-    let infallible = metadata.defs_with_type(&def.ty).len() == 1;
+    let infallible = metadata.defs_with_type(&def.parsed.ty).len() == 1;
     let type_name = rustifier::definitions::type_name(&def);
 
     writeln!(
@@ -415,7 +454,7 @@ fn write_impl_from<W: Write>(
         "{}impl {}From<{}> for {} {{",
         indent,
         if infallible { "" } else { "Try" },
-        rustifier::types::qual_name(&def.ty),
+        rustifier::types::qual_name(&def.parsed.ty),
         type_name,
     )?;
     if !infallible {
@@ -426,7 +465,7 @@ fn write_impl_from<W: Write>(
         "{}    fn {try_}from(x: {cls}) -> {result}Self{error} {{",
         indent,
         try_ = if infallible { "" } else { "try_" },
-        cls = rustifier::types::qual_name(&def.ty),
+        cls = rustifier::types::qual_name(&def.parsed.ty),
         result = if infallible { "" } else { "Result<" },
         error = if infallible { "" } else { ", Self::Error>" },
     )?;
@@ -435,21 +474,29 @@ fn write_impl_from<W: Write>(
         file,
         "{}            {cls}::{name}{data} => {ok}{deref}{value}{body}{paren},",
         indent,
-        cls = rustifier::types::qual_name(&def.ty),
+        cls = rustifier::types::qual_name(&def.parsed.ty),
         name = rustifier::definitions::variant_name(def),
-        data = if def.params.is_empty() { "" } else { "(x)" },
+        data = if def.parsed.params.is_empty() {
+            ""
+        } else {
+            "(x)"
+        },
         ok = if infallible { "" } else { "Ok(" },
         deref = if metadata.is_recursive_def(def) {
             "*"
         } else {
             ""
         },
-        value = if def.params.is_empty() {
+        value = if def.parsed.params.is_empty() {
             type_name.as_ref()
         } else {
             "x"
         },
-        body = if def.params.is_empty() { " {}" } else { "" },
+        body = if def.parsed.params.is_empty() {
+            " {}"
+        } else {
+            ""
+        },
         paren = if infallible { "" } else { ")" },
     )?;
     if !infallible {
@@ -465,20 +512,20 @@ fn write_impl_from<W: Write>(
 fn write_definition<W: Write>(
     file: &mut W,
     indent: &str,
-    def: &Definition,
+    def: &GeneratableDefinition,
     metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {
     write_struct(file, indent, def, metadata, config)?;
     write_identifiable(file, indent, def, metadata)?;
     write_serializable(file, indent, def, metadata)?;
-    if def.category == Category::Types || config.deserializable_functions {
+    if def.parsed.category == Category::Types || config.deserializable_functions {
         write_deserializable(file, indent, def, metadata)?;
     }
-    if def.category == Category::Functions {
+    if def.parsed.category == Category::Functions {
         write_rpc(file, indent, def, metadata)?;
     }
-    if def.category == Category::Types && config.impl_from_enum {
+    if def.parsed.category == Category::Types && config.impl_from_enum {
         write_impl_from(file, indent, def, metadata)?;
     }
     Ok(())
@@ -488,7 +535,7 @@ fn write_definition<W: Write>(
 pub(crate) fn write_category_mod<W: Write>(
     mut file: &mut W,
     category: Category,
-    definitions: &[Definition],
+    definitions: &[GeneratableDefinition],
     metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {
@@ -552,10 +599,9 @@ pub(crate) fn write_category_mod<W: Write>(
             writeln!(file, "{}use std::convert::TryFrom;", indent)?;
         }
 
-        for definition in grouped[key]
-            .iter()
-            .filter(|def| def.category == Category::Functions || !ignore_type(&def.ty))
-        {
+        for definition in grouped[key].iter().filter(|def| {
+            def.parsed.category == Category::Functions || !ignore_type(&def.parsed.ty)
+        }) {
             write_definition(&mut file, indent, definition, metadata, config)?;
         }
 
