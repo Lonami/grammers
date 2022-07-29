@@ -138,12 +138,14 @@ impl ParticipantIter {
                     Participants(p) => (p.count, p.participants, p.users),
                     NotModified => panic!("API returned Dialogs::NotModified even though hash = 0"),
                 };
-                iter.last_chunk = participants.len() < iter.request.limit as usize;
 
-                // Don't bother updating offsets if this is the last time stuff has to be fetched.
-                if !iter.last_chunk && !iter.buffer.is_empty() {
-                    iter.request.offset += participants.len() as i32;
-                }
+                // Telegram can return less participants than asked for but the count being higher
+                // (for example, count=4825, participants=199, users=200). The missing participant
+                // was an admin bot account, not sure why it's not included.
+                //
+                // In any case we pick whichever size is highest to avoid weird cases like this.
+                iter.last_chunk = usize::max(participants.len(), users.len()) < iter.request.limit as usize;
+                iter.request.offset += participants.len() as i32;
 
                 // Don't actually care for the chats, just the users.
                 let mut chats = ChatMap::new(users, Vec::new());
