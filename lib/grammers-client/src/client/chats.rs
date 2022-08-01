@@ -144,7 +144,8 @@ impl ParticipantIter {
                 // was an admin bot account, not sure why it's not included.
                 //
                 // In any case we pick whichever size is highest to avoid weird cases like this.
-                iter.last_chunk = usize::max(participants.len(), users.len()) < iter.request.limit as usize;
+                iter.last_chunk =
+                    usize::max(participants.len(), users.len()) < iter.request.limit as usize;
                 iter.request.offset += participants.len() as i32;
 
                 // Don't actually care for the chats, just the users.
