@@ -79,3 +79,19 @@ without having to use `Box`.
 ## futures-util
 
 Provides useful functions for working with futures/tasks.
+
+## url
+
+Parse proxy url
+
+## trust-dns-resolver
+
+Lookup ip address if proxy host is domain
+
+## tokio-socks
+
+Socks5 proxy supported
+
+## rand
+
+Choose ip if proxy domain has any address

@@ -92,6 +92,8 @@ pub struct InitParams {
     ///
     /// When the limit is `Some`, a buffer to hold that many updates will be pre-allocated.
     pub update_queue_limit: Option<usize>,
+    /// Proxy url of TcpStream
+    pub proxy: Option<String>,
 }
 
 pub(crate) struct ClientInner {
@@ -154,6 +156,7 @@ impl Default for InitParams {
             server_addr: None,
             flood_sleep_threshold: Some(60),
             update_queue_limit: Some(100),
+            proxy: None,
         }
     }
 }

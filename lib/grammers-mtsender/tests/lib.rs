@@ -30,7 +30,7 @@ fn test_invoke_encrypted_method() {
         .build()
         .unwrap();
     rt.block_on(async {
-        let (mut sender, enqueuer) = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
+        let (mut sender, enqueuer) = connect(transport::Full::new(), TELEGRAM_TEST_DC_2, None)
             .await
             .unwrap();
 
