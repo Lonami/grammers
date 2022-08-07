@@ -29,3 +29,19 @@ Used in the tests in order to debug with more information when things go wrong.
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
+
+## tokio-socks
+
+Socks5 proxy support.
+
+## url
+
+Parse proxy url.
+
+## trust-dns-resolver
+
+Lookup ip if proxy host is a domain.
+
+## rand
+
+Random choose ip from domain.
