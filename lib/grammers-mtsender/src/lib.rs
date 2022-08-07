@@ -32,7 +32,7 @@ use url::Host;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 use tl::Serializable;
-use tokio::io::{AsyncRead, AsyncReadExt, AsyncWrite, AsyncWriteExt};
+use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{ReadHalf, WriteHalf};
 use tokio::net::{TcpStream, ToSocketAddrs};
 use tokio::sync::mpsc;
@@ -81,9 +81,25 @@ pub(crate) fn generate_random_id() -> i64 {
     LAST_ID.fetch_add(1, Ordering::SeqCst)
 }
 
+pub enum NetStream {
+    Tcp(TcpStream),
+    #[cfg(feature = "proxy")]
+    ProxySocks5(Socks5Stream),
+}
+
+impl NetStream {
+    fn split(&mut self) -> (ReadHalf, WriteHalf) {
+        match self {
+            Self::Tcp(stream) => stream.split(),
+            #[cfg(feature = "proxy")]
+            Self::ProxySocks5(stream) => stream.split(),
+        }
+    }
+}
+
 // Manages enqueuing requests, matching them to their response, and IO.
 pub struct Sender<T: Transport, M: Mtp> {
-    stream: Box<dyn Stream>,
+    stream: NetStream,
     transport: T,
     mtp: M,
     mtp_buffer: BytesMut,
@@ -150,7 +166,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
-        let stream: Box<dyn Stream> = Box::new(TcpStream::connect(addr).await?);
+        let stream = NetStream::Tcp(TcpStream::connect(addr).await?);
         let (tx, rx) = mpsc::unbounded_channel();
 
         Ok((
@@ -318,7 +334,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         let write_len = self.write_buffer.len() - self.write_index;
 
-        let (mut reader, mut writer) = self.stream.split_stream();
+        let (mut reader, mut writer) = self.stream.split();
         if self.write_buffer.is_empty() {
             // TODO this always has to read the header of the packet and then the rest (2 or more calls)
             // it would be better to always perform calls in a circular buffer to have as much data from
@@ -720,21 +736,4 @@ pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: ToSocketAddrs>(
         proxy_url,
     )
     .await
-}
-
-trait Stream: AsyncRead + AsyncWrite + Unpin + Sync + Send {
-    fn split_stream(&mut self) -> (ReadHalf, WriteHalf);
-}
-
-impl Stream for TcpStream {
-    fn split_stream(&mut self) -> (ReadHalf, WriteHalf) {
-        self.split()
-    }
-}
-
-#[cfg(feature = "proxy")]
-impl Stream for Socks5Stream<TcpStream> {
-    fn split_stream(&mut self) -> (ReadHalf, WriteHalf) {
-        self.split()
-    }
 }
