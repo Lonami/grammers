@@ -140,24 +140,24 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         transport: T,
         mtp: M,
         addr: A,
-        proxy: Option<String>,
+        proxy_url: Option<&str>,
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
-        let stream: Box<dyn Stream> = if let Some(url_str) = proxy {
-            let proxy_url = url::Url::parse(url_str.as_str())
+        let stream: Box<dyn Stream> = if let Some(url) = proxy_url {
+            let proxy = url::Url::parse(url)
                 .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
-            let scheme = proxy_url.scheme();
-            let host = proxy_url.host().ok_or(io::Error::new(
-                ErrorKind::ConnectionAborted,
-                "need proxy host",
+            let scheme = proxy.scheme();
+            let host = proxy.host().ok_or(io::Error::new(
+                ErrorKind::NotFound,
+                format!("proxy host is missing from url: {}", url),
             ))?;
-            let port = proxy_url.port().ok_or(io::Error::new(
-                ErrorKind::ConnectionAborted,
-                "need proxy port",
+            let port = proxy.port().ok_or(io::Error::new(
+                ErrorKind::NotFound,
+                format!("proxy port is missing from url: {}", url),
             ))?;
-            let username = proxy_url.username();
-            let password = proxy_url.password().unwrap_or("");
+            let username = proxy.username();
+            let password = proxy.password().unwrap_or("");
             let socks_addr = match host {
                 Host::Domain(domain) => {
                     let resolver =
@@ -167,8 +167,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         .into_iter()
                         .next()
                         .ok_or(io::Error::new(
-                            ErrorKind::ConnectionAborted,
-                            format!("not lookup proxy domain address : {}", domain),
+                            ErrorKind::NotFound,
+                            format!("proxy host did not return any ip address: {}", domain),
                         ))?;
                     SocketAddr::new(socks_ip_addr, port)
                 }
@@ -197,7 +197,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 scheme => {
                     return Err(io::Error::new(
                         ErrorKind::ConnectionAborted,
-                        format!("not supported proxy scheme {}", scheme),
+                        format!("proxy scheme not supported: {}", scheme),
                     ));
                 }
             }
@@ -566,9 +566,9 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
 pub async fn connect<'a, T: Transport, A: ToSocketAddrs + IntoTargetAddr<'a>>(
     transport: T,
     addr: A,
-    proxy: Option<String>,
+    proxy_url: Option<&str>,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (mut sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, proxy).await?;
+    let (mut sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, proxy_url).await?;
 
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
@@ -615,13 +615,13 @@ pub async fn connect_with_auth<'a, T: Transport, A: ToSocketAddrs + IntoTargetAd
     transport: T,
     addr: A,
     auth_key: [u8; 256],
-    proxy: Option<String>,
+    proxy_url: Option<&str>,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
     Sender::connect(
         transport,
         mtp::Encrypted::build().finish(auth_key),
         addr,
-        proxy,
+        proxy_url,
     )
     .await
 }

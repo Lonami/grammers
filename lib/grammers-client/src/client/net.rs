@@ -53,13 +53,20 @@ pub(crate) async fn connect_sender(
             "creating a new sender with existing auth key to dc {} {:?}",
             dc_id, addr
         );
-        sender::connect_with_auth(transport, addr, auth_key, config.params.proxy.clone()).await?
+        sender::connect_with_auth(
+            transport,
+            addr,
+            auth_key,
+            config.params.proxy_url.as_deref(),
+        )
+        .await?
     } else {
         info!(
             "creating a new sender and auth key in dc {} {:?}",
             dc_id, addr
         );
-        let (sender, tx) = sender::connect(transport, addr, config.params.proxy.clone()).await?;
+        let (sender, tx) =
+            sender::connect(transport, addr, config.params.proxy_url.as_deref()).await?;
 
         config.session.insert_dc(dc_id, addr, sender.auth_key());
         (sender, tx)

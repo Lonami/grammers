@@ -99,7 +99,7 @@ pub struct InitParams {
     /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up,
     /// and the first IP address found will be used. If a different IP address should be used, consider resolving the
     /// host manually and selecting an IP address of your choice.
-    pub proxy: Option<String>,
+    pub proxy_url: Option<String>,
 }
 
 pub(crate) struct ClientInner {
@@ -162,7 +162,7 @@ impl Default for InitParams {
             server_addr: None,
             flood_sleep_threshold: Some(60),
             update_queue_limit: Some(100),
-            proxy: None,
+            proxy_url: None,
         }
     }
 }
