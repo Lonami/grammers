@@ -84,7 +84,7 @@ pub(crate) fn generate_random_id() -> i64 {
 pub enum NetStream {
     Tcp(TcpStream),
     #[cfg(feature = "proxy")]
-    ProxySocks5(Socks5Stream),
+    ProxySocks5(Socks5Stream<TcpStream>),
 }
 
 impl NetStream {
@@ -190,7 +190,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     #[cfg(feature = "proxy")]
-    async fn connect_via_proxy<'a, A: ToSocketAddrs>(
+    async fn connect_via_proxy<'a, A: IntoTargetAddr<'a>>(
         transport: T,
         mtp: M,
         addr: A,
@@ -229,16 +229,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
         };
 
-        match scheme {
+        let stream = match scheme {
             "socks5" => {
                 if username.is_empty() {
-                    Box::new(
-                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+                    NetStream::ProxySocks5(tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
                             .await
                             .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     )
                 } else {
-                    Box::new(
+                    NetStream::ProxySocks5(
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
                             socks_addr, addr, username, password,
                         )
@@ -253,7 +252,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     format!("proxy scheme not supported: {}", scheme),
                 ));
             }
-        }
+        };
 
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -622,12 +621,12 @@ pub async fn connect<T: Transport, A: ToSocketAddrs>(
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy<T: Transport, A: ToSocketAddrs>(
+pub async fn connect_via_proxy<'a, T: Transport, A: IntoTargetAddr<'a>>(
     transport: T,
     addr: A,
     proxy_url: &str,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (mut sender, enqueuer) = Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
+    let (sender, enqueuer) = Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
     generate_auth_key(sender, enqueuer).await
 }
 
@@ -691,7 +690,7 @@ pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy_with_auth<T: Transport, A: ToSocketAddrs>(
+pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: IntoTargetAddr<'a>>(
     transport: T,
     addr: A,
     auth_key: [u8; 256],
