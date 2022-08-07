@@ -41,7 +41,3 @@ Used to look up the IP address of the proxy host if a domain is provided.
 ## tokio-socks
 
 SOCKS5 proxy support.
-
-## rand
-
-Used to choose one of the many IP addresses of the proxy's domain.

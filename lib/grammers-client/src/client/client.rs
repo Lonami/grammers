@@ -92,12 +92,15 @@ pub struct InitParams {
     ///
     /// When the limit is `Some`, a buffer to hold that many updates will be pre-allocated.
     pub update_queue_limit: Option<usize>,
-    /// URL of the proxy to use.
+    /// URL of the proxy to use. Requires the `proxy` feature to be enabled.
     ///
     /// The scheme must be `socks5`. Username and password are optional.
     ///
-    /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up.
-    pub proxy: Option<String>,
+    /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up,
+    /// and the first IP address found will be used. If a different IP address should be used, consider resolving the
+    /// host manually and selecting an IP address of your choice.
+    #[cfg(feature = "proxy")]
+    pub proxy_url: Option<String>,
 }
 
 pub(crate) struct ClientInner {
@@ -160,7 +163,8 @@ impl Default for InitParams {
             server_addr: None,
             flood_sleep_threshold: Some(60),
             update_queue_limit: Some(100),
-            proxy: None,
+            #[cfg(feature = "proxy")]
+            proxy_url: None,
         }
     }
 }

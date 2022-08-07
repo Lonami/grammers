@@ -16,6 +16,7 @@ edition = "2021"
 [features]
 markdown = ["pulldown-cmark"]
 html = ["html5ever"]
+proxy = ["grammers-mtsender/proxy"]
 
 [dependencies]
 chrono = "0.4.19"
