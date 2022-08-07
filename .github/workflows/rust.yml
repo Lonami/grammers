@@ -29,4 +29,4 @@ jobs:
         # Doesn't need to be valid, just set for the examples to compile
         TG_ID: 1
         TG_HASH: a
-      run: cargo test --verbose
+      run: cargo test --verbose --all-features

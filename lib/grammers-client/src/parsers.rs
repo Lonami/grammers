@@ -26,7 +26,7 @@ fn telegram_string_len(string: &str) -> i32 {
 ///
 /// # Examples
 ///
-/// ```
+/// ```notrust
 /// let mut vec = Vec::new();
 /// push_entity!(MessageEntityBold(1) => vec);
 /// push_entity!(MessageEntityPre(2, language = "rust".to_string()) => vec);
@@ -57,7 +57,7 @@ macro_rules! push_entity {
 ///
 /// # Examples
 ///
-/// ```
+/// ```notrust
 /// let mut vec = Vec::new();
 /// push_entity!(MessageEntityBold(1) => vec);
 /// update_entity_len!(MessageEntityBold(2) => vec);
