@@ -296,11 +296,7 @@ fn write_deserializable<W: Write>(
                         write!(file, "{}            Some(", indent)?;
                     }
                     if ty.generic_ref {
-                        write!(
-                            file,
-                            "{}::deserialize(buf)?",
-                            ty.name
-                        )?;
+                        write!(file, "{}::deserialize(buf)?", ty.name)?;
                     } else {
                         write!(
                             file,
