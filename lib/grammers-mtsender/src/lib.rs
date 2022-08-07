@@ -15,20 +15,6 @@ use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
-#[cfg(feature = "proxy")]
-use std::io::ErrorKind;
-#[cfg(feature = "proxy")]
-use std::net::{IpAddr, SocketAddr};
-#[cfg(feature = "proxy")]
-use tokio_socks::tcp::Socks5Stream;
-#[cfg(feature = "proxy")]
-use tokio_socks::IntoTargetAddr;
-#[cfg(feature = "proxy")]
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-#[cfg(feature = "proxy")]
-use trust_dns_resolver::AsyncResolver;
-#[cfg(feature = "proxy")]
-use url::Host;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 use tl::Serializable;
@@ -39,6 +25,16 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{sleep_until, Duration, Instant};
+#[cfg(feature = "proxy")]
+use {
+    std::io::ErrorKind,
+    std::net::{IpAddr, SocketAddr},
+    tokio_socks::tcp::Socks5Stream,
+    tokio_socks::IntoTargetAddr,
+    trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
+    trust_dns_resolver::AsyncResolver,
+    url::Host,
+};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -216,13 +212,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 let resolver =
                     AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())?;
                 let response = resolver.lookup_ip(domain).await?;
-                let socks_ip_addr = response
-                    .into_iter()
-                    .next()
-                    .ok_or(io::Error::new(
-                        ErrorKind::NotFound,
-                        format!("proxy host did not return any ip address: {}", domain),
-                    ))?;
+                let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
+                    ErrorKind::NotFound,
+                    format!("proxy host did not return any ip address: {}", domain),
+                ))?;
                 SocketAddr::new(socks_ip_addr, port)
             }
             Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
@@ -232,7 +225,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let stream = match scheme {
             "socks5" => {
                 if username.is_empty() {
-                    NetStream::ProxySocks5(tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+                    NetStream::ProxySocks5(
+                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
                             .await
                             .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     )
@@ -626,7 +620,8 @@ pub async fn connect_via_proxy<'a, T: Transport, A: IntoTargetAddr<'a>>(
     addr: A,
     proxy_url: &str,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (sender, enqueuer) = Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
+    let (sender, enqueuer) =
+        Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
     generate_auth_key(sender, enqueuer).await
 }
 
@@ -634,7 +629,6 @@ pub async fn generate_auth_key<T: Transport>(
     mut sender: Sender<T, mtp::Plain>,
     enqueuer: Enqueuer,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");
@@ -681,12 +675,7 @@ pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     addr: A,
     auth_key: [u8; 256],
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
-    Sender::connect(
-        transport,
-        mtp::Encrypted::build().finish(auth_key),
-        addr,
-    )
-    .await
+    Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
 }
 
 #[cfg(feature = "proxy")]
