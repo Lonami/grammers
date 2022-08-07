@@ -34,7 +34,7 @@ fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
                     }
                     result.push_str(&ty.name);
                     if declaring {
-                        result.push_str(": crate::RemoteCall");
+                        result.push_str(": crate::RemoteCall + crate::Deserializable");
                     }
                 }
             }
@@ -267,7 +267,7 @@ fn write_deserializable<W: Write>(
         if def.params.is_empty() { "_" } else { "" }
     )?;
 
-    for (i, param) in def.params.iter().enumerate() {
+    for param in def.params.iter() {
         write!(file, "{}        ", indent)?;
         match &param.ty {
             ParameterType::Flags => {
@@ -296,28 +296,11 @@ fn write_deserializable<W: Write>(
                         write!(file, "{}            Some(", indent)?;
                     }
                     if ty.generic_ref {
-                        // Deserialization of a generic reference requires
-                        // parsing *any* constructor, because the length is
-                        // not included anywhere. Unfortunately, we do not
-                        // have the machinery to do that; we would need a
-                        // single `match` with all the possible constructors!.
-                        //
-                        // But, if the generic is the last parameter, we can
-                        // just read the entire remaining thing.
-                        //
-                        // This will only potentially happen while
-                        // deserializing functions anyway.
-                        if i == def.params.len() - 1 {
-                            writeln!(
-                                file,
-                                "{{ let mut tmp = Vec::new(); buf.read_to_end(&mut tmp)?; tmp }}"
-                            )?;
-                        } else {
-                            writeln!(
-                                file,
-                                "unimplemented!(\"cannot read generic params in the middle\")"
-                            )?;
-                        }
+                        write!(
+                            file,
+                            "{}::deserialize(buf)?",
+                            ty.name
+                        )?;
                     } else {
                         write!(
                             file,
