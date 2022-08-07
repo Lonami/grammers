@@ -613,60 +613,28 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
     }
 }
 
-pub async fn connect<'a, T: Transport, A: ToSocketAddrs>(
+pub async fn connect<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (mut sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr).await?;
-
-    info!("generating new authorization key...");
-    let (request, data) = authentication::step1()?;
-    debug!("gen auth key: sending step 1");
-    let response = sender.send(request).await?;
-    debug!("gen auth key: starting step 2");
-    let (request, data) = authentication::step2(data, &response)?;
-    debug!("gen auth key: sending step 2");
-    let response = sender.send(request).await?;
-    debug!("gen auth key: starting step 3");
-    let (request, data) = authentication::step3(data, &response)?;
-    debug!("gen auth key: sending step 3");
-    let response = sender.send(request).await?;
-    debug!("gen auth key: completing generation");
-    let authentication::Finished {
-        auth_key,
-        time_offset,
-        first_salt,
-    } = authentication::create_key(data, &response)?;
-    info!("authorization key generated successfully");
-
-    Ok((
-        Sender {
-            stream: sender.stream,
-            transport: sender.transport,
-            mtp: mtp::Encrypted::build()
-                .time_offset(time_offset)
-                .first_salt(first_salt)
-                .finish(auth_key),
-            mtp_buffer: sender.mtp_buffer,
-            requests: sender.requests,
-            request_tx: sender.request_tx,
-            request_rx: sender.request_rx,
-            next_ping: Instant::now() + PING_DELAY,
-            read_buffer: sender.read_buffer,
-            write_buffer: sender.write_buffer,
-            write_index: sender.write_index,
-        },
-        enqueuer,
-    ))
+    let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr).await?;
+    generate_auth_key(sender, enqueuer).await
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy<'a, T: Transport, A: ToSocketAddrs>(
+pub async fn connect_via_proxy<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     proxy_url: &str,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let (mut sender, enqueuer) = Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
+    generate_auth_key(sender, enqueuer).await
+}
+
+pub async fn generate_auth_key<T: Transport>(
+    mut sender: Sender<T, mtp::Plain>,
+    enqueuer: Enqueuer,
+) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
 
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
@@ -709,7 +677,7 @@ pub async fn connect_via_proxy<'a, T: Transport, A: ToSocketAddrs>(
     ))
 }
 
-pub async fn connect_with_auth<'a, T: Transport, A: ToSocketAddrs>(
+pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     auth_key: [u8; 256],
@@ -723,7 +691,7 @@ pub async fn connect_with_auth<'a, T: Transport, A: ToSocketAddrs>(
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: ToSocketAddrs>(
+pub async fn connect_via_proxy_with_auth<T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     auth_key: [u8; 256],
