@@ -96,7 +96,9 @@ pub struct InitParams {
     ///
     /// The scheme must be `socks5`. Username and password are optional.
     ///
-    /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up.
+    /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up,
+    /// and the first IP address found will be used. If a different IP address should be used, consider resolving the
+    /// host manually and selecting an IP address of your choice.
     pub proxy: Option<String>,
 }
 

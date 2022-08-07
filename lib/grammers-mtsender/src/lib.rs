@@ -14,7 +14,6 @@ use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
-use rand::prelude::IteratorRandom;
 use std::io;
 use std::io::ErrorKind;
 use std::net::{IpAddr, SocketAddr};
@@ -166,7 +165,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     let response = resolver.lookup_ip(domain).await?;
                     let socks_ip_addr = response
                         .into_iter()
-                        .choose_stable(&mut rand::thread_rng())
+                        .next()
                         .ok_or(io::Error::new(
                             ErrorKind::ConnectionAborted,
                             format!("not lookup proxy domain address : {}", domain),
