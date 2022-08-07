@@ -13,15 +13,18 @@ keywords = ["api", "mtproto", "telegram", "tl"]
 categories = ["api-bindings", "network-programming"]
 edition = "2021"
 
+[features]
+proxy = ["tokio-socks", "trust-dns-resolver", "url"]
+
 [dependencies]
 bytes = "1.0.1"
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.3.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.3.0", features = [ "tl-mtproto" ] }
 log = "0.4.14"
 tokio = { version = "1.5.0", features = ["net", "io-util", "sync", "macros", "time"] }
-tokio-socks = "0.5.1"
-trust-dns-resolver = "0.21.2"
-url = "2.2.2"
+tokio-socks = { version = "0.5.1", optional = true }
+trust-dns-resolver = { version = "0.21.2", optional = true }
+url = { version = "2.2.2", optional = true }
 
 [dev-dependencies]
 simple_logger = { version = "1.11.0", default-features = false, features = ["colors"] }

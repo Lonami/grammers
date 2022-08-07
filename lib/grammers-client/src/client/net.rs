@@ -57,7 +57,6 @@ pub(crate) async fn connect_sender(
             transport,
             addr,
             auth_key,
-            config.params.proxy_url.as_deref(),
         )
         .await?
     } else {
@@ -66,7 +65,7 @@ pub(crate) async fn connect_sender(
             dc_id, addr
         );
         let (sender, tx) =
-            sender::connect(transport, addr, config.params.proxy_url.as_deref()).await?;
+            sender::connect(transport, addr).await?;
 
         config.session.insert_dc(dc_id, addr, sender.auth_key());
         (sender, tx)

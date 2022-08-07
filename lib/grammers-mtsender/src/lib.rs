@@ -15,8 +15,20 @@ use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
+#[cfg(feature = "proxy")]
 use std::io::ErrorKind;
+#[cfg(feature = "proxy")]
 use std::net::{IpAddr, SocketAddr};
+#[cfg(feature = "proxy")]
+use tokio_socks::tcp::Socks5Stream;
+#[cfg(feature = "proxy")]
+use tokio_socks::IntoTargetAddr;
+#[cfg(feature = "proxy")]
+use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
+#[cfg(feature = "proxy")]
+use trust_dns_resolver::AsyncResolver;
+#[cfg(feature = "proxy")]
+use url::Host;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 use tl::Serializable;
@@ -27,11 +39,6 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{sleep_until, Duration, Instant};
-use tokio_socks::tcp::Socks5Stream;
-use tokio_socks::IntoTargetAddr;
-use trust_dns_resolver::config::{ResolverConfig, ResolverOpts};
-use trust_dns_resolver::AsyncResolver;
-use url::Host;
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -136,74 +143,101 @@ impl Enqueuer {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect<'a, A: ToSocketAddrs + IntoTargetAddr<'a>>(
+    async fn connect<'a, A: ToSocketAddrs>(
         transport: T,
         mtp: M,
         addr: A,
-        proxy_url: Option<&str>,
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
-        let stream: Box<dyn Stream> = if let Some(url) = proxy_url {
-            let proxy = url::Url::parse(url)
-                .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
-            let scheme = proxy.scheme();
-            let host = proxy.host().ok_or(io::Error::new(
-                ErrorKind::NotFound,
-                format!("proxy host is missing from url: {}", url),
-            ))?;
-            let port = proxy.port().ok_or(io::Error::new(
-                ErrorKind::NotFound,
-                format!("proxy port is missing from url: {}", url),
-            ))?;
-            let username = proxy.username();
-            let password = proxy.password().unwrap_or("");
-            let socks_addr = match host {
-                Host::Domain(domain) => {
-                    let resolver =
-                        AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())?;
-                    let response = resolver.lookup_ip(domain).await?;
-                    let socks_ip_addr = response
-                        .into_iter()
-                        .next()
-                        .ok_or(io::Error::new(
-                            ErrorKind::NotFound,
-                            format!("proxy host did not return any ip address: {}", domain),
-                        ))?;
-                    SocketAddr::new(socks_ip_addr, port)
-                }
-                Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
-                Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
-            };
+        let stream: Box<dyn Stream> = Box::new(TcpStream::connect(addr).await?);
+        let (tx, rx) = mpsc::unbounded_channel();
 
-            match scheme {
-                "socks5" => {
-                    if username.is_empty() {
-                        Box::new(
-                            tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
-                                .await
-                                .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
-                        )
-                    } else {
-                        Box::new(
-                            tokio_socks::tcp::Socks5Stream::connect_with_password(
-                                socks_addr, addr, username, password,
-                            )
+        Ok((
+            Self {
+                stream,
+                transport,
+                mtp,
+                mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+
+                requests: vec![],
+                request_tx: tx.clone(),
+                request_rx: rx,
+                next_ping: Instant::now() + PING_DELAY,
+
+                read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_index: 0,
+            },
+            Enqueuer(tx),
+        ))
+    }
+
+    #[cfg(feature = "proxy")]
+    async fn connect_via_proxy<'a, A: ToSocketAddrs>(
+        transport: T,
+        mtp: M,
+        addr: A,
+        proxy_url: &str,
+    ) -> Result<(Self, Enqueuer), io::Error> {
+        info!("connecting...");
+
+        let proxy = url::Url::parse(proxy_url)
+            .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
+        let scheme = proxy.scheme();
+        let host = proxy.host().ok_or(io::Error::new(
+            ErrorKind::NotFound,
+            format!("proxy host is missing from url: {}", proxy_url),
+        ))?;
+        let port = proxy.port().ok_or(io::Error::new(
+            ErrorKind::NotFound,
+            format!("proxy port is missing from url: {}", proxy_url),
+        ))?;
+        let username = proxy.username();
+        let password = proxy.password().unwrap_or("");
+        let socks_addr = match host {
+            Host::Domain(domain) => {
+                let resolver =
+                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())?;
+                let response = resolver.lookup_ip(domain).await?;
+                let socks_ip_addr = response
+                    .into_iter()
+                    .next()
+                    .ok_or(io::Error::new(
+                        ErrorKind::NotFound,
+                        format!("proxy host did not return any ip address: {}", domain),
+                    ))?;
+                SocketAddr::new(socks_ip_addr, port)
+            }
+            Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
+            Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
+        };
+
+        match scheme {
+            "socks5" => {
+                if username.is_empty() {
+                    Box::new(
+                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
                             .await
                             .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                    )
+                } else {
+                    Box::new(
+                        tokio_socks::tcp::Socks5Stream::connect_with_password(
+                            socks_addr, addr, username, password,
                         )
-                    }
-                }
-                scheme => {
-                    return Err(io::Error::new(
-                        ErrorKind::ConnectionAborted,
-                        format!("proxy scheme not supported: {}", scheme),
-                    ));
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                    )
                 }
             }
-        } else {
-            Box::new(TcpStream::connect(addr).await?)
-        };
+            scheme => {
+                return Err(io::Error::new(
+                    ErrorKind::ConnectionAborted,
+                    format!("proxy scheme not supported: {}", scheme),
+                ));
+            }
+        }
 
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -563,12 +597,11 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
     }
 }
 
-pub async fn connect<'a, T: Transport, A: ToSocketAddrs + IntoTargetAddr<'a>>(
+pub async fn connect<'a, T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
-    proxy_url: Option<&str>,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (mut sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, proxy_url).await?;
+    let (mut sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr).await?;
 
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
@@ -611,13 +644,76 @@ pub async fn connect<'a, T: Transport, A: ToSocketAddrs + IntoTargetAddr<'a>>(
     ))
 }
 
-pub async fn connect_with_auth<'a, T: Transport, A: ToSocketAddrs + IntoTargetAddr<'a>>(
+#[cfg(feature = "proxy")]
+pub async fn connect_via_proxy<'a, T: Transport, A: ToSocketAddrs>(
+    transport: T,
+    addr: A,
+    proxy_url: &str,
+) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+    let (mut sender, enqueuer) = Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
+
+    info!("generating new authorization key...");
+    let (request, data) = authentication::step1()?;
+    debug!("gen auth key: sending step 1");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: starting step 2");
+    let (request, data) = authentication::step2(data, &response)?;
+    debug!("gen auth key: sending step 2");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: starting step 3");
+    let (request, data) = authentication::step3(data, &response)?;
+    debug!("gen auth key: sending step 3");
+    let response = sender.send(request).await?;
+    debug!("gen auth key: completing generation");
+    let authentication::Finished {
+        auth_key,
+        time_offset,
+        first_salt,
+    } = authentication::create_key(data, &response)?;
+    info!("authorization key generated successfully");
+
+    Ok((
+        Sender {
+            stream: sender.stream,
+            transport: sender.transport,
+            mtp: mtp::Encrypted::build()
+                .time_offset(time_offset)
+                .first_salt(first_salt)
+                .finish(auth_key),
+            mtp_buffer: sender.mtp_buffer,
+            requests: sender.requests,
+            request_tx: sender.request_tx,
+            request_rx: sender.request_rx,
+            next_ping: Instant::now() + PING_DELAY,
+            read_buffer: sender.read_buffer,
+            write_buffer: sender.write_buffer,
+            write_index: sender.write_index,
+        },
+        enqueuer,
+    ))
+}
+
+pub async fn connect_with_auth<'a, T: Transport, A: ToSocketAddrs>(
     transport: T,
     addr: A,
     auth_key: [u8; 256],
-    proxy_url: Option<&str>,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
     Sender::connect(
+        transport,
+        mtp::Encrypted::build().finish(auth_key),
+        addr,
+    )
+    .await
+}
+
+#[cfg(feature = "proxy")]
+pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: ToSocketAddrs>(
+    transport: T,
+    addr: A,
+    auth_key: [u8; 256],
+    proxy_url: &str,
+) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
+    Sender::connect_via_proxy(
         transport,
         mtp::Encrypted::build().finish(auth_key),
         addr,
@@ -636,6 +732,7 @@ impl Stream for TcpStream {
     }
 }
 
+#[cfg(feature = "proxy")]
 impl Stream for Socks5Stream<TcpStream> {
     fn split_stream(&mut self) -> (ReadHalf, WriteHalf) {
         self.split()
