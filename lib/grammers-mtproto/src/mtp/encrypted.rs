@@ -49,7 +49,7 @@ pub struct Builder {
 /// An implementation of the [Mobile Transport Protocol] for ciphertext
 /// (encrypted) messages.
 ///
-/// [Mobile Transport Protocol]: https://core.telegram.or);
+/// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub struct Encrypted {
     /// The authorization key to use to encrypt payload.
     auth_key: AuthKey,

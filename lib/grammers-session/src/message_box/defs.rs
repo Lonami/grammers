@@ -47,7 +47,7 @@ pub(crate) enum Entry {
 
 /// Represents a "message box" (event `pts` for a specific entry).
 ///
-/// See https://core.telegram.org/api/updates#message-related-event-sequences.
+/// See <https://core.telegram.org/api/updates#message-related-event-sequences>.
 #[derive(Debug)]
 pub struct MessageBox {
     /// Map each entry to their current state.

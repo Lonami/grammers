@@ -25,10 +25,10 @@ macro_rules! h {
 }
 
 /// Prepare the password for sending to telegram for verification.
-/// The method returns M1 and g_a parameters that should be sent to the telegram
-///   (without a raw password)
+/// The method returns M1 and g_a parameters that should be sent to Telegram
+/// (without the raw password).
 ///
-/// The algorithm is described here: https://core.telegram.org/api/srp
+/// The algorithm is described in <https://core.telegram.org/api/srp>.
 pub fn calculate_2fa(
     salt1: &[u8],
     salt2: &[u8],

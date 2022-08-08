@@ -33,7 +33,7 @@ pub struct InputMessage {
 impl InputMessage {
     /// Whether to "send this message as a background message".
     ///
-    /// This description is taken from https://core.telegram.org/method/messages.sendMessage.
+    /// This description is taken from <https://core.telegram.org/method/messages.sendMessage>.
     pub fn background(mut self, background: bool) -> Self {
         self.background = background;
         self

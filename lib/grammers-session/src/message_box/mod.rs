@@ -320,13 +320,13 @@ impl MessageBox {
     /// Updates corresponding to entries for which their difference is currently being fetched
     /// will be ignored. While according to the [updates' documentation]:
     ///
-    /// > Implementations [have] to postpone updates received via the socket while
+    /// > Implementations \[have\] to postpone updates received via the socket while
     /// > filling gaps in the event and `Update` sequences, as well as avoid filling
     /// > gaps in the same sequence.
     ///
     /// In practice, these updates should have also been retrieved through getting difference.
     ///
-    /// [updates documentation] https://core.telegram.org/api/updates
+    /// [updates' documentation]: https://core.telegram.org/api/updates
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,

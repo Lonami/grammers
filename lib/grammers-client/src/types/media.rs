@@ -119,7 +119,7 @@ impl Photo {
     /// for other types an additional request to the Telegram should be performed.
     /// Check the description of [PhotoSize] to get an information about each particular thumbnail.
     ///
-    /// https://core.telegram.org/api/files#image-thumbnail-types
+    /// <https://core.telegram.org/api/files#image-thumbnail-types>
     pub fn thumbs(&self) -> Vec<PhotoSize> {
         use tl::enums::Photo as P;
 

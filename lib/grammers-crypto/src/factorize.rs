@@ -36,10 +36,10 @@ fn modpow(mut n: u128, mut e: u128, m: u128) -> u128 {
 ///
 /// The algorithm here is a faster variant of [Pollard's rho algorithm],
 /// published by [Richard Brent], based on
-/// https://comeoncodeon.wordpress.com/2010/09/18/pollard-rho-brent-integer-factorization/.
+/// <https://comeoncodeon.wordpress.com/2010/09/18/pollard-rho-brent-integer-factorization/>.
 ///
-/// Pollard's rho algorithm: https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm
-/// Richard Brent: https://maths-people.anu.edu.au/~brent/pd/rpb051i.pdf
+/// Pollard's rho algorithm: <https://en.wikipedia.org/wiki/Pollard%27s_rho_algorithm>
+/// Richard Brent: <https://maths-people.anu.edu.au/~brent/pd/rpb051i.pdf>
 #[allow(clippy::many_single_char_names)]
 pub fn factorize(pq: u64) -> (u64, u64) {
     if pq % 2 == 0 {
