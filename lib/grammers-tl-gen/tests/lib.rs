@@ -42,17 +42,14 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
     )?;
     let result = String::from_utf8(file).unwrap();
     eprintln!("{}", result);
-    assert!(result.contains("InvokeWithLayer<X: crate::RemoteCall>"));
+    assert!(result.contains("pub struct InvokeWithLayer<X>"));
     assert!(result.contains("pub query: X,"));
+    assert!(result.contains("impl<X> crate::Identifiable for InvokeWithLayer<X>"));
     assert!(
-        result.contains("impl<X: crate::RemoteCall> crate::Identifiable for InvokeWithLayer<X>")
+        result.contains("impl<X: crate::Serializable> crate::Serializable for InvokeWithLayer<X>")
     );
-    assert!(
-        result.contains("impl<X: crate::RemoteCall> crate::Serializable for InvokeWithLayer<X>")
-    );
-    assert!(
-        result.contains("impl<X: crate::RemoteCall> crate::Deserializable for InvokeWithLayer<X>")
-    );
+    assert!(result
+        .contains("impl<X: crate::Deserializable> crate::Deserializable for InvokeWithLayer<X>"));
     assert!(result.contains("impl<X: crate::RemoteCall> crate::RemoteCall for InvokeWithLayer<X>"));
     assert!(result.contains("type Return = X::Return;"));
     Ok(())

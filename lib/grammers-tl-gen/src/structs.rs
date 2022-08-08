@@ -20,7 +20,7 @@ use std::io::{self, Write};
 /// ```ignore
 /// <X, Y>
 /// ```
-fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
+fn get_generic_param_list(def: &Definition, trait_bounds: &str) -> String {
     let mut result = String::new();
     for param in def.params.iter() {
         match param.ty {
@@ -33,9 +33,7 @@ fn get_generic_param_list(def: &Definition, declaring: bool) -> String {
                         result.push_str(", ");
                     }
                     result.push_str(&ty.name);
-                    if declaring {
-                        result.push_str(": crate::RemoteCall + crate::Deserializable");
-                    }
+                    result.push_str(trait_bounds);
                 }
             }
         }
@@ -71,7 +69,7 @@ fn write_struct<W: Write>(
         "{}pub struct {}{} {{",
         indent,
         rustifier::definitions::type_name(def),
-        get_generic_param_list(def, true),
+        get_generic_param_list(def, ""),
     )?;
 
     writeln!(file)?;
@@ -112,9 +110,9 @@ fn write_identifiable<W: Write>(
         file,
         "{}impl{} crate::Identifiable for {}{} {{",
         indent,
-        get_generic_param_list(def, true),
+        get_generic_param_list(def, ""),
         rustifier::definitions::type_name(def),
-        get_generic_param_list(def, false),
+        get_generic_param_list(def, ""),
     )?;
     writeln!(
         file,
@@ -144,9 +142,9 @@ fn write_serializable<W: Write>(
         file,
         "{}impl{} crate::Serializable for {}{} {{",
         indent,
-        get_generic_param_list(def, true),
+        get_generic_param_list(def, ": crate::Serializable"),
         rustifier::definitions::type_name(def),
-        get_generic_param_list(def, false),
+        get_generic_param_list(def, ""),
     )?;
     writeln!(
         file,
@@ -256,9 +254,9 @@ fn write_deserializable<W: Write>(
         file,
         "{}impl{} crate::Deserializable for {}{} {{",
         indent,
-        get_generic_param_list(def, true),
+        get_generic_param_list(def, ": crate::Deserializable"),
         rustifier::definitions::type_name(def),
-        get_generic_param_list(def, false),
+        get_generic_param_list(def, ""),
     )?;
     writeln!(
         file,
@@ -355,9 +353,9 @@ fn write_rpc<W: Write>(
         file,
         "{}impl{} crate::RemoteCall for {}{} {{",
         indent,
-        get_generic_param_list(def, true),
+        get_generic_param_list(def, ": crate::RemoteCall"),
         rustifier::definitions::type_name(def),
-        get_generic_param_list(def, false),
+        get_generic_param_list(def, ""),
     )?;
     writeln!(
         file,
