@@ -44,12 +44,25 @@ impl Update {
         chats: &Arc<ChatMap>,
     ) -> Option<Self> {
         match update {
+            // NewMessage
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {
                 Message::new(client, message, chats).map(Self::NewMessage)
             }
+            tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
+                message,
+                ..
+            }) => Message::new(client, message, chats).map(Self::NewMessage),
+
+            // MessageEdited
             tl::enums::Update::EditMessage(tl::types::UpdateEditMessage { message, .. }) => {
                 Message::new(client, message, chats).map(Self::MessageEdited)
             }
+            tl::enums::Update::EditChannelMessage(tl::types::UpdateEditChannelMessage {
+                message,
+                ..
+            }) => Message::new(client, message, chats).map(Self::MessageEdited),
+
+            // MessageDeleted
             tl::enums::Update::DeleteMessages(tl::types::UpdateDeleteMessages {
                 messages, ..
             }) => Some(Self::MessageDeleted(MessageDeletion::new(messages))),
@@ -60,16 +73,18 @@ impl Update {
             }) => Some(Self::MessageDeleted(MessageDeletion::new_with_channel(
                 messages, channel_id,
             ))),
-            tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
-                message,
-                ..
-            }) => Message::new(client, message, chats).map(Self::NewMessage),
+
+            // CallbackQuery
             tl::enums::Update::BotCallbackQuery(query) => Some(Self::CallbackQuery(
                 CallbackQuery::new(client, query, chats),
             )),
+
+            // InlineQuery
             tl::enums::Update::BotInlineQuery(query) => {
                 Some(Self::InlineQuery(InlineQuery::new(client, query, chats)))
             }
+
+            // Raw
             update => Some(Self::Raw(update)),
         }
     }
