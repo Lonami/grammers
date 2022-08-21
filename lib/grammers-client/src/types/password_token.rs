@@ -17,7 +17,7 @@ impl PasswordToken {
         PasswordToken { password }
     }
 
-    pub fn hint(&self) -> Option<&String> {
-        self.password.hint.as_ref()
+    pub fn hint(&self) -> Option<&str> {
+        self.password.hint.as_deref()
     }
 }
