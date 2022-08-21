@@ -7,7 +7,7 @@
 // except according to those terms.
 use super::{Client, ClientInner, Config};
 use crate::utils::{self, AsyncMutex, Mutex};
-use grammers_mtproto::mtp::{self};
+use grammers_mtproto::mtp::{self, RpcError};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::{ChatHashCache, MessageBox};
@@ -240,15 +240,34 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
+        let mut slept_flood = false;
+        let sleep_thresh = self.0.config.params.flood_sleep_threshold.unwrap_or(0);
+
         let mut rx = self.0.request_tx.lock("invoke").enqueue(request);
         loop {
             match rx.try_recv() {
-                Ok(response) => {
-                    break match response {
-                        Ok(body) => R::Return::from_bytes(&body).map_err(|e| e.into()),
-                        Err(err) => Err(err),
+                Ok(response) => match response {
+                    Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
+                    Err(InvocationError::Rpc(RpcError {
+                        name,
+                        code: 420,
+                        value: Some(seconds),
+                        ..
+                    })) if !slept_flood && seconds <= sleep_thresh => {
+                        let delay = std::time::Duration::from_secs(seconds as _);
+                        info!(
+                            "sleeping on {} for {:?} before retrying {}",
+                            name,
+                            delay,
+                            std::any::type_name::<R>()
+                        );
+                        tokio::time::sleep(delay).await;
+                        slept_flood = true;
+                        rx = self.0.request_tx.lock("invoke").enqueue(request);
+                        continue;
                     }
-                }
+                    Err(e) => break Err(e),
+                },
                 Err(TryRecvError::Empty) => {
                     self.step().await?;
                 }
