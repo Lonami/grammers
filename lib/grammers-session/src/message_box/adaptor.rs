@@ -212,13 +212,25 @@ pub(super) fn adapt(
         // > generation of the `Updates`, and `seq_start` indicates the remote `Updates` state
         // > after the first of the `Updates` in the packet is generated
         tl::enums::Updates::Combined(combined) => {
-            chat_hashes.extend(&combined.users, &combined.chats);
+            // In essence, "min constructors suck".
+            // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
+            // So rather than using the `inputPeer*FromMessage` (which not only are considerably
+            // larger but may need to be nested, and may stop working if the message is gone),
+            // just treat it as a gap when encountering peers for which the hash is not known.
+            // Context: https://t.me/tdlibchat/15096.
+            if !chat_hashes.extend(&combined.users, &combined.chats) {
+                info!("found a peer in combined with unknown access hash, treating as gap");
+                return Err(Gap);
+            }
             combined
         }
         // > [the] `seq_start` attribute is omitted, because it is assumed that it is always
         // > equal to `seq`.
         tl::enums::Updates::Updates(updates) => {
-            chat_hashes.extend(&updates.users, &updates.chats);
+            if !chat_hashes.extend(&updates.users, &updates.chats) {
+                info!("found a peer with unknown access hash, treating as gap");
+                return Err(Gap);
+            }
             self::updates(updates)
         }
         // Even though we lack fields like the message text, it still needs to be handled, so

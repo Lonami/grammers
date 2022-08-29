@@ -670,6 +670,10 @@ impl MessageBox {
             date: 1,
             seq: NO_SEQ,
         });
+
+        // Not sure if it's possible for users/chats from getting difference
+        // to be `min` or have missing `access_hash`, but those would likely
+        // trigger this gap (so if that ever occurs, this might be why).
         self.process_updates(us, chat_hashes, &mut result_updates)
             .expect("gap is detected while applying difference");
 

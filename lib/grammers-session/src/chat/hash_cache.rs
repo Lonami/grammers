@@ -53,32 +53,38 @@ impl ChatHashCache {
         })
     }
 
-    pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) {
+    // Returns `true` if all users and chats could be extended without issue.
+    // Returns `false` if there is any user or chat for which its `access_hash` is missing.
+    pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) -> bool {
         // See https://core.telegram.org/api/min for "issues" with "min constructors".
         use tl::enums::{Chat as C, User as U};
-        self.hash_map
-            .extend(users.iter().flat_map(|user| match user {
-                U::Empty(_) => None,
-                U::User(u) => u.access_hash.and_then(|hash| {
-                    if u.min {
-                        None
-                    } else {
+
+        for user in users.iter() {
+            match user {
+                U::Empty(_) => continue,
+                U::User(u) => match (u.min, u.access_hash) {
+                    (false, Some(hash)) => {
                         let ty = if u.bot {
                             PackedType::Bot
                         } else {
                             PackedType::User
                         };
-                        Some((u.id, (hash, ty)))
+                        self.hash_map.insert(u.id, (hash, ty));
                     }
-                }),
-            }));
-        self.hash_map
-            .extend(chats.iter().flat_map(|chat| match chat {
-                C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
-                C::Channel(c) => c.access_hash.and_then(|hash| {
-                    if c.min {
-                        None
-                    } else {
+                    _ => {
+                        if !self.hash_map.contains_key(&u.id) {
+                            return false;
+                        }
+                    }
+                },
+            }
+        }
+
+        for chat in chats.iter() {
+            match chat {
+                C::Empty(_) | C::Chat(_) | C::Forbidden(_) => continue,
+                C::Channel(c) => match (c.min, c.access_hash) {
+                    (false, Some(hash)) => {
                         let ty = if c.megagroup {
                             PackedType::Megagroup
                         } else if c.gigagroup {
@@ -86,17 +92,25 @@ impl ChatHashCache {
                         } else {
                             PackedType::Broadcast
                         };
-                        Some((c.id, (hash, ty)))
+                        self.hash_map.insert(c.id, (hash, ty));
                     }
-                }),
+                    _ => {
+                        if !self.hash_map.contains_key(&c.id) {
+                            return false;
+                        }
+                    }
+                },
                 C::ChannelForbidden(c) => {
                     let ty = if c.megagroup {
                         PackedType::Megagroup
                     } else {
                         PackedType::Broadcast
                     };
-                    Some((c.id, (c.access_hash, ty)))
+                    self.hash_map.insert(c.id, (c.access_hash, ty));
                 }
-            }));
+            }
+        }
+
+        true
     }
 }
