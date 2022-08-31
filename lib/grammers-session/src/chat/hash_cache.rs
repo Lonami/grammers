@@ -53,6 +53,11 @@ impl ChatHashCache {
         })
     }
 
+    #[inline]
+    fn has(&self, id: i64) -> bool {
+        self.hash_map.contains_key(&id)
+    }
+
     // Returns `true` if all users and chats could be extended without issue.
     // Returns `false` if there is any user or chat for which its `access_hash` is missing.
     pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) -> bool {
@@ -112,5 +117,24 @@ impl ChatHashCache {
         }
 
         true
+    }
+
+    // Like `Self::extend`, but intended for socket updates.
+    pub fn extend_from_updates(&mut self, updates: &tl::enums::Updates) -> bool {
+        match updates {
+            tl::enums::Updates::TooLong => true,
+            tl::enums::Updates::UpdateShortMessage(short) => self.has(short.user_id),
+            tl::enums::Updates::UpdateShortChatMessage(short) => self.has(short.from_id),
+            tl::enums::Updates::UpdateShort(_short) => todo!(),
+            // Telegram should be including all the peers referenced in the updates in
+            // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
+            //
+            // If it turns out that there is some peer somewhere within the updates which was not
+            // actually known, the solution would be to check all inner updates in the same way
+            // `UpdateShort` is checked (which is sadly quite wasteful).
+            tl::enums::Updates::Combined(combined) => self.extend(&combined.users, &combined.chats),
+            tl::enums::Updates::Updates(updates) => self.extend(&updates.users, &updates.chats),
+            tl::enums::Updates::UpdateShortSentMessage(_short) => true,
+        }
     }
 }

@@ -170,7 +170,7 @@ pub(super) fn update_short_sent_message(
 
 pub(super) fn adapt(
     updates: tl::enums::Updates,
-    chat_hashes: &mut ChatHashCache,
+    chat_hashes: &ChatHashCache,
 ) -> Result<tl::types::UpdatesCombined, Gap> {
     Ok(match updates {
         // > `updatesTooLong` indicates that there are too many events pending to be pushed
@@ -185,15 +185,12 @@ pub(super) fn adapt(
             // > Incomplete update: the client is missing data about a chat/user from one of
             // > the shortened constructors, such as `updateShortChatMessage`, etc.
             //
-            // This only needs to be done for "short messages", to get the private chat (user)
+            // The check for missing hashes is done elsewhere to avoid doing the same work twice.
+            // This "only" needs to be done for "short messages", to get the private chat (user)
             // where the message occured. Anywhere else, Telegram should send information
             // about the chat so that [min constructors][0] can be used.
             //
             // [0]: https://core.telegram.org/api/min
-            if chat_hashes.get(short.user_id).is_none() {
-                info!("no hash for user {} known, treating as gap", short.user_id);
-                return Err(Gap);
-            }
             update_short_message(short, chat_hashes.self_id())
         }
         tl::enums::Updates::UpdateShortChatMessage(short) => {
@@ -211,28 +208,10 @@ pub(super) fn adapt(
         // > [the] `seq` attribute, which indicates the remote `Updates` state after the
         // > generation of the `Updates`, and `seq_start` indicates the remote `Updates` state
         // > after the first of the `Updates` in the packet is generated
-        tl::enums::Updates::Combined(combined) => {
-            // In essence, "min constructors suck".
-            // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
-            // So rather than using the `inputPeer*FromMessage` (which not only are considerably
-            // larger but may need to be nested, and may stop working if the message is gone),
-            // just treat it as a gap when encountering peers for which the hash is not known.
-            // Context: https://t.me/tdlibchat/15096.
-            if !chat_hashes.extend(&combined.users, &combined.chats) {
-                info!("found a peer in combined with unknown access hash, treating as gap");
-                return Err(Gap);
-            }
-            combined
-        }
+        tl::enums::Updates::Combined(combined) => combined,
         // > [the] `seq_start` attribute is omitted, because it is assumed that it is always
         // > equal to `seq`.
-        tl::enums::Updates::Updates(updates) => {
-            if !chat_hashes.extend(&updates.users, &updates.chats) {
-                info!("found a peer with unknown access hash, treating as gap");
-                return Err(Gap);
-            }
-            self::updates(updates)
-        }
+        tl::enums::Updates::Updates(updates) => self::updates(updates),
         // Even though we lack fields like the message text, it still needs to be handled, so
         // that the `pts` can be kept consistent.
         tl::enums::Updates::UpdateShortSentMessage(short) => update_short_sent_message(short),

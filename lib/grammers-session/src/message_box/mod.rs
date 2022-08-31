@@ -315,6 +315,27 @@ impl MessageBox {
 
 // "Normal" updates flow (processing and detection of gaps).
 impl MessageBox {
+    /// Make sure all peer hashes contained in the update are known by the client
+    /// (either by checking if they were already known, or by extending the hash cache
+    /// with those that were not known).
+    ///
+    /// If a peer is found, but it doesn't contain a non-`min` hash and no hash for it
+    /// is known, it is treated as a gap.
+    pub fn ensure_known_peer_hashes(&mut self, updates: &tl::enums::Updates, chat_hashes: &mut ChatHashCache) -> Result<(), Gap> {
+        // In essence, "min constructors suck".
+        // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
+        // So rather than using the `inputPeer*FromMessage` (which not only are considerably
+        // larger but may need to be nested, and may stop working if the message is gone),
+        // just treat it as a gap when encountering peers for which the hash is not known.
+        // Context: https://t.me/tdlibchat/15096.
+        if chat_hashes.extend_from_updates(updates) {
+            Ok(())
+        } else {
+            self.try_begin_get_diff(Entry::AccountWide);
+            return Err(Gap);
+        }
+    }
+
     /// Process an update and return what should be done with it.
     ///
     /// Updates corresponding to entries for which their difference is currently being fetched
@@ -330,11 +351,15 @@ impl MessageBox {
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
-        chat_hashes: &mut ChatHashCache,
+        chat_hashes: &ChatHashCache,
         result: &mut Vec<tl::enums::Update>,
     ) -> Result<(Vec<tl::enums::User>, Vec<tl::enums::Chat>), Gap> {
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
+        //
+        // This assumes all access hashes are already known to the client (socket updates are
+        // expected to use `ensure_known_peer_hashes`, and the result from getting difference
+        // has to deal with the peers in a different way).
         let tl::types::UpdatesCombined {
             date,
             seq_start,
@@ -671,9 +696,8 @@ impl MessageBox {
             seq: NO_SEQ,
         });
 
-        // Not sure if it's possible for users/chats from getting difference
-        // to be `min` or have missing `access_hash`, but those would likely
-        // trigger this gap (so if that ever occurs, this might be why).
+        // It is possible that the result from `GetDifference` includes users with `min = true`.
+        // TODO in that case, we will have to resort to getUsers.
         self.process_updates(us, chat_hashes, &mut result_updates)
             .expect("gap is detected while applying difference");
 

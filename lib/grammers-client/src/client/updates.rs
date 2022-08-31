@@ -160,7 +160,13 @@ impl Client {
         let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
 
         for updates in all_updates {
-            match message_box.process_updates(updates, &mut chat_hashes, &mut result.0) {
+            if message_box
+                .ensure_known_peer_hashes(&updates, &mut chat_hashes)
+                .is_err()
+            {
+                return;
+            }
+            match message_box.process_updates(updates, &chat_hashes, &mut result.0) {
                 Ok((users, chats)) => {
                     result.1.extend(users);
                     result.2.extend(chats);
