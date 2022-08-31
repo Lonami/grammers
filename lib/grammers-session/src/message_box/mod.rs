@@ -349,17 +349,11 @@ impl MessageBox {
             };
 
             if can_recover {
-                info!(
-                    "received an update referencing an unknown peer, treating as gap {:?}",
-                    updates
-                );
+                info!("received an update referencing an unknown peer, treating as gap");
                 self.try_begin_get_diff(Entry::AccountWide);
                 Err(Gap)
             } else {
-                info!(
-                    "received an update referencing an unknown peer, but cannot find out who {:?}",
-                    updates
-                );
+                info!("received an update referencing an unknown peer, but cannot find out who");
                 Ok(())
             }
         }
