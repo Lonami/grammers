@@ -82,6 +82,10 @@ impl DialogIter {
             }
         };
 
+        let mut chat_hashes = self.client.0.chat_hashes.lock("iter_dialogs");
+        chat_hashes.extend(&users, &chats);
+        drop(chat_hashes);
+
         let chats = ChatMap::new(users, chats);
         let mut messages = messages
             .into_iter()
