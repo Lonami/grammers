@@ -713,15 +713,16 @@ impl MessageBox {
         let mut result_updates = vec![];
         let us = tl::enums::Updates::Updates(tl::types::Updates {
             updates,
-            users: users.clone(),
-            chats: chats.clone(),
+            users,
+            chats,
             date: 1,
             seq: NO_SEQ,
         });
 
         // It is possible that the result from `GetDifference` includes users with `min = true`.
         // TODO in that case, we will have to resort to getUsers.
-        self.process_updates(us, chat_hashes, &mut result_updates)
+        let (users, chats) = self
+            .process_updates(us, chat_hashes, &mut result_updates)
             .expect("gap is detected while applying difference");
 
         result_updates.extend(
@@ -881,12 +882,13 @@ impl MessageBox {
                 let mut result_updates = vec![];
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
-                    users: users.clone(),
-                    chats: chats.clone(),
+                    users: users,
+                    chats: chats,
                     date: 1,
                     seq: NO_SEQ,
                 });
-                self.process_updates(us, chat_hashes, &mut result_updates)
+                let (users, chats) = self
+                    .process_updates(us, chat_hashes, &mut result_updates)
                     .expect("gap is detected while applying channel difference");
 
                 result_updates.extend(new_messages.into_iter().map(|message| {
