@@ -321,7 +321,11 @@ impl MessageBox {
     ///
     /// If a peer is found, but it doesn't contain a non-`min` hash and no hash for it
     /// is known, it is treated as a gap.
-    pub fn ensure_known_peer_hashes(&mut self, updates: &tl::enums::Updates, chat_hashes: &mut ChatHashCache) -> Result<(), Gap> {
+    pub fn ensure_known_peer_hashes(
+        &mut self,
+        updates: &tl::enums::Updates,
+        chat_hashes: &mut ChatHashCache,
+    ) -> Result<(), Gap> {
         // In essence, "min constructors suck".
         // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
         // So rather than using the `inputPeer*FromMessage` (which not only are considerably
@@ -331,8 +335,33 @@ impl MessageBox {
         if chat_hashes.extend_from_updates(updates) {
             Ok(())
         } else {
-            self.try_begin_get_diff(Entry::AccountWide);
-            return Err(Gap);
+            // However, some updates do not change the pts, so attempting to recover the gap
+            // will just result in an empty result from `getDifference` (being just wasteful).
+            // Check if this update has any pts we can try to recover from.
+            let can_recover = match updates {
+                tl::enums::Updates::TooLong => true,
+                tl::enums::Updates::UpdateShortMessage(_) => true,
+                tl::enums::Updates::UpdateShortChatMessage(_) => true,
+                tl::enums::Updates::UpdateShort(u) => PtsInfo::from_update(&u.update).is_some(),
+                tl::enums::Updates::Combined(_) => true,
+                tl::enums::Updates::Updates(_) => true,
+                tl::enums::Updates::UpdateShortSentMessage(_) => true,
+            };
+
+            if can_recover {
+                info!(
+                    "received an update referencing an unknown peer, treating as gap {:?}",
+                    updates
+                );
+                self.try_begin_get_diff(Entry::AccountWide);
+                Err(Gap)
+            } else {
+                info!(
+                    "received an update referencing an unknown peer, but cannot find out who {:?}",
+                    updates
+                );
+                Ok(())
+            }
         }
     }
 
