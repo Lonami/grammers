@@ -109,6 +109,7 @@ impl ChatHashCache {
 
     // Returns `true` if all users and chats could be extended without issue.
     // Returns `false` if there is any user or chat for which its `access_hash` is missing.
+    #[must_use]
     pub fn extend(&mut self, users: &[tl::enums::User], chats: &[tl::enums::Chat]) -> bool {
         // See https://core.telegram.org/api/min for "issues" with "min constructors".
         use tl::enums::{Chat as C, User as U};

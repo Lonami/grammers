@@ -117,7 +117,10 @@ impl ParticipantIter {
                 };
 
                 let mut chat_hashes = client.0.chat_hashes.lock("iter_participants");
-                chat_hashes.extend(&full.users, &full.chats);
+                assert!(
+                    chat_hashes.extend(&full.users, &full.chats),
+                    "API is returning peers without access_hash"
+                );
                 drop(chat_hashes);
 
                 // Don't actually care for the chats, just the users.
@@ -147,7 +150,10 @@ impl ParticipantIter {
                     };
 
                 let mut chat_hashes = iter.client.0.chat_hashes.lock("iter_participants");
-                chat_hashes.extend(&users, &chats);
+                assert!(
+                    chat_hashes.extend(&users, &chats),
+                    "API is returning peers without access_hash"
+                );
                 drop(chat_hashes);
 
                 // Telegram can return less participants than asked for but the count being higher
@@ -357,7 +363,10 @@ impl Client {
         };
 
         let mut chat_hashes = self.0.chat_hashes.lock("resolve_username");
-        chat_hashes.extend(&users, &chats);
+        assert!(
+            chat_hashes.extend(&users, &chats),
+            "API is returning peers without access_hash"
+        );
         drop(chat_hashes);
 
         Ok(match peer {

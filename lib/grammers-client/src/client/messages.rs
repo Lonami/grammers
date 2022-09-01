@@ -145,7 +145,10 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
         };
 
         let mut chat_hashes = self.client.0.chat_hashes.lock("iter_messages");
-        chat_hashes.extend(&users, &chats);
+        assert!(
+            chat_hashes.extend(&users, &chats),
+            "API is returning peers without access_hash"
+        );
         drop(chat_hashes);
 
         let chats = ChatMap::new(users, chats);

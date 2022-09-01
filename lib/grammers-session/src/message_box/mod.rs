@@ -625,12 +625,14 @@ impl MessageBox {
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::Difference::Difference(diff) => {
+                // TODO return Err(attempt to find users)
+                drop(chat_hashes.extend(&diff.users, &diff.chats));
+
                 debug!(
                     "handling full difference {:?}; no longer getting diff",
                     diff.state
                 );
                 finish = true;
-                chat_hashes.extend(&diff.users, &diff.chats);
                 self.apply_difference_type(diff, chat_hashes)
             }
             tl::enums::updates::Difference::Slice(tl::types::updates::DifferenceSlice {
@@ -641,9 +643,11 @@ impl MessageBox {
                 users,
                 intermediate_state: state,
             }) => {
+                // TODO return Err(attempt to find users)
+                drop(chat_hashes.extend(&users, &chats));
+
                 debug!("handling partial difference {:?}", state);
                 finish = false;
-                chat_hashes.extend(&users, &chats);
                 self.apply_difference_type(
                     tl::types::updates::Difference {
                         new_messages,
@@ -834,6 +838,9 @@ impl MessageBox {
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
+                // TODO return Err(attempt to find users)
+                drop(chat_hashes.extend(&diff.users, &diff.chats));
+
                 assert!(diff.r#final);
                 info!(
                     "handling too long channel {} difference; no longer getting diff",
@@ -849,7 +856,7 @@ impl MessageBox {
                         panic!("received a folder on channelDifferenceTooLong")
                     }
                 }
-                chat_hashes.extend(&diff.users, &diff.chats);
+
                 self.reset_channel_deadline(channel_id, diff.timeout);
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
@@ -867,6 +874,9 @@ impl MessageBox {
                     users,
                 },
             ) => {
+                // TODO return Err(attempt to find users)
+                drop(chat_hashes.extend(&users, &chats));
+
                 if r#final {
                     debug!(
                         "handling channel {} difference; no longer getting diff",
@@ -878,7 +888,6 @@ impl MessageBox {
                 }
 
                 self.map.get_mut(&entry).unwrap().pts = pts;
-                chat_hashes.extend(&users, &chats);
                 let mut result_updates = vec![];
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
