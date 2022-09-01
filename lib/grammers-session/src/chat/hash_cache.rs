@@ -113,59 +113,49 @@ impl ChatHashCache {
         // See https://core.telegram.org/api/min for "issues" with "min constructors".
         use tl::enums::{Chat as C, User as U};
 
-        for user in users.iter() {
-            match user {
-                U::Empty(_) => continue,
-                U::User(u) => match (u.min, u.access_hash) {
-                    (false, Some(hash)) => {
-                        let ty = if u.bot {
-                            PackedType::Bot
-                        } else {
-                            PackedType::User
-                        };
-                        self.hash_map.insert(u.id, (hash, ty));
-                    }
-                    _ => {
-                        if !self.hash_map.contains_key(&u.id) {
-                            return false;
-                        }
-                    }
-                },
-            }
-        }
+        let mut success = true;
 
-        for chat in chats.iter() {
-            match chat {
-                C::Empty(_) | C::Chat(_) | C::Forbidden(_) => continue,
-                C::Channel(c) => match (c.min, c.access_hash) {
-                    (false, Some(hash)) => {
-                        let ty = if c.megagroup {
-                            PackedType::Megagroup
-                        } else if c.gigagroup {
-                            PackedType::Gigagroup
-                        } else {
-                            PackedType::Broadcast
-                        };
-                        self.hash_map.insert(c.id, (hash, ty));
-                    }
-                    _ => {
-                        if !self.hash_map.contains_key(&c.id) {
-                            return false;
-                        }
-                    }
-                },
-                C::ChannelForbidden(c) => {
+        users.iter().for_each(|user| match user {
+            U::Empty(_) => {}
+            U::User(u) => match (u.min, u.access_hash) {
+                (false, Some(hash)) => {
+                    let ty = if u.bot {
+                        PackedType::Bot
+                    } else {
+                        PackedType::User
+                    };
+                    self.hash_map.insert(u.id, (hash, ty));
+                }
+                _ => success &= self.hash_map.contains_key(&u.id),
+            },
+        });
+
+        chats.iter().for_each(|chat| match chat {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => {}
+            C::Channel(c) => match (c.min, c.access_hash) {
+                (false, Some(hash)) => {
                     let ty = if c.megagroup {
                         PackedType::Megagroup
+                    } else if c.gigagroup {
+                        PackedType::Gigagroup
                     } else {
                         PackedType::Broadcast
                     };
-                    self.hash_map.insert(c.id, (c.access_hash, ty));
+                    self.hash_map.insert(c.id, (hash, ty));
                 }
+                _ => success &= self.hash_map.contains_key(&c.id),
+            },
+            C::ChannelForbidden(c) => {
+                let ty = if c.megagroup {
+                    PackedType::Megagroup
+                } else {
+                    PackedType::Broadcast
+                };
+                self.hash_map.insert(c.id, (c.access_hash, ty));
             }
-        }
+        });
 
-        true
+        success
     }
 
     // Like `Self::extend`, but intended for socket updates.
