@@ -103,6 +103,17 @@ impl Channel {
     pub fn title(&self) -> &str {
         self.0.title.as_str()
     }
+
+    /// Return the public @username of this channel, if any.
+    ///
+    /// The returned username does not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of Telegram's URLs, such
+    /// as https://t.me/username.
+    pub fn username(&self) -> Option<&str> {
+        self.0.username.as_deref()
+    }
+
 }
 
 impl From<Channel> for PackedChat {
