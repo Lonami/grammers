@@ -113,7 +113,6 @@ impl Channel {
     pub fn username(&self) -> Option<&str> {
         self.0.username.as_deref()
     }
-
 }
 
 impl From<Channel> for PackedChat {
