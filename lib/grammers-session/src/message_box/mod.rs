@@ -446,7 +446,7 @@ impl MessageBox {
                     .unwrap()
                     .updates
                     .sort_by_key(|update| match PtsInfo::from_update(update) {
-                        Some(pts) => (pts.pts - pts.pts_count),
+                        Some(pts) => pts.pts - pts.pts_count,
                         None => 0,
                     });
 
