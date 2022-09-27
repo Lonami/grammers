@@ -103,6 +103,17 @@ impl Group {
             Chat::ChannelForbidden(chat) => chat.title.as_str(),
         }
     }
+    
+    /// Return the access_hash of this group.
+    pub fn access_hash(&self) -> Option<i64> {
+        use tl::enums::Chat as C;
+
+        match &self.0 {
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => None,
+            C::Channel(channel) => channel.access_hash,
+            C::ChannelForbidden(channel) => Some(channel.access_hash),
+        }
+    }
 
     /// Returns true if this group is a megagroup (also known as supergroups).
     ///
