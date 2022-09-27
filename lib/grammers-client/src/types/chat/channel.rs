@@ -103,6 +103,11 @@ impl Channel {
     pub fn title(&self) -> &str {
         self.0.title.as_str()
     }
+    
+    /// Return the access_hash of this channel.
+    pub fn access_hash(&self) -> Option<i64> {
+        self.0.access_hash
+    }
 }
 
 impl From<Channel> for PackedChat {
