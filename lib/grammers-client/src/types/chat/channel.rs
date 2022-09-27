@@ -103,6 +103,21 @@ impl Channel {
     pub fn title(&self) -> &str {
         self.0.title.as_str()
     }
+    
+    /// Return the access_hash of this channel.
+    pub fn access_hash(&self) -> Option<i64> {
+        self.0.access_hash
+    }
+
+    /// Return the access_hash of this group.
+    pub fn broadcast(&self) -> bool {
+        self.0.broadcast
+    }
+
+    /// Return the username of this group.
+    pub fn username(&self) -> Option<String> {
+        self.0.username.clone()
+    }
 }
 
 impl From<Channel> for PackedChat {
