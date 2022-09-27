@@ -58,18 +58,20 @@ pub(crate) fn extract_password_parameters(
 /// Get a `Chat`, no matter what.
 ///
 /// If necessary, `access_hash` of `0` will be returned, but *something* will be returned.
+///
+/// If the `Chat` is `min`, attempt to update its `access_hash` to the non-`min` version.
 pub(crate) fn always_find_entity(
     peer: &tl::enums::Peer,
     map: &types::ChatMap,
     client: &crate::Client,
 ) -> types::Chat {
-    map.get(peer).cloned().unwrap_or_else(|| {
+    let get_packed = || {
         let (id, ty) = match peer {
             tl::enums::Peer::User(user) => (user.user_id, PackedType::User),
             tl::enums::Peer::Chat(chat) => (chat.chat_id, PackedType::Chat),
             tl::enums::Peer::Channel(channel) => (channel.channel_id, PackedType::Broadcast),
         };
-        let packed = client
+        client
             .0
             .chat_hashes
             .lock("always_find_entity")
@@ -78,9 +80,25 @@ pub(crate) fn always_find_entity(
                 ty,
                 id,
                 access_hash: None,
-            });
-        types::Chat::unpack(packed)
-    })
+            })
+    };
+
+    match map.get(peer).cloned() {
+        Some(mut chat) => {
+            // As a best-effort, attempt to replace any `min` `access_hash` with the non-`min`
+            // version. The `min` hash is only usable to download profile photos (if the user
+            // tried to pack it for later use, like sending a message, it would fail).
+            if let Some((min, access_hash)) = chat.get_min_hash_ref() {
+                let packed = get_packed();
+                if let Some(ah) = packed.access_hash {
+                    *access_hash = ah;
+                    *min = false;
+                }
+            }
+            chat
+        }
+        None => types::Chat::unpack(get_packed()),
+    }
 }
 
 pub(crate) struct Mutex<T: ?Sized> {

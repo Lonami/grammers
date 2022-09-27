@@ -43,6 +43,7 @@ pub struct Config {
 
 /// Optional initialization parameters, required when initializing a connection to Telegram's
 /// API.
+#[derive(Clone)]
 pub struct InitParams {
     pub device_model: String,
     pub system_version: String,

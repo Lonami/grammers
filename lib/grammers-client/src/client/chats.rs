@@ -116,6 +116,10 @@ impl ParticipantIter {
                     tl::enums::ChatParticipants::Participants(c) => c.participants,
                 };
 
+                let mut chat_hashes = client.0.chat_hashes.lock("iter_participants");
+                chat_hashes.extend(&full.users, &full.chats);
+                drop(chat_hashes);
+
                 // Don't actually care for the chats, just the users.
                 let mut chats = ChatMap::new(full.users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
@@ -134,10 +138,17 @@ impl ParticipantIter {
                 use tl::enums::channels::ChannelParticipants::*;
 
                 iter.request.limit = iter.determine_limit(MAX_PARTICIPANT_LIMIT);
-                let (count, participants, users) = match iter.client.invoke(&iter.request).await? {
-                    Participants(p) => (p.count, p.participants, p.users),
-                    NotModified => panic!("API returned Dialogs::NotModified even though hash = 0"),
-                };
+                let (count, participants, chats, users) =
+                    match iter.client.invoke(&iter.request).await? {
+                        Participants(p) => (p.count, p.participants, p.chats, p.users),
+                        NotModified => {
+                            panic!("API returned Dialogs::NotModified even though hash = 0")
+                        }
+                    };
+
+                let mut chat_hashes = iter.client.0.chat_hashes.lock("iter_participants");
+                chat_hashes.extend(&users, &chats);
+                drop(chat_hashes);
 
                 // Telegram can return less participants than asked for but the count being higher
                 // (for example, count=4825, participants=199, users=200). The missing participant
@@ -344,6 +355,10 @@ impl Client {
             Err(err) if err.is("USERNAME_NOT_OCCUPIED") => return Ok(None),
             Err(err) => return Err(err),
         };
+
+        let mut chat_hashes = self.0.chat_hashes.lock("resolve_username");
+        chat_hashes.extend(&users, &chats);
+        drop(chat_hashes);
 
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users

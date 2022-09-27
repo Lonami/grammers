@@ -315,6 +315,50 @@ impl MessageBox {
 
 // "Normal" updates flow (processing and detection of gaps).
 impl MessageBox {
+    /// Make sure all peer hashes contained in the update are known by the client
+    /// (either by checking if they were already known, or by extending the hash cache
+    /// with those that were not known).
+    ///
+    /// If a peer is found, but it doesn't contain a non-`min` hash and no hash for it
+    /// is known, it is treated as a gap.
+    pub fn ensure_known_peer_hashes(
+        &mut self,
+        updates: &tl::enums::Updates,
+        chat_hashes: &mut ChatHashCache,
+    ) -> Result<(), Gap> {
+        // In essence, "min constructors suck".
+        // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
+        // So rather than using the `inputPeer*FromMessage` (which not only are considerably
+        // larger but may need to be nested, and may stop working if the message is gone),
+        // just treat it as a gap when encountering peers for which the hash is not known.
+        // Context: https://t.me/tdlibchat/15096.
+        if chat_hashes.extend_from_updates(updates) {
+            Ok(())
+        } else {
+            // However, some updates do not change the pts, so attempting to recover the gap
+            // will just result in an empty result from `getDifference` (being just wasteful).
+            // Check if this update has any pts we can try to recover from.
+            let can_recover = match updates {
+                tl::enums::Updates::TooLong => true,
+                tl::enums::Updates::UpdateShortMessage(_) => true,
+                tl::enums::Updates::UpdateShortChatMessage(_) => true,
+                tl::enums::Updates::UpdateShort(u) => PtsInfo::from_update(&u.update).is_some(),
+                tl::enums::Updates::Combined(_) => true,
+                tl::enums::Updates::Updates(_) => true,
+                tl::enums::Updates::UpdateShortSentMessage(_) => true,
+            };
+
+            if can_recover {
+                info!("received an update referencing an unknown peer, treating as gap");
+                self.try_begin_get_diff(Entry::AccountWide);
+                Err(Gap)
+            } else {
+                info!("received an update referencing an unknown peer, but cannot find out who");
+                Ok(())
+            }
+        }
+    }
+
     /// Process an update and return what should be done with it.
     ///
     /// Updates corresponding to entries for which their difference is currently being fetched
@@ -330,11 +374,15 @@ impl MessageBox {
     pub fn process_updates(
         &mut self,
         updates: tl::enums::Updates,
-        chat_hashes: &mut ChatHashCache,
+        chat_hashes: &ChatHashCache,
         result: &mut Vec<tl::enums::Update>,
     ) -> Result<(Vec<tl::enums::User>, Vec<tl::enums::Chat>), Gap> {
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
+        //
+        // This assumes all access hashes are already known to the client (socket updates are
+        // expected to use `ensure_known_peer_hashes`, and the result from getting difference
+        // has to deal with the peers in a different way).
         let tl::types::UpdatesCombined {
             date,
             seq_start,
@@ -665,12 +713,16 @@ impl MessageBox {
         let mut result_updates = vec![];
         let us = tl::enums::Updates::Updates(tl::types::Updates {
             updates,
-            users: users.clone(),
-            chats: chats.clone(),
+            users,
+            chats,
             date: 1,
             seq: NO_SEQ,
         });
-        self.process_updates(us, chat_hashes, &mut result_updates)
+
+        // It is possible that the result from `GetDifference` includes users with `min = true`.
+        // TODO in that case, we will have to resort to getUsers.
+        let (users, chats) = self
+            .process_updates(us, chat_hashes, &mut result_updates)
             .expect("gap is detected while applying difference");
 
         result_updates.extend(
@@ -830,12 +882,13 @@ impl MessageBox {
                 let mut result_updates = vec![];
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
-                    users: users.clone(),
-                    chats: chats.clone(),
+                    users: users,
+                    chats: chats,
                     date: 1,
                     seq: NO_SEQ,
                 });
-                self.process_updates(us, chat_hashes, &mut result_updates)
+                let (users, chats) = self
+                    .process_updates(us, chat_hashes, &mut result_updates)
                     .expect("gap is detected while applying channel difference");
 
                 result_updates.extend(new_messages.into_iter().map(|message| {
