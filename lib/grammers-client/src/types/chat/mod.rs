@@ -137,6 +137,20 @@ impl Chat {
         }
     }
 
+    /// Return the public @username of this chat, if any.
+    ///
+    /// The returned username does not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of Telegram's URLs, such
+    /// as https://t.me/username.
+    pub fn username(&self) -> Option<&str> {
+        match self {
+            Self::User(user) => user.username(),
+            Self::Group(group) => group.username(),
+            Self::Channel(channel) => channel.username(),
+        }
+    }
+
     // If `Self` has `min` `access_hash`, returns a mutable reference to both `min` and `access_hash`.
     //
     // This serves as a way of checking "is it min?" and "update the access hash" both in one.
