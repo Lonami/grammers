@@ -114,7 +114,8 @@ impl User {
         self.0.id
     }
 
-    pub(crate) fn access_hash(&self) -> Option<i64> {
+    /// Return access_hash for this user.
+    pub fn access_hash(&self) -> Option<i64> {
         self.0.access_hash
     }
 
