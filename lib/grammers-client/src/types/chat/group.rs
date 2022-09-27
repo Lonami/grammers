@@ -104,6 +104,21 @@ impl Group {
         }
     }
 
+    /// Return the public @username of this group, if any.
+    ///
+    /// The returned username does not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of Telegram's URLs, such
+    /// as https://t.me/username.
+    pub fn username(&self) -> Option<&str> {
+        use tl::enums::Chat;
+
+        match &self.0 {
+            Chat::Empty(_) | Chat::Chat(_) | Chat::Forbidden(_) | Chat::ChannelForbidden(_) => None,
+            Chat::Channel(channel) => channel.username.as_deref(),
+        }
+    }
+
     /// Returns true if this group is a megagroup (also known as supergroups).
     ///
     /// In case inner type of group is Channel, that means it's a megagroup.
