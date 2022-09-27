@@ -267,6 +267,11 @@ impl User {
     pub fn lang_code(&self) -> Option<&str> {
         self.0.lang_code.as_deref()
     }
+    
+    /// Return the min of this user.
+    pub fn is_min(&self) -> bool {
+        self.0.min
+    }
 }
 
 impl From<User> for PackedChat {
