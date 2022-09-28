@@ -232,3 +232,22 @@ impl Client {
         );
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use core::future::Future;
+
+    fn get_client() -> Client {
+        panic!()
+    }
+
+    #[test]
+    fn ensure_next_update_future_impls_send() {
+        if false {
+            // We just want it to type-check, not actually run.
+            fn typeck(_: impl Future + Send) {}
+            typeck(get_client().next_update());
+        }
+    }
+}
