@@ -83,10 +83,8 @@ impl DialogIter {
         };
 
         let mut chat_hashes = self.client.0.chat_hashes.lock("iter_dialogs");
-        assert!(
-            chat_hashes.extend(&users, &chats),
-            "API is returning peers without access_hash"
-        );
+        // Telegram can return peers without hash (e.g. Users with 'min: true')
+        let _ = chat_hashes.extend(&users, &chats);
         drop(chat_hashes);
 
         let chats = ChatMap::new(users, chats);
