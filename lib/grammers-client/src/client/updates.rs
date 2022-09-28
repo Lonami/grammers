@@ -52,9 +52,13 @@ impl Client {
                 return Ok(Some(updates));
             }
 
-            let mut message_box = self.0.message_box.lock("client.next_update");
-            if let Some(request) = message_box.get_difference() {
-                drop(message_box);
+            if let Some(request) = {
+                let mut message_box = self.0.message_box.lock("client.next_update");
+                // This temporary is needed or message_box's lifetime is extended too much.
+                // See https://github.com/rust-lang/rust/issues/102423.
+                let diff = message_box.get_difference();
+                diff
+            } {
                 let response = self.invoke(&request).await?;
                 let mut message_box = self.0.message_box.lock("client.next_update/get_difference");
                 let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_difference");
@@ -66,10 +70,11 @@ impl Client {
             }
 
             if let Some(request) = {
+                let mut message_box = self.0.message_box.lock("client.next_update");
                 let chat_hashes = self.0.chat_hashes.lock("client.next_update");
-                message_box.get_channel_difference(&chat_hashes)
+                let diff = message_box.get_channel_difference(&chat_hashes);
+                diff
             } {
-                drop(message_box);
                 let maybe_response = self.invoke(&request).await;
 
                 let response = match maybe_response {
@@ -136,8 +141,11 @@ impl Client {
                 continue;
             }
 
-            let deadline = message_box.check_deadlines();
-            drop(message_box);
+            let deadline = {
+                let mut message_box = self.0.message_box.lock("client.next_update");
+                let deadline = message_box.check_deadlines();
+                deadline
+            };
             tokio::select! {
                 step = self.step() => {
                     log::trace!("stepped");
