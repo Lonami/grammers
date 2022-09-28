@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::photo_sizes::PhotoSize;
+use crate::types::photo_sizes::{PhotoSize, VecExt};
 use crate::Client;
 use chrono::{DateTime, NaiveDateTime, Utc};
 use grammers_tl_types as tl;
@@ -74,7 +74,11 @@ impl Photo {
                     id: photo.id,
                     access_hash: photo.access_hash,
                     file_reference: photo.file_reference.clone(),
-                    thumb_size: String::new(),
+                    thumb_size: self
+                        .thumbs()
+                        .largest()
+                        .map(|ps| ps.photo_type())
+                        .unwrap_or(String::from("w")),
                 }
                 .into(),
             ),
