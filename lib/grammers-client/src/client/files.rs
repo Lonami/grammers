@@ -12,7 +12,6 @@ use crate::Client;
 use futures_util::future::try_join_all;
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use std::time::Duration;
 use std::{io::SeekFrom, path::Path, sync::Arc};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
@@ -24,8 +23,6 @@ pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
-const RATE_LIMIT_DELAY: Duration = Duration::from_millis(250);
-const RATE_LIMIT_RETRIES: usize = 3;
 
 pub struct DownloadIter {
     client: Client,
@@ -88,7 +85,6 @@ impl DownloadIter {
         use tl::enums::upload::File;
 
         // TODO handle FILE_MIGRATE and maybe FILEREF_UPGRADE_NEEDED
-        let mut retries = 0;
         loop {
             break match self.client.invoke(&self.request).await {
                 Ok(File::File(f)) => {
@@ -104,14 +100,6 @@ impl DownloadIter {
                 }
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
-                }
-                // Rate limit hit
-                Err(InvocationError::Rpc(err))
-                    if err.code == 420 && retries < RATE_LIMIT_RETRIES =>
-                {
-                    tokio::time::sleep(RATE_LIMIT_DELAY).await;
-                    retries += 1;
-                    continue;
                 }
                 Err(e) => Err(e),
             };
@@ -226,8 +214,8 @@ impl Client {
             let part_index = part_index.clone();
             let client = self.clone();
             let task = tokio::task::spawn(async move {
+                // TODO: use retry_offset to control FILE_MIGRATE retries
                 let mut retry_offset = None;
-                let mut retry_counter = 0;
                 loop {
                     // Calculate file offset
                     let offset: i64 = {
@@ -235,7 +223,6 @@ impl Client {
                             retry_offset = None;
                             offset
                         } else {
-                            retry_counter = 0;
                             let mut i = part_index.lock().await;
                             *i += 1;
                             (MAX_CHUNK_SIZE * (*i - 1)) as i64
@@ -264,15 +251,6 @@ impl Client {
                             );
                         }
                         Err(InvocationError::Rpc(err)) => {
-                            // Retry on rate limit
-                            if err.code == 420 {
-                                tokio::time::sleep(RATE_LIMIT_DELAY).await;
-                                retry_offset = Some(offset);
-                                retry_counter += 1;
-                                if retry_counter <= RATE_LIMIT_RETRIES {
-                                    continue;
-                                }
-                            }
                             return Err(InvocationError::Rpc(err));
                         }
                         Err(e) => return Err(e),
