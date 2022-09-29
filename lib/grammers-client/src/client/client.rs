@@ -9,12 +9,12 @@ use crate::utils::{AsyncMutex, Mutex};
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{Enqueuer, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::net::SocketAddr;
 use std::sync::Arc;
 use std::time::Instant;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, RwLock};
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -119,6 +119,14 @@ pub(crate) struct ClientInner {
     pub(crate) updates: Mutex<VecDeque<crate::types::Update>>,
     // Used to avoid locking the entire sender when enqueueing requests.
     pub(crate) request_tx: Mutex<Enqueuer>,
+    // Stores per-datacenter downloader instances
+    pub(crate) downloader_map: RwLock<HashMap<i32, Arc<FileDownloader>>>,
+}
+
+pub(crate) struct FileDownloader {
+    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
+    pub(crate) request_tx: Mutex<Enqueuer>,
+    pub(crate) stepping_done: Notify,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.

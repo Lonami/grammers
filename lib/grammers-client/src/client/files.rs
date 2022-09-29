@@ -21,6 +21,7 @@ use tokio::{
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
+pub const FILE_MIGRATE_ERROR: i32 = 303;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
 
@@ -84,9 +85,15 @@ impl DownloadIter {
 
         use tl::enums::upload::File;
 
-        // TODO handle FILE_MIGRATE and maybe FILEREF_UPGRADE_NEEDED
+        // TODO handle maybe FILEREF_UPGRADE_NEEDED
+        let mut dc: Option<u32> = None;
         loop {
-            break match self.client.invoke(&self.request).await {
+            let result = match dc.take() {
+                None => self.client.invoke(&self.request).await,
+                Some(dc) => self.client.invoke_in_dc(&self.request, dc as i32).await,
+            };
+
+            break match result {
                 Ok(File::File(f)) => {
                     if f.bytes.len() < self.request.limit as usize {
                         self.done = true;
@@ -101,7 +108,11 @@ impl DownloadIter {
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
                 }
-                Err(e) => Err(e),
+                Err(InvocationError::Rpc(err)) if err.code == FILE_MIGRATE_ERROR => {
+                    dc = err.value;
+                    continue;
+                }
+                Err(e) => Err(e.into()),
             };
         }
     }
@@ -214,8 +225,8 @@ impl Client {
             let part_index = part_index.clone();
             let client = self.clone();
             let task = tokio::task::spawn(async move {
-                // TODO: use retry_offset to control FILE_MIGRATE retries
                 let mut retry_offset = None;
+                let mut dc = None;
                 loop {
                     // Calculate file offset
                     let offset: i64 = {
@@ -232,15 +243,17 @@ impl Client {
                         break;
                     }
                     // Fetch from telegram
-                    let res = client
-                        .invoke(&tl::functions::upload::GetFile {
-                            precise: true,
-                            cdn_supported: false,
-                            location: location.clone(),
-                            offset,
-                            limit: MAX_CHUNK_SIZE,
-                        })
-                        .await;
+                    let request = &tl::functions::upload::GetFile {
+                        precise: true,
+                        cdn_supported: false,
+                        location: location.clone(),
+                        offset,
+                        limit: MAX_CHUNK_SIZE,
+                    };
+                    let res = match dc {
+                        None => client.invoke(request).await,
+                        Some(dc) => client.invoke_in_dc(request, dc as i32).await,
+                    };
                     match res {
                         Ok(tl::enums::upload::File::File(file)) => {
                             tx.send((offset as u64, file.bytes)).unwrap();
@@ -251,6 +264,11 @@ impl Client {
                             );
                         }
                         Err(InvocationError::Rpc(err)) => {
+                            if err.code == FILE_MIGRATE_ERROR {
+                                dc = err.value;
+                                retry_offset = Some(offset);
+                                continue;
+                            }
                             return Err(InvocationError::Rpc(err));
                         }
                         Err(e) => return Err(e),

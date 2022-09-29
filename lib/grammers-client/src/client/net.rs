@@ -6,19 +6,22 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner, Config};
+use crate::client::client::FileDownloader;
 use crate::utils::{self, AsyncMutex, Mutex};
 use grammers_mtproto::mtp::{self, RpcError};
 use grammers_mtproto::transport;
+use grammers_mtproto::transport::Full;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::{ChatHashCache, MessageBox};
 use grammers_tl_types::{self as tl, Deserializable};
-use log::info;
+use log::{debug, info};
+use mtp::Encrypted;
 use sender::Enqueuer;
-use std::collections::VecDeque;
+use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::Arc;
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::Notify;
+use tokio::sync::{Notify, RwLock};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -184,6 +187,7 @@ impl Client {
             last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
             updates: Mutex::new("client.updates", updates),
             request_tx: Mutex::new("client.request_tx", request_tx),
+            downloader_map: RwLock::new(HashMap::new()),
         }));
 
         // Don't bother getting pristine state if we're not logged in.
@@ -240,10 +244,27 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
+        return self
+            .invoke_request(
+                request,
+                &self.0.request_tx,
+                &self.0.sender,
+                &self.0.stepping_done,
+            )
+            .await;
+    }
+
+    pub(crate) async fn invoke_request<R: tl::RemoteCall>(
+        &self,
+        request: &R,
+        enqueuer: &Mutex<Enqueuer>,
+        sender: &AsyncMutex<Sender<Full, Encrypted>>,
+        notifier: &Notify,
+    ) -> Result<R::Return, InvocationError> {
         let mut slept_flood = false;
         let sleep_thresh = self.0.config.params.flood_sleep_threshold.unwrap_or(0);
 
-        let mut rx = self.0.request_tx.lock("invoke").enqueue(request);
+        let mut rx = enqueuer.lock("invoke").enqueue(request);
         loop {
             match rx.try_recv() {
                 Ok(response) => match response {
@@ -263,19 +284,97 @@ impl Client {
                         );
                         tokio::time::sleep(delay).await;
                         slept_flood = true;
-                        rx = self.0.request_tx.lock("invoke").enqueue(request);
+                        rx = enqueuer.lock("invoke").enqueue(request);
                         continue;
                     }
                     Err(e) => break Err(e),
                 },
                 Err(TryRecvError::Empty) => {
-                    self.step().await?;
+                    self.step_sender(sender, notifier).await?;
                 }
                 Err(TryRecvError::Closed) => {
                     panic!("request channel dropped before receiving a result")
                 }
             }
         }
+    }
+
+    async fn export_authorization(
+        &self,
+        target_dc_id: i32,
+    ) -> Result<tl::types::auth::ExportedAuthorization, InvocationError> {
+        let request = tl::functions::auth::ExportAuthorization {
+            dc_id: target_dc_id,
+        };
+        return match self.invoke(&request).await {
+            Ok(tl::enums::auth::ExportedAuthorization::Authorization(exported_auth)) => {
+                Ok(exported_auth)
+            }
+            Err(e) => Err(e),
+        };
+    }
+
+    async fn connect_sender(&self, dc_id: i32) -> Result<Arc<FileDownloader>, InvocationError> {
+        let mut mutex = self.0.downloader_map.write().await;
+        debug!("Connecting new datacenter {}", dc_id);
+        return match connect_sender(dc_id, &self.0.config).await {
+            Ok((new_sender, new_tx)) => {
+                let new_downloader = Arc::new(FileDownloader {
+                    sender: AsyncMutex::new("dc_sender", new_sender),
+                    request_tx: Mutex::new("dc_enqueuer", new_tx),
+                    stepping_done: Notify::new(),
+                });
+
+                // export auth
+                let authorization = self.export_authorization(dc_id).await?;
+
+                // import into new sender
+                let request = tl::functions::auth::ImportAuthorization {
+                    id: authorization.id,
+                    bytes: authorization.bytes,
+                };
+                self.invoke_request(
+                    &request,
+                    &new_downloader.request_tx,
+                    &new_downloader.sender,
+                    &new_downloader.stepping_done,
+                )
+                .await?;
+
+                mutex.insert(dc_id, new_downloader.clone());
+                Ok(new_downloader.clone())
+            }
+            Err(e) => panic!("Cannot obtain new sender to datacenter {}", e),
+        };
+    }
+
+    async fn get_downloader(
+        &self,
+        dc_id: i32,
+    ) -> Result<Option<Arc<FileDownloader>>, InvocationError> {
+        return Ok({
+            let guard = self.0.downloader_map.read().await;
+            guard.get(&dc_id).map(|f| f.clone())
+        });
+    }
+
+    pub async fn invoke_in_dc<R: tl::RemoteCall>(
+        &self,
+        request: &R,
+        dc_id: i32,
+    ) -> Result<R::Return, InvocationError> {
+        let downloader = match self.get_downloader(dc_id).await? {
+            None => self.connect_sender(dc_id).await?,
+            Some(fd) => fd,
+        };
+        return self
+            .invoke_request(
+                request,
+                &downloader.request_tx,
+                &downloader.sender,
+                &downloader.stepping_done,
+            )
+            .await;
     }
 
     /// Perform a single network step.
@@ -295,11 +394,20 @@ impl Client {
     /// # }
     /// ```
     pub async fn step(&self) -> Result<(), sender::ReadError> {
-        match self.0.sender.try_lock("client.step") {
+        return self
+            .step_sender(&self.0.sender, &self.0.stepping_done)
+            .await;
+    }
+    async fn step_sender(
+        &self,
+        sender: &AsyncMutex<Sender<Full, Encrypted>>,
+        notifier: &Notify,
+    ) -> Result<(), sender::ReadError> {
+        match sender.try_lock("client.step") {
             Ok(mut sender) => {
                 // Sender was unlocked, we're the ones that will perform the network step.
                 let updates = sender.step().await?;
-                self.0.stepping_done.notify_waiters();
+                notifier.notify_waiters();
                 self.process_socket_updates(updates);
 
                 // TODO request cancellation if this is Err
@@ -310,7 +418,7 @@ impl Client {
                 // Someone else is already performing the network step. Wait for the step to
                 // complete and return immediately without stepping again. The caller wants
                 // *one* step to complete, but it doesn't care *who* completes it.
-                self.0.stepping_done.notified().await;
+                notifier.notified().await;
                 Ok(())
             }
         }
