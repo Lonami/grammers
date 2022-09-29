@@ -148,13 +148,13 @@ fn main() -> Result<()> {
 }
 
 fn get_file_extension(media: &Media) -> String {
-    return match media {
+    match media {
         Photo(_) => ".jpg".to_string(),
         Sticker(sticker) => get_mime_extension(sticker.document.mime_type()),
         Document(document) => get_mime_extension(document.mime_type()),
         Contact(_) => ".vcf".to_string(),
         _ => String::new(),
-    };
+    }
 }
 
 fn get_mime_extension(mime_type: Option<&str>) -> String {
