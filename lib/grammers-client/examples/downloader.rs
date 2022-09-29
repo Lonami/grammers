@@ -148,21 +148,20 @@ fn main() -> Result<()> {
 }
 
 fn get_file_extension(media: &Media) -> String {
-    let suffix = match media {
-        Photo(_) => "jpg".to_string(),
-        Sticker(sticker) => get_subtype(sticker.document.mime_type()),
-        Document(document) => get_subtype(document.mime_type()),
-        Contact(_) => "vcf".to_string(),
+    match media {
+        Photo(_) => ".jpg".to_string(),
+        Sticker(sticker) => get_mime_extension(sticker.document.mime_type()),
+        Document(document) => get_mime_extension(document.mime_type()),
+        Contact(_) => ".vcf".to_string(),
         _ => String::new(),
-    };
-    return format!(".{}", suffix);
+    }
 }
 
-fn get_subtype(mime_type: Option<&str>) -> String {
+fn get_mime_extension(mime_type: Option<&str>) -> String {
     return mime_type
         .map(|m| {
             let mime: Mime = m.parse().unwrap();
-            mime.subtype().to_string()
+            format!(".{}", mime.subtype().to_string())
         })
         .unwrap_or(String::new());
 }
