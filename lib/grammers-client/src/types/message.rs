@@ -396,7 +396,7 @@ impl Message {
     ///
     /// Shorthand for `Client::forward_messages`. If you need to forward multiple messages
     /// at once, consider using that method instead.
-    pub async fn forward_to(&self, chat: &Chat) -> Result<Self, InvocationError> {
+    pub async fn forward_to<C: Into<PackedChat>>(&self, chat: C) -> Result<Self, InvocationError> {
         // TODO return `Message`
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
