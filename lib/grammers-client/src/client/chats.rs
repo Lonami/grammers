@@ -750,8 +750,10 @@ impl Client {
         Ok(None)
     }
 
-    /// Join a group or channel.
-    /// use PackedChat
+    /// Join a public group or channel.
+    ///
+    /// A channel is public if it has a username.
+    /// To join private chats, [`Client::accept_invite_link`](Client::accept_invite_link) should be used instead.
     pub async fn join_chat(
         &mut self,
         packed_chat: PackedChat,
