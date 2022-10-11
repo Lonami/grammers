@@ -726,15 +726,73 @@ impl Client {
         Ok(permissions)
     }
     
+    fn parse_invite_link(invite_link: &str) -> Option<String> {
+        let url_parse_result = url::Url::parse(invite_link);
+        if url_parse_result.is_err() {
+            return None;
+        }
+
+        let url_parse = url_parse_result.unwrap();
+        let scheme = url_parse.scheme();
+        let path = url_parse.path();
+        if url_parse.host_str().is_none() || !vec!["https", "http"].contains(&scheme) {
+            return None;
+        }
+        let host = url_parse.host_str().unwrap();
+        let hosts = vec![
+            "t.me",
+            "telegram.me",
+            "telegram.dog",
+            "tg.dev",
+            "telegram.me",
+            "telesco.pe",
+        ];
+
+        if !hosts.contains(&host) {
+            return None;
+        }
+        let paths = path.split("/").collect::<Vec<&str>>();
+
+        if paths.len() == 1 {
+            if paths[0].starts_with("+") {
+                return Some(paths[0].replace("+", ""));
+            }
+            return None;
+        }
+
+        if paths.len() > 1 {
+            if paths[0].starts_with("joinchat") {
+                return Some(paths[1].to_string());
+            }
+            if paths[0].starts_with("+") {
+                return Some(paths[0].replace("+", ""));
+            }
+            return None;
+        }
+
+        None
+    }
+    
     /// Accept an invite link to join the corresponding private chat.
     ///
     /// If the chat is public (has a public username), [`Client::join_chat`](Client::join_chat) should be used instead.
     pub async fn accept_invite_link(
         &mut self,
-        invite_link_hash: &str,
+        invite_link: &str,
     ) -> Result<tl::enums::Updates, InvocationError> {
+        use grammers_mtproto::mtp::RpcError;
+        let parse_result = Self::parse_invite_link(invite_link);
+        if parse_result.is_none() {
+            return Err(InvocationError::Rpc(RpcError {
+                code: 400,
+                name: "INVITE_HASH_INVALID".to_string(),
+                value: None,
+                caused_by: None,
+            }));
+        }
+
         self.invoke(&tl::functions::messages::ImportChatInvite {
-            hash: invite_link_hash.to_owned(),
+            hash: parse_result.unwrap(),
         })
         .await
     }
