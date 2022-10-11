@@ -725,6 +725,38 @@ impl Client {
         let permissions = ParticipantPermissions::Channel(participant.participant);
         Ok(permissions)
     }
+    
+    /// Invite users to a channel/supergroup
+    pub async fn invite_to_channel(
+        &mut self,
+        chat: PackedChat,
+        users: Vec<PackedChat>,
+    ) -> Result<bool, InvocationError> {
+        let _ = self
+            .invoke(&tl::functions::channels::InviteToChannel {
+                channel: chat.to_input_channel_lossy(),
+                users: users.into_iter().map(|x| x.to_input_user_lossy()).collect(),
+            })
+            .await?;
+        Ok(true)
+    }
+
+    /// Adds a user to a chat and sends a service message on it
+    pub async fn add_chat_user(
+        &mut self,
+        chat: PackedChat,
+        user: PackedChat,
+        fwd_limit: i32,
+    ) -> Result<bool, InvocationError> {
+        let _ = self
+            .invoke(&tl::functions::messages::AddChatUser {
+                chat_id: chat.id,
+                user_id: user.to_input_user_lossy(),
+                fwd_limit,
+            })
+            .await?;
+        Ok(true)
+    }
 }
 
 #[derive(Debug, Clone)]
