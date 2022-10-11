@@ -740,7 +740,7 @@ impl Client {
             return None;
         }
         let host = url_parse.host_str().unwrap();
-        let hosts = vec![
+        let hosts = [
             "t.me",
             "telegram.me",
             "telegram.dog",
@@ -777,29 +777,24 @@ impl Client {
     /// Accept an invite link to join the corresponding private chat.
     ///
     /// If the chat is public (has a public username), [`Client::join_chat`](Client::join_chat) should be used instead.
+    #[cfg(feature = "parse_invite_link")]
     pub async fn accept_invite_link(
         &mut self,
         invite_link: &str,
     ) -> Result<tl::enums::Updates, InvocationError> {
-        #[cfg(not(feature = "parse_invite_link"))]
-        let hash = invite_link.to_string();
-        #[cfg(feature = "parse_invite_link")]
-        let hash = {
-            use grammers_mtproto::mtp::RpcError;
-            let parse_result = Self::parse_invite_link(invite_link);
-            if parse_result.is_none() {
-                return Err(InvocationError::Rpc(RpcError {
-                    code: 400,
-                    name: "INVITE_HASH_INVALID".to_string(),
-                    value: None,
-                    caused_by: None,
-                }));
+        use grammers_mtproto::mtp::RpcError;
+        match Self::parse_invite_link(invite_link) {
+            Some(hash) => {
+                self.invoke(&tl::functions::messages::ImportChatInvite { hash })
+                    .await
             }
-            parse_result.unwrap()
-        };
-
-        self.invoke(&tl::functions::messages::ImportChatInvite { hash })
-            .await
+            None => Err(InvocationError::Rpc(RpcError {
+                code: 400,
+                name: "INVITE_HASH_INVALID".to_string(),
+                value: None,
+                caused_by: None,
+            })),
+        }
     }
 
     /// Join a public group or channel.
