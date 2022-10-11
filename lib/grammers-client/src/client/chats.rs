@@ -756,27 +756,42 @@ impl Client {
     ///
     /// A channel is public if it has a username.
     /// To join private chats, [`Client::accept_invite_link`](Client::accept_invite_link) should be used instead.
-    pub async fn join_chat(
+    pub async fn join_chat<C: Into<PackedChat>>(
         &mut self,
-        packed_chat: PackedChat,
+        packed_chat: C,
     ) -> Result<Option<Chat>, InvocationError> {
         use tl::enums::Updates;
 
+        let chat = packed_chat.into();
         let update_chat = match self
             .invoke(&tl::functions::channels::JoinChannel {
-                channel: packed_chat.try_to_input_channel().unwrap(),
+                channel: chat.try_to_input_channel().unwrap(),
             })
             .await?
         {
-            Updates::Combined(updates) => updates.chats.first().cloned(),
-            Updates::Updates(updates) => updates.chats.first().cloned(),
+            Updates::Combined(updates) => Some(
+                updates
+                    .chats
+                    .into_iter()
+                    .filter(|x| x.id() == chat.id)
+                    .collect::<Vec<tl::enums::Chat>>(),
+            ),
+            Updates::Updates(updates) => Some(
+                updates
+                    .chats
+                    .into_iter()
+                    .filter(|x| x.id() == chat.id)
+                    .collect::<Vec<tl::enums::Chat>>(),
+            ),
             _ => None,
         };
 
-        if let Some(chat) = update_chat {
-            return Ok(Some(Chat::from_chat(chat)));
+        match update_chat {
+            Some(chats) if chats.len() > 0 => Ok(Some(Chat::from_chat(chats[0].clone()))),
+            Some(chats) if chats.len() == 0 => Ok(None),
+            None => Ok(None),
+            Some(_) => Ok(None),
         }
-        Ok(None)
     }
 }
 
