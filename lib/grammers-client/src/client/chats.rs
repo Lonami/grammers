@@ -726,7 +726,9 @@ impl Client {
         Ok(permissions)
     }
     
-    /// join private chat
+    /// Accept an invite link to join the corresponding private chat.
+    ///
+    /// If the chat is public (has a public username), [`Client::join_chat`](Client::join_chat) should be used instead.
     pub async fn accept_invite_link(
         &mut self,
         invite_link: &str,
