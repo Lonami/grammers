@@ -725,6 +725,55 @@ impl Client {
         let permissions = ParticipantPermissions::Channel(participant.participant);
         Ok(permissions)
     }
+    
+    /// join private chat
+    pub async fn accept_invite_link(
+        &mut self,
+        invite_link: &str,
+    ) -> Result<Option<Chat>, InvocationError> {
+        use tl::enums::Updates;
+        assert!(invite_link.starts_with("https://t.me/joinchat/"));
+        let update_chat = match self
+            .invoke(&tl::functions::messages::ImportChatInvite {
+                hash: invite_link.replace("https://t.me/joinchat/", ""),
+            })
+            .await?
+        {
+            Updates::Combined(updates) => updates.chats.first().cloned(),
+            Updates::Updates(updates) => updates.chats.first().cloned(),
+            _ => None,
+        };
+
+        if let Some(chat) = update_chat {
+            return Ok(Some(Chat::from_chat(chat)));
+        }
+        Ok(None)
+    }
+
+    /// Join a group or channel.
+    /// use PackedChat
+    pub async fn join_chat(
+        &mut self,
+        packed_chat: PackedChat,
+    ) -> Result<Option<Chat>, InvocationError> {
+        use tl::enums::Updates;
+
+        let update_chat = match self
+            .invoke(&tl::functions::channels::JoinChannel {
+                channel: packed_chat.try_to_input_channel().unwrap(),
+            })
+            .await?
+        {
+            Updates::Combined(updates) => updates.chats.first().cloned(),
+            Updates::Updates(updates) => updates.chats.first().cloned(),
+            _ => None,
+        };
+
+        if let Some(chat) = update_chat {
+            return Ok(Some(Chat::from_chat(chat)));
+        }
+        Ok(None)
+    }
 }
 
 #[derive(Debug, Clone)]
