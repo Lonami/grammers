@@ -170,6 +170,16 @@ impl PackedChat {
             _ => None,
         }
     }
+    
+    pub fn to_input_channel_lossy(&self) -> tl::enums::InputChannel {
+        self.try_to_input_channel().unwrap_or_else(|| {
+            tl::types::InputChannel {
+                channel_id: 0,
+                access_hash: 0,
+            }
+            .into()
+        })
+    }
 }
 
 impl fmt::Display for PackedType {
