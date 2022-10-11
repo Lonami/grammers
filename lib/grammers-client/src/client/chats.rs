@@ -731,25 +731,12 @@ impl Client {
     /// If the chat is public (has a public username), [`Client::join_chat`](Client::join_chat) should be used instead.
     pub async fn accept_invite_link(
         &mut self,
-        invite_link: &str,
-    ) -> Result<Option<Chat>, InvocationError> {
-        use tl::enums::Updates;
-        assert!(invite_link.starts_with("https://t.me/joinchat/"));
-        let update_chat = match self
-            .invoke(&tl::functions::messages::ImportChatInvite {
-                hash: invite_link.replace("https://t.me/joinchat/", ""),
-            })
-            .await?
-        {
-            Updates::Combined(updates) => updates.chats.first().cloned(),
-            Updates::Updates(updates) => updates.chats.first().cloned(),
-            _ => None,
-        };
-
-        if let Some(chat) = update_chat {
-            return Ok(Some(Chat::from_chat(chat)));
-        }
-        Ok(None)
+        invite_link_hash: &str,
+    ) -> Result<tl::enums::Updates, InvocationError> {
+        self.invoke(&tl::functions::messages::ImportChatInvite {
+            hash: invite_link_hash.to_owned(),
+        })
+        .await
     }
 
     /// Join a public group or channel.
