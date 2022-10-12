@@ -59,7 +59,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if client.is_authorized().await? {
     ///     println!("Client is not authorized, you will need to sign_in!");
     /// } else {
@@ -68,7 +68,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn is_authorized(&mut self) -> Result<bool, InvocationError> {
+    pub async fn is_authorized(&self) -> Result<bool, InvocationError> {
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(_) => Ok(true),
             Err(InvocationError::Rpc(_)) => Ok(false),
@@ -77,7 +77,7 @@ impl Client {
     }
 
     async fn complete_login(
-        &mut self,
+        &self,
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
         let user = User::from_raw(auth.user);
@@ -120,7 +120,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
@@ -143,7 +143,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn bot_sign_in(
-        &mut self,
+        &self,
         token: &str,
         api_id: i32,
         api_hash: &str,
@@ -191,7 +191,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
@@ -210,7 +210,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn request_login_code(
-        &mut self,
+        &self,
         phone: &str,
         api_id: i32,
         api_hash: &str,
@@ -268,7 +268,7 @@ impl Client {
     /// ```
     /// # use grammers_client::SignInError;
     ///
-    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    ///  async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
@@ -293,7 +293,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn sign_in(&mut self, token: &LoginToken, code: &str) -> Result<User, SignInError> {
+    pub async fn sign_in(&self, token: &LoginToken, code: &str) -> Result<User, SignInError> {
         match self
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
@@ -324,7 +324,7 @@ impl Client {
 
     /// Extract information needed for the two-factor authentication
     /// It's called automatically when we get SESSION_PASSWORD_NEEDED error during sign in.
-    async fn get_password_information(&mut self) -> Result<PasswordToken, InvocationError> {
+    async fn get_password_information(&self) -> Result<PasswordToken, InvocationError> {
         let request = tl::functions::account::GetPassword {};
 
         let password: tl::types::account::Password = self.invoke(&request).await?.into();
@@ -342,7 +342,7 @@ impl Client {
     /// ```
     /// use grammers_client::SignInError;
     ///
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # const API_ID: i32 = 0;
     /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
@@ -373,7 +373,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn check_password(
-        &mut self,
+        &self,
         password_token: PasswordToken,
         password: impl AsRef<[u8]>,
     ) -> Result<User, SignInError> {
@@ -433,7 +433,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    ///  async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    ///  async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// # let token = client.request_login_code("", 0, "").await?;
     /// # let code = "".to_string();
     ///
@@ -463,7 +463,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn sign_up(
-        &mut self,
+        &self,
         token: &LoginToken,
         first_name: &str,
         last_name: &str,
@@ -500,7 +500,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if client.sign_out().await.is_ok() {
     ///     println!("Signed out successfully!");
     /// } else {
@@ -509,7 +509,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn sign_out(&mut self) -> Result<tl::enums::auth::LoggedOut, InvocationError> {
+    pub async fn sign_out(&self) -> Result<tl::enums::auth::LoggedOut, InvocationError> {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
 
@@ -526,7 +526,7 @@ impl Client {
     /// Calls [`Client::sign_out`] and disconnects.
     ///
     /// The client will be disconnected even if signing out fails.
-    pub async fn sign_out_disconnect(&mut self) -> Result<(), InvocationError> {
+    pub async fn sign_out_disconnect(&self) -> Result<(), InvocationError> {
         let _res = self.invoke(&tl::functions::auth::LogOut {}).await;
         panic!("disconnect now only works via dropping");
     }

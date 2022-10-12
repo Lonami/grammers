@@ -30,7 +30,7 @@ pub struct CallbackQuery {
 ///
 /// It will be executed once `.await`-ed. Modifying it after polling it once will have no effect.
 pub struct Answer<'a> {
-    query: &'a mut CallbackQuery,
+    query: &'a CallbackQuery,
     request: tl::functions::messages::SetBotCallbackAnswer,
 }
 
@@ -88,7 +88,7 @@ impl CallbackQuery {
     }
 
     /// Answer the callback query.
-    pub fn answer(&mut self) -> Answer {
+    pub fn answer(&self) -> Answer {
         Answer {
             request: tl::functions::messages::SetBotCallbackAnswer {
                 alert: false,

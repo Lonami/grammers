@@ -336,7 +336,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(chat) = client.resolve_username("username").await? {
     ///     println!("Found chat!: {:?}", chat.name());
     /// }
@@ -344,7 +344,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn resolve_username(
-        &mut self,
+        &self,
         username: &str,
     ) -> Result<Option<Chat>, InvocationError> {
         let tl::types::contacts::ResolvedPeer { peer, users, chats } = match self
@@ -385,13 +385,13 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// println!("Displaying full user information of the logged-in user:");
     /// dbg!(client.get_me().await?);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn get_me(&mut self) -> Result<User, InvocationError> {
+    pub async fn get_me(&self) -> Result<User, InvocationError> {
         let mut res = self
             .invoke(&tl::functions::users::GetUsers {
                 id: vec![tl::enums::InputUser::UserSelf],
@@ -414,7 +414,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut participants = client.iter_participants(&chat);
     ///
     /// while let Some(participant) = participants.next().await? {
@@ -441,7 +441,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// match client.kick_participant(&chat, &user).await {
     ///     Ok(_) => println!("user is no more >:D"),
     ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
@@ -450,7 +450,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn kick_participant<C: Into<PackedChat>, U: Into<PackedChat>>(
-        &mut self,
+        &self,
         chat: C,
         user: U,
     ) -> Result<(), InvocationError> {
@@ -503,7 +503,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This user keeps spamming pepe stickers, take the sticker permission away from them
     /// let res = client
     ///     .set_banned_rights(&chat, &user)
@@ -518,7 +518,7 @@ impl Client {
     /// # }
     /// ```
     pub fn set_banned_rights<C: Into<PackedChat>, U: Into<PackedChat>>(
-        &mut self,
+        &self,
         channel: C,
         user: U,
     ) -> BannedRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
@@ -550,7 +550,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, user: grammers_client::types::User, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let the user pin messages and ban other people
     /// let res = client.set_admin_rights(&chat, &user)
     ///     .load_current()
@@ -586,7 +586,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut photos = client.iter_profile_photos(&chat);
     ///
     /// while let Some(photo) = photos.next().await? {
@@ -604,14 +604,14 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(packed_chat: grammers_client::types::chat::PackedChat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(packed_chat: grammers_client::types::chat::PackedChat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let chat = client.unpack_chat(packed_chat).await?;
     ///
     /// println!("Found chat: {}", chat.name());
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpack_chat(&mut self, packed_chat: PackedChat) -> Result<Chat, InvocationError> {
+    pub async fn unpack_chat(&self, packed_chat: PackedChat) -> Result<Chat, InvocationError> {
         Ok(match packed_chat.ty {
             PackedType::User | PackedType::Bot => {
                 let mut res = self
@@ -668,7 +668,7 @@ impl Client {
     /// # Panics
     /// Panics if chat isn't channel or chat, and if user isn't user
     pub async fn get_permissions<C: Into<PackedChat>, U: Into<PackedChat>>(
-        &mut self,
+        &self,
         chat: C,
         user: U,
     ) -> Result<ParticipantPermissions, InvocationError> {

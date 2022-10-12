@@ -141,7 +141,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut dialogs = client.iter_dialogs();
     ///
     /// while let Some(dialog) = dialogs.next().await? {
@@ -167,14 +167,14 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in chat!
     /// client.delete_dialog(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn delete_dialog<C: Into<PackedChat>>(
-        &mut self,
+        &self,
         chat: C,
     ) -> Result<(), InvocationError> {
         let chat = chat.into();
@@ -214,13 +214,13 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.mark_as_read(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn mark_as_read<C: Into<PackedChat>>(
-        &mut self,
+        &self,
         chat: C,
     ) -> Result<(), InvocationError> {
         let chat = chat.into();
@@ -243,13 +243,13 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.clear_mentions(&chat).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn clear_mentions<C: Into<PackedChat>>(
-        &mut self,
+        &self,
         chat: C,
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {

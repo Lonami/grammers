@@ -372,7 +372,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.send_message(&chat, "Boring text message :-(").await?;
     ///
     /// use grammers_client::InputMessage;
@@ -449,7 +449,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let old_message_id = 123;
     /// client.edit_message(&chat, old_message_id, "New text message").await?;
     /// # Ok(())
@@ -503,7 +503,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// // Careful, these messages will be gone after the method succeeds!
@@ -549,7 +549,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(destination: grammers_client::types::Chat, source: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(destination: grammers_client::types::Chat, source: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// let messages = client.forward_messages(&destination, &message_ids, &source).await?;
@@ -590,7 +590,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(message: grammers_client::types::Message, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(reply) = client.get_reply_to_message(&message).await? {
     ///     println!("The reply said: {}", reply.text());
     /// }
@@ -667,7 +667,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in chat!
     /// let mut messages = client.iter_messages(&chat).limit(100);
     ///
@@ -688,7 +688,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let's print all the people who think grammers is cool.
     /// let mut messages = client.search_messages(&chat).query("grammers is cool");
     ///
@@ -710,7 +710,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let's print all the chats were people think grammers is cool.
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
@@ -734,7 +734,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// let messages = client.get_messages_by_id(&chat, &message_ids).await?;
@@ -787,7 +787,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(message) = client.get_pinned_message(&chat).await? {
     ///     println!("There is a message pinned in {}: {}", chat.name(), message.text());
     /// } else {
@@ -833,7 +833,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     /// client.pin_message(&chat, message_id).await?;
     /// # Ok(())
@@ -853,7 +853,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     /// client.unpin_message(&chat, message_id).await?;
     /// # Ok(())
@@ -889,7 +889,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.unpin_all_messages(&chat).await?;
     /// # Ok(())
     /// # }

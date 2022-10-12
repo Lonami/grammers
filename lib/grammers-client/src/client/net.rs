@@ -233,7 +233,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
@@ -385,7 +385,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// loop {
     ///     // Process network events forever until we gracefully disconnect or get an error.
     ///     client.step().await?;
@@ -431,7 +431,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.run_until_disconnected().await?;
     /// # Ok(())
     /// # }

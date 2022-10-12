@@ -125,7 +125,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(media: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
     /// let mut download = client.iter_download(&media);
     ///
@@ -151,7 +151,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(media: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.download_media(&media, "/home/username/photos/holidays.jpg").await?;
     /// # Ok(())
     /// # }
@@ -438,7 +438,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// let uploaded_file = client.upload_file("/home/username/photos/holidays.jpg").await?;

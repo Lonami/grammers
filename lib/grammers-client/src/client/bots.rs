@@ -26,7 +26,7 @@ pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResu
 impl InlineResult {
     /// Send this inline result to the specified chat.
     // TODO return the produced message
-    pub async fn send<C: Into<PackedChat>>(&mut self, chat: C) -> Result<(), InvocationError> {
+    pub async fn send<C: Into<PackedChat>>(&self, chat: C) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SendInlineBotResult {
                 silent: false,
@@ -138,7 +138,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(bot: grammers_client::types::User, mut client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(bot: grammers_client::types::User, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This is equivalent to writing `@bot inline query` in a Telegram app.
     /// let mut inline_results = client.inline_query(&bot, "inline query");
     ///

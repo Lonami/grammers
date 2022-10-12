@@ -363,7 +363,7 @@ impl Message {
     /// reply to a previous message.
     ///
     /// Shorthand for `Client::get_reply_to_message`.
-    pub async fn get_reply(&mut self) -> Result<Option<Self>, InvocationError> {
+    pub async fn get_reply(&self) -> Result<Option<Self>, InvocationError> {
         self.client
             .clone() // TODO don't clone
             .get_reply_to_message(self)
@@ -409,10 +409,7 @@ impl Message {
     /// Edit this message to change its text or media.
     ///
     /// Shorthand for `Client::edit_message`.
-    pub async fn edit<M: Into<InputMessage>>(
-        &mut self,
-        new_message: M,
-    ) -> Result<(), InvocationError> {
+    pub async fn edit<M: Into<InputMessage>>(&self, new_message: M) -> Result<(), InvocationError> {
         self.client
             .edit_message(&self.chat(), self.msg.id, new_message)
             .await
@@ -422,7 +419,7 @@ impl Message {
     ///
     /// Shorthand for `Client::delete_messages`. If you need to delete multiple messages
     /// at once, consider using that method instead.
-    pub async fn delete(&mut self) -> Result<(), InvocationError> {
+    pub async fn delete(&self) -> Result<(), InvocationError> {
         self.client
             .delete_messages(&self.chat(), &[self.msg.id])
             .await
@@ -433,7 +430,7 @@ impl Message {
     ///
     /// Unlike `Client::mark_as_read`, this method only will mark the chat as read up to
     /// this message, not the entire chat.
-    pub async fn mark_as_read(&mut self) -> Result<(), InvocationError> {
+    pub async fn mark_as_read(&self) -> Result<(), InvocationError> {
         let chat = self.chat().pack();
         if let Some(channel) = chat.try_to_input_channel() {
             self.client
@@ -457,14 +454,14 @@ impl Message {
     /// Pin this message in the chat.
     ///
     /// Shorthand for `Client::pin_message`.
-    pub async fn pin(&mut self) -> Result<(), InvocationError> {
+    pub async fn pin(&self) -> Result<(), InvocationError> {
         self.client.pin_message(&self.chat(), self.msg.id).await
     }
 
     /// Unpin this message from the chat.
     ///
     /// Shorthand for `Client::unpin_message`.
-    pub async fn unpin(&mut self) -> Result<(), InvocationError> {
+    pub async fn unpin(&self) -> Result<(), InvocationError> {
         self.client.unpin_message(&self.chat(), self.msg.id).await
     }
 
@@ -490,7 +487,7 @@ impl Message {
     /// Returns `true` if there was media to download, or `false` otherwise.
     ///
     /// Shorthand for `Client::download_media`.
-    pub async fn download_media<P: AsRef<Path>>(&mut self, path: P) -> Result<bool, io::Error> {
+    pub async fn download_media<P: AsRef<Path>>(&self, path: P) -> Result<bool, io::Error> {
         // TODO probably encode failed download in error
         if let Some(media) = self.media() {
             self.client.download_media(&media, path).await.map(|_| true)
