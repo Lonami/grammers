@@ -343,10 +343,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn resolve_username(
-        &self,
-        username: &str,
-    ) -> Result<Option<Chat>, InvocationError> {
+    pub async fn resolve_username(&self, username: &str) -> Result<Option<Chat>, InvocationError> {
         let tl::types::contacts::ResolvedPeer { peer, users, chats } = match self
             .invoke(&tl::functions::contacts::ResolveUsername {
                 username: username.into(),

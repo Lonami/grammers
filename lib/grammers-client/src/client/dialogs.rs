@@ -173,10 +173,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog<C: Into<PackedChat>>(
-        &self,
-        chat: C,
-    ) -> Result<(), InvocationError> {
+    pub async fn delete_dialog<C: Into<PackedChat>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
         if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::LeaveChannel { channel })
@@ -219,10 +216,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read<C: Into<PackedChat>>(
-        &self,
-        chat: C,
-    ) -> Result<(), InvocationError> {
+    pub async fn mark_as_read<C: Into<PackedChat>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
         if let Some(channel) = chat.try_to_input_channel() {
             self.invoke(&tl::functions::channels::ReadHistory { channel, max_id: 0 })
