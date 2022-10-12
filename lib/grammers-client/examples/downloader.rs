@@ -42,7 +42,7 @@ async fn async_main() -> Result<()> {
     let chat_name = env::args().skip(1).next().expect("chat name missing");
 
     println!("Connecting to Telegram...");
-    let mut client = Client::connect(Config {
+    let client = Client::connect(Config {
         session: Session::load_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
@@ -95,7 +95,7 @@ async fn async_main() -> Result<()> {
     // one that communicates with the network.
     //
     // The design's annoying to use for trivial sequential tasks, but is otherwise scalable.
-    let mut client_handle = client.clone();
+    let client_handle = client.clone();
     let network_handle = task::spawn(async move { client.run_until_disconnected().await });
 
     let maybe_chat = client_handle.resolve_username(chat_name.as_str()).await?;

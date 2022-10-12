@@ -69,7 +69,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
                 .respond(InputMessage::text("Here's a fibonacci").reply_markup(&fib_markup(0, 1)))
                 .await?;
         }
-        Update::CallbackQuery(mut query) => {
+        Update::CallbackQuery(query) => {
             let data = std::str::from_utf8(query.data()).unwrap();
             println!("Got callback query for {}", data);
 
@@ -115,7 +115,7 @@ async fn async_main() -> Result {
     let token = env::args().skip(1).next().expect("token missing");
 
     println!("Connecting to Telegram...");
-    let mut client = Client::connect(Config {
+    let client = Client::connect(Config {
         session: Session::load_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),

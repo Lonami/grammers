@@ -45,7 +45,7 @@ async fn async_main() -> Result {
     let token = env::args().skip(1).next().expect("token missing");
 
     println!("Connecting to Telegram...");
-    let mut client = Client::connect(Config {
+    let client = Client::connect(Config {
         session: Session::load_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
