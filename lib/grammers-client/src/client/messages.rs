@@ -15,6 +15,14 @@ use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
+fn get_message_id(message: &tl::enums::Message) -> i32 {
+    match message {
+        tl::enums::Message::Empty(m) => m.id,
+        tl::enums::Message::Message(m) => m.id,
+        tl::enums::Message::Service(m) => m.id,
+    }
+}
+
 fn map_random_ids_to_messages(
     client: &Client,
     random_ids: &[i64],
@@ -130,12 +138,18 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
                 (m.messages, m.users, m.chats, None)
             }
             Messages::Slice(m) => {
-                self.last_chunk = m.messages.len() < limit as usize;
+                // Can't rely on `count(messages) < limit` as the stop condition.
+                // See https://github.com/LonamiWebs/Telethon/issues/3949 for more.
+                //
+                // If the highest fetched message ID is lower than or equal to the limit,
+                // there can't be more messages after (highest ID - limit), because the
+                // absolute lowest message ID is 1.
+                self.last_chunk = m.messages.is_empty() || get_message_id(&m.messages[0]) <= limit;
                 self.total = Some(m.count as usize);
                 (m.messages, m.users, m.chats, m.next_rate)
             }
             Messages::ChannelMessages(m) => {
-                self.last_chunk = m.messages.len() < limit as usize;
+                self.last_chunk = m.messages.is_empty() || get_message_id(&m.messages[0]) <= limit;
                 self.total = Some(m.count as usize);
                 (m.messages, m.users, m.chats, None)
             }
