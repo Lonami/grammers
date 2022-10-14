@@ -18,7 +18,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.3.0" }
 log = "0.4.14"
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.4.0" }
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.4.1" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.0" }
 
 [dev-dependencies]
