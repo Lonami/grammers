@@ -21,7 +21,7 @@ proxy = ["grammers-mtsender/proxy"]
 [dependencies]
 chrono = "0.4.19"
 futures-util = "0.3.15"
-grammers-crypto = { path = "../grammers-crypto", version = "0.3.0" }
+grammers-crypto = { path = "../grammers-crypto", version = "0.4.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.3.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.3.0" }
 grammers-session = { path = "../grammers-session", version = "0.3.0" }
