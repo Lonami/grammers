@@ -211,7 +211,7 @@ impl ChatHashCache {
                 U::ChatParticipantAdmin(u) => self.has(u.user_id),
                 U::NewStickerSet(_) => true,
                 U::StickerSetsOrder(_) => true,
-                U::StickerSets => true,
+                U::StickerSets(_) => true,
                 U::SavedGifs => true,
                 U::BotInlineQuery(u) => self.has(u.user_id),
                 U::BotInlineSend(u) => self.has(u.user_id),
@@ -344,6 +344,12 @@ impl ChatHashCache {
                 U::BotMenuButton(u) => self.has(u.bot_id),
                 U::SavedRingtones => true,
                 U::TranscribedAudio(u) => self.has_peer(&u.peer),
+                U::ReadFeaturedEmojiStickers => true,
+                U::UserEmojiStatus(u) => self.has(u.user_id),
+                U::RecentEmojiStatuses => true,
+                U::RecentReactions => true,
+                U::MoveStickerSetToTop(_) => true,
+                U::MessageExtendedMedia(u) => self.has_peer(&u.peer),
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
@@ -513,6 +519,7 @@ impl ChatHashCache {
                         MA::ChatJoinedByRequest => true,
                         MA::WebViewDataSentMe(_) => true,
                         MA::WebViewDataSent(_) => true,
+                        MA::GiftPremium(_) => true,
                     }
             }
         }

@@ -298,7 +298,8 @@ impl Client {
             .invoke(&tl::functions::auth::SignIn {
                 phone_number: token.phone.clone(),
                 phone_code_hash: token.phone_code_hash.clone(),
-                phone_code: code.to_string(),
+                phone_code: Some(code.to_string()),
+                email_verification: None,
             })
             .await
         {

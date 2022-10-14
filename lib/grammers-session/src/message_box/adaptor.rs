@@ -338,7 +338,7 @@ impl PtsInfo {
             ChatParticipantAdmin(_) => None,
             NewStickerSet(_) => None,
             StickerSetsOrder(_) => None,
-            StickerSets => None,
+            StickerSets(_) => None,
             SavedGifs => None,
             BotInlineQuery(_) => None,
             BotInlineSend(_) => None,
@@ -450,13 +450,17 @@ impl PtsInfo {
                 entry: Entry::SecretChats,
             }),
             MessageReactions(_) => None,
-
-            // LAYER 143
             AttachMenuBots => None,
             WebViewResultSent(_) => None,
             BotMenuButton(_) => None,
             SavedRingtones => None,
             TranscribedAudio(_) => None,
+            ReadFeaturedEmojiStickers => None,
+            UserEmojiStatus(_) => None,
+            RecentEmojiStatuses => None,
+            RecentReactions => None,
+            MoveStickerSetToTop(_) => None,
+            MessageExtendedMedia(_) => None,
         }
     }
 }

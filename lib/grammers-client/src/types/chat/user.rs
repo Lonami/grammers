@@ -104,6 +104,7 @@ impl User {
                 restriction_reason: None,
                 bot_inline_placeholder: None,
                 lang_code: None,
+                emoji_status: None,
             },
             tl::enums::User::User(user) => user,
         })

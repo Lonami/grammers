@@ -421,6 +421,7 @@ impl Client {
                 schedule_date: message.schedule_date,
                 send_as: None,
                 noforwards: false,
+                update_stickersets_order: false,
             })
             .await
         } else {
@@ -438,6 +439,7 @@ impl Client {
                 schedule_date: message.schedule_date,
                 send_as: None,
                 noforwards: false,
+                update_stickersets_order: false,
             })
             .await
         }?;
