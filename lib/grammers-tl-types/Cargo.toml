@@ -19,7 +19,7 @@ include = [
 ]
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.3.0" }
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.4.0" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.0" }
 
 [dev-dependencies]
