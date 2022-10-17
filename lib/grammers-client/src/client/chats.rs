@@ -725,7 +725,7 @@ impl Client {
         let permissions = ParticipantPermissions::Channel(participant.participant);
         Ok(permissions)
     }
-    
+
     #[cfg(feature = "parse_invite_link")]
     fn parse_invite_link(invite_link: &str) -> Option<String> {
         let url_parse_result = url::Url::parse(invite_link);
