@@ -27,7 +27,7 @@ grammers-mtsender = { path = "../grammers-mtsender", version = "0.4.0" }
 grammers-session = { path = "../grammers-session", version = "0.4.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.4.0", features = ["tl-mtproto"] }
 html5ever = { version = "0.25.1", optional = true }
-locate-locale = "0.1.0"
+locate-locale = "0.2.0"
 log = "0.4.14"
 md5 = "0.7.0"
 mime_guess = "2.0.3"
