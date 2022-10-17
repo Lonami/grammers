@@ -779,7 +779,6 @@ impl Client {
         &self,
         invite_link: &str,
     ) -> Result<tl::enums::Updates, InvocationError> {
-        use grammers_mtproto::mtp::RpcError;
         match Self::parse_invite_link(invite_link) {
             Some(hash) => {
                 self.invoke(&tl::functions::messages::ImportChatInvite { hash })
@@ -800,11 +799,11 @@ impl Client {
     /// To join private chats, [`Client::accept_invite_link`](Client::accept_invite_link) should be used instead.
     pub async fn join_chat<C: Into<PackedChat>>(
         &self,
-        packed_chat: C,
+        chat: C,
     ) -> Result<Option<Chat>, InvocationError> {
         use tl::enums::Updates;
 
-        let chat = packed_chat.into();
+        let chat = chat.into();
         let update_chat = match self
             .invoke(&tl::functions::channels::JoinChannel {
                 channel: chat.try_to_input_channel().unwrap(),
