@@ -779,7 +779,7 @@ impl Client {
     /// If the chat is public (has a public username), [`Client::join_chat`](Client::join_chat) should be used instead.
     #[cfg(feature = "parse_invite_link")]
     pub async fn accept_invite_link(
-        &mut self,
+        &self,
         invite_link: &str,
     ) -> Result<tl::enums::Updates, InvocationError> {
         use grammers_mtproto::mtp::RpcError;
@@ -802,7 +802,7 @@ impl Client {
     /// A channel is public if it has a username.
     /// To join private chats, [`Client::accept_invite_link`](Client::accept_invite_link) should be used instead.
     pub async fn join_chat<C: Into<PackedChat>>(
-        &mut self,
+        &self,
         packed_chat: C,
     ) -> Result<Option<Chat>, InvocationError> {
         use tl::enums::Updates;
