@@ -16,7 +16,7 @@ edition = "2021"
 [dependencies]
 aes = "0.7.0"
 getrandom = "0.2.2"
-glass_pumpkin = "~1.3.0"
+glass_pumpkin = "1.5.0"
 hmac = "0.11.0"
 num-bigint = "0.4.0"
 pbkdf2 = "0.8.0"
