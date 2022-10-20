@@ -25,7 +25,7 @@ futures-util = "0.3.15"
 grammers-crypto = { path = "../grammers-crypto", version = "0.4.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.4.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.4.0" }
-grammers-session = { path = "../grammers-session", version = "0.4.0" }
+grammers-session = { path = "../grammers-session", version = "0.4.1" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.4.0", features = ["tl-mtproto"] }
 html5ever = { version = "0.25.1", optional = true }
 locate-locale = "0.2.0"

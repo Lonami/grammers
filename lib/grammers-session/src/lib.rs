@@ -187,6 +187,16 @@ impl Session {
         )
     }
 
+    pub fn get_dcs(&self) -> Vec<types::DataCenter> {
+        self.session
+            .lock()
+            .unwrap()
+            .dcs
+            .iter()
+            .map(|enums::DataCenter::Center(dc)| dc.clone())
+            .collect()
+    }
+
     pub fn save(&self) -> Vec<u8> {
         enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
     }
