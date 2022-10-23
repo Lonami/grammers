@@ -244,14 +244,13 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        self
-            .invoke_request(
-                request,
-                &self.0.request_tx,
-                &self.0.sender,
-                &self.0.stepping_done,
-            )
-            .await
+        self.invoke_request(
+            request,
+            &self.0.request_tx,
+            &self.0.sender,
+            &self.0.stepping_done,
+        )
+        .await
     }
 
     pub(crate) async fn invoke_request<R: tl::RemoteCall>(
@@ -367,14 +366,13 @@ impl Client {
             None => self.connect_sender(dc_id).await?,
             Some(fd) => fd,
         };
-        self
-            .invoke_request(
-                request,
-                &downloader.request_tx,
-                &downloader.sender,
-                &downloader.stepping_done,
-            )
-            .await
+        self.invoke_request(
+            request,
+            &downloader.request_tx,
+            &downloader.sender,
+            &downloader.stepping_done,
+        )
+        .await
     }
 
     /// Perform a single network step.
@@ -394,8 +392,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn step(&self) -> Result<(), sender::ReadError> {
-        self
-            .step_sender(&self.0.sender, &self.0.stepping_done)
+        self.step_sender(&self.0.sender, &self.0.stepping_done)
             .await
     }
     async fn step_sender(
