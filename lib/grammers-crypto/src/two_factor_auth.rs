@@ -145,7 +145,7 @@ fn check_p_len(p: &[u8]) -> bool {
 
 // SH(data, salt) := H(salt | data | salt)
 fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Output<Sha256> {
-    return h!(&salt, &data, &salt);
+    h!(&salt, &data, &salt)
 }
 
 // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
@@ -188,7 +188,7 @@ mod tests {
         let salt1 = vec![1];
         let salt2 = vec![2];
         let g = 3;
-        let p = pad_to_256(&vec![47]);
+        let p = pad_to_256(&[47]);
         let g_b = vec![5];
         let a = vec![6];
         let password = vec![7];
@@ -346,10 +346,10 @@ mod tests {
     }
 
     fn assert_incorrect_pg(p: u32, g: i32) {
-        assert!(!check_p_prime_and_subgroup(&p.to_be_bytes().to_vec(), &g))
+        assert!(!check_p_prime_and_subgroup(p.to_be_bytes().as_ref(), &g))
     }
 
     fn assert_correct_pg(p: u32, g: i32) {
-        assert!(check_p_prime_and_subgroup(&p.to_be_bytes().to_vec(), &g))
+        assert!(check_p_prime_and_subgroup(p.to_be_bytes().as_ref(), &g))
     }
 }

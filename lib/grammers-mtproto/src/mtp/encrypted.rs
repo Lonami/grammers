@@ -1300,7 +1300,7 @@ mod tests {
         let buffer = mtproto.finalize_plain();
 
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
-        ensure_buffer_is_message(&buffer, b"Hey!", 1);
+        ensure_buffer_is_message(buffer, b"Hey!", 1);
     }
 
     #[test]
@@ -1377,7 +1377,7 @@ mod tests {
     fn ensure_non_padded_payload_panics() {
         let mut mtproto = Encrypted::build().finish(auth_key());
 
-        mtproto.push(&vec![1, 2, 3]);
+        mtproto.push(&[1, 2, 3]);
     }
 
     #[test]

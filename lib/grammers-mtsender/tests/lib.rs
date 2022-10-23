@@ -14,7 +14,7 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 use grammers_mtproto::transport;
 use grammers_mtsender::connect;
 use grammers_tl_types::{enums, functions, Deserializable, RemoteCall, LAYER};
-use log;
+
 use simple_logger::SimpleLogger;
 use tokio::runtime;
 
