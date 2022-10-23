@@ -13,7 +13,7 @@ use std::io;
 const LAYER: i32 = 0;
 
 fn get_definitions(contents: &str) -> Vec<Definition> {
-    parse_tl_file(&contents)
+    parse_tl_file(contents)
         .into_iter()
         .map(|d| d.unwrap())
         .collect()
@@ -23,7 +23,7 @@ fn gen_rust_code(definitions: &[Definition]) -> io::Result<String> {
     let mut file = Vec::new();
     generate_rust_code(
         &mut file,
-        &definitions,
+        definitions,
         LAYER,
         &Config {
             gen_name_for_id: false,

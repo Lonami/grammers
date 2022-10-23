@@ -143,8 +143,8 @@ impl Client {
 
             let deadline = {
                 let mut message_box = self.0.message_box.lock("client.next_update");
-                let deadline = message_box.check_deadlines();
-                deadline
+
+                message_box.check_deadlines()
             };
             tokio::select! {
                 step = self.step() => {

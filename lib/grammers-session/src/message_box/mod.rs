@@ -891,8 +891,8 @@ impl MessageBox {
                 let mut result_updates = vec![];
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
-                    users: users,
-                    chats: chats,
+                    users,
+                    chats,
                     date: 1,
                     seq: NO_SEQ,
                 });

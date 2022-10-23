@@ -828,8 +828,8 @@ impl Client {
         };
 
         match update_chat {
-            Some(chats) if chats.len() > 0 => Ok(Some(Chat::from_chat(chats[0].clone()))),
-            Some(chats) if chats.len() == 0 => Ok(None),
+            Some(chats) if !chats.is_empty() => Ok(Some(Chat::from_chat(chats[0].clone()))),
+            Some(chats) if chats.is_empty() => Ok(None),
             None => Ok(None),
             Some(_) => Ok(None),
         }

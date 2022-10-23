@@ -244,14 +244,13 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        return self
-            .invoke_request(
-                request,
-                &self.0.request_tx,
-                &self.0.sender,
-                &self.0.stepping_done,
-            )
-            .await;
+        self.invoke_request(
+            request,
+            &self.0.request_tx,
+            &self.0.sender,
+            &self.0.stepping_done,
+        )
+        .await
     }
 
     pub(crate) async fn invoke_request<R: tl::RemoteCall>(
@@ -306,18 +305,18 @@ impl Client {
         let request = tl::functions::auth::ExportAuthorization {
             dc_id: target_dc_id,
         };
-        return match self.invoke(&request).await {
+        match self.invoke(&request).await {
             Ok(tl::enums::auth::ExportedAuthorization::Authorization(exported_auth)) => {
                 Ok(exported_auth)
             }
             Err(e) => Err(e),
-        };
+        }
     }
 
     async fn connect_sender(&self, dc_id: i32) -> Result<Arc<FileDownloader>, InvocationError> {
         let mut mutex = self.0.downloader_map.write().await;
         debug!("Connecting new datacenter {}", dc_id);
-        return match connect_sender(dc_id, &self.0.config).await {
+        match connect_sender(dc_id, &self.0.config).await {
             Ok((new_sender, new_tx)) => {
                 let new_downloader = Arc::new(FileDownloader {
                     sender: AsyncMutex::new("dc_sender", new_sender),
@@ -345,7 +344,7 @@ impl Client {
                 Ok(new_downloader.clone())
             }
             Err(e) => panic!("Cannot obtain new sender to datacenter {}", e),
-        };
+        }
     }
 
     async fn get_downloader(
@@ -354,7 +353,7 @@ impl Client {
     ) -> Result<Option<Arc<FileDownloader>>, InvocationError> {
         return Ok({
             let guard = self.0.downloader_map.read().await;
-            guard.get(&dc_id).map(|f| f.clone())
+            guard.get(&dc_id).cloned()
         });
     }
 
@@ -367,14 +366,13 @@ impl Client {
             None => self.connect_sender(dc_id).await?,
             Some(fd) => fd,
         };
-        return self
-            .invoke_request(
-                request,
-                &downloader.request_tx,
-                &downloader.sender,
-                &downloader.stepping_done,
-            )
-            .await;
+        self.invoke_request(
+            request,
+            &downloader.request_tx,
+            &downloader.sender,
+            &downloader.stepping_done,
+        )
+        .await
     }
 
     /// Perform a single network step.
@@ -394,9 +392,8 @@ impl Client {
     /// # }
     /// ```
     pub async fn step(&self) -> Result<(), sender::ReadError> {
-        return self
-            .step_sender(&self.0.sender, &self.0.stepping_done)
-            .await;
+        self.step_sender(&self.0.sender, &self.0.stepping_done)
+            .await
     }
     async fn step_sender(
         &self,
