@@ -329,7 +329,7 @@ impl Poll {
     pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
         Self {
             poll: match poll.poll {
-                tl::enums::Poll::Poll(poll) => poll
+                tl::enums::Poll::Poll(poll) => poll,
             },
             results: match poll.results {
                 tl::enums::PollResults::Results(results) => results,
@@ -364,7 +364,7 @@ impl Poll {
     /// Iterator over poll answer options
     pub fn iter_answers(&self) -> impl Iterator<Item = &tl::types::PollAnswer> {
         self.poll.answers.iter().map(|answer| match answer {
-            tl::enums::PollAnswer::Answer(answer) => answer
+            tl::enums::PollAnswer::Answer(answer) => answer,
         })
     }
 
@@ -377,10 +377,12 @@ impl Poll {
 
     /// Return details of the voters choices:
     /// how much voters chose each answer and wether current option
-    pub fn iter_voters_summary(&self) -> Option<impl Iterator<Item = &tl::types::PollAnswerVoters>> {
+    pub fn iter_voters_summary(
+        &self,
+    ) -> Option<impl Iterator<Item = &tl::types::PollAnswerVoters>> {
         self.results.results.as_ref().map(|results| {
             results.iter().map(|result| match result {
-                tl::enums::PollAnswerVoters::Voters(voters) => voters
+                tl::enums::PollAnswerVoters::Voters(voters) => voters,
             })
         })
     }
