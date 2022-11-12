@@ -41,12 +41,19 @@ pub struct Contact {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Poll {
+    poll: tl::types::Poll,
+    results: tl::types::PollResults,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
     Document(Document),
     Sticker(Sticker),
     Contact(Contact),
+    Poll(Poll),
 }
 
 impl Photo {
@@ -318,6 +325,67 @@ impl Contact {
     }
 }
 
+impl Poll {
+    pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+        Self {
+            poll: match poll.poll {
+                tl::enums::Poll::Poll(poll) => poll
+            },
+            results: match poll.results {
+                tl::enums::PollResults::Results(results) => results,
+            },
+        }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaPoll {
+        tl::types::InputMediaPoll {
+            poll: grammers_tl_types::enums::Poll::Poll(self.poll.clone()),
+            correct_answers: None,
+            solution: None,
+            solution_entities: None,
+        }
+    }
+
+    /// Return question of the poll
+    pub fn question(&self) -> &str {
+        &self.poll.question
+    }
+
+    /// Return if current poll is quiz
+    pub fn is_quiz(&self) -> bool {
+        self.poll.quiz
+    }
+
+    /// Indicator that poll is closed
+    pub fn closed(&self) -> bool {
+        self.poll.closed
+    }
+
+    /// Iterator over poll answer options
+    pub fn iter_answers(&self) -> impl Iterator<Item = &tl::types::PollAnswer> {
+        self.poll.answers.iter().map(|answer| match answer {
+            tl::enums::PollAnswer::Answer(answer) => answer
+        })
+    }
+
+    /// Total voters that took part in the vote
+    ///
+    /// May be None if poll isn't started
+    pub fn total_voters(&self) -> Option<i32> {
+        self.results.total_voters
+    }
+
+    /// Return details of the voters choices:
+    /// how much voters chose each answer and wether current option
+    pub fn iter_voters_summary(&self) -> Option<impl Iterator<Item = &tl::types::PollAnswerVoters>> {
+        self.results.results.as_ref().map(|results| {
+            results.iter().map(|result| match result {
+                tl::enums::PollAnswerVoters::Voters(voters) => voters
+            })
+        })
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -355,7 +423,7 @@ impl Media {
             M::Game(_) => None,
             M::Invoice(_) => None,
             M::GeoLive(_) => None,
-            M::Poll(_) => None,
+            M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
             M::Dice(_) => None,
         }
     }
@@ -366,6 +434,7 @@ impl Media {
             Media::Document(document) => document.to_input_media().into(),
             Media::Sticker(sticker) => sticker.document.to_input_media().into(),
             Media::Contact(contact) => contact.to_input_media().into(),
+            Media::Poll(poll) => poll.to_input_media().into(),
         }
     }
 
@@ -375,6 +444,7 @@ impl Media {
             Media::Document(document) => document.to_input_location(),
             Media::Sticker(sticker) => sticker.document.to_input_location(),
             Media::Contact(_) => None,
+            Media::Poll(_) => None,
         }
     }
 }
