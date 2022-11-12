@@ -233,7 +233,7 @@ impl Document {
     pub fn creation_date(&self) -> Option<DateTime<Utc>> {
         match self.document.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => Some(DateTime::from_utc(
-                NaiveDateTime::from_timestamp(d.date as i64, 0),
+                NaiveDateTime::from_timestamp_opt(d.date as i64, 0).expect("date out of range"),
                 Utc,
             )),
             _ => None,

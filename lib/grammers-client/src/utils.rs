@@ -42,7 +42,10 @@ pub(crate) fn generate_random_ids(n: usize) -> Vec<i64> {
 }
 
 pub(crate) fn date(date: i32) -> Date {
-    DateTime::<Utc>::from_utc(NaiveDateTime::from_timestamp(date as i64, 0), Utc)
+    DateTime::<Utc>::from_utc(
+        NaiveDateTime::from_timestamp_opt(date as i64, 0).expect("date out of range"),
+        Utc,
+    )
 }
 
 pub(crate) fn extract_password_parameters(
