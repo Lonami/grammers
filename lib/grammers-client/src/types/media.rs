@@ -248,6 +248,72 @@ impl Document {
             _ => 0,
         }
     }
+
+    /// Duration of video/audio, in seconds
+    pub fn duration(&self) -> Option<i32> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => {
+                for attr in &d.attributes {
+                    match attr {
+                        tl::enums::DocumentAttribute::Video(v) => return Some(v.duration),
+                        tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration),
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => None,
+        }
+    }
+
+    /// Width & height of video/image
+    pub fn resolution(&self) -> Option<(i32, i32)> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => {
+                for attr in &d.attributes {
+                    match attr {
+                        tl::enums::DocumentAttribute::Video(v) => return Some((v.w, v.h)),
+                        tl::enums::DocumentAttribute::ImageSize(i) => return Some((i.w, i.h)),
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => None,
+        }
+    }
+
+    /// Title of audio
+    pub fn audio_title(&self) -> Option<String> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => {
+                for attr in &d.attributes {
+                    match attr {
+                        tl::enums::DocumentAttribute::Audio(a) => return a.title.clone(),
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => None,
+        }
+    }
+
+    /// Performer (artist) of audio
+    pub fn performer(&self) -> Option<String> {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => {
+                for attr in &d.attributes {
+                    match attr {
+                        tl::enums::DocumentAttribute::Audio(a) => return a.performer.clone(),
+                        _ => {}
+                    }
+                }
+                return None;
+            }
+            _ => None,
+        }
+    }
 }
 
 impl Sticker {
