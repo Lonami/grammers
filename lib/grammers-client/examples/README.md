@@ -30,6 +30,13 @@ you to have as many handles as you need, for as many tasks as you need (and enab
 iterators which keep their own handle). It requires some boilerplate to setup, but it's a very
 powerful approach.
 
+## [downloader.rs]
+
+Downloads all media from a chat, including files located in datacenters different than your own. 
+After logging in, the example iterates all messages of the supplied chat name, printing in the console 
+the ID and the text for each one; videos, images, stickers and contacts are saved in the `target` folder. 
+
 [ping.rs]: ping.rs
 [echo.rs]: echo.rs
 [dialogs.rs]: dialogs.rs
+[downloader.rs]: downloader.rs
