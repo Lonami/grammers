@@ -40,5 +40,3 @@ the ID and the text for each one; videos, images, stickers and contacts are save
 [echo.rs]: echo.rs
 [dialogs.rs]: dialogs.rs
 [downloader.rs]: downloader.rs
-
-
