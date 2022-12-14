@@ -50,6 +50,7 @@ impl MessageBox {
     ///
     /// This is the only way it may return `true` from [`MessageBox::is_empty`].
     pub fn new() -> Self {
+        trace!("created new message box with no previous state");
         Self {
             map: HashMap::new(),
             date: 1,
@@ -63,6 +64,7 @@ impl MessageBox {
 
     /// Create a [`MessageBox`] from a previously known update state.
     pub fn load(state: UpdateState) -> Self {
+        trace!("created new message box with state: {:?}", state);
         let deadline = next_updates_deadline();
         let mut map = HashMap::with_capacity(2 + state.channels.len());
         map.insert(
@@ -248,6 +250,7 @@ impl MessageBox {
     /// Should be called right after login if [`MessageBox::new`] was used, otherwise undesirable
     /// updates will be fetched.
     pub fn set_state(&mut self, state: tl::enums::updates::State) {
+        trace!("setting state {:?}", state);
         let deadline = next_updates_deadline();
         let state: tl::types::updates::State = state.into();
         self.map.insert(
@@ -272,6 +275,7 @@ impl MessageBox {
     ///
     /// The update state will only be updated if no entry was known previously.
     pub fn try_set_channel_state(&mut self, id: i64, pts: i32) {
+        trace!("trying to set channel state for {}: {}", id, pts);
         self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
             pts,
             deadline: next_updates_deadline(),
@@ -377,6 +381,7 @@ impl MessageBox {
         chat_hashes: &ChatHashCache,
         result: &mut Vec<tl::enums::Update>,
     ) -> Result<(Vec<tl::enums::User>, Vec<tl::enums::Chat>), Gap> {
+        trace!("processing updates: {:?}", updates);
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
         //
@@ -425,7 +430,6 @@ impl MessageBox {
             self.date = date;
             if seq != NO_SEQ {
                 self.seq = seq;
-                trace!("updated date = {}, seq = {}", date, seq);
             }
         }
 
@@ -516,13 +520,6 @@ impl MessageBox {
             match (local_pts + pts.pts_count).cmp(&pts.pts) {
                 // Apply
                 Ordering::Equal => {
-                    trace!(
-                        "applying update for {:?} (local {:?}, count {:?}, remote {:?})",
-                        pts.entry,
-                        local_pts,
-                        pts.pts_count,
-                        pts.pts
-                    );
                 }
                 // Ignore
                 Ordering::Greater => {
@@ -612,6 +609,7 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
+        trace!("applying account difference: {:?}", difference);
         let finish: bool;
         let result = match difference {
             tl::enums::updates::Difference::Empty(diff) => {
@@ -822,6 +820,7 @@ impl MessageBox {
             tl::enums::InputChannel::Channel(c) => c.channel_id,
             _ => panic!("request had wrong input channel"),
         };
+        trace!("applying channel difference for {}: {:?}", channel_id, difference);
         let entry = Entry::Channel(channel_id);
 
         self.possible_gaps.remove(&entry);
@@ -921,6 +920,7 @@ impl MessageBox {
         reason: PrematureEndReason,
     ) {
         if let Some(channel_id) = channel_id(request) {
+            trace!("ending channel differene for {}", channel_id);
             let entry = Entry::Channel(channel_id);
             match reason {
                 PrematureEndReason::TemporaryServerIssues => {
