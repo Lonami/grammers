@@ -816,10 +816,7 @@ impl MessageBox {
         Vec<tl::enums::User>,
         Vec<tl::enums::Chat>,
     ) {
-        let channel_id = match request.channel {
-            tl::enums::InputChannel::Channel(c) => c.channel_id,
-            _ => panic!("request had wrong input channel"),
-        };
+        let channel_id = channel_id(&request).expect("request had wrong input channel");
         trace!("applying channel difference for {}: {:?}", channel_id, difference);
         let entry = Entry::Channel(channel_id);
 
