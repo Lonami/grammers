@@ -5,6 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#[cfg(any(feature = "markdown", feature = "html"))]
+use crate::parsers;
 use crate::types::{InputMessage, Media, Photo};
 use crate::utils;
 use crate::ChatMap;
@@ -273,7 +275,25 @@ impl Message {
         &self.msg.message
     }
 
-    // TODO `markdown_text`, `html_text`
+    /// Like [`text`](Self::text), but with the [`fmt_entities`](Self::fmt_entities)
+    /// applied to produce a markdown string instead.
+    ///
+    /// Some formatting entities automatically added by Telegram, such as bot commands or
+    /// clickable emails, are ignored in the generated string, as those do not need to be
+    /// sent for Telegram to include them in the message.
+    ///
+    /// Formatting entities which cannot be represented in CommonMark without resorting to HTML,
+    /// such as underline, are also ignored.
+    #[cfg(feature = "markdown")]
+    pub fn markdown_text(&self) -> String {
+        if let Some(entities) = self.msg.entities.as_ref() {
+            parsers::generate_markdown_message(&self.msg.message, entities)
+        } else {
+            self.msg.message.clone()
+        }
+    }
+
+    // TODO `html_text`
 
     /// The media displayed by this message, if any.
     ///

@@ -7,6 +7,7 @@
 // except according to those terms.
 #![cfg(any(feature = "markdown", feature = "html"))]
 use grammers_tl_types as tl;
+use std::borrow::Cow;
 
 #[cfg(feature = "html")]
 const CODE_LANG_PREFIX: &str = "language-";
@@ -165,6 +166,138 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
 
     text.truncate(text.trim_end().len());
     (text, entities)
+}
+
+#[cfg(feature = "markdown")]
+pub fn generate_markdown_message(message: &str, entities: &[tl::enums::MessageEntity]) -> String {
+    // Getting this wrong isn't the end of the world so the wildcard pattern is used
+    // (but it would still be a shame for it to be wrong).
+    let mut insertions = Vec::with_capacity(
+        entities
+            .iter()
+            .map(|entity| match entity {
+                ME::Bold(_) => 2,
+                ME::Italic(_) => 2,
+                ME::Code(_) => 2,
+                ME::Pre(_) => 2,
+                ME::TextUrl(_) => 2,
+                ME::MentionName(_) => 2,
+                _ => 0,
+            })
+            .sum(),
+    );
+
+    use tl::enums::MessageEntity as ME;
+    entities.iter().for_each(|entity| match entity {
+        ME::Unknown(_) => {}
+        ME::Mention(_) => {}
+        ME::Hashtag(_) => {}
+        ME::BotCommand(_) => {}
+        ME::Url(_) => {}
+        ME::Email(_) => {}
+        ME::Bold(e) => {
+            insertions.push((e.offset, Cow::Borrowed("**")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("**")));
+        }
+        ME::Italic(e) => {
+            insertions.push((e.offset, Cow::Borrowed("_")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("_")));
+        }
+        ME::Code(e) => {
+            insertions.push((e.offset, Cow::Borrowed("`")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("`")));
+        }
+        ME::Pre(e) => {
+            // Both this and URLs could be improved by having a custom Insertion with prefix,
+            // formatted and suffix values separatedly. Or perhaps it's possible to use a
+            // formatter into our buffer directly.
+            insertions.push((e.offset, Cow::Owned(format!("```{}\n", e.language))));
+            insertions.push((e.offset + e.length, Cow::Borrowed("```\n")));
+        }
+        ME::TextUrl(e) => {
+            insertions.push((e.offset, Cow::Borrowed("[")));
+            insertions.push((e.offset + e.length, Cow::Owned(format!("]({})", e.url))));
+        }
+        ME::MentionName(e) => {
+            insertions.push((e.offset, Cow::Borrowed("[")));
+            insertions.push((
+                e.offset + e.length,
+                Cow::Owned(format!("]({}{})", MENTION_URL_PREFIX, e.user_id)),
+            ));
+        }
+        ME::InputMessageEntityMentionName(_) => {}
+        ME::Phone(_) => {}
+        ME::Cashtag(_) => {}
+        ME::Underline(_) => {}
+        ME::Strike(_) => {}
+        ME::Blockquote(_) => {}
+        ME::BankCard(_) => {}
+        ME::Spoiler(_) => {}
+        ME::CustomEmoji(_) => {}
+    });
+
+    // Allocate exactly as much as needed, then walk through the message string
+    // and insertions in order, without inserting in the middle of a UTF-8 encoded
+    // character or UTF-16 pairs.
+    //
+    // Insertion offset could probably be avoided by walking the strings in reverse,
+    // but that complicates things even more.
+    let mut result =
+        vec![0; message.len() + insertions.iter().map(|(_, what)| what.len()).sum::<usize>()];
+
+    insertions.sort_by_key(|(at, _)| -*at);
+
+    let mut index = 0usize; // current index into the result
+    let mut tg_index = 0usize; // current index as seen by telegram
+    let mut tg_ins_offset = 0usize; // offset introduced by previous insertions as seen by telegram
+    let mut prev_point = None; // temporary storage for utf-16 surrogate pairs
+    let mut insertion = insertions.pop(); // next insertion to apply
+
+    for point in message.encode_utf16() {
+        if let Some((at, what)) = &insertion {
+            let at = *at as usize;
+            debug_assert!(at + tg_ins_offset >= tg_index, "insertion left behind");
+            if at + tg_ins_offset == tg_index {
+                result[index..index + what.len()].copy_from_slice(what.as_bytes());
+                index += what.len();
+                tg_index += telegram_string_len(&what) as usize;
+                tg_ins_offset += telegram_string_len(&what) as usize;
+                insertion = insertions.pop();
+            }
+        }
+
+        let c = if let Some(previous) = prev_point.take() {
+            char::decode_utf16([previous, point])
+                .next()
+                .unwrap()
+                .unwrap()
+        } else {
+            match char::decode_utf16([point]).next().unwrap() {
+                Ok(c) => c,
+                Err(unpaired) => {
+                    prev_point = Some(unpaired.unpaired_surrogate());
+                    tg_index += 1;
+                    continue;
+                }
+            }
+        };
+
+        index += c.encode_utf8(&mut result[index..]).len();
+        tg_index += 1;
+    }
+
+    if let Some(ins) = insertion {
+        insertions.push(ins);
+    }
+    while let Some((_, what)) = insertions.pop() {
+        // The remaining insertion offsets are assumed to be correct at the end.
+        // Even if they were not, they couldn't really skip past the source message,
+        // which has already reached the end.
+        result[index..index + what.len()].copy_from_slice(what.as_bytes());
+        index += what.len();
+    }
+
+    String::from_utf8(result).unwrap()
 }
 
 #[cfg(feature = "html")]
@@ -474,6 +607,17 @@ mod tests {
                 .into(),
             ]
         );
+    }
+
+    #[test]
+    #[cfg(feature = "markdown")]
+    fn parse_then_unparse_markdown() {
+        let markdown = "Some **bold 🤷🏽‍♀️**, _italics_, inline `🤷🏽‍♀️ code`, \
+        a\n\n```rust\npre\n```\nblock, a [link](https://example.com), and \
+        [mentions](tg://user?id=12345678)";
+        let (text, entities) = parse_markdown_message(markdown);
+        let generated = generate_markdown_message(&text, &entities);
+        assert_eq!(generated, markdown);
     }
 
     #[test]
