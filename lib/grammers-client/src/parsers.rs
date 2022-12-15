@@ -566,7 +566,6 @@ fn inject_into_message(message: &str, mut insertions: Vec<(i32, Cow<str>)>) -> S
     String::from_utf8(result).unwrap()
 }
 
-
 #[cfg(test)]
 mod tests {
     use super::*;

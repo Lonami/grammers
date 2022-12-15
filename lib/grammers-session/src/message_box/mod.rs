@@ -519,8 +519,7 @@ impl MessageBox {
             let local_pts = state.pts;
             match (local_pts + pts.pts_count).cmp(&pts.pts) {
                 // Apply
-                Ordering::Equal => {
-                }
+                Ordering::Equal => {}
                 // Ignore
                 Ordering::Greater => {
                     debug!(
@@ -817,7 +816,11 @@ impl MessageBox {
         Vec<tl::enums::Chat>,
     ) {
         let channel_id = channel_id(&request).expect("request had wrong input channel");
-        trace!("applying channel difference for {}: {:?}", channel_id, difference);
+        trace!(
+            "applying channel difference for {}: {:?}",
+            channel_id,
+            difference
+        );
         let entry = Entry::Channel(channel_id);
 
         self.possible_gaps.remove(&entry);
