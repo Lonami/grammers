@@ -236,68 +236,7 @@ pub fn generate_markdown_message(message: &str, entities: &[tl::enums::MessageEn
         ME::CustomEmoji(_) => {}
     });
 
-    // Allocate exactly as much as needed, then walk through the message string
-    // and insertions in order, without inserting in the middle of a UTF-8 encoded
-    // character or UTF-16 pairs.
-    //
-    // Insertion offset could probably be avoided by walking the strings in reverse,
-    // but that complicates things even more.
-    let mut result =
-        vec![0; message.len() + insertions.iter().map(|(_, what)| what.len()).sum::<usize>()];
-
-    insertions.sort_by_key(|(at, _)| -*at);
-
-    let mut index = 0usize; // current index into the result
-    let mut tg_index = 0usize; // current index as seen by telegram
-    let mut tg_ins_offset = 0usize; // offset introduced by previous insertions as seen by telegram
-    let mut prev_point = None; // temporary storage for utf-16 surrogate pairs
-    let mut insertion = insertions.pop(); // next insertion to apply
-
-    for point in message.encode_utf16() {
-        if let Some((at, what)) = &insertion {
-            let at = *at as usize;
-            debug_assert!(at + tg_ins_offset >= tg_index, "insertion left behind");
-            if at + tg_ins_offset == tg_index {
-                result[index..index + what.len()].copy_from_slice(what.as_bytes());
-                index += what.len();
-                tg_index += telegram_string_len(&what) as usize;
-                tg_ins_offset += telegram_string_len(&what) as usize;
-                insertion = insertions.pop();
-            }
-        }
-
-        let c = if let Some(previous) = prev_point.take() {
-            char::decode_utf16([previous, point])
-                .next()
-                .unwrap()
-                .unwrap()
-        } else {
-            match char::decode_utf16([point]).next().unwrap() {
-                Ok(c) => c,
-                Err(unpaired) => {
-                    prev_point = Some(unpaired.unpaired_surrogate());
-                    tg_index += 1;
-                    continue;
-                }
-            }
-        };
-
-        index += c.encode_utf8(&mut result[index..]).len();
-        tg_index += 1;
-    }
-
-    if let Some(ins) = insertion {
-        insertions.push(ins);
-    }
-    while let Some((_, what)) = insertions.pop() {
-        // The remaining insertion offsets are assumed to be correct at the end.
-        // Even if they were not, they couldn't really skip past the source message,
-        // which has already reached the end.
-        result[index..index + what.len()].copy_from_slice(what.as_bytes());
-        index += what.len();
-    }
-
-    String::from_utf8(result).unwrap()
+    inject_into_message(message, insertions)
 }
 
 #[cfg(feature = "html")]
@@ -559,6 +498,10 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
         ME::CustomEmoji(_) => {}
     });
 
+    inject_into_message(message, insertions)
+}
+
+fn inject_into_message(message: &str, mut insertions: Vec<(i32, Cow<str>)>) -> String {
     // Allocate exactly as much as needed, then walk through the message string
     // and insertions in order, without inserting in the middle of a UTF-8 encoded
     // character or UTF-16 pairs.
@@ -622,6 +565,7 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
 
     String::from_utf8(result).unwrap()
 }
+
 
 #[cfg(test)]
 mod tests {
