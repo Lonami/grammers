@@ -469,6 +469,160 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
     (text, entities)
 }
 
+#[cfg(feature = "html")]
+pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity]) -> String {
+    use grammers_tl_types::enums::MessageEntity as ME;
+
+    // Getting this wrong isn't the end of the world so the wildcard pattern is used
+    // (but it would still be a shame for it to be wrong).
+    let mut insertions = Vec::with_capacity(
+        entities
+            .iter()
+            .map(|entity| match entity {
+                ME::Bold(_) => 2,
+                ME::Italic(_) => 2,
+                ME::Code(_) => 2,
+                ME::Pre(_) => 2,
+                ME::TextUrl(_) => 2,
+                ME::MentionName(_) => 2,
+                ME::Underline(_) => 2,
+                ME::Strike(_) => 2,
+                ME::Blockquote(_) => 2,
+                _ => 0,
+            })
+            .sum(),
+    );
+
+    entities.iter().for_each(|entity| match entity {
+        ME::Unknown(_) => {}
+        ME::Mention(_) => {}
+        ME::Hashtag(_) => {}
+        ME::BotCommand(_) => {}
+        ME::Url(_) => {}
+        ME::Email(_) => {}
+        ME::Bold(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<b>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</b>")));
+        }
+        ME::Italic(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<i>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</i>")));
+        }
+        ME::Code(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<code>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</code>")));
+        }
+        ME::Pre(e) => {
+            // See markdown implementation: this could be more efficient.
+            if e.language.is_empty() {
+                insertions.push((e.offset, Cow::Borrowed("<pre>")));
+                insertions.push((e.offset + e.length, Cow::Borrowed("</pre>")));
+            } else {
+                insertions.push((
+                    e.offset,
+                    Cow::Owned(format!(
+                        "<pre><code class=\"{}{}\">",
+                        CODE_LANG_PREFIX, e.language
+                    )),
+                ));
+                insertions.push((e.offset + e.length, Cow::Borrowed("</code></pre>")));
+            }
+        }
+        ME::TextUrl(e) => {
+            insertions.push((e.offset, Cow::Owned(format!("<a href=\"{}\">", e.url))));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</a>")));
+        }
+        ME::MentionName(e) => {
+            insertions.push((
+                e.offset,
+                Cow::Owned(format!("<a href=\"{}{}\">", MENTION_URL_PREFIX, e.user_id)),
+            ));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</a>")));
+        }
+        ME::InputMessageEntityMentionName(_) => {}
+        ME::Phone(_) => {}
+        ME::Cashtag(_) => {}
+        ME::Underline(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<u>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</u>")));
+        }
+        ME::Strike(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<del>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</del>")));
+        }
+        ME::Blockquote(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<blockquote>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</blockquote>")));
+        }
+        ME::BankCard(_) => {}
+        ME::Spoiler(_) => {}
+        ME::CustomEmoji(_) => {}
+    });
+
+    // Allocate exactly as much as needed, then walk through the message string
+    // and insertions in order, without inserting in the middle of a UTF-8 encoded
+    // character or UTF-16 pairs.
+    //
+    // Insertion offset could probably be avoided by walking the strings in reverse,
+    // but that complicates things even more.
+    let mut result =
+        vec![0; message.len() + insertions.iter().map(|(_, what)| what.len()).sum::<usize>()];
+
+    insertions.sort_by_key(|(at, _)| -*at);
+
+    let mut index = 0usize; // current index into the result
+    let mut tg_index = 0usize; // current index as seen by telegram
+    let mut tg_ins_offset = 0usize; // offset introduced by previous insertions as seen by telegram
+    let mut prev_point = None; // temporary storage for utf-16 surrogate pairs
+    let mut insertion = insertions.pop(); // next insertion to apply
+
+    for point in message.encode_utf16() {
+        if let Some((at, what)) = &insertion {
+            let at = *at as usize;
+            debug_assert!(at + tg_ins_offset >= tg_index, "insertion left behind");
+            if at + tg_ins_offset == tg_index {
+                result[index..index + what.len()].copy_from_slice(what.as_bytes());
+                index += what.len();
+                tg_index += telegram_string_len(&what) as usize;
+                tg_ins_offset += telegram_string_len(&what) as usize;
+                insertion = insertions.pop();
+            }
+        }
+
+        let c = if let Some(previous) = prev_point.take() {
+            char::decode_utf16([previous, point])
+                .next()
+                .unwrap()
+                .unwrap()
+        } else {
+            match char::decode_utf16([point]).next().unwrap() {
+                Ok(c) => c,
+                Err(unpaired) => {
+                    prev_point = Some(unpaired.unpaired_surrogate());
+                    tg_index += 1;
+                    continue;
+                }
+            }
+        };
+
+        index += c.encode_utf8(&mut result[index..]).len();
+        tg_index += 1;
+    }
+
+    if let Some(ins) = insertion {
+        insertions.push(ins);
+    }
+    while let Some((_, what)) = insertions.pop() {
+        // The remaining insertion offsets are assumed to be correct at the end.
+        // Even if they were not, they couldn't really skip past the source message,
+        // which has already reached the end.
+        result[index..index + what.len()].copy_from_slice(what.as_bytes());
+        index += what.len();
+    }
+
+    String::from_utf8(result).unwrap()
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -818,5 +972,17 @@ mod tests {
                 .into(),
             ]
         );
+    }
+
+    #[test]
+    #[cfg(feature = "html")]
+    fn parse_then_unparse_html() {
+        let html = "Some <b>bold</b>, <i>italics</i> inline <code>code</code>, \
+        a <pre>pre</pre> block <pre><code class=\"language-rs\">use rust;</code></pre>, \
+        a <a href=\"https://example.com\">link</a>, and \
+        <a href=\"tg://user?id=12345678\">mentions</a>";
+        let (text, entities) = parse_html_message(html);
+        let generated = generate_html_message(&text, &entities);
+        assert_eq!(generated, html);
     }
 }

@@ -293,7 +293,20 @@ impl Message {
         }
     }
 
-    // TODO `html_text`
+    /// Like [`text`](Self::text), but with the [`fmt_entities`](Self::fmt_entities)
+    /// applied to produce a HTML string instead.
+    ///
+    /// Some formatting entities automatically added by Telegram, such as bot commands or
+    /// clickable emails, are ignored in the generated string, as those do not need to be
+    /// sent for Telegram to include them in the message.
+    #[cfg(feature = "html")]
+    pub fn html_text(&self) -> String {
+        if let Some(entities) = self.msg.entities.as_ref() {
+            parsers::generate_html_message(&self.msg.message, entities)
+        } else {
+            self.msg.message.clone()
+        }
+    }
 
     /// The media displayed by this message, if any.
     ///
