@@ -253,10 +253,11 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
         ATOM_LOCALNAME__61 as TAG_A, ATOM_LOCALNAME__62 as TAG_B,
         ATOM_LOCALNAME__62_6C_6F_63_6B_71_75_6F_74_65 as TAG_BLOCKQUOTE,
         ATOM_LOCALNAME__63_6C_61_73_73 as ATTR_CLASS, ATOM_LOCALNAME__63_6F_64_65 as TAG_CODE,
-        ATOM_LOCALNAME__64_65_6C as TAG_DEL, ATOM_LOCALNAME__65_6D as TAG_EM,
-        ATOM_LOCALNAME__68_72_65_66 as ATTR_HREF, ATOM_LOCALNAME__69 as TAG_I,
-        ATOM_LOCALNAME__70_72_65 as TAG_PRE, ATOM_LOCALNAME__73 as TAG_S,
-        ATOM_LOCALNAME__73_74_72_6F_6E_67 as TAG_STRONG, ATOM_LOCALNAME__75 as TAG_U,
+        ATOM_LOCALNAME__64_65_6C as TAG_DEL, ATOM_LOCALNAME__64_65_74_61_69_6C_73 as TAG_DETAILS,
+        ATOM_LOCALNAME__65_6D as TAG_EM, ATOM_LOCALNAME__68_72_65_66 as ATTR_HREF,
+        ATOM_LOCALNAME__69 as TAG_I, ATOM_LOCALNAME__70_72_65 as TAG_PRE,
+        ATOM_LOCALNAME__73 as TAG_S, ATOM_LOCALNAME__73_74_72_6F_6E_67 as TAG_STRONG,
+        ATOM_LOCALNAME__75 as TAG_U,
     };
 
     struct Sink {
@@ -290,6 +291,9 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     }
                     TAG_BLOCKQUOTE => {
                         push_entity!(MessageEntityBlockquote(self.offset) => self.entities);
+                    }
+                    TAG_DETAILS => {
+                        push_entity!(MessageEntitySpoiler(self.offset) => self.entities);
                     }
                     TAG_CODE => {
                         match self.entities.iter_mut().rev().next() {
@@ -352,6 +356,9 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     }
                     TAG_BLOCKQUOTE => {
                         update_entity_len!(Blockquote(self.offset) => self.entities);
+                    }
+                    TAG_DETAILS => {
+                        update_entity_len!(Spoiler(self.offset) => self.entities);
                     }
                     TAG_CODE => {
                         match self.entities.iter_mut().rev().next() {
@@ -427,6 +434,7 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
                 ME::Underline(_) => 2,
                 ME::Strike(_) => 2,
                 ME::Blockquote(_) => 2,
+                ME::Spoiler(_) => 2,
                 _ => 0,
             })
             .sum(),
@@ -494,7 +502,10 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
             insertions.push((e.offset + e.length, Cow::Borrowed("</blockquote>")));
         }
         ME::BankCard(_) => {}
-        ME::Spoiler(_) => {}
+        ME::Spoiler(e) => {
+            insertions.push((e.offset, Cow::Borrowed("<details>")));
+            insertions.push((e.offset + e.length, Cow::Borrowed("</details>")));
+        }
         ME::CustomEmoji(_) => {}
     });
 
@@ -769,13 +780,13 @@ mod tests {
         let (text, entities) = parse_html_message(
             "Some <b>bold</b> (<strong>strong</strong>), <i>italics</i> \
             (<em>cursive</em>), inline <code>code</code>, a <pre>pre</pre> \
-            block, a <a href=\"https://example.com\">link</a>, and \
-            <a href=\"tg://user?id=12345678\">mentions</a>",
+            block, a <a href=\"https://example.com\">link</a>, \
+            <details>spoilers</details> and <a href=\"tg://user?id=12345678\">mentions</a>",
         );
 
         assert_eq!(
             text,
-            "Some bold (strong), italics (cursive), inline code, a pre block, a link, and mentions"
+            "Some bold (strong), italics (cursive), inline code, a pre block, a link, spoilers and mentions"
         );
         assert_eq!(
             entities,
@@ -817,8 +828,13 @@ mod tests {
                     url: "https://example.com".to_string()
                 }
                 .into(),
+                tl::types::MessageEntitySpoiler {
+                    offset: 73,
+                    length: 8,
+                }
+                .into(),
                 tl::types::MessageEntityMentionName {
-                    offset: 77,
+                    offset: 86,
                     length: 8,
                     user_id: 12345678
                 }
@@ -922,7 +938,7 @@ mod tests {
     fn parse_then_unparse_html() {
         let html = "Some <b>bold</b>, <i>italics</i> inline <code>code</code>, \
         a <pre>pre</pre> block <pre><code class=\"language-rs\">use rust;</code></pre>, \
-        a <a href=\"https://example.com\">link</a>, and \
+        a <a href=\"https://example.com\">link</a>, <details>spoilers</details> and \
         <a href=\"tg://user?id=12345678\">mentions</a>";
         let (text, entities) = parse_html_message(html);
         let generated = generate_html_message(&text, &entities);
