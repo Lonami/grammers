@@ -10,9 +10,11 @@
 use crate::types::{IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ChatMap, Client};
+use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
+use grammers_tl_types::enums::InputPeer;
 use std::collections::HashMap;
 
 fn get_message_id(message: &tl::enums::Message) -> i32 {
@@ -259,6 +261,50 @@ impl SearchIter {
     /// example).
     pub fn query(mut self, query: &str) -> Self {
         self.request.q = query.to_string();
+        self
+    }
+
+    /// Restricts results to messages sent by the logged-in user
+    pub fn sent_by_self(mut self) -> Self {
+        self.request.from_id = Some(InputPeer::PeerSelf);
+        self
+    }
+
+    /// Returns only messages with date bigger than date_time.
+    ///
+    /// ```
+    /// use chrono::DateTime;
+    ///
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Search messages sent after Jan 1st, 2021
+    /// let min_date = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
+    ///
+    /// let mut messages = client.search_messages(&chat).min_date(&min_date);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn min_date(mut self, date_time: &DateTime<FixedOffset>) -> Self {
+        self.request.min_date = date_time.timestamp() as i32;
+        self
+    }
+
+    /// Returns only messages with date smaller than date_time
+    ///
+    /// ```
+    /// use chrono::DateTime;
+    ///
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Search messages sent before Dec, 25th 2022
+    /// let max_date = DateTime::parse_from_rfc3339("2022-12-25T00:00:00-00:00").unwrap();
+    ///
+    /// let mut messages = client.search_messages(&chat).max_date(&max_date);
+    ///
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn max_date(mut self, date_time: &DateTime<FixedOffset>) -> Self {
+        self.request.max_date = date_time.timestamp() as i32;
         self
     }
 
