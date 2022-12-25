@@ -68,7 +68,7 @@ async fn async_main() -> Result<()> {
             Err(SignInError::PasswordRequired(password_token)) => {
                 // Note: this `prompt` method will echo the password in the console.
                 //       Real code might want to use a better way to handle this.
-                let hint = password_token.hint().unwrap();
+                let hint = password_token.hint().unwrap_or("None");
                 let prompt_message = format!("Enter the password (hint {}): ", &hint);
                 let password = prompt(prompt_message.as_str())?;
 
