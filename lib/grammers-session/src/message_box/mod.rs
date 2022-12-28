@@ -596,7 +596,7 @@ impl MessageBox {
                     );
                 }
 
-                return Some(tl::functions::updates::GetDifference {
+                let gd = tl::functions::updates::GetDifference {
                     pts: self.map[&Entry::AccountWide].pts,
                     pts_total_limit: None,
                     date: self.date,
@@ -605,7 +605,9 @@ impl MessageBox {
                     } else {
                         NO_SEQ
                     },
-                });
+                };
+                trace!("requesting {:?}", gd);
+                return Some(gd);
             }
         }
         None
@@ -787,7 +789,7 @@ impl MessageBox {
             }
             .into();
             if let Some(state) = self.map.get(&entry) {
-                Some(tl::functions::updates::GetChannelDifference {
+                let gd = tl::functions::updates::GetChannelDifference {
                     force: false,
                     channel,
                     filter: tl::enums::ChannelMessagesFilter::Empty,
@@ -797,7 +799,9 @@ impl MessageBox {
                     } else {
                         defs::USER_CHANNEL_DIFF_LIMIT
                     },
-                })
+                };
+                trace!("requesting {:?}", gd);
+                Some(gd)
             } else {
                 panic!(
                     "Should not try to get difference for an entry {:?} without known state",
@@ -933,7 +937,11 @@ impl MessageBox {
         reason: PrematureEndReason,
     ) {
         if let Some(channel_id) = channel_id(request) {
-            trace!("ending channel differene for {}", channel_id);
+            trace!(
+                "ending channel difference for {} because {:?}",
+                channel_id,
+                reason
+            );
             let entry = Entry::Channel(channel_id);
             match reason {
                 PrematureEndReason::TemporaryServerIssues => {
@@ -958,6 +966,7 @@ pub fn channel_id(request: &tl::functions::updates::GetChannelDifference) -> Opt
     }
 }
 
+#[derive(Debug)]
 pub enum PrematureEndReason {
     TemporaryServerIssues,
     Banned,
