@@ -392,7 +392,7 @@ impl MessageBox {
             date,
             seq_start,
             seq,
-            updates,
+            mut updates,
             users,
             chats,
         } = match adaptor::adapt(updates, chat_hashes) {
@@ -433,6 +433,26 @@ impl MessageBox {
             }
         }
 
+        // Telegram can send updates out of order (e.g. `ReadChannelInbox` first
+        // and then `NewChannelMessage`, both with the same `pts`, but the `count`
+        // is `0` and `1` respectively).
+        //
+        // We can't know beforehand if this would cause issues (i.e. if any of
+        // the updates is the first one we get to know about a specific channel)
+        // (other than doing a pre-scan to check if any has info about an entry
+        // we lack), so instead we sort preemptively. As a bonus there's less
+        // likelyhood of "possible gaps" by doing this.
+        // TODO give this more thought, perhaps possible gaps can't happen at all
+        //      (not ones which would be resolved by sorting anyway; same in telethon)
+        fn update_sort_key(update: &tl::enums::Update) -> i32 {
+            match PtsInfo::from_update(update) {
+                Some(pts) => pts.pts - pts.pts_count,
+                None => 0,
+            }
+        }
+
+        updates.sort_by_key(update_sort_key);
+
         result.extend(
             updates
                 .into_iter()
@@ -449,10 +469,7 @@ impl MessageBox {
                     .get_mut(&key)
                     .unwrap()
                     .updates
-                    .sort_by_key(|update| match PtsInfo::from_update(update) {
-                        Some(pts) => pts.pts - pts.pts_count,
-                        None => 0,
-                    });
+                    .sort_by_key(update_sort_key);
 
                 for _ in 0..self.possible_gaps[&key].updates.len() {
                     let update = self.possible_gaps.get_mut(&key).unwrap().updates.remove(0);
