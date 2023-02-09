@@ -198,12 +198,12 @@ impl MessageIter {
         )
     }
 
-    fn offset_id(mut self, offset: i32) -> Self {
+    pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
     }
 
-    fn max_date(mut self, offset: i32) -> Self {
+    pub fn max_date(mut self, offset: i32) -> Self {
         self.request.offset_date = offset;
         self
     }
@@ -265,7 +265,7 @@ impl SearchIter {
         )
     }
 
-    fn offset_id(mut self, offset: i32) -> Self {
+    pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
     }
@@ -383,7 +383,7 @@ impl GlobalSearchIter {
         )
     }
 
-    fn offset_id(mut self, offset: i32) -> Self {
+    pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
     }
