@@ -208,7 +208,6 @@ impl MessageIter {
         self
     }
 
-
     /// Determines how many messages there are in total.
     ///
     /// This only performs a network call if `next` has not been called before.
@@ -270,7 +269,6 @@ impl SearchIter {
         self.request.offset_id = offset;
         self
     }
-
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
     /// this query (so a word in singular may also return messages with the word in plural, for
@@ -389,7 +387,6 @@ impl GlobalSearchIter {
         self.request.offset_id = offset;
         self
     }
-
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
     /// this query (so a world in singular may also return messages with the word in plural, for
