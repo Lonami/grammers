@@ -200,14 +200,17 @@ impl MessageIter {
 
     fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
+        self
     }
 
     fn offset_date(mut self, offset: i32) -> Self {
         self.request.offset_date = offset;
+        self
     }
 
     fn add_offset(mut self, offset: i32) -> Self {
         self.request.add_offset = offset;
+        self
     }
 
     /// Determines how many messages there are in total.
@@ -265,6 +268,16 @@ impl SearchIter {
                 hash: 0,
             },
         )
+    }
+
+    fn offset_id(mut self, offset: i32) -> Self {
+        self.request.offset_id = offset;
+        self
+    }
+
+    fn add_offset(mut self, offset: i32) -> Self {
+        self.request.add_offset = offset;
+        self
     }
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
@@ -379,6 +392,17 @@ impl GlobalSearchIter {
             },
         )
     }
+
+    fn offset_id(mut self, offset: i32) -> Self {
+        self.request.offset_id = offset;
+        self
+    }
+
+    fn offset_rate(mut self, rate: i32) -> Self {
+        self.request.offset_rate = rate;
+        self
+    }
+
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
     /// this query (so a world in singular may also return messages with the word in plural, for
