@@ -198,32 +198,16 @@ impl MessageIter {
         )
     }
 
-    fn with_offset(mut self, offset: i32) -> Self {
+    fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
     }
 
-    fn with_offset_date(mut self, offset: i32) -> Self {
+    fn offset_date(mut self, offset: i32) -> Self {
         self.request.offset_date = offset;
     }
 
-    fn with_add_offset(mut self, offset: i32) -> Self {
+    fn add_offset(mut self, offset: i32) -> Self {
         self.request.add_offset = offset;
-    }
-
-    fn with_limit(mut self, limit: i32) -> Self {
-        self.request.limit = limit;
-    }
-
-    fn with_max_id(mut self, max_id: i32) -> Self {
-        self.request.max_id = max_id;
-    }
-
-    fn with_min_id(mut self, min_id: i32) -> Self {
-        self.request.min_id = min_id;
-    }
-
-    fn with_hash(mut self, hash: i64) -> Self {
-        self.request.hash = hash;
     }
 
     /// Determines how many messages there are in total.
