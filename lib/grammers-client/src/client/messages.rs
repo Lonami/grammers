@@ -389,7 +389,7 @@ impl GlobalSearchIter {
     }
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
-    /// this query (so a world in singular may also return messages with the word in plural, for
+    /// this query (so a word in singular may also return messages with the word in plural, for
     /// example).
     pub fn query(mut self, query: &str) -> Self {
         self.request.q = query.to_string();
