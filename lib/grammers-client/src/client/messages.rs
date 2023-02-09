@@ -182,7 +182,6 @@ pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
 impl MessageIter {
     fn new(client: &Client, peer: PackedChat) -> Self {
-        // TODO let users tweak all the options from the request
         Self::from_request(
             client,
             MAX_LIMIT,
@@ -197,6 +196,34 @@ impl MessageIter {
                 hash: 0,
             },
         )
+    }
+
+    fn with_offset(mut self, offset: i32) -> Self {
+        self.request.offset_id = offset;
+    }
+
+    fn with_offset_date(mut self, offset: i32) -> Self {
+        self.request.offset_date = offset;
+    }
+
+    fn with_add_offset(mut self, offset: i32) -> Self {
+        self.request.add_offset = offset;
+    }
+
+    fn with_limit(mut self, limit: i32) -> Self {
+        self.request.limit = limit;
+    }
+
+    fn with_max_id(mut self, max_id: i32) -> Self {
+        self.request.max_id = max_id;
+    }
+
+    fn with_min_id(mut self, min_id: i32) -> Self {
+        self.request.min_id = min_id;
+    }
+
+    fn with_hash(mut self, hash: i64) -> Self {
+        self.request.hash = hash;
     }
 
     /// Determines how many messages there are in total.
@@ -257,7 +284,7 @@ impl SearchIter {
     }
 
     /// Changes the query of the search. Telegram servers perform a somewhat fuzzy search over
-    /// this query (so a world in singular may also return messages with the word in plural, for
+    /// this query (so a word in singular may also return messages with the word in plural, for
     /// example).
     pub fn query(mut self, query: &str) -> Self {
         self.request.q = query.to_string();
