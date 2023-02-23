@@ -183,52 +183,18 @@ impl InputMessage {
     ///
     /// ```
     /// async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let thumb = client.upload_file("thumb.png").await?;
-    /// let video = client.upload_file("video.mp4").await?;
+    ///     use grammers_client::{InputMessage};
     ///
-    /// let message = InputMessage::text("").document_thumb(video, Some(thumb)).attribute(
-    /// Attribute::Video {
-    ///     round_message: (false),
-    ///     supports_streaming: (true),
-    ///     duration: duration,
-    ///     w: width,
-    ///     h: height,
-    /// });
-    /// # Ok(())
-    /// # }
+    ///     let video = client.upload_file("video.mp4").await?;    
+    ///     let thumb = client.upload_file("thumb.png").await?;
+    ///     let message = InputMessage::text("").document(video).thumbnail(thumb);
+    ///     Ok(())
+    /// }
     /// ```
-    pub fn document_thumb(mut self, file: Uploaded, thumb: Option<Uploaded>) -> Self {
-        let mime_type = self.get_file_mime(&file);
-        let file_name = file.name().to_string();
-        if let Some(thumb) = thumb {
-            self.media = Some(
-                (tl::types::InputMediaUploadedDocument {
-                    nosound_video: false,
-                    force_file: false,
-                    file: file.input_file,
-                    thumb: Some(thumb.input_file),
-                    mime_type,
-                    attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
-                    stickers: None,
-                    ttl_seconds: self.media_ttl,
-                })
-                .into(),
-            );
-            return self;
+    pub fn thumbnail(mut self, thumb: Uploaded) -> Self {
+        if let Some(tl::enums::InputMedia::UploadedDocument(document)) = &mut self.media {
+            document.thumb = Some(thumb.input_file);
         }
-        self.media = Some(
-            (tl::types::InputMediaUploadedDocument {
-                nosound_video: false,
-                force_file: false,
-                file: file.input_file,
-                thumb: None,
-                mime_type,
-                attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
-                stickers: None,
-                ttl_seconds: self.media_ttl,
-            })
-            .into(),
-        );
         self
     }
 
