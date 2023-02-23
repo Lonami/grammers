@@ -11,7 +11,7 @@ use grammers_tl_types as tl;
 use std::time::{SystemTime, UNIX_EPOCH};
 
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
-const SCHEDULE_ONCE_ONLINE: i32 = 0x7FFFFFFE;
+const SCHEDULE_ONCE_ONLINE: i32 = 0x7ffffffe;
 
 /// Construct and send rich text messages with various options.
 #[derive(Default)]
@@ -124,11 +124,11 @@ impl InputMessage {
     /// The text will be the caption of the photo, which may be empty for no caption.
     pub fn photo(mut self, file: Uploaded) -> Self {
         self.media = Some(
-            tl::types::InputMediaUploadedPhoto {
+            (tl::types::InputMediaUploadedPhoto {
                 file: file.input_file,
                 stickers: None,
                 ttl_seconds: self.media_ttl,
-            }
+            })
             .into(),
         );
         self
@@ -142,10 +142,10 @@ impl InputMessage {
     /// The text will be the caption of the photo, which may be empty for no caption.
     pub fn photo_url(mut self, url: impl Into<String>) -> Self {
         self.media = Some(
-            tl::types::InputMediaPhotoExternal {
+            (tl::types::InputMediaPhotoExternal {
                 url: url.into(),
                 ttl_seconds: self.media_ttl,
-            }
+            })
             .into(),
         );
         self
@@ -160,18 +160,41 @@ impl InputMessage {
         let mime_type = self.get_file_mime(&file);
         let file_name = file.name().to_string();
         self.media = Some(
-            tl::types::InputMediaUploadedDocument {
+            (tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: false,
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
+                attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
-            }
+            })
             .into(),
         );
+        self
+    }
+
+    /// Include the video file with thumb in the message.
+    ///
+    /// The text will be the caption of the document, which may be empty for no caption.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    ///     use grammers_client::{InputMessage};
+    ///
+    ///     let video = client.upload_file("video.mp4").await?;    
+    ///     let thumb = client.upload_file("thumb.png").await?;
+    ///     let message = InputMessage::text("").document(video).thumbnail(thumb);
+    ///     Ok(())
+    /// }
+    /// ```
+    pub fn thumbnail(mut self, thumb: Uploaded) -> Self {
+        if let Some(tl::enums::InputMedia::UploadedDocument(document)) = &mut self.media {
+            document.thumb = Some(thumb.input_file);
+        }
         self
     }
 
@@ -184,10 +207,10 @@ impl InputMessage {
     /// The text will be the caption of the document, which may be empty for no caption.
     pub fn document_url(mut self, url: impl Into<String>) -> Self {
         self.media = Some(
-            tl::types::InputMediaDocumentExternal {
+            (tl::types::InputMediaDocumentExternal {
                 url: url.into(),
                 ttl_seconds: self.media_ttl,
-            }
+            })
             .into(),
         );
         self
@@ -240,16 +263,16 @@ impl InputMessage {
         let mime_type = self.get_file_mime(&file);
         let file_name = file.name().to_string();
         self.media = Some(
-            tl::types::InputMediaUploadedDocument {
+            (tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: true,
                 file: file.input_file,
                 thumb: None,
                 mime_type,
-                attributes: vec![tl::types::DocumentAttributeFilename { file_name }.into()],
+                attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
-            }
+            })
             .into(),
         );
         self
