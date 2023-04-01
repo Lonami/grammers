@@ -266,7 +266,6 @@ impl PtsInfo {
             ChatParticipants(_) => None,
             UserStatus(_) => None,
             UserName(_) => None,
-            UserPhoto(_) => None,
             NewEncryptedMessage(u) => Some(Self {
                 pts: u.qts,
                 pts_count: 1,
@@ -461,6 +460,11 @@ impl PtsInfo {
             RecentReactions => None,
             MoveStickerSetToTop(_) => None,
             MessageExtendedMedia(_) => None,
+            ChannelPinnedTopic(_) => None,
+            ChannelPinnedTopics(_) => None,
+            User(_) => None,
+            AutoSaveSettings => None,
+            GroupInvitePrivacyForbidden(_) => None,
         }
     }
 }

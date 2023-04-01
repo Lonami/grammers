@@ -91,6 +91,7 @@ impl InlineQuery {
                 cache_time: 0,
                 next_offset: None,
                 switch_pm: None,
+                switch_webview: None,
             },
             client: self.client.clone(),
         }

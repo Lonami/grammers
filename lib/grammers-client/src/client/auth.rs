@@ -224,13 +224,21 @@ impl Client {
                 current_number: false,
                 allow_app_hash: false,
                 allow_missed_call: false,
+                allow_firebase: false,
                 logout_tokens: None,
+                token: None,
+                app_sandbox: None,
             }
             .into(),
         };
 
+        use tl::enums::auth::SentCode as SC;
+
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request).await {
-            Ok(x) => x.into(),
+            Ok(x) => match x {
+                SC::Code(code) => code,
+                SC::Success(_) => panic!("should not have logged in yet"),
+            },
             Err(InvocationError::Rpc(err)) if err.is("PHONE_MIGRATE") => {
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
@@ -243,7 +251,10 @@ impl Client {
                 *self.0.sender.lock("client.request_login_code").await = sender;
                 *self.0.request_tx.lock("client.request_login_code") = request_tx;
                 *self.0.dc_id.lock("client.request_login_code") = dc_id;
-                self.invoke(&request).await?.into()
+                match self.invoke(&request).await? {
+                    SC::Code(code) => code,
+                    SC::Success(_) => panic!("should not have logged in yet"),
+                }
             }
             Err(e) => return Err(e.into()),
         };

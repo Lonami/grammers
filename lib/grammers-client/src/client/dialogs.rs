@@ -248,6 +248,7 @@ impl Client {
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {
             peer: chat.into().to_input_peer(),
+            top_msg_id: None,
         })
         .await
         .map(drop)

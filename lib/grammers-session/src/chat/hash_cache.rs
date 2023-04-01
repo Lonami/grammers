@@ -181,7 +181,6 @@ impl ChatHashCache {
                 },
                 U::UserStatus(u) => self.has(u.user_id),
                 U::UserName(u) => self.has(u.user_id),
-                U::UserPhoto(u) => self.has(u.user_id),
                 U::NewEncryptedMessage(_) => true,
                 U::EncryptedChatTyping(_) => true,
                 U::Encryption(_) => true,
@@ -191,6 +190,7 @@ impl ChatHashCache {
                 U::DcOptions(_) => true,
                 U::NotifySettings(u) => match &u.peer {
                     tl::enums::NotifyPeer::Peer(n) => self.has_peer(&n.peer),
+                    tl::enums::NotifyPeer::NotifyForumTopic(n) => self.has_peer(&n.peer),
                     tl::enums::NotifyPeer::NotifyUsers
                     | tl::enums::NotifyPeer::NotifyChats
                     | tl::enums::NotifyPeer::NotifyBroadcasts => true,
@@ -350,6 +350,11 @@ impl ChatHashCache {
                 U::RecentReactions => true,
                 U::MoveStickerSetToTop(_) => true,
                 U::MessageExtendedMedia(u) => self.has_peer(&u.peer),
+                U::ChannelPinnedTopic(u) => self.has(u.channel_id),
+                U::ChannelPinnedTopics(u) => self.has(u.channel_id),
+                U::User(u) => self.has(u.user_id),
+                U::AutoSaveSettings => true,
+                U::GroupInvitePrivacyForbidden(u) => self.has(u.user_id),
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
@@ -520,6 +525,10 @@ impl ChatHashCache {
                         MA::WebViewDataSentMe(_) => true,
                         MA::WebViewDataSent(_) => true,
                         MA::GiftPremium(_) => true,
+                        MA::TopicCreate(_) => true,
+                        MA::TopicEdit(_) => true,
+                        MA::SuggestProfilePhoto(_) => true,
+                        MA::RequestedPeer(c) => self.has_peer(&c.peer),
                     }
             }
         }

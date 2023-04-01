@@ -140,6 +140,7 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
         resize: false,
         single_use: false,
         selective: false,
+        persistent: false,
         rows: buttons
             .into()
             .into_iter()

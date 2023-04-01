@@ -35,6 +35,7 @@ impl InlineResult {
                 hide_via: false,
                 peer: chat.into().to_input_peer(),
                 reply_to_msg_id: None,
+                top_msg_id: None,
                 random_id: generate_random_id(),
                 query_id: self.query_id,
                 id: self.id().to_string(),

@@ -61,6 +61,7 @@ impl Channel {
                         gigagroup: false,
                         noforwards: false,
                         join_request: false,
+                        forum: false,
                         join_to_send: false,
                         id: channel.id,
                         access_hash: Some(channel.access_hash),
@@ -73,6 +74,7 @@ impl Channel {
                         banned_rights: None,
                         default_banned_rights: None,
                         participants_count: None,
+                        usernames: None,
                     })
                 } else {
                     panic!("tried to create broadcast channel from megagroup");

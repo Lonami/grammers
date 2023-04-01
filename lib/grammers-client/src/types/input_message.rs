@@ -125,6 +125,7 @@ impl InputMessage {
     pub fn photo(mut self, file: Uploaded) -> Self {
         self.media = Some(
             (tl::types::InputMediaUploadedPhoto {
+                spoiler: false,
                 file: file.input_file,
                 stickers: None,
                 ttl_seconds: self.media_ttl,
@@ -143,6 +144,7 @@ impl InputMessage {
     pub fn photo_url(mut self, url: impl Into<String>) -> Self {
         self.media = Some(
             (tl::types::InputMediaPhotoExternal {
+                spoiler: false,
                 url: url.into(),
                 ttl_seconds: self.media_ttl,
             })
@@ -163,6 +165,7 @@ impl InputMessage {
             (tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: false,
+                spoiler: false,
                 file: file.input_file,
                 thumb: None,
                 mime_type,
@@ -185,7 +188,7 @@ impl InputMessage {
     /// async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     ///     use grammers_client::{InputMessage};
     ///
-    ///     let video = client.upload_file("video.mp4").await?;    
+    ///     let video = client.upload_file("video.mp4").await?;
     ///     let thumb = client.upload_file("thumb.png").await?;
     ///     let message = InputMessage::text("").document(video).thumbnail(thumb);
     ///     Ok(())
@@ -208,6 +211,7 @@ impl InputMessage {
     pub fn document_url(mut self, url: impl Into<String>) -> Self {
         self.media = Some(
             (tl::types::InputMediaDocumentExternal {
+                spoiler: false,
                 url: url.into(),
                 ttl_seconds: self.media_ttl,
             })
@@ -266,6 +270,7 @@ impl InputMessage {
             (tl::types::InputMediaUploadedDocument {
                 nosound_video: false,
                 force_file: true,
+                spoiler: false,
                 file: file.input_file,
                 thumb: None,
                 mime_type,

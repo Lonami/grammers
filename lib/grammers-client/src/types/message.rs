@@ -122,6 +122,7 @@ impl Message {
                 reply_to: input.reply_to.map(|reply_to_msg_id| {
                     tl::types::MessageReplyHeader {
                         reply_to_scheduled: false,
+                        forum_topic: false,
                         reply_to_msg_id,
                         reply_to_peer_id: None,
                         reply_to_top_id: None,

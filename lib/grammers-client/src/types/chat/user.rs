@@ -105,6 +105,7 @@ impl User {
                 bot_inline_placeholder: None,
                 lang_code: None,
                 emoji_status: None,
+                usernames: None,
             },
             tl::enums::User::User(user) => user,
         })

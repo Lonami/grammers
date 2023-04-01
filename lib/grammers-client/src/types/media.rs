@@ -60,6 +60,7 @@ impl Photo {
     pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
         Self {
             photo: tl::types::MessageMediaPhoto {
+                spoiler: false,
                 photo: Some(photo),
                 ttl_seconds: None,
             },
@@ -99,6 +100,7 @@ impl Photo {
         };
 
         tl::types::InputMediaPhoto {
+            spoiler: false,
             id: match self.photo.photo {
                 Some(Photo::Photo(ref photo)) => InputPhoto {
                     id: photo.id,
@@ -179,6 +181,7 @@ impl Document {
         };
 
         tl::types::InputMediaDocument {
+            spoiler: false,
             id: match self.document.document {
                 Some(Document::Document(ref document)) => InputDocument {
                     id: document.id,

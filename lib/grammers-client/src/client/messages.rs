@@ -478,6 +478,7 @@ impl Client {
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
                 reply_to_msg_id: message.reply_to,
+                top_msg_id: None,
                 media,
                 message: message.text.clone(),
                 random_id,
@@ -497,6 +498,7 @@ impl Client {
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
                 reply_to_msg_id: message.reply_to,
+                top_msg_id: None,
                 message: message.text.clone(),
                 random_id,
                 reply_markup: message.reply_markup.clone(),
@@ -656,6 +658,7 @@ impl Client {
             id: message_ids.to_vec(),
             random_id: generate_random_ids(message_ids.len()),
             to_peer: destination.into().to_input_peer(),
+            top_msg_id: None,
             schedule_date: None,
             send_as: None,
             noforwards: false,
@@ -981,6 +984,7 @@ impl Client {
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UnpinAllMessages {
             peer: chat.into().to_input_peer(),
+            top_msg_id: None,
         })
         .await?;
         Ok(())

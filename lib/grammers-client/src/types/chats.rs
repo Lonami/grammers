@@ -130,6 +130,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                     add_admins: false,
                     manage_call: false,
                     other: false,
+                    manage_topics: false,
                 },
             }),
             gen,
@@ -198,6 +199,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         anonymous: false,
                         manage_call: true,
                         other: true,
+                        manage_topics: true,
                     };
                     break;
                 }
@@ -399,6 +401,14 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
                     change_info: false,
                     invite_users: false,
                     pin_messages: false,
+                    manage_topics: false,
+                    send_photos: false,
+                    send_videos: false,
+                    send_roundvideos: false,
+                    send_audios: false,
+                    send_voices: false,
+                    send_docs: false,
+                    send_plain: false,
                     until_date: 0,
                 },
             }),

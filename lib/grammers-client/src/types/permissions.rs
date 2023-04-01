@@ -28,6 +28,7 @@ impl Permissions {
             anonymous: true,
             manage_call: true,
             other: true,
+            manage_topics: true,
         })
     }
 
