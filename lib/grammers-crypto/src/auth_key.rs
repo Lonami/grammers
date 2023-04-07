@@ -67,7 +67,7 @@ impl AuthKey {
         };
 
         let mut result = [0u8; 16];
-        result.copy_from_slice(&Sha1::from(&data).digest().bytes()[4..]);
+        result.copy_from_slice(&Sha1::from(data).digest().bytes()[4..]);
         result
     }
 }
