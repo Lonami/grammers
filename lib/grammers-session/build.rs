@@ -29,7 +29,6 @@ fn main() -> std::io::Result<()> {
         session flags:# dcs:Vector<DataCenter> user:flags.0?User state:flags.1?UpdateState = Session;
         "#,
     )
-    .into_iter()
     .map(Result::unwrap)
     .collect::<Vec<_>>();
 
