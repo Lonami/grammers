@@ -82,7 +82,6 @@ fn main() -> std::io::Result<()> {
             methods: Vec::new(),
         };
         parse_tl_file(&tl)
-            .into_iter()
             .filter_map(Result::ok)
             .for_each(|def| match def.category {
                 tl::Category::Types => schema.constructors.push(Constructor {
