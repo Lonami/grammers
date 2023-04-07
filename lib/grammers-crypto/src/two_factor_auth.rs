@@ -150,7 +150,7 @@ fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Output<Sha256> {
 
 // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
 fn ph1(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256> {
-    sh(&sh(password, salt1), salt2)
+    sh(sh(password, salt1), salt2)
 }
 
 // PH2(password, salt1, salt2)
