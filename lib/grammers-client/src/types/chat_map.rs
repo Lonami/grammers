@@ -66,7 +66,7 @@ impl ChatMap {
     }
 
     /// Retrieve the full `Chat` object given its `Peer`.
-    pub fn get<'a, 'b>(&'a self, peer: &'b tl::enums::Peer) -> Option<&'a Chat> {
+    pub fn get(&self, peer: &tl::enums::Peer) -> Option<&Chat> {
         self.map.get(&peer.into())
     }
 
