@@ -33,6 +33,7 @@ pub(crate) fn remove_tl_comments(contents: &str) -> String {
 
 /// Infers the identifier for a definition.
 pub(crate) fn infer_id(definition: &str) -> u32 {
+    #[allow(clippy::collapsible_str_replace)]
     let mut representation = definition
         .replace(":bytes ", ": string")
         .replace("?bytes ", "? string")
