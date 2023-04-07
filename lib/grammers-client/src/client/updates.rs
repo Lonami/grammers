@@ -56,6 +56,7 @@ impl Client {
                 let mut message_box = self.0.message_box.lock("client.next_update");
                 // This temporary is needed or message_box's lifetime is extended too much.
                 // See https://github.com/rust-lang/rust/issues/102423.
+                #[allow(clippy::let_and_return)]
                 let diff = message_box.get_difference();
                 diff
             } {
@@ -72,6 +73,7 @@ impl Client {
             if let Some(request) = {
                 let mut message_box = self.0.message_box.lock("client.next_update");
                 let chat_hashes = self.0.chat_hashes.lock("client.next_update");
+                #[allow(clippy::let_and_return)]
                 let diff = message_box.get_channel_difference(&chat_hashes);
                 diff
             } {
