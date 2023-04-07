@@ -263,7 +263,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -280,7 +280,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -296,7 +296,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -312,7 +312,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
