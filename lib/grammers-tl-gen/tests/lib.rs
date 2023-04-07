@@ -14,7 +14,6 @@ const LAYER: i32 = 0;
 
 fn get_definitions(contents: &str) -> Vec<Definition> {
     parse_tl_file(contents)
-        .into_iter()
         .map(|d| d.unwrap())
         .collect()
 }
