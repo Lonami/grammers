@@ -162,7 +162,7 @@ fn ph2(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256>
     let mut dk = [0u8; 64];
     pbkdf2::pbkdf2::<Hmac<Sha512>>(&hash1, salt1, 100000, &mut dk);
 
-    sh(&dk, salt2)
+    sh(dk, salt2)
 }
 
 fn xor(left: &Output<Sha256>, right: &Output<Sha256>) -> Vec<u8> {
