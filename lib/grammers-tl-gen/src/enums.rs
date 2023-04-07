@@ -403,7 +403,7 @@ pub(crate) fn write_enums_mod<W: Write>(
             "    "
         };
 
-        for ty in grouped[key].iter().filter(|ty| !ignore_type(*ty)) {
+        for ty in grouped[key].iter().filter(|ty| !ignore_type(ty)) {
             write_definition(&mut file, indent, ty, metadata, config)?;
         }
 
