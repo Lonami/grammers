@@ -65,7 +65,7 @@ impl DownloadIter {
     /// the range `MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE`.
     pub fn chunk_size(mut self, size: i32) -> Self {
         assert!((MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&size) && size % MIN_CHUNK_SIZE == 0);
-        self.request.limit = size as i32;
+        self.request.limit = size;
         self
     }
 
