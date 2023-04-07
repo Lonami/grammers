@@ -21,7 +21,6 @@ fn load_tl(file: &str) -> io::Result<Vec<Definition>> {
     let mut contents = String::new();
     file.read_to_string(&mut contents)?;
     Ok(parse_tl_file(&contents)
-        .into_iter()
         .filter_map(|d| match d {
             Ok(d) => Some(d),
             Err(e) => {
