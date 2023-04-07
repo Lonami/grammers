@@ -655,7 +655,7 @@ impl MessageBox {
             }
             tl::enums::updates::Difference::Difference(diff) => {
                 // TODO return Err(attempt to find users)
-                drop(chat_hashes.extend(&diff.users, &diff.chats));
+                let _ = chat_hashes.extend(&diff.users, &diff.chats);
 
                 debug!(
                     "handling full difference {:?}; no longer getting diff",
@@ -673,7 +673,7 @@ impl MessageBox {
                 intermediate_state: state,
             }) => {
                 // TODO return Err(attempt to find users)
-                drop(chat_hashes.extend(&users, &chats));
+                let _ = chat_hashes.extend(&users, &chats);
 
                 debug!("handling partial difference {:?}", state);
                 finish = false;
@@ -872,7 +872,7 @@ impl MessageBox {
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
                 // TODO return Err(attempt to find users)
-                drop(chat_hashes.extend(&diff.users, &diff.chats));
+                let _ = chat_hashes.extend(&diff.users, &diff.chats);
 
                 assert!(diff.r#final);
                 info!(
@@ -908,7 +908,7 @@ impl MessageBox {
                 },
             ) => {
                 // TODO return Err(attempt to find users)
-                drop(chat_hashes.extend(&users, &chats));
+                let _ = chat_hashes.extend(&users, &chats);
 
                 if r#final {
                     debug!(

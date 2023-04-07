@@ -157,7 +157,7 @@ impl Chat {
     // (Obtaining the non-min hash may require locking so it's desirable to check first, and also
     // to avoid double work to update it later, but it may not be possible to update it if the hash
     // is missing).
-    pub(crate) fn get_min_hash_ref<'a>(&'a mut self) -> Option<(&'a mut bool, &'a mut i64)> {
+    pub(crate) fn get_min_hash_ref(&mut self) -> Option<(&mut bool, &mut i64)> {
         match self {
             Self::User(user) => match (&mut user.0.min, user.0.access_hash.as_mut()) {
                 (m @ true, Some(ah)) => Some((m, ah)),

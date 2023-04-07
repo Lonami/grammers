@@ -263,7 +263,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -280,7 +280,7 @@ impl Document {
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -291,12 +291,13 @@ impl Document {
         match self.document.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
+                    #[allow(clippy::single_match)]
                     match attr {
                         tl::enums::DocumentAttribute::Audio(a) => return a.title.clone(),
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }
@@ -307,12 +308,13 @@ impl Document {
         match self.document.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
+                    #[allow(clippy::single_match)]
                     match attr {
                         tl::enums::DocumentAttribute::Audio(a) => return a.performer.clone(),
                         _ => {}
                     }
                 }
-                return None;
+                None
             }
             _ => None,
         }

@@ -386,7 +386,7 @@ fn do_step3(
 
             let new_nonce_hash = {
                 let mut buffer = [0; 16];
-                buffer.copy_from_slice(&Sha1::from(&new_nonce).digest().bytes()[4..20]);
+                buffer.copy_from_slice(&Sha1::from(new_nonce).digest().bytes()[4..20]);
                 buffer
             };
             check_new_nonce_hash(&server_dh_params.new_nonce_hash, &new_nonce_hash)?;
