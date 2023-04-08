@@ -1160,7 +1160,7 @@ impl Mtp for Encrypted {
                 let now = start_secs + start_instant.elapsed().as_secs() as i32;
                 if now >= salt.valid_since + SALT_USE_DELAY {
                     self.salts.pop();
-                    if self.salts.len() <= 1 {
+                    if self.salts.len() == 1 {
                         info!("only one future salt remaining; asking for more salts");
                         let body = tl::functions::GetFutureSalts {
                             num: NUM_FUTURE_SALTS,
