@@ -175,6 +175,12 @@ impl User {
         self.0.username.as_deref()
     }
 
+    /// Return the phone number of this user, if they are not a bot and their privacy settings
+    /// allow you to see it.
+    pub fn phone(&self) -> Option<&str> {
+        self.0.phone.as_deref()
+    }
+
     /// Does this user represent the account that's currently logged in?
     pub fn is_self(&self) -> bool {
         // TODO if is_self is false, check in chat cache if id == ourself
