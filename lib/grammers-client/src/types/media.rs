@@ -56,6 +56,20 @@ pub enum Media {
     Poll(Poll),
 }
 
+#[cfg(feature = "unstable_raw")]
+#[derive(Clone, Debug, PartialEq)]
+#[non_exhaustive]
+pub enum RawMedia {
+    RawPhoto(tl::types::MessageMediaPhoto),
+    RawDocument(tl::types::MessageMediaDocument),
+    RawSticker(
+        tl::types::MessageMediaDocument,
+        tl::types::DocumentAttributeSticker,
+    ),
+    RawContact(tl::types::MessageMediaContact),
+    RawPoll(tl::types::Poll, tl::types::PollResults),
+}
+
 impl Photo {
     pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
         Self {
@@ -518,6 +532,19 @@ impl Media {
             Media::Sticker(sticker) => sticker.document.to_input_location(),
             Media::Contact(_) => None,
             Media::Poll(_) => None,
+        }
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> RawMedia {
+        match self {
+            Media::Photo(photo) => RawMedia::RawPhoto(photo.photo.clone()),
+            Media::Document(document) => RawMedia::RawDocument(document.document.clone()),
+            Media::Sticker(sticker) => {
+                RawMedia::RawSticker(sticker.document.document.clone(), sticker.attrs.clone())
+            }
+            Media::Contact(contact) => RawMedia::RawContact(contact.contact.clone()),
+            Media::Poll(poll) => RawMedia::RawPoll(poll.poll.clone(), poll.results.clone()),
         }
     }
 }

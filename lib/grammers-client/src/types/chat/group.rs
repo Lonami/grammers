@@ -18,7 +18,7 @@ use std::fmt;
 /// join more of them. Certain actions in official clients, like setting a chat's username,
 /// silently upgrade the chat to a megagroup.
 #[derive(Clone)]
-pub struct Group(tl::enums::Chat);
+pub struct Group(pub(crate) tl::enums::Chat);
 
 impl fmt::Debug for Group {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

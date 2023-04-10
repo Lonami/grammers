@@ -538,6 +538,11 @@ impl Message {
 
         None
     }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> (tl::types::Message, Option<tl::enums::MessageAction>) {
+        (self.msg.clone(), self.action.clone())
+    }
 }
 
 impl fmt::Debug for Message {

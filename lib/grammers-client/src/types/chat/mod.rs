@@ -36,6 +36,14 @@ pub enum Chat {
     Channel(Channel),
 }
 
+#[cfg(feature = "unstable_raw")]
+#[derive(Clone, Debug)]
+pub enum RawChat {
+    User(tl::types::User),
+    Group(tl::enums::Chat),
+    Channel(tl::types::Channel),
+}
+
 impl Chat {
     pub(crate) fn from_user(user: tl::enums::User) -> Self {
         Self::User(User::from_raw(user))
@@ -169,6 +177,15 @@ impl Chat {
                 (m @ true, Some(ah)) => Some((m, ah)),
                 _ => None,
             },
+        }
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> RawChat {
+        match self {
+            Chat::User(user) => RawChat::User(user.0.clone()),
+            Chat::Group(group) => RawChat::Group(group.0.clone()),
+            Chat::Channel(channel) => RawChat::Channel(channel.0.clone()),
         }
     }
 }

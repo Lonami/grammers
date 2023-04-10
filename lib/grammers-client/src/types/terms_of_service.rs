@@ -37,4 +37,9 @@ impl TermsOfService {
     pub fn minimum_age(&self) -> Option<i32> {
         self.0.min_age_confirm
     }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> tl::types::help::TermsOfService {
+        self.0.clone()
+    }
 }
