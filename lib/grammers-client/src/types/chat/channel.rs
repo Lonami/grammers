@@ -115,6 +115,11 @@ impl Channel {
     pub fn username(&self) -> Option<&str> {
         self.0.username.as_deref()
     }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> &tl::types::Channel {
+        &self.0
+    }
 }
 
 impl From<Channel> for PackedChat {
