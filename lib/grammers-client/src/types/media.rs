@@ -150,6 +150,11 @@ impl Photo {
                 .collect(),
         }
     }
+
+    /// Returns true if the photo is a spoiler.
+    pub fn is_spoiler(&self) -> bool {
+        self.photo.spoiler
+    }
 }
 
 impl Document {
@@ -318,6 +323,28 @@ impl Document {
             }
             _ => None,
         }
+    }
+
+    /// Returns true if the document is an animated sticker
+    pub fn is_animated(&self) -> bool {
+        match self.document.document.as_ref() {
+            Some(tl::enums::Document::Document(d)) => {
+                for attr in &d.attributes {
+                    #[allow(clippy::single_match)]
+                    match attr {
+                        tl::enums::DocumentAttribute::Animated => return true,
+                        _ => {}
+                    }
+                }
+                false
+            }
+            _ => false,
+        }
+    }
+
+    /// Returns true if the document is a spoiler
+    pub fn is_spoiler(&self) -> bool {
+        self.document.spoiler
     }
 }
 
