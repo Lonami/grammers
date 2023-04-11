@@ -29,7 +29,8 @@ impl fmt::Debug for Group {
 // TODO it might be desirable to manually merge all the properties of the chat to avoid endless matching
 
 impl Group {
-    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
+    /// THIS IS EVIL DON'T USE THIS IF YOU CAN
+    pub fn from_raw(chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
