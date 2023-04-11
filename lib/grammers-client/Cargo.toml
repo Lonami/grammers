@@ -18,6 +18,7 @@ markdown = ["pulldown-cmark"]
 html = ["html5ever"]
 proxy = ["grammers-mtsender/proxy"]
 parse_invite_link = ["url"]
+unstable_raw = []
 
 [dependencies]
 chrono = "0.4.19"
@@ -26,7 +27,9 @@ grammers-crypto = { path = "../grammers-crypto", version = "0.4.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.4.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.4.0" }
 grammers-session = { path = "../grammers-session", version = "0.4.1" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.4.0", features = ["tl-mtproto"] }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.4.0", features = [
+    "tl-mtproto",
+] }
 html5ever = { version = "0.25.1", optional = true }
 locate-locale = "0.2.0"
 log = "0.4.14"
@@ -35,10 +38,19 @@ mime_guess = "2.0.3"
 os_info = { version = "3.0.4", default_features = false }
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.8.0", default-features = false, optional = true }
-tokio = { version = "1.5.0", features = ["sync", "fs", "macros", "time", "sync", "rt"] }
-url = {version = "2.2.2", optional = true}
+tokio = { version = "1.5.0", features = [
+    "sync",
+    "fs",
+    "macros",
+    "time",
+    "sync",
+    "rt",
+] }
+url = { version = "2.2.2", optional = true }
 
 [dev-dependencies]
-simple_logger = { version = "1.11.0", default-features = false, features = ["colors"] }
+simple_logger = { version = "1.11.0", default-features = false, features = [
+    "colors",
+] }
 tokio = { version = "1.5.0", features = ["rt", "signal"] }
 toml = "0.5.8"
