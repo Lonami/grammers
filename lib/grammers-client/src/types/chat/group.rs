@@ -131,6 +131,11 @@ impl Group {
             C::Channel(_) | C::ChannelForbidden(_) => true,
         }
     }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn as_raw(&self) -> &tl::enums::Chat {
+        &self.0
+    }
 }
 
 impl From<Group> for PackedChat {
