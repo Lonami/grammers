@@ -260,7 +260,7 @@ impl Client {
         sender: &AsyncMutex<Sender<Full, Encrypted>>,
         notifier: &Notify,
     ) -> Result<R::Return, InvocationError> {
-        let mut slept_flood = false;
+        let mut slept_flood = 0;
         let sleep_thresh = self.0.config.params.flood_sleep_threshold.unwrap_or(0);
 
         let mut rx = enqueuer.lock("invoke").enqueue(request);
@@ -273,8 +273,8 @@ impl Client {
                         code: 420,
                         value: Some(seconds),
                         ..
-                    })) if !slept_flood && seconds <= sleep_thresh => {
-                        let delay = std::time::Duration::from_secs(seconds as _);
+                    })) if slept_flood < 5 && seconds <= sleep_thresh => {
+                        let delay = std::time::Duration::from_secs((seconds + 1).into());
                         info!(
                             "sleeping on {} for {:?} before retrying {}",
                             name,
@@ -282,7 +282,7 @@ impl Client {
                             std::any::type_name::<R>()
                         );
                         tokio::time::sleep(delay).await;
-                        slept_flood = true;
+                        slept_flood += 1;
                         rx = enqueuer.lock("invoke").enqueue(request);
                         continue;
                     }
