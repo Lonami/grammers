@@ -48,7 +48,7 @@ pub struct Poll {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Geo {
-    geo: tl::types::MessageMediaGeo,
+    geo: tl::types::GeoPoint,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -58,13 +58,13 @@ pub struct Dice {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Venue {
-    pub geo: Geo,
+    pub geo: Option<Geo>,
     venue: tl::types::MessageMediaVenue,
 }
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeoLive {
-    pub geo: Geo,
+    pub geo: Option<Geo>,
     geolive: tl::types::MessageMediaGeoLive,
 }
 
@@ -513,67 +513,51 @@ impl Poll {
 }
 
 impl Geo {
-    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Self {
-        Self { geo }
+    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        use tl::enums::GeoPoint as eGeoPoint;
+
+        match &geo.geo {
+            eGeoPoint::Empty => None,
+            eGeoPoint::Point(point) => Some(Self { geo: point.clone() }),
+        }
     }
 
     pub(crate) fn to_input_media(&self) -> tl::types::InputMediaGeoPoint {
-        use tl::{
-            enums::{GeoPoint, InputGeoPoint as eInputGeoPoint},
-            types::InputGeoPoint,
-        };
+        use tl::types::InputGeoPoint;
 
         tl::types::InputMediaGeoPoint {
-            geo_point: match self.geo.geo {
-                GeoPoint::Point(ref point) => InputGeoPoint {
-                    lat: point.lat,
-                    long: point.long,
-                    accuracy_radius: point.accuracy_radius,
-                }
-                .into(),
-                _ => eInputGeoPoint::Empty,
-            },
+            geo_point: InputGeoPoint {
+                lat: self.geo.lat,
+                long: self.geo.long,
+                accuracy_radius: self.geo.accuracy_radius,
+            }
+            .into(),
         }
     }
 
     pub(crate) fn to_input_geo_point(&self) -> tl::enums::InputGeoPoint {
-        use tl::{
-            enums::{GeoPoint as eGeoPoint, InputGeoPoint as eInputGeoPoint},
-            types::InputGeoPoint,
-        };
+        use tl::{enums::InputGeoPoint as eInputGeoPoint, types::InputGeoPoint};
 
-        match &self.geo.geo {
-            eGeoPoint::Empty => eInputGeoPoint::Empty,
-            eGeoPoint::Point(point) => eInputGeoPoint::Point(InputGeoPoint {
-                lat: point.lat,
-                long: point.long,
-                accuracy_radius: point.accuracy_radius,
-            }),
-        }
+        eInputGeoPoint::Point(InputGeoPoint {
+            lat: self.geo.lat,
+            long: self.geo.long,
+            accuracy_radius: self.geo.accuracy_radius,
+        })
     }
 
     /// Get the latitude of the location.
-    pub fn latitue(&self) -> Option<f64> {
-        match self.geo.geo {
-            tl::enums::GeoPoint::Point(ref point) => Some(point.lat),
-            tl::enums::GeoPoint::Empty => None,
-        }
+    pub fn latitue(&self) -> f64 {
+        self.geo.lat
     }
 
     /// Get the latitude of the location.
-    pub fn longitude(&self) -> Option<f64> {
-        match self.geo.geo {
-            tl::enums::GeoPoint::Point(ref point) => Some(point.long),
-            tl::enums::GeoPoint::Empty => None,
-        }
+    pub fn longitude(&self) -> f64 {
+        self.geo.long
     }
 
     /// Get the accuracy of the geo location in meters.
     pub fn accuracy_radius(&self) -> Option<i32> {
-        match self.geo.geo {
-            tl::enums::GeoPoint::Point(ref point) => point.accuracy_radius,
-            tl::enums::GeoPoint::Empty => None,
-        }
+        self.geo.accuracy_radius
     }
 }
 
@@ -601,8 +585,9 @@ impl Dice {
 
 impl Venue {
     pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        use tl::types::MessageMediaGeo;
         Self {
-            geo: Geo::from_media(tl::types::MessageMediaGeo {
+            geo: Geo::from_media(MessageMediaGeo {
                 geo: venue.geo.clone(),
             }),
             venue,
@@ -611,7 +596,10 @@ impl Venue {
 
     fn to_input_media(&self) -> tl::types::InputMediaVenue {
         tl::types::InputMediaVenue {
-            geo_point: self.geo.to_input_geo_point(),
+            geo_point: match self.geo {
+                Some(ref geo) => geo.to_input_geo_point(),
+                None => tl::enums::InputGeoPoint::Empty,
+            },
             title: self.venue.title.clone(),
             address: self.venue.address.clone(),
             provider: self.venue.provider.clone(),
@@ -648,8 +636,9 @@ impl Venue {
 
 impl GeoLive {
     pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        use tl::types::MessageMediaGeo;
         Self {
-            geo: Geo::from_media(tl::types::MessageMediaGeo {
+            geo: Geo::from_media(MessageMediaGeo {
                 geo: geolive.geo.clone(),
             }),
             geolive,
@@ -658,7 +647,10 @@ impl GeoLive {
 
     fn to_input_media(&self) -> tl::types::InputMediaGeoLive {
         tl::types::InputMediaGeoLive {
-            geo_point: self.geo.to_input_geo_point(),
+            geo_point: match self.geo {
+                Some(ref geo) => geo.to_input_geo_point(),
+                None => tl::enums::InputGeoPoint::Empty,
+            },
             heading: self.geolive.heading,
             period: Some(self.geolive.period),
             proximity_notification_radius: self.geolive.proximity_notification_radius,
@@ -703,7 +695,7 @@ impl Media {
         match media {
             M::Empty => None,
             M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
-            M::Geo(geo) => Some(Self::Geo(Geo::from_media(geo))),
+            M::Geo(geo) => Geo::from_media(geo).map(Self::Geo),
             M::Contact(contact) => Some(Self::Contact(Contact::from_media(contact))),
             M::Unsupported => None,
             M::Document(document) => {
