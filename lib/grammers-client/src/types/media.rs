@@ -63,6 +63,12 @@ pub struct Venue {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct GeoLive {
+    pub geo: Geo,
+    geolive: tl::types::MessageMediaGeoLive,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
@@ -73,6 +79,7 @@ pub enum Media {
     Geo(Geo),
     Dice(Dice),
     Venue(Venue),
+    GeoLive(GeoLive),
 }
 
 impl Photo {
@@ -639,6 +646,42 @@ impl Venue {
     }
 }
 
+impl GeoLive {
+    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        Self {
+            geo: Geo::from_media(tl::types::MessageMediaGeo {
+                geo: geolive.geo.clone(),
+            }),
+            geolive,
+        }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaGeoLive {
+        tl::types::InputMediaGeoLive {
+            geo_point: self.geo.to_input_geo_point(),
+            heading: self.geolive.heading,
+            period: Some(self.geolive.period),
+            proximity_notification_radius: self.geolive.proximity_notification_radius,
+            stopped: false,
+        }
+    }
+
+    /// Get the heading of the live location in degress (1-360).
+    pub fn heading(&self) -> Option<i32> {
+        self.geolive.heading
+    }
+
+    /// Get the validity period of the live location.
+    pub fn period(&self) -> i32 {
+        self.geolive.period
+    }
+
+    /// Get the radius of the proximity alert.
+    pub fn proximity_notification_radius(&self) -> Option<i32> {
+        self.geolive.proximity_notification_radius
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -675,7 +718,7 @@ impl Media {
             M::Venue(venue) => Some(Self::Venue(Venue::from_media(venue))),
             M::Game(_) => None,
             M::Invoice(_) => None,
-            M::GeoLive(_) => None,
+            M::GeoLive(geolive) => Some(Self::GeoLive(GeoLive::from_media(geolive))),
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
             M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
         }
@@ -691,6 +734,7 @@ impl Media {
             Media::Geo(geo) => geo.to_input_media().into(),
             Media::Dice(dice) => dice.to_input_media().into(),
             Media::Venue(venue) => venue.to_input_media().into(),
+            Media::GeoLive(geolive) => geolive.to_input_media().into(),
         }
     }
 
@@ -704,6 +748,7 @@ impl Media {
             Media::Geo(_) => None,
             Media::Dice(_) => None,
             Media::Venue(_) => None,
+            Media::GeoLive(_) => None,
         }
     }
 }
