@@ -57,6 +57,12 @@ pub struct Dice {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Venue {
+    pub geo: Geo,
+    venue: tl::types::MessageMediaVenue,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
@@ -66,6 +72,7 @@ pub enum Media {
     Poll(Poll),
     Geo(Geo),
     Dice(Dice),
+    Venue(Venue),
 }
 
 impl Photo {
@@ -522,6 +529,22 @@ impl Geo {
         }
     }
 
+    pub(crate) fn to_input_geo_point(&self) -> tl::enums::InputGeoPoint {
+        use tl::{
+            enums::{GeoPoint as eGeoPoint, InputGeoPoint as eInputGeoPoint},
+            types::InputGeoPoint,
+        };
+
+        match &self.geo.geo {
+            eGeoPoint::Empty => eInputGeoPoint::Empty,
+            eGeoPoint::Point(point) => eInputGeoPoint::Point(InputGeoPoint {
+                lat: point.lat,
+                long: point.long,
+                accuracy_radius: point.accuracy_radius,
+            }),
+        }
+    }
+
     /// Get the latitude of the location.
     pub fn latitue(&self) -> Option<f64> {
         match self.geo.geo {
@@ -569,6 +592,53 @@ impl Dice {
     }
 }
 
+impl Venue {
+    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        Self {
+            geo: Geo::from_media(tl::types::MessageMediaGeo {
+                geo: venue.geo.clone(),
+            }),
+            venue,
+        }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaVenue {
+        tl::types::InputMediaVenue {
+            geo_point: self.geo.to_input_geo_point(),
+            title: self.venue.title.clone(),
+            address: self.venue.address.clone(),
+            provider: self.venue.provider.clone(),
+            venue_id: self.venue.venue_id.clone(),
+            venue_type: self.venue.venue_type.clone(),
+        }
+    }
+
+    /// Get the title of the venue.
+    pub fn title(&self) -> &str {
+        &self.venue.title
+    }
+
+    /// Get the address of the venue.
+    pub fn address(&self) -> &str {
+        &self.venue.address
+    }
+
+    /// Get the provider of the venue location.
+    pub fn provider(&self) -> &str {
+        &self.venue.provider
+    }
+
+    /// Get the id of the venue.
+    pub fn venue_id(&self) -> &str {
+        &self.venue.venue_id
+    }
+
+    /// Get the type of the venue.
+    pub fn venue_type(&self) -> &str {
+        &self.venue.venue_type
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -602,7 +672,7 @@ impl Media {
                 })
             }
             M::WebPage(_) => None,
-            M::Venue(_) => None,
+            M::Venue(venue) => Some(Self::Venue(Venue::from_media(venue))),
             M::Game(_) => None,
             M::Invoice(_) => None,
             M::GeoLive(_) => None,
@@ -620,6 +690,7 @@ impl Media {
             Media::Poll(poll) => poll.to_input_media().into(),
             Media::Geo(geo) => geo.to_input_media().into(),
             Media::Dice(dice) => dice.to_input_media().into(),
+            Media::Venue(venue) => venue.to_input_media().into(),
         }
     }
 
@@ -632,6 +703,7 @@ impl Media {
             Media::Poll(_) => None,
             Media::Geo(_) => None,
             Media::Dice(_) => None,
+            Media::Venue(_) => None,
         }
     }
 }
