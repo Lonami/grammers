@@ -275,11 +275,6 @@ impl User {
     pub fn lang_code(&self) -> Option<&str> {
         self.0.lang_code.as_deref()
     }
-
-    #[cfg(feature = "unstable_raw")]
-    pub fn as_raw(&self) -> &tl::types::User {
-        &self.0
-    }
 }
 
 impl From<User> for PackedChat {
@@ -291,5 +286,12 @@ impl From<User> for PackedChat {
 impl From<&User> for PackedChat {
     fn from(chat: &User) -> Self {
         chat.pack()
+    }
+}
+
+#[cfg(feature = "unstable_raw")]
+impl From<User> for tl::types::User {
+    fn from(user: User) -> Self {
+        user.0
     }
 }
