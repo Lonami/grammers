@@ -47,6 +47,11 @@ pub struct Poll {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Geo {
+    geo: tl::types::MessageMediaGeo,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
@@ -54,6 +59,7 @@ pub enum Media {
     Sticker(Sticker),
     Contact(Contact),
     Poll(Poll),
+    Geo(Geo),
 }
 
 impl Photo {
@@ -486,6 +492,55 @@ impl Poll {
     }
 }
 
+impl Geo {
+    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Self {
+        Self { geo }
+    }
+
+    pub(crate) fn to_input_media(&self) -> tl::types::InputMediaGeoPoint {
+        use tl::{
+            enums::{GeoPoint, InputGeoPoint as eInputGeoPoint},
+            types::InputGeoPoint,
+        };
+
+        tl::types::InputMediaGeoPoint {
+            geo_point: match self.geo.geo {
+                GeoPoint::Point(ref point) => InputGeoPoint {
+                    lat: point.lat,
+                    long: point.long,
+                    accuracy_radius: point.accuracy_radius,
+                }
+                .into(),
+                _ => eInputGeoPoint::Empty,
+            },
+        }
+    }
+
+    /// Get the latitude of the location.
+    pub fn latitue(&self) -> Option<f64> {
+        match self.geo.geo {
+            tl::enums::GeoPoint::Point(ref point) => Some(point.lat),
+            tl::enums::GeoPoint::Empty => None,
+        }
+    }
+
+    /// Get the latitude of the location.
+    pub fn longitude(&self) -> Option<f64> {
+        match self.geo.geo {
+            tl::enums::GeoPoint::Point(ref point) => Some(point.long),
+            tl::enums::GeoPoint::Empty => None,
+        }
+    }
+
+    /// Get the accuracy of the geo location in meters.
+    pub fn accuracy_radius(&self) -> Option<i32> {
+        match self.geo.geo {
+            tl::enums::GeoPoint::Point(ref point) => point.accuracy_radius,
+            tl::enums::GeoPoint::Empty => None,
+        }
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -507,7 +562,7 @@ impl Media {
         match media {
             M::Empty => None,
             M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
-            M::Geo(_) => None,
+            M::Geo(geo) => Some(Self::Geo(Geo::from_media(geo))),
             M::Contact(contact) => Some(Self::Contact(Contact::from_media(contact))),
             M::Unsupported => None,
             M::Document(document) => {
@@ -535,6 +590,7 @@ impl Media {
             Media::Sticker(sticker) => sticker.document.to_input_media().into(),
             Media::Contact(contact) => contact.to_input_media().into(),
             Media::Poll(poll) => poll.to_input_media().into(),
+            Media::Geo(geo) => geo.to_input_media().into(),
         }
     }
 
@@ -545,6 +601,7 @@ impl Media {
             Media::Sticker(sticker) => sticker.document.to_input_location(),
             Media::Contact(_) => None,
             Media::Poll(_) => None,
+            Media::Geo(_) => None,
         }
     }
 }
