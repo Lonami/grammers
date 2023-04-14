@@ -52,6 +52,11 @@ pub struct Geo {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Dice {
+    dice: tl::types::MessageMediaDice,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
@@ -60,6 +65,7 @@ pub enum Media {
     Contact(Contact),
     Poll(Poll),
     Geo(Geo),
+    Dice(Dice),
 }
 
 impl Photo {
@@ -541,6 +547,28 @@ impl Geo {
     }
 }
 
+impl Dice {
+    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self { dice }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaDice {
+        tl::types::InputMediaDice {
+            emoticon: self.dice.emoticon.clone(),
+        }
+    }
+
+    /// Get the emoji of the dice.
+    pub fn emoji(&self) -> &str {
+        &self.dice.emoticon
+    }
+
+    /// Get the value of the dice.
+    pub fn value(&self) -> i32 {
+        self.dice.value
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -579,7 +607,7 @@ impl Media {
             M::Invoice(_) => None,
             M::GeoLive(_) => None,
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
-            M::Dice(_) => None,
+            M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
         }
     }
 
@@ -591,6 +619,7 @@ impl Media {
             Media::Contact(contact) => contact.to_input_media().into(),
             Media::Poll(poll) => poll.to_input_media().into(),
             Media::Geo(geo) => geo.to_input_media().into(),
+            Media::Dice(dice) => dice.to_input_media().into(),
         }
     }
 
@@ -602,6 +631,7 @@ impl Media {
             Media::Contact(_) => None,
             Media::Poll(_) => None,
             Media::Geo(_) => None,
+            Media::Dice(_) => None,
         }
     }
 }
