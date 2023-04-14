@@ -750,3 +750,30 @@ impl From<Photo> for Media {
         Self::Photo(photo)
     }
 }
+
+#[cfg(feature = "unstable_raw")]
+impl From<Media> for tl::enums::MessageMedia {
+    fn from(media: Media) -> Self {
+        use tl::enums::GeoPoint as eGeoPoint;
+        use tl::types::{MessageMediaGeo, MessageMediaPoll};
+
+        match media {
+            Media::Photo(photo) => photo.photo.into(),
+            Media::Document(document) => document.document.into(),
+            Media::Sticker(sticker) => sticker.document.document.into(),
+            Media::Contact(contact) => contact.contact.into(),
+            Media::Poll(Poll { poll, results }) => MessageMediaPoll {
+                poll: poll.into(),
+                results: results.into(),
+            }
+            .into(),
+            Media::Geo(geo) => MessageMediaGeo {
+                geo: eGeoPoint::Point(geo.geo),
+            }
+            .into(),
+            Media::Dice(dice) => dice.dice.into(),
+            Media::Venue(venue) => venue.venue.into(),
+            Media::GeoLive(geolive) => geolive.geolive.into(),
+        }
+    }
+}
