@@ -111,7 +111,7 @@ impl User {
         })
     }
 
-    /// return user status
+    /// Return the user presence status (also known as "last seen").
     pub fn status(&self) -> &grammers_tl_types::enums::UserStatus {
         self.0
             .status
