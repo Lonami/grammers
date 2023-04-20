@@ -632,8 +632,18 @@ impl Geo {
 }
 
 impl Dice {
-    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+    fn _from_media(dice: tl::types::MessageMediaDice) -> Self {
         Self { dice }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self::_from_media(dice)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self::_from_media(dice)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaDice {
