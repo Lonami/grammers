@@ -405,7 +405,7 @@ impl Document {
 }
 
 impl Sticker {
-    pub(crate) fn from_document(document: &Document) -> Option<Self> {
+    fn _from_document(document: &Document) -> Option<Self> {
         match document.document.document {
             Some(tl::enums::Document::Document(ref doc)) => {
                 let mut animated = false;
@@ -425,6 +425,16 @@ impl Sticker {
             }
             _ => None,
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_document(document: &Document) -> Option<Self> {
+        Self::_from_document(document)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_document(document: &Document) -> Option<Self> {
+        Self::_from_document(document)
     }
 
     /// Get the emoji associated with the sticker.
