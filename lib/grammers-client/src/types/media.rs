@@ -725,7 +725,7 @@ impl Venue {
 }
 
 impl GeoLive {
-    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+    fn _from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
         use tl::types::MessageMediaGeo;
         Self {
             geo: Geo::from_media(MessageMediaGeo {
@@ -733,6 +733,16 @@ impl GeoLive {
             }),
             geolive,
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        Self::_from_media(geolive)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        Self::_from_media(geolive)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaGeoLive {
