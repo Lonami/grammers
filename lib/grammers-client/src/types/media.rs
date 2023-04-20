@@ -573,13 +573,23 @@ impl Poll {
 }
 
 impl Geo {
-    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+    fn _from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
         use tl::enums::GeoPoint as eGeoPoint;
 
         match &geo.geo {
             eGeoPoint::Empty => None,
             eGeoPoint::Point(point) => Some(Self { geo: point.clone() }),
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        Self::_from_media(geo)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        Self::_from_media(geo)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::types::InputMediaGeoPoint {
