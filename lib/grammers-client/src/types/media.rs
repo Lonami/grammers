@@ -449,8 +449,18 @@ impl Sticker {
 }
 
 impl Contact {
-    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+    fn _from_media(contact: tl::types::MessageMediaContact) -> Self {
         Self { contact }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self::_from_media(contact)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self::_from_media(contact)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::types::InputMediaContact {
