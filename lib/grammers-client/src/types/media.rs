@@ -83,7 +83,7 @@ pub enum Media {
 }
 
 impl Photo {
-    pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+    fn _from_raw(photo: tl::enums::Photo, client: Client) -> Self {
         Self {
             photo: tl::types::MessageMediaPhoto {
                 spoiler: false,
@@ -94,8 +94,28 @@ impl Photo {
         }
     }
 
-    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+        Self::_from_raw(photo, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+        Self::_from_raw(photo, client)
+    }
+
+    fn _from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
         Self { photo, client }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+        Self::_from_media(photo, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+        Self::_from_media(photo, client)
     }
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
