@@ -204,8 +204,18 @@ impl Photo {
 }
 
 impl Document {
-    pub(crate) fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+    fn _from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
         Self { document, client }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+        Self::_from_media(document, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+        Self::_from_media(document, client)
     }
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
