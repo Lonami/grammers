@@ -131,11 +131,6 @@ impl Group {
             C::Channel(_) | C::ChannelForbidden(_) => true,
         }
     }
-
-    #[cfg(feature = "unstable_raw")]
-    pub fn as_raw(&self) -> &tl::enums::Chat {
-        &self.0
-    }
 }
 
 impl From<Group> for PackedChat {
@@ -147,5 +142,12 @@ impl From<Group> for PackedChat {
 impl From<&Group> for PackedChat {
     fn from(chat: &Group) -> Self {
         chat.pack()
+    }
+}
+
+#[cfg(feature = "unstable_raw")]
+impl From<Group> for tl::enums::Chat {
+    fn from(group: Group) -> Self {
+        group.0
     }
 }

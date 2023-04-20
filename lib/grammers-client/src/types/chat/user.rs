@@ -69,7 +69,7 @@ impl fmt::Debug for User {
     }
 }
 
-// TODO: photo, status
+// TODO: photo
 impl User {
     pub(crate) fn from_raw(user: tl::enums::User) -> Self {
         Self(match user {
@@ -109,6 +109,14 @@ impl User {
             },
             tl::enums::User::User(user) => user,
         })
+    }
+
+    /// Return the user presence status (also known as "last seen").
+    pub fn status(&self) -> &grammers_tl_types::enums::UserStatus {
+        self.0
+            .status
+            .as_ref()
+            .unwrap_or(&grammers_tl_types::enums::UserStatus::Empty)
     }
 
     /// Return the unique identifier for this user.
@@ -275,11 +283,6 @@ impl User {
     pub fn lang_code(&self) -> Option<&str> {
         self.0.lang_code.as_deref()
     }
-
-    #[cfg(feature = "unstable_raw")]
-    pub fn as_raw(&self) -> &tl::types::User {
-        &self.0
-    }
 }
 
 impl From<User> for PackedChat {
@@ -291,5 +294,12 @@ impl From<User> for PackedChat {
 impl From<&User> for PackedChat {
     fn from(chat: &User) -> Self {
         chat.pack()
+    }
+}
+
+#[cfg(feature = "unstable_raw")]
+impl From<User> for tl::types::User {
+    fn from(user: User) -> Self {
+        user.0
     }
 }

@@ -47,6 +47,28 @@ pub struct Poll {
 }
 
 #[derive(Clone, Debug, PartialEq)]
+pub struct Geo {
+    geo: tl::types::GeoPoint,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Dice {
+    dice: tl::types::MessageMediaDice,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct Venue {
+    pub geo: Option<Geo>,
+    venue: tl::types::MessageMediaVenue,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct GeoLive {
+    pub geo: Option<Geo>,
+    geolive: tl::types::MessageMediaGeoLive,
+}
+
+#[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
     Photo(Photo),
@@ -54,6 +76,10 @@ pub enum Media {
     Sticker(Sticker),
     Contact(Contact),
     Poll(Poll),
+    Geo(Geo),
+    Dice(Dice),
+    Venue(Venue),
+    GeoLive(GeoLive),
 }
 
 impl Photo {
@@ -486,6 +512,168 @@ impl Poll {
     }
 }
 
+impl Geo {
+    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        use tl::enums::GeoPoint as eGeoPoint;
+
+        match &geo.geo {
+            eGeoPoint::Empty => None,
+            eGeoPoint::Point(point) => Some(Self { geo: point.clone() }),
+        }
+    }
+
+    pub(crate) fn to_input_media(&self) -> tl::types::InputMediaGeoPoint {
+        use tl::types::InputGeoPoint;
+
+        tl::types::InputMediaGeoPoint {
+            geo_point: InputGeoPoint {
+                lat: self.geo.lat,
+                long: self.geo.long,
+                accuracy_radius: self.geo.accuracy_radius,
+            }
+            .into(),
+        }
+    }
+
+    pub(crate) fn to_input_geo_point(&self) -> tl::enums::InputGeoPoint {
+        use tl::{enums::InputGeoPoint as eInputGeoPoint, types::InputGeoPoint};
+
+        eInputGeoPoint::Point(InputGeoPoint {
+            lat: self.geo.lat,
+            long: self.geo.long,
+            accuracy_radius: self.geo.accuracy_radius,
+        })
+    }
+
+    /// Get the latitude of the location.
+    pub fn latitue(&self) -> f64 {
+        self.geo.lat
+    }
+
+    /// Get the latitude of the location.
+    pub fn longitude(&self) -> f64 {
+        self.geo.long
+    }
+
+    /// Get the accuracy of the geo location in meters.
+    pub fn accuracy_radius(&self) -> Option<i32> {
+        self.geo.accuracy_radius
+    }
+}
+
+impl Dice {
+    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self { dice }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaDice {
+        tl::types::InputMediaDice {
+            emoticon: self.dice.emoticon.clone(),
+        }
+    }
+
+    /// Get the emoji of the dice.
+    pub fn emoji(&self) -> &str {
+        &self.dice.emoticon
+    }
+
+    /// Get the value of the dice.
+    pub fn value(&self) -> i32 {
+        self.dice.value
+    }
+}
+
+impl Venue {
+    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        use tl::types::MessageMediaGeo;
+        Self {
+            geo: Geo::from_media(MessageMediaGeo {
+                geo: venue.geo.clone(),
+            }),
+            venue,
+        }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaVenue {
+        tl::types::InputMediaVenue {
+            geo_point: match self.geo {
+                Some(ref geo) => geo.to_input_geo_point(),
+                None => tl::enums::InputGeoPoint::Empty,
+            },
+            title: self.venue.title.clone(),
+            address: self.venue.address.clone(),
+            provider: self.venue.provider.clone(),
+            venue_id: self.venue.venue_id.clone(),
+            venue_type: self.venue.venue_type.clone(),
+        }
+    }
+
+    /// Get the title of the venue.
+    pub fn title(&self) -> &str {
+        &self.venue.title
+    }
+
+    /// Get the address of the venue.
+    pub fn address(&self) -> &str {
+        &self.venue.address
+    }
+
+    /// Get the provider of the venue location.
+    pub fn provider(&self) -> &str {
+        &self.venue.provider
+    }
+
+    /// Get the id of the venue.
+    pub fn venue_id(&self) -> &str {
+        &self.venue.venue_id
+    }
+
+    /// Get the type of the venue.
+    pub fn venue_type(&self) -> &str {
+        &self.venue.venue_type
+    }
+}
+
+impl GeoLive {
+    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        use tl::types::MessageMediaGeo;
+        Self {
+            geo: Geo::from_media(MessageMediaGeo {
+                geo: geolive.geo.clone(),
+            }),
+            geolive,
+        }
+    }
+
+    fn to_input_media(&self) -> tl::types::InputMediaGeoLive {
+        tl::types::InputMediaGeoLive {
+            geo_point: match self.geo {
+                Some(ref geo) => geo.to_input_geo_point(),
+                None => tl::enums::InputGeoPoint::Empty,
+            },
+            heading: self.geolive.heading,
+            period: Some(self.geolive.period),
+            proximity_notification_radius: self.geolive.proximity_notification_radius,
+            stopped: false,
+        }
+    }
+
+    /// Get the heading of the live location in degress (1-360).
+    pub fn heading(&self) -> Option<i32> {
+        self.geolive.heading
+    }
+
+    /// Get the validity period of the live location.
+    pub fn period(&self) -> i32 {
+        self.geolive.period
+    }
+
+    /// Get the radius of the proximity alert.
+    pub fn proximity_notification_radius(&self) -> Option<i32> {
+        self.geolive.proximity_notification_radius
+    }
+}
+
 impl Uploaded {
     pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
@@ -507,7 +695,7 @@ impl Media {
         match media {
             M::Empty => None,
             M::Photo(photo) => Some(Self::Photo(Photo::from_media(photo, client))),
-            M::Geo(_) => None,
+            M::Geo(geo) => Geo::from_media(geo).map(Self::Geo),
             M::Contact(contact) => Some(Self::Contact(Contact::from_media(contact))),
             M::Unsupported => None,
             M::Document(document) => {
@@ -519,12 +707,12 @@ impl Media {
                 })
             }
             M::WebPage(_) => None,
-            M::Venue(_) => None,
+            M::Venue(venue) => Some(Self::Venue(Venue::from_media(venue))),
             M::Game(_) => None,
             M::Invoice(_) => None,
-            M::GeoLive(_) => None,
+            M::GeoLive(geolive) => Some(Self::GeoLive(GeoLive::from_media(geolive))),
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
-            M::Dice(_) => None,
+            M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
         }
     }
 
@@ -535,6 +723,10 @@ impl Media {
             Media::Sticker(sticker) => sticker.document.to_input_media().into(),
             Media::Contact(contact) => contact.to_input_media().into(),
             Media::Poll(poll) => poll.to_input_media().into(),
+            Media::Geo(geo) => geo.to_input_media().into(),
+            Media::Dice(dice) => dice.to_input_media().into(),
+            Media::Venue(venue) => venue.to_input_media().into(),
+            Media::GeoLive(geolive) => geolive.to_input_media().into(),
         }
     }
 
@@ -545,6 +737,10 @@ impl Media {
             Media::Sticker(sticker) => sticker.document.to_input_location(),
             Media::Contact(_) => None,
             Media::Poll(_) => None,
+            Media::Geo(_) => None,
+            Media::Dice(_) => None,
+            Media::Venue(_) => None,
+            Media::GeoLive(_) => None,
         }
     }
 }
@@ -552,5 +748,32 @@ impl Media {
 impl From<Photo> for Media {
     fn from(photo: Photo) -> Self {
         Self::Photo(photo)
+    }
+}
+
+#[cfg(feature = "unstable_raw")]
+impl From<Media> for tl::enums::MessageMedia {
+    fn from(media: Media) -> Self {
+        use tl::enums::GeoPoint as eGeoPoint;
+        use tl::types::{MessageMediaGeo, MessageMediaPoll};
+
+        match media {
+            Media::Photo(photo) => photo.photo.into(),
+            Media::Document(document) => document.document.into(),
+            Media::Sticker(sticker) => sticker.document.document.into(),
+            Media::Contact(contact) => contact.contact.into(),
+            Media::Poll(Poll { poll, results }) => MessageMediaPoll {
+                poll: poll.into(),
+                results: results.into(),
+            }
+            .into(),
+            Media::Geo(geo) => MessageMediaGeo {
+                geo: eGeoPoint::Point(geo.geo),
+            }
+            .into(),
+            Media::Dice(dice) => dice.dice.into(),
+            Media::Venue(venue) => venue.venue.into(),
+            Media::GeoLive(geolive) => geolive.geolive.into(),
+        }
     }
 }
