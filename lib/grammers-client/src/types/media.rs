@@ -664,7 +664,7 @@ impl Dice {
 }
 
 impl Venue {
-    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+    fn _from_media(venue: tl::types::MessageMediaVenue) -> Self {
         use tl::types::MessageMediaGeo;
         Self {
             geo: Geo::from_media(MessageMediaGeo {
@@ -672,6 +672,16 @@ impl Venue {
             }),
             venue,
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        Self::_from_media(venue)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        Self::_from_media(venue)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaVenue {
