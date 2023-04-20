@@ -775,8 +775,18 @@ impl GeoLive {
 }
 
 impl Uploaded {
-    pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
+    fn _from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
+        Self::_from_raw(input_file)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(input_file: tl::enums::InputFile) -> Self {
+        Self::_from_raw(input_file)
     }
 
     pub(crate) fn name(&self) -> &str {
