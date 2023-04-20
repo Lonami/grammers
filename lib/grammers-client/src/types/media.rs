@@ -798,7 +798,7 @@ impl Uploaded {
 }
 
 impl Media {
-    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+    fn _from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
         use tl::enums::MessageMedia as M;
 
         // TODO implement the rest
@@ -824,6 +824,16 @@ impl Media {
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
             M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+        Self::_from_raw(media, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+        Self::_from_raw(media, client)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::enums::InputMedia {
