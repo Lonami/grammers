@@ -500,7 +500,7 @@ impl Contact {
 }
 
 impl Poll {
-    pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+    fn _from_media(poll: tl::types::MessageMediaPoll) -> Self {
         Self {
             poll: match poll.poll {
                 tl::enums::Poll::Poll(poll) => poll,
@@ -509,6 +509,16 @@ impl Poll {
                 tl::enums::PollResults::Results(results) => results,
             },
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+        Self::_from_media(poll)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+        Self::_from_media(poll)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaPoll {
