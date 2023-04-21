@@ -65,7 +65,7 @@ pub struct InitParams {
     /// mode wait errors (inclusive). For instance, if an
     /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
     /// and `flood_sleep_threshold` is 20 (seconds), the library will `sleep` automatically for
-    /// 17 seconds. If the error was for 21s, it would propagate the error instead instead.
+    /// 17 seconds. If the error was for 21s, it would propagate the error instead.
     ///
     /// By default, the library will sleep on flood-waits below or equal to one minute (60
     /// seconds), but this can be disabled by passing `None`.
