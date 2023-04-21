@@ -83,7 +83,7 @@ pub enum Media {
 }
 
 impl Photo {
-    pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+    fn _from_raw(photo: tl::enums::Photo, client: Client) -> Self {
         Self {
             photo: tl::types::MessageMediaPhoto {
                 spoiler: false,
@@ -94,8 +94,28 @@ impl Photo {
         }
     }
 
-    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+        Self::_from_raw(photo, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(photo: tl::enums::Photo, client: Client) -> Self {
+        Self::_from_raw(photo, client)
+    }
+
+    fn _from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
         Self { photo, client }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+        Self::_from_media(photo, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(photo: tl::types::MessageMediaPhoto, client: Client) -> Self {
+        Self::_from_media(photo, client)
     }
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
@@ -184,8 +204,18 @@ impl Photo {
 }
 
 impl Document {
-    pub(crate) fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+    fn _from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
         Self { document, client }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+        Self::_from_media(document, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(document: tl::types::MessageMediaDocument, client: Client) -> Self {
+        Self::_from_media(document, client)
     }
 
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
@@ -375,7 +405,7 @@ impl Document {
 }
 
 impl Sticker {
-    pub(crate) fn from_document(document: &Document) -> Option<Self> {
+    fn _from_document(document: &Document) -> Option<Self> {
         match document.document.document {
             Some(tl::enums::Document::Document(ref doc)) => {
                 let mut animated = false;
@@ -397,6 +427,16 @@ impl Sticker {
         }
     }
 
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_document(document: &Document) -> Option<Self> {
+        Self::_from_document(document)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_document(document: &Document) -> Option<Self> {
+        Self::_from_document(document)
+    }
+
     /// Get the emoji associated with the sticker.
     pub fn emoji(&self) -> &str {
         self.attrs.alt.as_str()
@@ -409,8 +449,18 @@ impl Sticker {
 }
 
 impl Contact {
-    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+    fn _from_media(contact: tl::types::MessageMediaContact) -> Self {
         Self { contact }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self::_from_media(contact)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(contact: tl::types::MessageMediaContact) -> Self {
+        Self::_from_media(contact)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::types::InputMediaContact {
@@ -450,7 +500,7 @@ impl Contact {
 }
 
 impl Poll {
-    pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+    fn _from_media(poll: tl::types::MessageMediaPoll) -> Self {
         Self {
             poll: match poll.poll {
                 tl::enums::Poll::Poll(poll) => poll,
@@ -459,6 +509,16 @@ impl Poll {
                 tl::enums::PollResults::Results(results) => results,
             },
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+        Self::_from_media(poll)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(poll: tl::types::MessageMediaPoll) -> Self {
+        Self::_from_media(poll)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaPoll {
@@ -513,13 +573,23 @@ impl Poll {
 }
 
 impl Geo {
-    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+    fn _from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
         use tl::enums::GeoPoint as eGeoPoint;
 
         match &geo.geo {
             eGeoPoint::Empty => None,
             eGeoPoint::Point(point) => Some(Self { geo: point.clone() }),
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        Self::_from_media(geo)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(geo: tl::types::MessageMediaGeo) -> Option<Self> {
+        Self::_from_media(geo)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::types::InputMediaGeoPoint {
@@ -562,8 +632,18 @@ impl Geo {
 }
 
 impl Dice {
-    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+    fn _from_media(dice: tl::types::MessageMediaDice) -> Self {
         Self { dice }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self::_from_media(dice)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(dice: tl::types::MessageMediaDice) -> Self {
+        Self::_from_media(dice)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaDice {
@@ -584,7 +664,7 @@ impl Dice {
 }
 
 impl Venue {
-    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+    fn _from_media(venue: tl::types::MessageMediaVenue) -> Self {
         use tl::types::MessageMediaGeo;
         Self {
             geo: Geo::from_media(MessageMediaGeo {
@@ -592,6 +672,16 @@ impl Venue {
             }),
             venue,
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        Self::_from_media(venue)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(venue: tl::types::MessageMediaVenue) -> Self {
+        Self::_from_media(venue)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaVenue {
@@ -635,7 +725,7 @@ impl Venue {
 }
 
 impl GeoLive {
-    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+    fn _from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
         use tl::types::MessageMediaGeo;
         Self {
             geo: Geo::from_media(MessageMediaGeo {
@@ -643,6 +733,16 @@ impl GeoLive {
             }),
             geolive,
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        Self::_from_media(geolive)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_media(geolive: tl::types::MessageMediaGeoLive) -> Self {
+        Self::_from_media(geolive)
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaGeoLive {
@@ -675,8 +775,18 @@ impl GeoLive {
 }
 
 impl Uploaded {
-    pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
+    fn _from_raw(input_file: tl::enums::InputFile) -> Self {
         Self { input_file }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(input_file: tl::enums::InputFile) -> Self {
+        Self::_from_raw(input_file)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(input_file: tl::enums::InputFile) -> Self {
+        Self::_from_raw(input_file)
     }
 
     pub(crate) fn name(&self) -> &str {
@@ -688,7 +798,7 @@ impl Uploaded {
 }
 
 impl Media {
-    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+    fn _from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
         use tl::enums::MessageMedia as M;
 
         // TODO implement the rest
@@ -714,6 +824,16 @@ impl Media {
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
             M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
         }
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+        Self::_from_raw(media, client)
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(media: tl::enums::MessageMedia, client: Client) -> Option<Self> {
+        Self::_from_raw(media, client)
     }
 
     pub(crate) fn to_input_media(&self) -> tl::enums::InputMedia {

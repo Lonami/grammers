@@ -71,7 +71,7 @@ impl fmt::Debug for User {
 
 // TODO: photo
 impl User {
-    pub(crate) fn from_raw(user: tl::enums::User) -> Self {
+    fn _from_raw(user: tl::enums::User) -> Self {
         Self(match user {
             tl::enums::User::Empty(empty) => tl::types::User {
                 is_self: false,
@@ -109,6 +109,16 @@ impl User {
             },
             tl::enums::User::User(user) => user,
         })
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(user: tl::enums::User) -> Self {
+        Self::_from_raw(user)
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(user: tl::enums::User) -> Self {
+        Self::_from_raw(user)
     }
 
     /// Return the user presence status (also known as "last seen").
