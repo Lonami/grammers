@@ -7,7 +7,7 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
-#[derive(Debug, Clone)]
+#[derive(Clone, Debug)]
 pub struct PasswordToken {
     pub(crate) password: tl::types::account::Password,
 }
