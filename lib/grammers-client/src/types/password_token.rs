@@ -7,7 +7,8 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
-#[derive(Debug)]
+// TODO this should not be Clone, but check_password Err doesn't include it back yet
+#[derive(Clone, Debug)]
 pub struct PasswordToken {
     pub(crate) password: tl::types::account::Password,
 }
