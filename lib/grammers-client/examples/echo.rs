@@ -11,12 +11,12 @@
 //! ```
 
 use futures_util::future::{select, Either};
-use futures_util::pin_mut;
 use grammers_client::{Client, Config, InitParams, Update};
 use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;
+use std::pin::pin;
 use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -78,11 +78,8 @@ async fn async_main() -> Result {
     // so a manual `select` is used instead by pinning async blocks by hand.
     loop {
         let update = {
-            let exit = async { tokio::signal::ctrl_c().await };
-            pin_mut!(exit);
-
-            let upd = async { client.next_update().await };
-            pin_mut!(upd);
+            let exit = pin!(async { tokio::signal::ctrl_c().await });
+            let upd = pin!(async { client.next_update().await });
 
             match select(exit, upd).await {
                 Either::Left(_) => None,

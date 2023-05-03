@@ -11,12 +11,12 @@
 use super::Client;
 use crate::types::{ChatMap, Update};
 use futures_util::future::{select, Either};
-use futures_util::pin_mut;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::warn;
+use std::pin::pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep_until;
@@ -152,11 +152,8 @@ impl Client {
             };
 
             let step = {
-                let sleep = async { sleep_until(deadline.into()).await };
-                pin_mut!(sleep);
-
-                let step = async { self.step().await };
-                pin_mut!(step);
+                let sleep = pin!(async { sleep_until(deadline.into()).await });
+                let step = pin!(async { self.step().await });
 
                 match select(sleep, step).await {
                     Either::Left(_) => None,

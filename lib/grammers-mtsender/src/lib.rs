@@ -10,13 +10,13 @@ mod errors;
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures_util::future::{pending, select, Either};
-use futures_util::pin_mut;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
+use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 use tl::Serializable;
@@ -349,23 +349,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         let sel = {
-            let sleep = async { sleep_until(self.next_ping).await };
-            pin_mut!(sleep);
-
-            let recv_req = async { self.request_rx.recv().await };
-            pin_mut!(recv_req);
-
-            let recv_data = async { reader.read_buf(&mut self.read_buffer).await };
-            pin_mut!(recv_data);
-
-            let send_data = async {
+            let sleep = pin!(async { sleep_until(self.next_ping).await });
+            let recv_req = pin!(async { self.request_rx.recv().await });
+            let recv_data = pin!(async { reader.read_buf(&mut self.read_buffer).await });
+            let send_data = pin!(async {
                 if self.write_buffer.is_empty() {
                     pending().await
                 } else {
                     writer.write(&self.write_buffer[self.write_index..]).await
                 }
-            };
-            pin_mut!(send_data);
+            });
 
             match select(select(sleep, recv_req), select(recv_data, send_data)).await {
                 Either::Left((Either::Left(_), _)) => Sel::Sleep,
