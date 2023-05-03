@@ -10,6 +10,8 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
+use futures_util::future::{select, Either};
+use futures_util::pin_mut;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
@@ -148,14 +150,22 @@ impl Client {
 
                 message_box.check_deadlines()
             };
-            tokio::select! {
-                step = self.step() => {
-                    log::trace!("stepped");
-                    step?
+
+            let step = {
+                let sleep = async { sleep_until(deadline.into()).await };
+                pin_mut!(sleep);
+
+                let step = async { self.step().await };
+                pin_mut!(step);
+
+                match select(sleep, step).await {
+                    Either::Left(_) => None,
+                    Either::Right((step, _)) => Some(step),
                 }
-                _ = sleep_until(deadline.into()) => {
-                    log::trace!("slept")
-                }
+            };
+
+            if let Some(step) = step {
+                step?;
             }
         }
     }

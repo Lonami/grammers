@@ -132,11 +132,6 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-
-    // This code uses `select!` on Ctrl+C to gracefully stop the client and have a chance to
-    // save the session. You could have fancier logic to save the session if you wanted to
-    // (or even save it on every update). Or you could also ignore Ctrl+C and just use
-    // `while let Some(updates) =  client.next_updates().await?`.
     while let Some(update) = client.next_update().await? {
         let handle = client.clone();
         task::spawn(async move {

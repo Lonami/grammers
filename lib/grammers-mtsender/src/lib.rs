@@ -9,6 +9,8 @@ mod errors;
 
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
+use futures_util::future::{select, Either};
+use futures_util::pin_mut;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
@@ -336,37 +338,87 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             //
             // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
             trace!("reading bytes from the network");
-            tokio::select!(
-                request = self.request_rx.recv() => {
-                    self.requests.push(request.unwrap());
-                    Ok(Vec::new())
-                },
-                n = reader.read_buf(&mut self.read_buffer) => {
-                    self.on_net_read(n?)
-                },
-                _ = sleep_until(self.next_ping) => {
+
+            enum Sel {
+                Sleep,
+                Request(Option<Request>),
+                Read(io::Result<usize>),
+            }
+
+            let sel = {
+                let sleep = async { sleep_until(self.next_ping).await };
+                pin_mut!(sleep);
+
+                let recv_req = async { self.request_rx.recv().await };
+                pin_mut!(recv_req);
+
+                let recv_data = async { reader.read_buf(&mut self.read_buffer).await };
+                pin_mut!(recv_data);
+
+                match select(sleep, select(recv_req, recv_data)).await {
+                    Either::Left(_) => Sel::Sleep,
+                    Either::Right((Either::Left((request, _)), _)) => Sel::Request(request),
+                    Either::Right((Either::Right((n, _)), _)) => Sel::Read(n),
+                }
+            };
+
+            match sel {
+                Sel::Sleep => {
                     self.on_ping_timeout();
                     Ok(Vec::new())
                 }
-            )
+                Sel::Request(request) => {
+                    self.requests.push(request.unwrap());
+                    Ok(Vec::new())
+                }
+                Sel::Read(n) => self.on_net_read(n?),
+            }
         } else {
             trace!(
                 "reading bytes and sending up to {} bytes via network",
                 write_len
             );
-            tokio::select! {
-                request = self.request_rx.recv() => {
+
+            enum Sel {
+                Sleep,
+                Request(Option<Request>),
+                Read(io::Result<usize>),
+                Write(io::Result<usize>),
+            }
+
+            let sel = {
+                let sleep = async { sleep_until(self.next_ping).await };
+                pin_mut!(sleep);
+
+                let recv_req = async { self.request_rx.recv().await };
+                pin_mut!(recv_req);
+
+                let recv_data = async { reader.read_buf(&mut self.read_buffer).await };
+                pin_mut!(recv_data);
+
+                let send_data =
+                    async { writer.write(&self.write_buffer[self.write_index..]).await };
+                pin_mut!(send_data);
+
+                match select(select(sleep, recv_req), select(recv_data, send_data)).await {
+                    Either::Left((Either::Left(_), _)) => Sel::Sleep,
+                    Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
+                    Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
+                    Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
+                }
+            };
+
+            match sel {
+                Sel::Request(request) => {
                     self.requests.push(request.unwrap());
                     Ok(Vec::new())
-                },
-                n = reader.read_buf(&mut self.read_buffer) => {
-                    self.on_net_read(n?)
                 }
-                n = writer.write(&self.write_buffer[self.write_index..]) => {
+                Sel::Read(n) => self.on_net_read(n?),
+                Sel::Write(n) => {
                     self.on_net_write(n?);
                     Ok(Vec::new())
                 }
-                _ = sleep_until(self.next_ping) => {
+                Sel::Sleep => {
                     self.on_ping_timeout();
                     Ok(Vec::new())
                 }
