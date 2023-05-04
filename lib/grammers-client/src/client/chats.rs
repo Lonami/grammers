@@ -210,6 +210,17 @@ impl ParticipantIter {
             Self::Channel(iter) => Ok(iter.pop_item()),
         }
     }
+
+    /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
+    pub fn filter(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
+        match self {
+            ParticipantIter::Channel(ref mut c) => {
+                c.request.filter = filter;
+                self
+            }
+            _ => self,
+        }
+    }
 }
 
 pub enum ProfilePhotoIter {
