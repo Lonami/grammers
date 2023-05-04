@@ -218,7 +218,7 @@ impl ParticipantIter {
                 c.request.filter = filter;
                 self
             }
-            _ => self
+            _ => self,
         }
     }
 }
@@ -320,8 +320,8 @@ impl ProfilePhotoIter {
             Self::Chat(iter) => {
                 while let Some(message) = iter.next().await? {
                     if let Some(tl::enums::MessageAction::ChatEditPhoto(
-                                    tl::types::MessageActionChatEditPhoto { photo },
-                                )) = message.action
+                        tl::types::MessageActionChatEditPhoto { photo },
+                    )) = message.action
                     {
                         return Ok(Some(Photo::from_raw(photo, message.client.clone())));
                     } else {
@@ -378,8 +378,8 @@ impl Client {
                 .find(|chat| chat.id() == user_id),
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id })
             | tl::enums::Peer::Channel(tl::types::PeerChannel {
-                                           channel_id: chat_id,
-                                       }) => chats
+                channel_id: chat_id,
+            }) => chats
                 .into_iter()
                 .map(Chat::from_chat)
                 .find(|chat| chat.id() == chat_id),
@@ -485,8 +485,8 @@ impl Client {
                 user_id: user.to_input_user_lossy(),
                 revoke_history: false,
             })
-                .await
-                .map(drop)
+            .await
+            .map(drop)
         } else {
             Ok(())
         }
@@ -529,7 +529,7 @@ impl Client {
         &self,
         channel: C,
         user: U,
-    ) -> BannedRightsBuilder<impl Future<Output=Result<(), InvocationError>>> {
+    ) -> BannedRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
         BannedRightsBuilder::new(
             self.clone(),
             channel.into(),
@@ -573,7 +573,7 @@ impl Client {
         &self,
         channel: C,
         user: U,
-    ) -> AdminRightsBuilder<impl Future<Output=Result<(), InvocationError>>> {
+    ) -> AdminRightsBuilder<impl Future<Output = Result<(), InvocationError>>> {
         AdminRightsBuilder::new(
             self.clone(),
             channel.into(),
