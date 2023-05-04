@@ -897,3 +897,10 @@ impl From<Media> for tl::enums::MessageMedia {
         }
     }
 }
+
+#[cfg(feature = "unstable_raw")]
+impl From<Uploaded> for tl::enums::InputFile {
+    fn from(uploaded: Uploaded) -> Self {
+        uploaded.input_file
+    }
+}
