@@ -126,7 +126,7 @@ impl Channel {
         self.0.username.as_deref()
     }
 
-    /// return the permissions of the user in the Channel
+    /// Return the permissions of the logged-in user in this channel.
     pub fn admin_rights(&self) -> Option<&tl::types::ChatAdminRights> {
         match &self.0.admin_rights {
             Some(tl::enums::ChatAdminRights::Rights(rights)) => Some(rights),
