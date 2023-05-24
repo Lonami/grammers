@@ -125,6 +125,28 @@ impl Channel {
     pub fn username(&self) -> Option<&str> {
         self.0.username.as_deref()
     }
+
+    /// Return the permissions of the logged-in user in this channel.
+    pub fn admin_rights(&self) -> Option<&tl::types::ChatAdminRights> {
+        match &self.0.admin_rights {
+            Some(tl::enums::ChatAdminRights::Rights(rights)) => Some(rights),
+            None if self.0.creator => Some(&tl::types::ChatAdminRights {
+                add_admins: true,
+                other: true,
+                change_info: true,
+                post_messages: true,
+                anonymous: false,
+                ban_users: true,
+                delete_messages: true,
+                edit_messages: true,
+                invite_users: true,
+                manage_call: true,
+                pin_messages: true,
+                manage_topics: true,
+            }),
+            None => None,
+        }
+    }
 }
 
 impl From<Channel> for PackedChat {
