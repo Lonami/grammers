@@ -126,18 +126,25 @@ impl Channel {
         self.0.username.as_deref()
     }
 
-    /// check if the current user has admin rights or ownership in the channel
-    pub fn is_admin(&self) -> bool {
-        if self.0.creator {
-            true
-        } else {
-            if self.0.admin_rights.is_some() {
-                let tl::enums::ChatAdminRights::Rights(rights) =
-                    self.0.admin_rights.as_ref().unwrap();
-                rights.post_messages || rights.change_info || rights.other
-            } else {
-                false
-            }
+    /// return the permissions of the user in the Channel
+    pub fn admin_rights(&self) -> Option<&tl::types::ChatAdminRights> {
+        match &self.0.admin_rights {
+            Some(tl::enums::ChatAdminRights::Rights(rights)) => Some(rights),
+            None if self.0.creator => Some(&tl::types::ChatAdminRights {
+                add_admins: true,
+                other: true,
+                change_info: true,
+                post_messages: true,
+                anonymous: false,
+                ban_users: true,
+                delete_messages: true,
+                edit_messages: true,
+                invite_users: true,
+                manage_call: true,
+                pin_messages: true,
+                manage_topics: true,
+            }),
+            None => None,
         }
     }
 }
