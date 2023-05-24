@@ -125,6 +125,21 @@ impl Channel {
     pub fn username(&self) -> Option<&str> {
         self.0.username.as_deref()
     }
+
+    /// check if the current user has admin rights or ownership in the channel
+    pub fn is_admin(&self) -> bool {
+        if self.0.creator {
+            true
+        } else {
+            if self.0.admin_rights.is_some() {
+                let tl::enums::ChatAdminRights::Rights(rights) =
+                    self.0.admin_rights.as_ref().unwrap();
+                rights.post_messages || rights.change_info || rights.other
+            } else {
+                false
+            }
+        }
+    }
 }
 
 impl From<Channel> for PackedChat {
