@@ -23,7 +23,7 @@ pub enum SignInError {
     },
     PasswordRequired(PasswordToken),
     InvalidCode,
-    InvalidPassword,
+    InvalidPassword(PasswordToken),
     Other(InvocationError),
 }
 
@@ -34,9 +34,9 @@ impl fmt::Display for SignInError {
             SignUpRequired {
                 terms_of_service: tos,
             } => write!(f, "sign in error: sign up required: {:?}", tos),
-            PasswordRequired(_password) => write!(f, "2fa password required"),
+            PasswordRequired(_token) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
-            InvalidPassword => write!(f, "invalid password"),
+            InvalidPassword(_token) => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {}", e),
         }
     }
@@ -427,7 +427,14 @@ impl Client {
                 self.complete_login(x).await.map_err(SignInError::Other)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
-            Err(err) if err.is("PASSWORD_HASH_INVALID") => Err(SignInError::InvalidPassword),
+            Err(err) if err.is("PASSWORD_HASH_INVALID") => {
+                let password_token = self.get_password_information().await;
+                match password_token {
+                    Ok(token) => Err(SignInError::InvalidPassword(token)),
+                    Err(e) => Err(SignInError::Other(e)),
+                }
+                
+            },
             Err(error) => Err(SignInError::Other(error)),
         }
     }
