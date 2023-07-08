@@ -124,7 +124,7 @@ impl Client {
                         message_box.end_channel_difference(&request, PrematureEndReason::Banned);
                         continue;
                     }
-                    Err(e) => Err(e) => match e {
+                    Err(e) => match e {
                         InvocationError::Rpc(e) => {
                             if e.code == 500 {
                                 let mut message_box = self
