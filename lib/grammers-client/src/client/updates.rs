@@ -124,25 +124,19 @@ impl Client {
                         message_box.end_channel_difference(&request, PrematureEndReason::Banned);
                         continue;
                     }
-                    Err(e) => match e {
-                        InvocationError::Rpc(e) => {
-                            if e.code == 500 {
-                                let mut message_box = self
-                                    .0
-                                    .message_box
-                                    .lock("client.next_update/end_channel_difference");
+                    Err(InvocationError::Rpc(rpc_error)) if rpc_error.code.eq(&500) => {
+                        let mut message_box = self
+                            .0
+                            .message_box
+                            .lock("client.next_update/end_channel_difference");
 
-                                message_box.end_channel_difference(
-                                    &request,
-                                    PrematureEndReason::TemporaryServerIssues,
-                                );
-                                continue;
-                            }
-                            return Err(e);
-                        }
-                        InvocationError::Dropped => return Err(e),
-                        InvocationError::Read(_) => return Err(e),
-                    },
+                        message_box.end_channel_difference(
+                            &request,
+                            PrematureEndReason::TemporaryServerIssues,
+                        );
+                        continue;
+                    }
+                    Err(e) => return Err(e),
                 };
 
                 let (updates, users, chats) = {
