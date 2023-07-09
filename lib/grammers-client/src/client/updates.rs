@@ -124,6 +124,19 @@ impl Client {
                         message_box.end_channel_difference(&request, PrematureEndReason::Banned);
                         continue;
                     }
+                    Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
+                        log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
+                        let mut message_box = self
+                            .0
+                            .message_box
+                            .lock("client.next_update/end_channel_difference");
+
+                        message_box.end_channel_difference(
+                            &request,
+                            PrematureEndReason::TemporaryServerIssues,
+                        );
+                        continue;
+                    }
                     Err(e) => return Err(e),
                 };
 
