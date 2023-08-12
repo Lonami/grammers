@@ -30,7 +30,7 @@ use crate::message_box::defs::PossibleGap;
 use crate::UpdateState;
 pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
-use defs::{PtsInfo, ResetDeadline, State, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
+use defs::{PtsInfo, ResetDeadline, State, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
@@ -132,8 +132,8 @@ impl MessageBox {
         self.map
             .get(&Entry::AccountWide)
             .map(|s| s.pts)
-            .unwrap_or(NO_SEQ)
-            == NO_SEQ
+            .unwrap_or(NO_PTS)
+            == NO_PTS
     }
 
     /// Return the next deadline when receiving updates should timeout.
@@ -620,7 +620,7 @@ impl MessageBox {
                     qts: if self.map.contains_key(&Entry::SecretChats) {
                         self.map[&Entry::SecretChats].pts
                     } else {
-                        NO_SEQ
+                        NO_PTS
                     },
                 };
                 trace!("requesting {:?}", gd);
@@ -764,15 +764,15 @@ impl MessageBox {
                 .map(|message| {
                     tl::types::UpdateNewMessage {
                         message,
-                        pts: NO_SEQ,
-                        pts_count: NO_SEQ,
+                        pts: NO_PTS,
+                        pts_count: 0,
                     }
                     .into()
                 })
                 .chain(new_encrypted_messages.into_iter().map(|message| {
                     tl::types::UpdateNewEncryptedMessage {
                         message,
-                        qts: NO_SEQ,
+                        qts: NO_PTS,
                     }
                     .into()
                 })),
@@ -936,8 +936,8 @@ impl MessageBox {
                 result_updates.extend(new_messages.into_iter().map(|message| {
                     tl::types::UpdateNewChannelMessage {
                         message,
-                        pts: NO_SEQ,
-                        pts_count: NO_SEQ,
+                        pts: NO_PTS,
+                        pts_count: 0,
                     }
                     .into()
                 }));

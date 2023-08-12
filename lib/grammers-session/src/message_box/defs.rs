@@ -12,6 +12,15 @@ use std::time::{Duration, Instant};
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 pub(super) const NO_SEQ: i32 = 0;
 
+/// It has been observed that Telegram may send updates with `qts` equal to `0` (for
+/// example with `ChannelParticipant`), interleaved with non-zero `qts` values. This
+/// presumably means that the ordering should be "ignored" in that case.
+///
+/// One can speculate this is done because the field is not optional in the TL definition.
+///
+/// Not ignoring the `pts` information in those updates can lead to failures resolving gaps.
+pub(super) const NO_PTS: i32 = 0;
+
 // See https://core.telegram.org/method/updates.getChannelDifference.
 pub(super) const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
 pub(super) const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
