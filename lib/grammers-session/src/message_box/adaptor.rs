@@ -430,17 +430,11 @@ impl PtsInfo {
                 pts_count: 0,
                 entry: Entry::SecretChats,
             }),
-            ChannelParticipant(u) => {
-                if u.qts == 0 {
-                    None
-                } else {
-                    Some(Self {
-                        pts: u.qts,
-                        pts_count: 0,
-                        entry: Entry::SecretChats,
-                    })
-                }
-            }
+            ChannelParticipant(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
             BotStopped(u) => Some(Self {
                 pts: u.qts,
                 pts_count: 0,
@@ -472,5 +466,6 @@ impl PtsInfo {
             AutoSaveSettings => None,
             GroupInvitePrivacyForbidden(_) => None,
         }
+        .filter(|info| info.pts != 0)
     }
 }
