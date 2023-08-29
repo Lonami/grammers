@@ -9,12 +9,11 @@ pub mod aes;
 pub mod auth_key;
 pub mod factorize;
 pub mod rsa;
+pub mod sha;
 pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
-use sha1::Sha1;
-use sha2::{Digest, Sha256};
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -64,20 +63,10 @@ fn calc_key(auth_key: &AuthKey, msg_key: &[u8; 16], side: Side) -> ([u8; 32], [u
     let x = side.x();
 
     // sha256_a = SHA256 (msg_key + substr (auth_key, x, 36));
-    let sha256_a = {
-        let mut hasher = Sha256::new();
-        hasher.update(msg_key);
-        hasher.update(&auth_key.data[x..x + 36]);
-        hasher.finalize()
-    };
+    let sha256_a = sha256!(msg_key, &auth_key.data[x..x + 36]);
 
     // sha256_b = SHA256 (substr (auth_key, 40+x, 36) + msg_key);
-    let sha256_b = {
-        let mut hasher = Sha256::new();
-        hasher.update(&auth_key.data[40 + x..40 + x + 36]);
-        hasher.update(msg_key);
-        hasher.finalize()
-    };
+    let sha256_b = sha256!(&auth_key.data[40 + x..40 + x + 36], msg_key);
 
     // aes_key = substr (sha256_a, 0, 8) + substr (sha256_b, 8, 16) + substr (sha256_a, 24, 8);
     let aes_key = {
@@ -124,12 +113,7 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
     let x = side.x();
 
     // msg_key_large = SHA256 (substr (auth_key, 88+x, 32) + plaintext + random_padding);
-    let msg_key_large = {
-        let mut hasher = Sha256::new();
-        hasher.update(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.update(&padded_plaintext);
-        hasher.finalize()
-    };
+    let msg_key_large = sha256!(&auth_key.data[88 + x..88 + x + 32], &padded_plaintext);
 
     // msg_key = substr (msg_key_large, 8, 16);
     let msg_key = {
@@ -192,12 +176,7 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
     let plaintext = decrypt_ige(&ciphertext[24..], &key, &iv);
 
     // https://core.telegram.org/mtproto/security_guidelines#mtproto-encrypted-messages
-    let our_key = {
-        let mut hasher = Sha256::new();
-        hasher.update(&auth_key.data[88 + x..88 + x + 32]);
-        hasher.update(&plaintext);
-        hasher.finalize()
-    };
+    let our_key = sha256!(&auth_key.data[88 + x..88 + x + 32], &plaintext);
 
     if msg_key != our_key[8..8 + 16] {
         return Err(Error::MessageKeyMismatch);
@@ -212,30 +191,12 @@ pub fn generate_key_data_from_nonce(
     server_nonce: &[u8; 16],
     new_nonce: &[u8; 32],
 ) -> ([u8; 32], [u8; 32]) {
-    // hash1 = sha1(new_nonce + server_nonce).digest()
-    let hash1: [u8; 20] = {
-        let mut hasher = Sha1::new();
-        hasher.update(new_nonce);
-        hasher.update(server_nonce);
-        hasher.finalize().into()
-    };
-    // hash2 = sha1(server_nonce + new_nonce).digest()
-    let hash2: [u8; 20] = {
-        let mut hasher = Sha1::new();
-        hasher.update(server_nonce);
-        hasher.update(new_nonce);
-        hasher.finalize().into()
-    };
-    // hash3 = sha1(new_nonce + new_nonce).digest()
-    let hash3: [u8; 20] = {
-        let mut hasher = Sha1::new();
-        hasher.update(new_nonce);
-        hasher.update(new_nonce);
-        hasher.finalize().into()
-    };
+    let hash1 = sha1!(new_nonce, server_nonce);
+    let hash2 = sha1!(server_nonce, new_nonce);
+    let hash3 = sha1!(new_nonce, new_nonce);
 
     // key = hash1 + hash2[:12]
-    let key: [u8; 32] = {
+    let key = {
         let mut buffer = [0; 32];
         buffer[..hash1.len()].copy_from_slice(&hash1);
         buffer[hash1.len()..].copy_from_slice(&hash2[..12]);
@@ -243,7 +204,7 @@ pub fn generate_key_data_from_nonce(
     };
 
     // iv = hash2[12:20] + hash3 + new_nonce[:4]
-    let iv: [u8; 32] = {
+    let iv = {
         let mut buffer = [0; 32];
         buffer[..8].copy_from_slice(&hash2[12..]);
         buffer[8..28].copy_from_slice(&hash3);

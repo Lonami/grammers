@@ -8,21 +8,10 @@
 use glass_pumpkin::safe_prime;
 use hmac::Hmac;
 use num_bigint::BigUint;
-use sha2::digest::Output;
-use sha2::{Digest, Sha256, Sha512};
+use sha2::Sha512;
 
 // H(data) := sha256(data)
-macro_rules! h {
-    ( $( $x:expr ),* ) => {
-        {
-            let mut hasher = Sha256::new();
-            $(
-                hasher.update($x);
-            )*
-            hasher.finalize()
-        }
-    };
-}
+use crate::sha256 as h;
 
 /// Prepare the password for sending to telegram for verification.
 /// The method returns M1 and g_a parameters that should be sent to Telegram
@@ -37,7 +26,7 @@ pub fn calculate_2fa(
     g_b: Vec<u8>,
     a: Vec<u8>,
     password: impl AsRef<[u8]>,
-) -> (Vec<u8>, Vec<u8>) {
+) -> ([u8; 32], [u8; 256]) {
     // Prepare our parameters
     let big_p = BigUint::from_bytes_be(p);
 
@@ -94,9 +83,9 @@ pub fn calculate_2fa(
     let h_p = h!(&p);
     let h_g = h!(&g_for_hash);
 
-    let p_xor_g: Vec<u8> = xor(&h_p, &h_g);
+    let p_xor_g = xor(&h_p, &h_g);
 
-    let m1 = h!(&p_xor_g, &h!(&salt1), &h!(&salt2), &g_a, &g_b, &k_a).to_vec();
+    let m1 = h!(&p_xor_g, &h!(&salt1), &h!(&salt2), &g_a, &g_b, &k_a);
 
     (m1, g_a)
 }
@@ -144,39 +133,39 @@ fn check_p_len(p: &[u8]) -> bool {
 }
 
 // SH(data, salt) := H(salt | data | salt)
-fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> Output<Sha256> {
+fn sh(data: impl AsRef<[u8]>, salt: impl AsRef<[u8]>) -> [u8; 32] {
     h!(&salt, &data, &salt)
 }
 
 // PH1(password, salt1, salt2) := SH(SH(password, salt1), salt2)
-fn ph1(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256> {
+fn ph1(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> [u8; 32] {
     sh(sh(password, salt1), salt2)
 }
 
 // PH2(password, salt1, salt2)
 //                      := SH(pbkdf2(sha512, PH1(password, salt1, salt2), salt1, 100000), salt2)
-fn ph2(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> Output<Sha256> {
+fn ph2(password: impl AsRef<[u8]>, salt1: &[u8], salt2: &[u8]) -> [u8; 32] {
     let hash1 = ph1(password, salt1, salt2);
 
     // 512-bit derived key
     let mut dk = [0u8; 64];
-    pbkdf2::pbkdf2::<Hmac<Sha512>>(&hash1, salt1, 100000, &mut dk);
+    pbkdf2::pbkdf2::<Hmac<Sha512>>(&hash1, salt1, 100000, &mut dk).unwrap();
 
     sh(dk, salt2)
 }
 
-fn xor(left: &Output<Sha256>, right: &Output<Sha256>) -> Vec<u8> {
-    return left
-        .iter()
-        .zip(right.iter())
-        .map(|(&x1, &x2)| x1 ^ x2)
-        .collect();
+fn xor(left: &[u8; 32], right: &[u8; 32]) -> [u8; 32] {
+    let mut out = [0; 32];
+    out.iter_mut().enumerate().for_each(|(i, o)| {
+        *o = left[i] ^ right[i];
+    });
+    out
 }
 
-fn pad_to_256(data: &[u8]) -> Vec<u8> {
-    let mut new_vec = vec![0; 256 - data.len()];
-    new_vec.extend(data);
-    new_vec
+fn pad_to_256(data: &[u8]) -> [u8; 256] {
+    let mut out = [0; 256];
+    out[256 - data.len()..].copy_from_slice(data);
+    out
 }
 
 #[cfg(test)]

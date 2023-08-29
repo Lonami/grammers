@@ -417,8 +417,8 @@ impl Client {
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
                 srp_id: password_info.srp_id.unwrap(),
-                a: g_a,
-                m1,
+                a: g_a.to_vec(),
+                m1: m1.to_vec(),
             }),
         };
 
