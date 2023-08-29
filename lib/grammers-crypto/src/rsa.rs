@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use num_bigint::BigUint;
-use sha1::Sha1;
+use sha1::{Digest, Sha1};
 
 /// RSA key.
 pub struct Key {
@@ -26,10 +26,16 @@ impl Key {
 /// Encrypt the given data, prefixing it with a hash before, using RSA.
 pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u8> {
     // Sha1::digest's len is always 20, we're left with 255 - 20 - x padding.
+    let sha = {
+        let mut hasher = Sha1::new();
+        hasher.update(&data);
+        hasher.finalize()
+    };
+
     let to_encrypt = {
         // sha1
         let mut buffer = Vec::with_capacity(255);
-        buffer.extend(&Sha1::from(data).digest().bytes());
+        buffer.extend(sha);
 
         // + data
         buffer.extend(data);

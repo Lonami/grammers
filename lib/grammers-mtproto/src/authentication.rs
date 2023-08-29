@@ -36,7 +36,7 @@ use getrandom::getrandom;
 use grammers_crypto::{factorize::factorize, rsa, AuthKey};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
-use sha1::Sha1;
+use sha1::{Digest, Sha1};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
 
@@ -384,9 +384,14 @@ fn do_step3(
             check_nonce(&server_dh_params.nonce, &nonce)?;
             check_server_nonce(&server_dh_params.server_nonce, &server_nonce)?;
 
+            let sha = {
+                let mut hasher = Sha1::new();
+                hasher.update(&new_nonce);
+                hasher.finalize()
+            };
             let new_nonce_hash = {
                 let mut buffer = [0; 16];
-                buffer.copy_from_slice(&Sha1::from(new_nonce).digest().bytes()[4..20]);
+                buffer.copy_from_slice(&sha[4..20]);
                 buffer
             };
             check_new_nonce_hash(&server_dh_params.new_nonce_hash, &new_nonce_hash)?;
@@ -427,9 +432,9 @@ fn do_step3(
     };
 
     let expected_answer_hash = {
-        Sha1::from(&plain_text_answer[20..20 + plain_text_cursor.pos()])
-            .digest()
-            .bytes()
+        let mut hasher = Sha1::new();
+        hasher.update(&plain_text_answer[20..20 + plain_text_cursor.pos()]);
+        hasher.finalize().into()
     };
 
     if got_answer_hash != expected_answer_hash {
@@ -485,10 +490,16 @@ fn do_step3(
     .to_bytes();
 
     // sha1(client_dh_inner).digest() + client_dh_inner
+    let sha = {
+        let mut hasher = Sha1::new();
+        hasher.update(&client_dh_inner);
+        hasher.finalize()
+    };
+
     let client_dh_inner_hashed = {
         let mut buffer = Vec::with_capacity(20 + client_dh_inner.len() + 16);
 
-        buffer.extend(&Sha1::from(&client_dh_inner).digest().bytes());
+        buffer.extend(&sha);
         buffer.extend(&client_dh_inner);
 
         // Make sure we pad it ourselves, or else `encrypt_ige` will,

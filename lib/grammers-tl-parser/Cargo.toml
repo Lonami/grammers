@@ -14,7 +14,7 @@ categories = ["parser-implementations"]
 edition = "2021"
 
 [dependencies]
-crc32fast = "1.2.1"
+crc32fast = "1.3.2"
 
 [dev-dependencies]
-toml = "0.5.8"
+toml = "0.7.6"

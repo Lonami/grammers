@@ -23,7 +23,7 @@ grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.4.1" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.0" }
 
 [dev-dependencies]
-toml = "0.5.8"
+toml = "0.7.6"
 
 [features]
 default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]

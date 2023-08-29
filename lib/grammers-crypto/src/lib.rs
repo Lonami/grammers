@@ -212,28 +212,26 @@ pub fn generate_key_data_from_nonce(
     server_nonce: &[u8; 16],
     new_nonce: &[u8; 32],
 ) -> ([u8; 32], [u8; 32]) {
-    let mut hasher = Sha1::new();
-
     // hash1 = sha1(new_nonce + server_nonce).digest()
     let hash1: [u8; 20] = {
-        hasher.reset();
+        let mut hasher = Sha1::new();
         hasher.update(new_nonce);
         hasher.update(server_nonce);
-        hasher.digest().bytes()
+        hasher.finalize().into()
     };
     // hash2 = sha1(server_nonce + new_nonce).digest()
     let hash2: [u8; 20] = {
-        hasher.reset();
+        let mut hasher = Sha1::new();
         hasher.update(server_nonce);
         hasher.update(new_nonce);
-        hasher.digest().bytes()
+        hasher.finalize().into()
     };
     // hash3 = sha1(new_nonce + new_nonce).digest()
     let hash3: [u8; 20] = {
-        hasher.reset();
+        let mut hasher = Sha1::new();
         hasher.update(new_nonce);
         hasher.update(new_nonce);
-        hasher.digest().bytes()
+        hasher.finalize().into()
     };
 
     // key = hash1 + hash2[:12]

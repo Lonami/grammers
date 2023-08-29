@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use aes::cipher::generic_array::GenericArray;
-use aes::cipher::{BlockDecrypt, BlockEncrypt, NewBlockCipher};
+use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 
 /// Encrypt the input plaintext using the AES-IGE mode.
 pub fn ige_encrypt(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {

@@ -212,7 +212,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let socks_addr = match host {
             Host::Domain(domain) => {
                 let resolver =
-                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default())?;
+                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
                 let response = resolver.lookup_ip(domain).await?;
                 let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
                     ErrorKind::NotFound,

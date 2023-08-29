@@ -17,4 +17,4 @@ edition = "2021"
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.0" }
 
 [dev-dependencies]
-toml = "0.5.8"
+toml = "0.7.6"

@@ -14,18 +14,18 @@ categories = ["cryptography"]
 edition = "2021"
 
 [dependencies]
-aes = "0.7.0"
-getrandom = "0.2.2"
-glass_pumpkin = "1.5.0"
-hmac = "0.11.0"
-num-bigint = "0.4.0"
-pbkdf2 = "0.8.0"
-sha1 = "0.6.0"
-sha2 = "0.9.3"
+aes = "0.8.3"
+getrandom = "0.2.10"
+glass_pumpkin = "1.6.0"
+hmac = "0.12.1"
+num-bigint = "0.4.4"
+pbkdf2 = "0.12.2"
+sha1 = "0.10.5"
+sha2 = "0.10.7"
 
 [dev-dependencies]
 bencher = "0.1.5"
-toml = "0.5.8"
+toml = "0.7.6"
 
 [[bench]]
 name = "cipher"
