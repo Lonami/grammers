@@ -804,6 +804,10 @@ impl Client {
         }
     }
 
+    #[cfg_attr(
+        not(feature = "parse_invite_link"),
+        allow(rustdoc::broken_intra_doc_links)
+    )]
     /// Join a public group or channel.
     ///
     /// A channel is public if it has a username.

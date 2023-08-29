@@ -12,7 +12,7 @@ use grammers_tl_types as tl;
 /// * [`inline`]
 /// * [`switch_inline`]
 /// * [`switch_inline_elsewhere`]
-/// * [`url`]
+/// * [`url`](url())
 pub struct Inline(pub(crate) tl::enums::KeyboardButton);
 
 /// Type used by keyboard buttons.

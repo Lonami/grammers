@@ -46,7 +46,7 @@ impl PackedChat {
         res
     }
 
-    /// Serialize the [`PackedChat`] [`to_bytes`] and return it as a hexadecimal string.
+    /// Serialize the [`PackedChat`] [`to_bytes`](Self::to_bytes) and return it as a hexadecimal string.
     pub fn to_hex(&self) -> String {
         let bytes = self.to_bytes();
         let mut result = String::with_capacity(bytes.len() * 2);
@@ -58,7 +58,7 @@ impl PackedChat {
 
     /// Deserialize a byte array into a [`PackedChat`].
     ///
-    /// The slice length must match that of [`to_bytes`] output or an `Err` will be returned.
+    /// The slice length must match that of [`to_bytes`](Self::to_bytes) output or an `Err` will be returned.
     /// A reference to a fixed-size array isn't used as the input parameter type for convenience.
     #[allow(clippy::result_unit_err)]
     pub fn from_bytes(buf: &[u8]) -> Result<Self, ()> {
