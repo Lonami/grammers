@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::types;
-use chrono::{DateTime, NaiveDateTime, Utc};
+use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use log::trace;
@@ -42,9 +42,8 @@ pub(crate) fn generate_random_ids(n: usize) -> Vec<i64> {
 }
 
 pub(crate) fn date(date: i32) -> Date {
-    DateTime::<Utc>::from_utc(
-        NaiveDateTime::from_timestamp_opt(date as i64, 0).expect("date out of range"),
-        Utc,
+    Utc.from_utc_datetime(
+        &NaiveDateTime::from_timestamp_opt(date as i64, 0).expect("date out of range"),
     )
 }
 

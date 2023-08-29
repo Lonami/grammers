@@ -21,7 +21,7 @@ parse_invite_link = ["url"]
 unstable_raw = []
 
 [dependencies]
-chrono = "0.4.19"
+chrono = "0.4.27"
 futures-util = { version = "0.3.15", default_features = false, features = [
     "alloc"
 ] }
