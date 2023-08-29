@@ -449,6 +449,12 @@ impl MessageBox {
         // is `0` and `1` respectively), so we sort them first.
         updates.sort_by_key(update_sort_key);
 
+        // This loop does a lot at once to reduce the amount of times we need to iterate over
+        // the updates as an optimization.
+        //
+        // It mutates the local pts state, remembers possible gaps, builds a set of entries for
+        // which the deadlines should be reset, and determines whether any local pts was changed
+        // so that the seq can be updated too (which could otherwise have been done earlier).
         let mut any_pts_applied = false;
         let mut reset_deadlines_for = mem::take(&mut self.tmp_entries);
         for update in updates {
