@@ -12,6 +12,7 @@ members = [
     "lib/grammers-tl-parser",
     "lib/grammers-tl-types",
 ]
+resolver = "2"
 
 [patch.crates-io]
 grammers-client = { path = "lib/grammers-client" }
