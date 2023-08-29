@@ -435,24 +435,8 @@ impl MessageBox {
                     return Err(Gap);
                 }
             }
-
-            self.date = date;
-            if seq != NO_SEQ {
-                self.seq = seq;
-            }
         }
 
-        // Telegram can send updates out of order (e.g. `ReadChannelInbox` first
-        // and then `NewChannelMessage`, both with the same `pts`, but the `count`
-        // is `0` and `1` respectively).
-        //
-        // We can't know beforehand if this would cause issues (i.e. if any of
-        // the updates is the first one we get to know about a specific channel)
-        // (other than doing a pre-scan to check if any has info about an entry
-        // we lack), so instead we sort preemptively. As a bonus there's less
-        // likelyhood of "possible gaps" by doing this.
-        // TODO give this more thought, perhaps possible gaps can't happen at all
-        //      (not ones which would be resolved by sorting anyway; same in telethon)
         fn update_sort_key(update: &tl::enums::Update) -> i32 {
             match PtsInfo::from_update(update) {
                 Some(pts) => pts.pts - pts.pts_count,
@@ -460,8 +444,12 @@ impl MessageBox {
             }
         }
 
+        // Telegram can send updates out of order (e.g. `ReadChannelInbox` first
+        // and then `NewChannelMessage`, both with the same `pts`, but the `count`
+        // is `0` and `1` respectively), so we sort them first.
         updates.sort_by_key(update_sort_key);
 
+        let mut any_pts_applied = false;
         let mut reset_deadlines_for = mem::take(&mut self.tmp_entries);
         for update in updates {
             let (entry, update) = self.apply_pts_info(update);
@@ -473,11 +461,26 @@ impl MessageBox {
             }
             if let Some(update) = update {
                 result.push(update);
+                any_pts_applied |= entry.is_some();
             }
         }
         self.reset_deadlines(&reset_deadlines_for, next_updates_deadline());
         reset_deadlines_for.clear();
         self.tmp_entries = reset_deadlines_for;
+
+        // > If the updates were applied, local *Updates* state must be updated
+        // > with `seq` (unless it's 0) and `date` from the constructor.
+        //
+        // By "were applied", we assume it means "some other pts was applied".
+        // Updates which can be applied in any order, such as `UpdateChat`,
+        // should not cause `seq` to be updated (or upcoming updates such as
+        // `UpdateChatParticipant` could be missed).
+        if any_pts_applied {
+            self.date = date;
+            if seq != NO_SEQ {
+                self.seq = seq;
+            }
+        }
 
         if !self.possible_gaps.is_empty() {
             // For each update in possible gaps, see if the gap has been resolved already.
