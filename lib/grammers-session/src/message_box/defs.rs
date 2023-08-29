@@ -66,9 +66,6 @@ pub struct MessageBox {
     pub(super) date: i32,
     pub(super) seq: i32,
 
-    /// Holds the entry with the closest deadline (optimization to avoid recalculating the minimum deadline).
-    pub(super) next_deadline: Option<Entry>,
-
     /// Which entries have a gap and may soon trigger a need to get difference.
     ///
     /// If a gap is found, stores the required information to resolve it (when should it timeout and what updates
@@ -81,9 +78,12 @@ pub struct MessageBox {
     /// For which entries are we currently getting difference.
     pub(super) getting_diff_for: HashSet<Entry>,
 
-    /// Temporarily stores which entries should have their update deadline reset.
-    /// Stored in the message box in order to reuse the allocation.
-    pub(super) reset_deadlines_for: HashSet<Entry>,
+    /// Holds the entry with the closest deadline.
+    /// This field is merely an optimization, to avoid recalculating the closest deadline.
+    pub(super) next_deadline: Option<Entry>,
+
+    /// This field is merely an optimization, to reuse the same allocation.
+    pub(super) tmp_entries: HashSet<Entry>,
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
@@ -121,9 +121,3 @@ pub(super) struct PossibleGap {
 
 #[derive(Debug)]
 pub struct Gap;
-
-#[derive(PartialEq)]
-pub(super) enum ResetDeadline {
-    No,
-    Yes,
-}

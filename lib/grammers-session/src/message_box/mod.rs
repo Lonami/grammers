@@ -30,7 +30,7 @@ use crate::message_box::defs::PossibleGap;
 use crate::UpdateState;
 pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
-use defs::{PtsInfo, ResetDeadline, State, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
+use defs::{PtsInfo, State, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
@@ -55,10 +55,10 @@ impl MessageBox {
             map: HashMap::new(),
             date: 1,
             seq: 0,
-            next_deadline: None,
             possible_gaps: HashMap::new(),
             getting_diff_for: HashSet::new(),
-            reset_deadlines_for: HashSet::new(),
+            next_deadline: None,
+            tmp_entries: HashSet::new(),
         }
     }
 
@@ -92,10 +92,10 @@ impl MessageBox {
             map,
             date: state.date,
             seq: state.seq,
-            next_deadline: Some(Entry::AccountWide),
             possible_gaps: HashMap::new(),
             getting_diff_for: HashSet::new(),
-            reset_deadlines_for: HashSet::new(),
+            next_deadline: Some(Entry::AccountWide),
+            tmp_entries: HashSet::new(),
         }
     }
 
@@ -192,18 +192,28 @@ impl MessageBox {
         deadline
     }
 
-    /// Reset the deadline for the periods without updates for a given entry.
+    /// Reset the deadline for the periods without updates for all input entries.
     ///
     /// It also updates the next deadline time to reflect the new closest deadline.
-    fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
-        if let Some(state) = self.map.get_mut(&entry) {
-            state.deadline = deadline;
-            debug!("reset deadline {:?} for {:?}", deadline, entry);
-        } else {
-            panic!("did not reset deadline for {:?} as it had no entry", entry);
+    fn reset_deadlines(&mut self, entries: &HashSet<Entry>, deadline: Instant) {
+        if entries.is_empty() {
+            return;
+        }
+        for entry in entries {
+            if let Some(state) = self.map.get_mut(&entry) {
+                state.deadline = deadline;
+                debug!("reset deadline {:?} for {:?}", deadline, entry);
+            } else {
+                panic!("did not reset deadline for {:?} as it had no entry", entry);
+            }
         }
 
-        if self.next_deadline == Some(entry) {
+        if self
+            .next_deadline
+            .as_ref()
+            .map(|next| entries.contains(next))
+            .unwrap_or(false)
+        {
             // If the updated deadline was the closest one, recalculate the new minimum.
             self.next_deadline = Some(
                 self.map
@@ -219,8 +229,18 @@ impl MessageBox {
         {
             // If the updated deadline is smaller than the next deadline, change the next deadline to be the new one.
             // An unrelated deadline was updated, so the closest one remains unchanged.
-            self.next_deadline = Some(entry);
+            // Any entry will do, as they all share the same new deadline.
+            self.next_deadline = Some(*entries.iter().next().unwrap());
         }
+    }
+
+    /// Convenience to reset a single entry's deadline.
+    fn reset_deadline(&mut self, entry: Entry, deadline: Instant) {
+        let mut entries = mem::take(&mut self.tmp_entries);
+        entries.insert(entry);
+        self.reset_deadlines(&entries, deadline);
+        entries.clear();
+        self.tmp_entries = entries;
     }
 
     /// Convenience to reset a channel's deadline, with optional timeout.
@@ -232,17 +252,6 @@ impl MessageBox {
                     .map(|t| Duration::from_secs(t as _))
                     .unwrap_or(defs::NO_UPDATES_TIMEOUT),
         );
-    }
-
-    /// Reset all the deadlines in `reset_deadlines_for` and then empty the set.
-    fn apply_deadlines_reset(&mut self) {
-        let next_deadline = next_updates_deadline();
-        let mut reset_deadlines_for = mem::take(&mut self.reset_deadlines_for);
-        reset_deadlines_for
-            .iter()
-            .for_each(|&entry| self.reset_deadline(entry, next_deadline));
-        reset_deadlines_for.clear();
-        self.reset_deadlines_for = reset_deadlines_for;
     }
 
     /// Sets the update state.
@@ -453,13 +462,22 @@ impl MessageBox {
 
         updates.sort_by_key(update_sort_key);
 
-        result.extend(
-            updates
-                .into_iter()
-                .filter_map(|u| self.apply_pts_info(u, ResetDeadline::Yes)),
-        );
-
-        self.apply_deadlines_reset();
+        let mut reset_deadlines_for = mem::take(&mut self.tmp_entries);
+        for update in updates {
+            let (entry, update) = self.apply_pts_info(update);
+            if let Some(entry) = entry {
+                // As soon as we receive an update of any form related to messages (has `PtsInfo`),
+                // the "no updates" period for that entry is reset. All the deadlines are reset at
+                // once via the temporary entries buffer as an optimization.
+                reset_deadlines_for.insert(entry);
+            }
+            if let Some(update) = update {
+                result.push(update);
+            }
+        }
+        self.reset_deadlines(&reset_deadlines_for, next_updates_deadline());
+        reset_deadlines_for.clear();
+        self.tmp_entries = reset_deadlines_for;
 
         if !self.possible_gaps.is_empty() {
             // For each update in possible gaps, see if the gap has been resolved already.
@@ -475,7 +493,7 @@ impl MessageBox {
                     let update = self.possible_gaps.get_mut(&key).unwrap().updates.remove(0);
                     // If this fails to apply, it will get re-inserted at the end.
                     // All should fail, so the order will be preserved (it would've cycled once).
-                    if let Some(update) = self.apply_pts_info(update, ResetDeadline::No) {
+                    if let (_, Some(update)) = self.apply_pts_info(update) {
                         result.push(update);
                     }
                 }
@@ -499,28 +517,17 @@ impl MessageBox {
     fn apply_pts_info(
         &mut self,
         update: tl::enums::Update,
-        reset_deadline: ResetDeadline,
-    ) -> Option<tl::enums::Update> {
+    ) -> (Option<Entry>, Option<tl::enums::Update>) {
         if let tl::enums::Update::ChannelTooLong(u) = update {
             self.try_begin_get_diff(Entry::Channel(u.channel_id));
-            return None;
+            return (None, None);
         }
 
         let pts = match PtsInfo::from_update(&update) {
             Some(pts) => pts,
             // No pts means that the update can be applied in any order.
-            None => return Some(update),
+            None => return (None, Some(update)),
         };
-
-        // As soon as we receive an update of any form related to messages (has `PtsInfo`),
-        // the "no updates" period for that entry is reset.
-        //
-        // Build the `HashSet` to avoid calling `reset_deadline` more than once for the same entry.
-        //
-        // By the time this method returns, self.map will have an entry for which we can reset its deadline.
-        if reset_deadline == ResetDeadline::Yes {
-            self.reset_deadlines_for.insert(pts.entry);
-        }
 
         if self.getting_diff_for.contains(&pts.entry) {
             debug!(
@@ -529,7 +536,7 @@ impl MessageBox {
             );
             // Note: early returning here also prevents gap from being inserted (which they should
             // not be while getting difference).
-            return None;
+            return (Some(pts.entry), None);
         }
 
         if let Some(state) = self.map.get(&pts.entry) {
@@ -543,7 +550,7 @@ impl MessageBox {
                         "skipping update for {:?} (local {:?}, count {:?}, remote {:?})",
                         pts.entry, local_pts, pts.pts_count, pts.pts
                     );
-                    return None;
+                    return (Some(pts.entry), None);
                 }
                 Ordering::Less => {
                     info!(
@@ -560,7 +567,7 @@ impl MessageBox {
                         .updates
                         .push(update);
 
-                    return None;
+                    return (Some(pts.entry), None);
                 }
             }
         }
@@ -596,7 +603,7 @@ impl MessageBox {
             })
             .pts = pts.pts;
 
-        Some(update)
+        (Some(pts.entry), Some(update))
     }
 }
 
