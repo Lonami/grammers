@@ -6,7 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use num_bigint::BigUint;
-use sha1::{Digest, Sha1};
+
+use crate::{aes::ige_encrypt, sha256};
 
 /// RSA key.
 pub struct Key {
@@ -25,31 +26,70 @@ impl Key {
 
 /// Encrypt the given data, prefixing it with a hash before, using RSA.
 pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u8> {
-    // Sha1::digest's len is always 20, we're left with 255 - 20 - x padding.
-    let sha = {
-        let mut hasher = Sha1::new();
-        hasher.update(&data);
-        hasher.finalize()
-    };
+    // https://core.telegram.org/mtproto/auth_key#41-rsa-paddata-server-public-key-mentioned-above-is-implemented-as-follows
 
-    let to_encrypt = {
-        // sha1
-        let mut buffer = Vec::with_capacity(255);
-        buffer.extend(sha);
-
-        // + data
+    // data_with_padding := data + random_padding_bytes; -- where random_padding_bytes are chosen so that the resulting length of data_with_padding is precisely 192 bytes, and data is the TL-serialized data to be encrypted as before. One has to check that data is not longer than 144 bytes.
+    assert!(data.len() <= 144);
+    let data_with_padding = {
+        let mut buffer = Vec::with_capacity(192);
         buffer.extend(data);
-
-        // + padding
-        let padding_len = 255 - 20 - data.len();
-        let mut padding = vec![0; padding_len];
-        padding.copy_from_slice(&random_bytes[..padding_len]);
-        buffer.extend(&padding);
-
+        buffer.extend(&random_bytes[..192 - data.len()]);
         buffer
     };
 
-    let payload = BigUint::from_bytes_be(&to_encrypt);
+    // data_pad_reversed := BYTE_REVERSE(data_with_padding); -- is obtained from data_with_padding by reversing the byte order.
+    let data_pad_reversed = data_with_padding.iter().copied().rev().collect::<Vec<u8>>();
+
+    let mut attempt = 0;
+    let key_aes_encrypted = loop {
+        if 192 + 32 * attempt + 32 > random_bytes.len() {
+            panic!("ran out of entropy");
+        }
+
+        // a random 32-byte temp_key is generated.
+        let temp_key = &random_bytes[192 + 32 * attempt..192 + 32 * attempt + 32]
+            .try_into()
+            .unwrap();
+
+        // data_with_hash := data_pad_reversed + SHA256(temp_key + data_with_padding); -- after this assignment, data_with_hash is exactly 224 bytes long.
+        let data_with_hash = {
+            let mut buffer = Vec::with_capacity(224);
+            buffer.extend(&data_pad_reversed);
+            buffer.extend(sha256!(&temp_key, &data_with_padding));
+            buffer
+        };
+
+        // aes_encrypted := AES256_IGE(data_with_hash, temp_key, 0); -- AES256-IGE encryption with zero IV.
+        let aes_encrypted = ige_encrypt(&data_with_hash, &temp_key, &[0u8; 32]);
+
+        // temp_key_xor := temp_key XOR SHA256(aes_encrypted); -- adjusted key, 32 bytes
+        let temp_key_xor = {
+            let mut xored = temp_key.clone();
+            xored
+                .iter_mut()
+                .zip(sha256!(&aes_encrypted))
+                .for_each(|(a, b)| *a ^= b);
+            xored
+        };
+
+        // key_aes_encrypted := temp_key_xor + aes_encrypted; -- exactly 256 bytes (2048 bits) long
+        let key_aes_encrypted = {
+            let mut buffer = Vec::with_capacity(256);
+            buffer.extend(temp_key_xor);
+            buffer.extend(aes_encrypted);
+            buffer
+        };
+
+        // The value of key_aes_encrypted is compared with the RSA-modulus of server_pubkey as a big-endian 2048-bit (256-byte) unsigned integer. If key_aes_encrypted turns out to be greater than or equal to the RSA modulus, the previous steps starting from the generation of new random temp_key are repeated. Otherwise the final step is performed:
+        if BigUint::from_bytes_be(&key_aes_encrypted) < key.n {
+            break key_aes_encrypted;
+        }
+
+        attempt += 1;
+    };
+
+    // encrypted_data := RSA(key_aes_encrypted, server_pubkey); -- 256-byte big-endian integer is elevated to the requisite power from the RSA public key modulo the RSA modulus, and the result is stored as a big-endian integer consisting of exactly 256 bytes (with leading zero bytes if required).
+    let payload = BigUint::from_bytes_be(&key_aes_encrypted);
     let encrypted = payload.modpow(&key.e, &key.n);
     let mut block = encrypted.to_bytes_be();
     while block.len() < 256 {
@@ -62,30 +102,19 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u
 #[cfg(test)]
 mod tests {
     use super::*;
+    use crate::hex;
 
     #[test]
     fn test_rsa_encryption() {
-        let key = Key::new("22081946531037833540524260580660774032207476521197121128740358761486364763467087828766873972338019078976854986531076484772771735399701424566177039926855356719497736439289455286277202113900509554266057302466528985253648318314129246825219640197356165626774276930672688973278712614800066037531599375044750753580126415613086372604312320014358994394131667022861767539879232149461579922316489532682165746762569651763794500923643656753278887871955676253526661694459370047843286685859688756429293184148202379356802488805862746046071921830921840273062124571073336369210703400985851431491295910187179045081526826572515473914151", "65537").unwrap();
-        let result = encrypt_hashed(b"Hello!", &key, &[0; 256]);
+        let key = Key::new("25342889448840415564971689590713473206898847759084779052582026594546022463853940585885215951168491965708222649399180603818074200620463776135424884632162512403163793083921641631564740959529419359595852941166848940585952337613333022396096584117954892216031229237302943701877588456738335398602461675225081791820393153757504952636234951323237820036543581047826906120927972487366805292115792231423684261262330394324750785450942589751755390156647751460719351439969059949569615302809050721500330239005077889855323917509948255722081644689442127297605422579707142646660768825302832201908302295573257427896031830742328565032949", "65537").unwrap();
+        let result = encrypt_hashed(
+            &hex::from_hex("955ff5a9081a8e635f5743de9b00000004453dc27100000004622f1fcb000000f7a81627bbf511fa4afef71e94a0937474586c1add9198dda81a5df8393871c8293623c5fb968894af1be7dfe9c7be813f9307789242fd0cb0c16a5cb39a8d3e"),
+            &key,
+            hex::from_hex("12270000635593b03fee033d0672f9afddf9124de9e77df6251806cba93482e4c9e6e06e7d44e4c4baae821aff91af44789689faaee9bdfc7b2df8c08709afe57396c4638ceaa0dc30114f82447e81d3b53edc423b32660c43a5b8ad057b64500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007dada0920c4973913229e0f881aec7b9db0c392d34f52fb0995ea493ecb4c09daaf68fe9554ec7a59c03e4035952b220b47a8d06aad71134110d8c44948901f8").as_slice().try_into().unwrap(),
+        );
         assert_eq!(
             result,
-            vec![
-                117, 112, 45, 76, 136, 210, 155, 106, 185, 52, 53, 81, 36, 221, 40, 217, 182, 42,
-                71, 85, 136, 65, 200, 3, 20, 80, 247, 73, 155, 28, 156, 107, 211, 157, 39, 193, 88,
-                28, 81, 52, 78, 81, 193, 121, 35, 112, 100, 167, 35, 174, 147, 157, 90, 195, 80,
-                20, 253, 139, 79, 226, 79, 117, 227, 17, 92, 50, 161, 99, 105, 238, 43, 55, 58, 97,
-                236, 148, 70, 185, 43, 46, 61, 240, 118, 24, 219, 10, 138, 253, 169, 153, 182, 112,
-                43, 50, 181, 129, 155, 214, 234, 73, 112, 251, 52, 124, 168, 74, 96, 208, 195, 138,
-                183, 12, 102, 229, 237, 1, 64, 68, 136, 137, 163, 184, 130, 238, 165, 51, 186, 208,
-                94, 250, 32, 69, 237, 167, 23, 18, 60, 65, 74, 191, 222, 212, 62, 30, 180, 131,
-                160, 73, 120, 110, 245, 3, 27, 18, 213, 26, 63, 247, 236, 183, 216, 4, 212, 65, 53,
-                148, 95, 152, 247, 90, 74, 108, 241, 161, 223, 55, 85, 158, 48, 187, 233, 42, 75,
-                121, 102, 195, 79, 7, 56, 230, 209, 48, 89, 133, 119, 109, 38, 223, 171, 124, 15,
-                223, 215, 236, 32, 44, 199, 140, 84, 207, 130, 172, 35, 134, 199, 157, 14, 25, 117,
-                128, 164, 250, 148, 48, 10, 35, 130, 249, 225, 22, 254, 130, 223, 155, 216, 114,
-                229, 185, 218, 123, 66, 98, 35, 191, 26, 216, 88, 137, 48, 181, 30, 22, 93, 108,
-                221, 2
-            ]
+            hex::from_hex("c6d211349fc10cda6983276250b09f4be9b39f533b5d314b732b51a6dd72234dab4224209992c894e0e4c9f30249f1dbbd1630a27b98f2f92a53c00baabbd46f380bd35f417e5ec2edb43f7644b5c81af011d736eb369265e848b553ae5e6350dd5695efc72bde0e35f3c3fc827b91eb97cf1efdbff12269b9c33f81645adebc89ed167edc19d285237a754bf629aa358ed08498863b2aec8b7139001627bbe8bdef239474a5a43e664d278f39e72d694a206d7b838fd40868a71c4bfbffa38b7679faa502b7795cbe5ae1bd05ca7eb01ff5b05107265fd39bd5b4e19d392b735a3b0b5b21473062981bff86ff9084a7b594775e3127c05fd454e19f794a4ab4")
         );
     }
 }
