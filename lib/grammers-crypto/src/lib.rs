@@ -8,6 +8,7 @@
 pub mod aes;
 pub mod auth_key;
 pub mod factorize;
+pub mod hex;
 pub mod rsa;
 pub mod sha;
 pub mod two_factor_auth;

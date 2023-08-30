@@ -7,6 +7,10 @@ Used for dealing with correct update processing.
 The serialization and deserialization traits are also used for storing and loading the session
 into and from bytes.
 
+## grammers-crypto
+
+Used for utility functions such as converting to and from hexadecimal strings.
+
 ## grammers-tl-gen
 
 Used to generate Rust code for a custom Type Language definition which defines the serialized

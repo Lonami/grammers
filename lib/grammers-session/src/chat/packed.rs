@@ -5,8 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_crypto::hex;
 use grammers_tl_types as tl;
-use std::fmt::{self, Write as _};
+use std::fmt;
 
 #[repr(u8)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -48,12 +49,7 @@ impl PackedChat {
 
     /// Serialize the [`PackedChat`] [`to_bytes`](Self::to_bytes) and return it as a hexadecimal string.
     pub fn to_hex(&self) -> String {
-        let bytes = self.to_bytes();
-        let mut result = String::with_capacity(bytes.len() * 2);
-        bytes.into_iter().for_each(|b| {
-            write!(result, "{:02x}", b).unwrap();
-        });
-        result
+        hex::to_hex(&self.to_bytes())
     }
 
     /// Deserialize a byte array into a [`PackedChat`].
@@ -94,31 +90,11 @@ impl PackedChat {
 
     /// Deserialize the hexadecimal string into a packed chat.
     pub fn from_hex(hex: &str) -> Result<Self, ()> {
-        fn hex_to_decimal(hex_digit: u8) -> Option<u8> {
-            Some(match hex_digit {
-                b'0'..=b'9' => hex_digit - b'0',
-                b'a'..=b'f' => hex_digit - b'a' + 0xa,
-                b'A'..=b'F' => hex_digit - b'A' + 0xa,
-                _ => return None,
-            })
+        if let Some(bytes) = hex::opt_from_hex(hex) {
+            Self::from_bytes(&bytes)
+        } else {
+            Err(())
         }
-
-        if hex.len() % 2 != 0 {
-            return Err(());
-        }
-
-        let bytes = hex
-            .as_bytes()
-            .chunks_exact(2)
-            .map(
-                |slice| match (hex_to_decimal(slice[0]), hex_to_decimal(slice[1])) {
-                    (Some(h), Some(l)) => Ok(h * 0x10 + l),
-                    _ => Err(()),
-                },
-            )
-            .collect::<Result<Vec<_>, _>>()?;
-
-        Self::from_bytes(&bytes)
     }
 
     pub fn is_user(&self) -> bool {
