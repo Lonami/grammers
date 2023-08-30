@@ -33,10 +33,10 @@ pub enum Error {
     MissingBytes,
 
     /// The length is either too short or too long to represent a valid packet.
-    BadLen { got: u32 },
+    BadLen { got: i32 },
 
     /// The sequence number received does not match the expected value.
-    BadSeq { expected: u32, got: u32 },
+    BadSeq { expected: i32, got: i32 },
 
     /// The checksum of the packet does not match its expected value.
     BadCrc { expected: u32, got: u32 },

@@ -74,7 +74,7 @@ impl Transport for Abridged {
         let len = input[0];
         let len = if len < 127 {
             header_len = 1;
-            len as u32
+            len as i32
         } else {
             if input.len() < 4 {
                 return Err(Error::MissingBytes);
@@ -83,13 +83,16 @@ impl Transport for Abridged {
             header_len = 4;
             let mut len = [0; 4];
             len[..3].copy_from_slice(&input[1..4]);
-            u32::from_le_bytes(len)
+            i32::from_le_bytes(len)
         };
 
-        let len = len as usize * 4;
-        if input.len() < header_len + len {
+        let len = len * 4;
+        if (input.len() as i32) < header_len + len {
             return Err(Error::MissingBytes);
         }
+
+        let header_len = header_len as usize;
+        let len = len as usize;
 
         output.put(&input[header_len..header_len + len]);
         Ok(header_len + len)

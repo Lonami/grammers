@@ -45,7 +45,7 @@ impl Transport for Intermediate {
             self.init = true;
         }
 
-        output.put_u32_le(input.len() as _);
+        output.put_i32_le(input.len() as _);
         output.put(input);
     }
 
@@ -55,10 +55,13 @@ impl Transport for Intermediate {
         }
         let needle = &mut &input[..];
 
-        let len = needle.get_u32_le() as usize;
-        if needle.len() < len {
+        let len = needle.get_i32_le();
+        if (needle.len() as i32) < len {
             return Err(Error::MissingBytes);
         }
+
+        let len = len as usize;
+
         output.put(&needle[..len]);
 
         Ok(len + 4)

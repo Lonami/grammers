@@ -27,8 +27,8 @@ use crc32fast::Hasher;
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
 pub struct Full {
-    send_seq: u32,
-    recv_seq: u32,
+    send_seq: i32,
+    recv_seq: i32,
 }
 
 #[allow(clippy::new_without_default)]
@@ -50,8 +50,8 @@ impl Transport for Full {
         output.reserve(len);
 
         let buf_start = output.len();
-        output.put_u32_le(len as _);
-        output.put_u32_le(self.send_seq);
+        output.put_i32_le(len as _);
+        output.put_i32_le(self.send_seq);
         output.put(input);
         let crc = {
             let mut hasher = Hasher::new();
@@ -69,13 +69,13 @@ impl Transport for Full {
             return Err(Error::MissingBytes);
         }
 
-        let total_len = input.len();
+        let total_len = input.len() as i32;
         let needle = &mut &input[..];
 
         // payload len
-        let len = needle.get_u32_le() as usize;
+        let len = needle.get_i32_le();
         if len < 12 {
-            return Err(Error::BadLen { got: len as u32 });
+            return Err(Error::BadLen { got: len as i32 });
         }
 
         if total_len < len {
@@ -83,13 +83,15 @@ impl Transport for Full {
         }
 
         // receive counter
-        let seq = needle.get_u32_le();
+        let seq = needle.get_i32_le();
         if seq != self.recv_seq {
             return Err(Error::BadSeq {
                 expected: self.recv_seq,
                 got: seq,
             });
         }
+
+        let len = len as usize;
 
         // skip payload for now
         needle.advance(len - 12);
