@@ -33,12 +33,17 @@
 //! }
 //! ```
 use getrandom::getrandom;
+use grammers_crypto::hex;
 use grammers_crypto::{factorize::factorize, rsa, AuthKey};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::{Digest, Sha1};
 use std::fmt;
 use std::time::{SystemTime, UNIX_EPOCH};
+
+// NOTE! Turning this on will leak the key generation process to stdout!
+// Should only be used for debugging purposes and generating test cases.
+const TRACE_AUTH_GEN: bool = false;
 
 /// Represents an error that occured during the generation of an
 /// authorization key.
@@ -219,7 +224,17 @@ pub fn step1() -> Result<(Vec<u8>, Step1), Error> {
         buffer
     };
 
-    do_step1(&random_bytes)
+    if TRACE_AUTH_GEN {
+        println!("r {}", hex::to_hex(&random_bytes));
+    }
+
+    let res = do_step1(&random_bytes);
+    if TRACE_AUTH_GEN {
+        if let Ok((x, _)) = &res {
+            println!("> {}", hex::to_hex(x));
+        }
+    }
+    res
 }
 
 // n.b.: the `do_step` functions are pure so that they can be tested.
@@ -234,13 +249,27 @@ fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), Error> {
 
 /// The second step of the process to generate an authorization key.
 pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), Error> {
+    if TRACE_AUTH_GEN {
+        println!("< {}", hex::to_hex(response));
+    }
+
     let random_bytes = {
         let mut buffer = [0; 32 + 256];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
         buffer
     };
 
-    do_step2(data, response, &random_bytes)
+    if TRACE_AUTH_GEN {
+        println!("r {}", hex::to_hex(&random_bytes));
+    }
+
+    let res = do_step2(data, response, &random_bytes);
+    if TRACE_AUTH_GEN {
+        if let Ok((x, _)) = &res {
+            println!("> {}", hex::to_hex(x));
+        }
+    }
+    res
 }
 
 fn do_step2(
@@ -349,17 +378,32 @@ fn do_step2(
 
 /// The third step of the process to generate an authorization key.
 pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), Error> {
+    if TRACE_AUTH_GEN {
+        println!("< {}", hex::to_hex(response));
+    }
+
     let random_bytes = {
         let mut buffer = [0; 256 + 16];
         getrandom(&mut buffer).expect("failed to generate secure data for auth key");
         buffer
     };
+
+    if TRACE_AUTH_GEN {
+        println!("r {}", hex::to_hex(&random_bytes));
+    }
+
     let now = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system time is before epoch")
         .as_secs() as i32;
 
-    do_step3(data, response, &random_bytes, now)
+    let res = do_step3(data, response, &random_bytes, now);
+    if TRACE_AUTH_GEN {
+        if let Ok((x, _)) = &res {
+            println!("> {}", hex::to_hex(x));
+        }
+    }
+    res
 }
 
 fn do_step3(
@@ -541,6 +585,10 @@ pub struct Finished {
 
 /// The last step of the process to generate an authorization key.
 pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
+    if TRACE_AUTH_GEN {
+        println!("< {}", hex::to_hex(response));
+    }
+
     let Step3 {
         nonce,
         server_nonce,
@@ -601,6 +649,12 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
             .for_each(|((x, a), b)| *x = a ^ b);
         i64::from_le_bytes(buffer)
     };
+
+    if TRACE_AUTH_GEN {
+        println!("a {}", hex::to_hex(&auth_key.to_bytes()));
+        println!("o {}", time_offset);
+        println!("s {}", first_salt);
+    }
 
     // 1 for DhGenOk
     if dh_gen.nonce_number == 1 {
