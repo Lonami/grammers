@@ -8,7 +8,6 @@
 use super::{Deserialization, DeserializeError, Mtp};
 use crate::MsgId;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
-use std::mem;
 
 /// An implementation of the [Mobile Transport Protocol] for plaintext
 /// (unencrypted) messages.
@@ -65,8 +64,9 @@ impl Mtp for Plain {
         Some(MsgId(0))
     }
 
-    fn finalize(&mut self) -> Vec<u8> {
-        mem::take(&mut self.buffer)
+    fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
+        func(self.buffer.as_slice());
+        self.buffer.clear();
     }
 
     /// Validates that the returned data is a correct plain message, and
@@ -126,10 +126,10 @@ mod tests {
         let mut mtp = Plain::new();
 
         mtp.push(REQUEST);
-        assert_eq!(mtp.finalize().len(), 24);
+        mtp.finalize(|buffer| assert_eq!(buffer.len(), 24));
 
         mtp.push(REQUEST);
-        assert_eq!(mtp.finalize().len(), 24);
+        mtp.finalize(|buffer| assert_eq!(buffer.len(), 24));
     }
 
     #[test]

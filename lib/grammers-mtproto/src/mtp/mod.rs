@@ -311,11 +311,12 @@ pub trait Mtp {
     /// payload is below that mark, it's safe to call.
     fn push(&mut self, request: &[u8]) -> Option<MsgId>;
 
-    /// Finalizes the internal buffer of requests.
+    /// Finalizes the internal buffer of requests. A reference to the buffer is
+    /// passed to the callback, and then the buffer is emptied for later reuse.
     ///
     /// Note that even if there are no requests to serialize, the protocol may
     /// produce data that has to be sent after deserializing incoming messages.
-    fn finalize(&mut self) -> Vec<u8>;
+    fn finalize<F: FnMut(&[u8])>(&mut self, func: F);
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;

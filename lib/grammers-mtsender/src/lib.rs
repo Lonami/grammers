@@ -415,9 +415,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 break;
             }
         }
-        let mtp_buffer = self.mtp.finalize();
         self.write_buffer.clear();
-        self.transport.pack(&mtp_buffer, &mut self.write_buffer);
+        self.mtp
+            .finalize(|mtp_buffer| self.transport.pack(&mtp_buffer, &mut self.write_buffer));
 
         // NOTE: we have to use the FILTERED requests, not the saved ones.
         // The key to finding this was printing the old and new state (but took ~2h to find).

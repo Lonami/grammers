@@ -218,9 +218,11 @@ impl Encrypted {
     }
 
     /// `finalize`, but without encryption.
-    fn finalize_plain(&mut self) -> Vec<u8> {
+    ///
+    /// The buffer is *not* cleared, but is instead returned.
+    fn finalize_plain(&mut self) -> &[u8] {
         if self.msg_count == 0 {
-            return Vec::new();
+            return &[];
         }
 
         if self.msg_count == 1 {
@@ -258,7 +260,7 @@ impl Encrypted {
         }
 
         self.msg_count = 0;
-        mem::take(&mut self.buffer)
+        self.buffer.as_slice()
     }
 
     fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
@@ -1210,12 +1212,13 @@ impl Mtp for Encrypted {
         Some(self.serialize_msg(body, true))
     }
 
-    fn finalize(&mut self) -> Vec<u8> {
-        let buffer = self.finalize_plain();
-        if buffer.is_empty() {
-            buffer
+    fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
+        self.finalize_plain();
+        if self.buffer.is_empty() {
+            func(self.buffer.as_slice());
         } else {
-            encrypt_data_v2(&buffer, &self.auth_key)
+            func(encrypt_data_v2(&self.buffer, &self.auth_key).as_slice());
+            self.buffer.clear()
         }
     }
 
