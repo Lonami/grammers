@@ -103,9 +103,6 @@ pub struct Sender<T: Transport, M: Mtp> {
     mtp_buffer: BytesMut,
 
     requests: Vec<Request>,
-    // Need to keep one sender to ensure there will always be at least one channel alive.
-    // Otherwise the receiver would always resolve to `None`.
-    request_tx: mpsc::UnboundedSender<Request>,
     request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
 
@@ -175,7 +172,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
 
                 requests: vec![],
-                request_tx: tx.clone(),
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
 
@@ -260,7 +256,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
 
                 requests: vec![],
-                request_tx: tx.clone(),
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
 
@@ -668,7 +663,6 @@ pub async fn generate_auth_key<T: Transport>(
                 .finish(auth_key),
             mtp_buffer: sender.mtp_buffer,
             requests: sender.requests,
-            request_tx: sender.request_tx,
             request_rx: sender.request_rx,
             next_ping: Instant::now() + PING_DELAY,
             read_buffer: sender.read_buffer,
