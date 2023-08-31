@@ -437,7 +437,7 @@ impl ChatHashCache {
                                     ) => self.has_user(&b.user_id),
                                     tl::enums::KeyboardButton::UserProfile(b) => {
                                         self.has(b.user_id)
-                                    },
+                                    }
                                     _ => true,
                                 }
                                 }),
