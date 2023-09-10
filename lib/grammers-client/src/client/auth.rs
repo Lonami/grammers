@@ -33,7 +33,11 @@ impl fmt::Display for SignInError {
         match self {
             SignUpRequired {
                 terms_of_service: tos,
-            } => write!(f, "sign in error: sign up required: {:?}", tos),
+            } => write!(
+                f,
+                "sign in error: sign up with official client required: {:?}",
+                tos
+            ),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
@@ -429,74 +433,6 @@ impl Client {
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
             Err(err) if err.is("PASSWORD_HASH_INVALID") => Err(SignInError::InvalidPassword),
             Err(error) => Err(SignInError::Other(error)),
-        }
-    }
-
-    /// Signs up a new user account to Telegram.
-    ///
-    /// This method should be used after [`Client::sign_in`] fails with
-    /// [`SignInError::SignUpRequired`]. This is also the only way to know if a certain phone
-    /// number is already reigstered on Telegram or not, by trying and failing to login.
-    ///
-    /// It is recommended to save the [`Client::session()`] on successful sign up, and if saving
-    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
-    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    ///  async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// # let token = client.request_login_code("", 0, "").await?;
-    /// # let code = "".to_string();
-    ///
-    /// use grammers_client::SignInError;
-    ///
-    /// let user = match client.sign_in(&token, &code).await {
-    ///     Ok(_user) => {
-    ///         println!("Can't create a new account because one already existed!");
-    ///         return Err("account already exists".into());
-    ///     }
-    ///     Err(SignInError::PasswordRequired(_password_information)) => {
-    ///         println!("Can't create a new account because one already existed!");
-    ///         return Err("account already exists".into());
-    ///     }
-    ///     Err(SignInError::SignUpRequired { terms_of_service }) => {
-    ///         println!("Signing up! You must agree to these TOS: {:?}", terms_of_service);
-    ///         client.sign_up(&token, "My first name", "(optional last name)").await?
-    ///     }
-    ///     Err(err) => {
-    ///         println!("Something else went wrong... {}", err);
-    ///         return Err(err.into());
-    ///     }
-    /// };
-    ///
-    /// println!("Signed up as {}!", user.first_name());
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn sign_up(
-        &self,
-        token: &LoginToken,
-        first_name: &str,
-        last_name: &str,
-    ) -> Result<User, AuthorizationError> {
-        // TODO accept tos? maybe accept method in the tos object?
-        match self
-            .invoke(&tl::functions::auth::SignUp {
-                phone_number: token.phone.clone(),
-                phone_code_hash: token.phone_code_hash.clone(),
-                first_name: first_name.to_string(),
-                last_name: last_name.to_string(),
-            })
-            .await
-        {
-            Ok(tl::enums::auth::Authorization::Authorization(x)) => {
-                self.complete_login(x).await.map_err(Into::into)
-            }
-            Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
-                panic!("API returned SignUpRequired even though we just invoked SignUp");
-            }
-            Err(error) => Err(error.into()),
         }
     }
 
