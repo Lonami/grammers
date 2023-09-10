@@ -30,7 +30,7 @@ use crate::message_box::defs::PossibleGap;
 use crate::UpdateState;
 pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
-use defs::{PtsInfo, State, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
+use defs::{PtsInfo, State, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
@@ -53,8 +53,8 @@ impl MessageBox {
         trace!("created new message box with no previous state");
         Self {
             map: HashMap::new(),
-            date: 1,
-            seq: 0,
+            date: 1, // non-zero or getting difference will fail
+            seq: NO_SEQ,
             possible_gaps: HashMap::new(),
             getting_diff_for: HashSet::new(),
             next_deadline: None,
@@ -108,12 +108,12 @@ impl MessageBox {
                 .map
                 .get(&Entry::AccountWide)
                 .map(|s| s.pts)
-                .unwrap_or(0),
+                .unwrap_or(NO_PTS),
             qts: self
                 .map
                 .get(&Entry::SecretChats)
                 .map(|s| s.pts)
-                .unwrap_or(0),
+                .unwrap_or(NO_PTS),
             date: self.date,
             seq: self.seq,
             channels: self
@@ -440,7 +440,7 @@ impl MessageBox {
         fn update_sort_key(update: &tl::enums::Update) -> i32 {
             match PtsInfo::from_update(update) {
                 Some(pts) => pts.pts - pts.pts_count,
-                None => 0,
+                None => NO_PTS,
             }
         }
 
@@ -482,7 +482,9 @@ impl MessageBox {
         // should not cause `seq` to be updated (or upcoming updates such as
         // `UpdateChatParticipant` could be missed).
         if any_pts_applied {
-            self.date = date;
+            if date != NO_DATE {
+                self.date = date;
+            }
             if seq != NO_SEQ {
                 self.seq = seq;
             }
@@ -764,7 +766,7 @@ impl MessageBox {
             updates,
             users,
             chats,
-            date: 1,
+            date: NO_DATE,
             seq: NO_SEQ,
         });
 
@@ -942,7 +944,7 @@ impl MessageBox {
                     updates,
                     users,
                     chats,
-                    date: 1,
+                    date: NO_DATE,
                     seq: NO_SEQ,
                 });
                 let (users, chats) = self
