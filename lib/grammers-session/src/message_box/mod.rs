@@ -170,11 +170,11 @@ impl MessageBox {
                 deadline
             };
 
-        if now > deadline {
+        if now >= deadline {
             // Check all expired entries and add them to the list that needs getting difference.
             self.getting_diff_for
                 .extend(self.possible_gaps.iter().filter_map(|(entry, gap)| {
-                    if now > gap.deadline {
+                    if now >= gap.deadline {
                         info!("gap was not resolved after waiting for {:?}", entry);
                         Some(entry)
                     } else {
@@ -184,7 +184,7 @@ impl MessageBox {
 
             self.getting_diff_for
                 .extend(self.map.iter().filter_map(|(entry, state)| {
-                    if now > state.deadline {
+                    if now >= state.deadline {
                         debug!("too much time has passed without updates for {:?}", entry);
                         Some(entry)
                     } else {
