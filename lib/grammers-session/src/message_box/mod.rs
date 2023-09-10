@@ -388,8 +388,14 @@ impl MessageBox {
         &mut self,
         updates: tl::enums::Updates,
         chat_hashes: &ChatHashCache,
-        result: &mut Vec<tl::enums::Update>,
-    ) -> Result<(Vec<tl::enums::User>, Vec<tl::enums::Chat>), Gap> {
+    ) -> Result<
+        (
+            Vec<tl::enums::Update>,
+            Vec<tl::enums::User>,
+            Vec<tl::enums::Chat>,
+        ),
+        Gap,
+    > {
         trace!("processing updates: {:?}", updates);
         // Top level, when handling received `updates` and `updatesCombined`.
         // `updatesCombined` groups all the fields we care about, which is why we use it.
@@ -424,7 +430,7 @@ impl MessageBox {
                         "skipping updates that were already handled at seq = {}",
                         self.seq
                     );
-                    return Ok((users, chats));
+                    return Ok((Vec::new(), users, chats));
                 }
                 Ordering::Less => {
                     debug!(
@@ -448,6 +454,9 @@ impl MessageBox {
         // and then `NewChannelMessage`, both with the same `pts`, but the `count`
         // is `0` and `1` respectively), so we sort them first.
         updates.sort_by_key(update_sort_key);
+
+        // Adding `possible_gaps.len()` is a guesstimate. Often it's just one update.
+        let mut result = Vec::with_capacity(updates.len() + self.possible_gaps.len());
 
         // This loop does a lot at once to reduce the amount of times we need to iterate over
         // the updates as an optimization.
@@ -517,7 +526,7 @@ impl MessageBox {
             }
         }
 
-        Ok((users, chats))
+        Ok((result, users, chats))
     }
 
     /// Tries to apply the input update if its `PtsInfo` follows the correct order.
@@ -761,7 +770,6 @@ impl MessageBox {
 
         // other_updates can contain things like UpdateChannelTooLong and UpdateNewChannelMessage.
         // We need to process those as if they were socket updates to discard any we have already handled.
-        let mut result_updates = vec![];
         let us = tl::enums::Updates::Updates(tl::types::Updates {
             updates,
             users,
@@ -772,8 +780,8 @@ impl MessageBox {
 
         // It is possible that the result from `GetDifference` includes users with `min = true`.
         // TODO in that case, we will have to resort to getUsers.
-        let (users, chats) = self
-            .process_updates(us, chat_hashes, &mut result_updates)
+        let (mut result_updates, users, chats) = self
+            .process_updates(us, chat_hashes)
             .expect("gap is detected while applying difference");
 
         result_updates.extend(
@@ -939,7 +947,6 @@ impl MessageBox {
                 }
 
                 self.map.get_mut(&entry).unwrap().pts = pts;
-                let mut result_updates = vec![];
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
                     users,
@@ -947,8 +954,8 @@ impl MessageBox {
                     date: NO_DATE,
                     seq: NO_SEQ,
                 });
-                let (users, chats) = self
-                    .process_updates(us, chat_hashes, &mut result_updates)
+                let (mut result_updates, users, chats) = self
+                    .process_updates(us, chat_hashes)
                     .expect("gap is detected while applying channel difference");
 
                 result_updates.extend(new_messages.into_iter().map(|message| {

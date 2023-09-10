@@ -196,8 +196,9 @@ impl Client {
             {
                 return;
             }
-            match message_box.process_updates(updates, &chat_hashes, &mut result.0) {
-                Ok((users, chats)) => {
+            match message_box.process_updates(updates, &chat_hashes) {
+                Ok((updates, users, chats)) => {
+                    result.0.extend(updates);
                     result.1.extend(users);
                     result.2.extend(chats);
                 }
