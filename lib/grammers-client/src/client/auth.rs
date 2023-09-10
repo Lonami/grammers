@@ -75,7 +75,7 @@ impl Client {
     pub async fn is_authorized(&self) -> Result<bool, InvocationError> {
         match self.invoke(&tl::functions::updates::GetState {}).await {
             Ok(_) => Ok(true),
-            Err(InvocationError::Rpc(_)) => Ok(false),
+            Err(InvocationError::Rpc(e)) if e.code == 401 => Ok(false),
             Err(err) => Err(err),
         }
     }
