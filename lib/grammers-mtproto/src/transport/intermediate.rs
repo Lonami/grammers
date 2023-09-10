@@ -119,4 +119,20 @@ mod tests {
         transport.unpack(&packed[4..], &mut unpacked).unwrap();
         assert_eq!(input, unpacked);
     }
+
+    #[test]
+    fn unpack_two_at_once() {
+        let (mut transport, input, mut packed) = setup_pack(128);
+        let mut unpacked = BytesMut::new();
+        transport.pack(&input, &mut packed);
+        let two_input = packed
+            .iter()
+            .copied()
+            .skip(4)
+            .chain(packed.iter().copied().skip(4))
+            .collect::<Vec<_>>();
+        let n = transport.unpack(&two_input, &mut unpacked).unwrap();
+        assert_eq!(input, unpacked);
+        assert_eq!(n, packed.len() - 4);
+    }
 }
