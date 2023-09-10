@@ -185,7 +185,7 @@ impl Client {
             return;
         }
 
-        let mut result = (Vec::new(), Vec::new(), Vec::new());
+        let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
         let mut message_box = self.0.message_box.lock("client.process_socket_updates");
         let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
 
@@ -197,17 +197,22 @@ impl Client {
                 return;
             }
             match message_box.process_updates(updates, &chat_hashes) {
-                Ok((updates, users, chats)) => {
-                    result.0.extend(updates);
-                    result.1.extend(users);
-                    result.2.extend(chats);
+                Ok(tup) => {
+                    if let Some(res) = result.as_mut() {
+                        res.0.extend(tup.0);
+                        res.1.extend(tup.1);
+                        res.2.extend(tup.2);
+                    } else {
+                        result = Some(tup);
+                    }
                 }
                 Err(_) => return,
             }
         }
 
-        let (updates, users, chats) = result;
-        self.extend_update_queue(updates, ChatMap::new(users, chats));
+        if let Some((updates, users, chats)) = result {
+            self.extend_update_queue(updates, ChatMap::new(users, chats));
+        }
     }
 
     fn extend_update_queue(&self, mut updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
