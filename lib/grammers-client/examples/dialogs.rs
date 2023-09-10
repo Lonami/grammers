@@ -61,7 +61,7 @@ async fn async_main() -> Result<()> {
     if !client.is_authorized().await? {
         println!("Signing in...");
         let phone = prompt("Enter your phone number (international format): ")?;
-        let token = client.request_login_code(&phone, api_id, &api_hash).await?;
+        let token = client.request_login_code(&phone).await?;
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
