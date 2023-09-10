@@ -26,6 +26,8 @@ mod adaptor;
 mod defs;
 
 use super::ChatHashCache;
+use crate::generated::enums::ChannelState as ChannelStateEnum;
+use crate::generated::types::ChannelState;
 use crate::message_box::defs::PossibleGap;
 use crate::UpdateState;
 pub(crate) use defs::Entry;
@@ -81,12 +83,15 @@ impl MessageBox {
                 deadline,
             },
         );
-        map.extend(
-            state
-                .channels
-                .iter()
-                .map(|(&id, &pts)| (Entry::Channel(id), State { pts, deadline })),
-        );
+        map.extend(state.channels.iter().map(|ChannelStateEnum::State(c)| {
+            (
+                Entry::Channel(c.channel_id),
+                State {
+                    pts: c.pts,
+                    deadline,
+                },
+            )
+        }));
 
         Self {
             map,
@@ -120,7 +125,13 @@ impl MessageBox {
                 .map
                 .iter()
                 .filter_map(|(entry, s)| match entry {
-                    Entry::Channel(id) => Some((*id, s.pts)),
+                    Entry::Channel(id) => Some(
+                        ChannelState {
+                            channel_id: *id,
+                            pts: s.pts,
+                        }
+                        .into(),
+                    ),
                     _ => None,
                 })
                 .collect(),
