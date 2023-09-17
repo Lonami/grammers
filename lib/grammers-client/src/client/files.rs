@@ -125,9 +125,9 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
-    /// let mut download = client.iter_download(&media);
+    /// let mut download = client.iter_download(&downloadable);
     ///
     /// while let Some(chunk) = download.next().await? {
     ///     file_bytes.extend(chunk);
@@ -151,8 +151,8 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(media: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.download_media(&media, "/home/username/photos/holidays.jpg").await?;
+    /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.download_media(&downloadable, "/home/username/photos/holidays.jpg").await?;
     /// # Ok(())
     /// # }
     /// ```
