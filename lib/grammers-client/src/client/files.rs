@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Media, Uploaded};
+use crate::types::{Media, Uploaded, Downloadable};
 use crate::utils::{generate_random_id, AsyncMutex};
 use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
@@ -32,8 +32,8 @@ pub struct DownloadIter {
 }
 
 impl DownloadIter {
-    fn new(client: &Client, media: &Media) -> Self {
-        DownloadIter::new_from_file_location(client, media.to_input_location().unwrap())
+    fn new(client: &Client, downloadable: &Downloadable) -> Self {
+        DownloadIter::new_from_file_location(client, downloadable.to_input_location().unwrap())
     }
 
     fn new_from_location(client: &Client, location: tl::enums::InputFileLocation) -> Self {
@@ -137,8 +137,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_download(&self, media: &Media) -> DownloadIter {
-        DownloadIter::new(self, media)
+    pub fn iter_download(&self, downloadable: &Downloadable) -> DownloadIter {
+        DownloadIter::new(self, downloadable)
     }
 
     /// Downloads a media file into the specified path.
@@ -158,19 +158,21 @@ impl Client {
     /// ```
     pub async fn download_media<P: AsRef<Path>>(
         &self,
-        media: &Media,
+        downloadable: &Downloadable,
         path: P,
     ) -> Result<(), io::Error> {
         // Concurrent downloader
-        if let Media::Document(document) = media {
-            if document.size() as usize > BIG_FILE_SIZE {
-                return self
-                    .download_media_concurrent(media, path, WORKER_COUNT)
-                    .await;
+        if let Downloadable::Media(media) = downloadable{
+            if let Media::Document(document) = media {
+                if document.size() as usize > BIG_FILE_SIZE {
+                    return self
+                        .download_media_concurrent(media, path, WORKER_COUNT)
+                        .await;
+                }
             }
         }
 
-        let mut download = self.iter_download(media);
+        let mut download = self.iter_download(downloadable);
         Client::load(path, &mut download).await
     }
 
