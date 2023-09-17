@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Media, Uploaded, Downloadable};
+use crate::types::{Downloadable, Media, Uploaded};
 use crate::utils::{generate_random_id, AsyncMutex};
 use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
@@ -162,7 +162,7 @@ impl Client {
         path: P,
     ) -> Result<(), io::Error> {
         // Concurrent downloader
-        if let Downloadable::Media(media) = downloadable{
+        if let Downloadable::Media(media) = downloadable {
             if let Media::Document(document) = media {
                 if document.size() as usize > BIG_FILE_SIZE {
                     return self

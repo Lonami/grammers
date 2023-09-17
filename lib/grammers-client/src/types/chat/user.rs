@@ -201,18 +201,12 @@ impl User {
 
     /// Return the photo of this user, if any.
     pub fn photo(&self) -> Option<&tl::types::UserProfilePhoto> {
-        match self.0.photo.as_ref(){
-            Some(maybe_photo) => {
-                match maybe_photo{
-                    tl::enums::UserProfilePhoto::Empty =>{
-                        None
-                    },
-                    tl::enums::UserProfilePhoto::Photo(photo) => {
-                        Some(photo)
-                    }
-                }
-            }
-            None => None
+        match self.0.photo.as_ref() {
+            Some(maybe_photo) => match maybe_photo {
+                tl::enums::UserProfilePhoto::Empty => None,
+                tl::enums::UserProfilePhoto::Photo(photo) => Some(photo),
+            },
+            None => None,
         }
     }
 

@@ -37,7 +37,7 @@ pub use chat_map::ChatMap;
 pub(crate) use chat_map::Peer;
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
-pub use downloadable::{Downloadable, UserProfilePhoto, ChatPhoto};
+pub use downloadable::{ChatPhoto, Downloadable, UserProfilePhoto};
 pub use inline_query::InlineQuery;
 pub use input_message::InputMessage;
 pub use iter_buffer::IterBuffer;
