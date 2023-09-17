@@ -2,9 +2,9 @@ use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct UserProfilePhoto {
-    photo: tl::types::UserProfilePhoto,
-    big: bool,
-    peer: tl::enums::InputPeer,
+    pub big: bool,
+    pub peer: tl::enums::InputPeer,
+    pub photo: tl::types::UserProfilePhoto,
 }
 
 impl UserProfilePhoto {
@@ -21,9 +21,9 @@ impl UserProfilePhoto {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChatPhoto {
-    photo: tl::types::ChatPhoto,
-    big: bool,
-    peer: tl::enums::InputPeer
+    pub big: bool,
+    pub peer: tl::enums::InputPeer,
+    pub photo: tl::types::ChatPhoto,
 }
 
 impl ChatPhoto {
