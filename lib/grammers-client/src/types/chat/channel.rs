@@ -134,11 +134,22 @@ impl Channel {
         self.0.username.as_deref()
     }
 
+<<<<<<< HEAD
     /// Return the photo of this channel, if any.
     pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
         match &self.0.photo {
             tl::enums::ChatPhoto::Empty => None,
             tl::enums::ChatPhoto::Photo(photo) => Some(photo),
+=======
+
+    /// Return the photo of this channel, if any.
+    pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
+        match &self.0.photo{
+            tl::enums::ChatPhoto::Empty => None,
+            tl::enums::ChatPhoto::Photo(photo) => {
+                Some(photo)
+            }
+>>>>>>> 69860c5 (Create photo method for grammers_client::types::chat::Chat)
         }
     }
 
