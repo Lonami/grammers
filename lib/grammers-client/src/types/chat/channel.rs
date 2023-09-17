@@ -126,6 +126,14 @@ impl Channel {
         self.0.username.as_deref()
     }
 
+    /// Return the photo of this channel, if any.
+    pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
+        match &self.0.photo {
+            tl::enums::ChatPhoto::Empty => None,
+            tl::enums::ChatPhoto::Photo(photo) => Some(photo),
+        }
+    }
+
     /// Return the permissions of the logged-in user in this channel.
     pub fn admin_rights(&self) -> Option<&tl::types::ChatAdminRights> {
         match &self.0.admin_rights {

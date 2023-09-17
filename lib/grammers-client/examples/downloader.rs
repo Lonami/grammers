@@ -122,7 +122,7 @@ async fn async_main() -> Result<()> {
                 get_file_extension(&media)
             );
             client_handle
-                .download_media(&media, &Path::new(dest.as_str()))
+                .download_media(&Downloadable::Media(media), &Path::new(dest.as_str()))
                 .await
                 .expect("Error downloading message");
         }

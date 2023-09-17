@@ -7,7 +7,7 @@
 // except according to those terms.
 #[cfg(any(feature = "markdown", feature = "html"))]
 use crate::parsers;
-use crate::types::{InputMessage, Media, Photo};
+use crate::types::{Downloadable, InputMessage, Media, Photo};
 use crate::utils;
 use crate::ChatMap;
 use crate::{types, Client};
@@ -524,7 +524,10 @@ impl Message {
     pub async fn download_media<P: AsRef<Path>>(&self, path: P) -> Result<bool, io::Error> {
         // TODO probably encode failed download in error
         if let Some(media) = self.media() {
-            self.client.download_media(&media, path).await.map(|_| true)
+            self.client
+                .download_media(&Downloadable::Media(media), path)
+                .await
+                .map(|_| true)
         } else {
             Ok(false)
         }
