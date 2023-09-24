@@ -10,13 +10,13 @@ mod generated;
 mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
+pub use generated::types::UpdateState;
 pub use generated::types::User;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::{channel_id, PrematureEndReason};
 pub use message_box::{Gap, MessageBox};
-use std::collections::HashMap;
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
@@ -26,15 +26,6 @@ use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
-
-#[derive(Debug)]
-pub struct UpdateState {
-    pub pts: i32,
-    pub qts: i32,
-    pub date: i32,
-    pub seq: i32,
-    pub channels: HashMap<i64, i32>,
-}
 
 pub struct Session {
     session: Mutex<types::Session>,
@@ -156,35 +147,12 @@ impl Session {
 
     pub fn get_state(&self) -> Option<UpdateState> {
         let session = self.session.lock().unwrap();
-        let enums::UpdateState::State(state) = session.state.as_ref()?;
-        Some(UpdateState {
-            pts: state.pts,
-            qts: state.qts,
-            date: state.date,
-            seq: state.seq,
-            channels: state
-                .channels
-                .iter()
-                .map(|enums::ChannelState::State(s)| (s.channel_id, s.pts))
-                .collect(),
-        })
+        let enums::UpdateState::State(state) = session.state.clone()?;
+        Some(state)
     }
 
     pub fn set_state(&self, state: UpdateState) {
-        self.session.lock().unwrap().state = Some(
-            types::UpdateState {
-                pts: state.pts,
-                qts: state.qts,
-                date: state.date,
-                seq: state.seq,
-                channels: state
-                    .channels
-                    .into_iter()
-                    .map(|(channel_id, pts)| types::ChannelState { channel_id, pts }.into())
-                    .collect(),
-            }
-            .into(),
-        )
+        self.session.lock().unwrap().state = Some(state.into())
     }
 
     pub fn get_dcs(&self) -> Vec<types::DataCenter> {

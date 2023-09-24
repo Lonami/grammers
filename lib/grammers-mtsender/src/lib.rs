@@ -576,11 +576,32 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match tl::enums::Updates::from_bytes(update) {
                 Ok(u) => Some(u),
                 Err(e) => {
-                    warn!(
-                        "telegram sent updates that failed to be deserialized: {}",
-                        e
-                    );
-                    None
+                    // Annoyingly enough, `messages.affectedMessages` also has `pts`.
+                    // Mostly received when deleting messages, so pretend that's the
+                    // update that actually occured.
+                    match tl::enums::messages::AffectedMessages::from_bytes(update) {
+                        Ok(tl::enums::messages::AffectedMessages::Messages(
+                            tl::types::messages::AffectedMessages { pts, pts_count },
+                        )) => Some(
+                            tl::types::UpdateShort {
+                                update: tl::types::UpdateDeleteMessages {
+                                    messages: Vec::new(),
+                                    pts,
+                                    pts_count,
+                                }
+                                .into(),
+                                date: 0,
+                            }
+                            .into(),
+                        ),
+                        Err(_) => {
+                            warn!(
+                                "telegram sent updates that failed to be deserialized: {}",
+                                e
+                            );
+                            None
+                        }
+                    }
                 }
             }
         }));
