@@ -281,11 +281,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             );
                             break Err(err);
                         }
-                        *self =
+                        self.stream =
                             Sender::connect(self.transport.clone(), self.mtp.clone(), self.addr)
                                 .await
                                 .unwrap()
-                                .0;
+                                .0
+                                .stream;
                     }
                     _ => break Err(err),
                 },
