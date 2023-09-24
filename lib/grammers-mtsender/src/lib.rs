@@ -22,7 +22,7 @@ use std::time::SystemTime;
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{ReadHalf, WriteHalf};
-use tokio::net::{TcpStream};
+use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -77,7 +77,6 @@ pub(crate) fn generate_random_id() -> i64 {
 
     LAST_ID.fetch_add(1, Ordering::SeqCst)
 }
-
 
 pub enum NetStream {
     Tcp(TcpStream),
@@ -232,8 +231,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
                             socks_addr, addr, username, password,
                         )
-                            .await
-                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     )
                 }
             }
@@ -267,25 +266,29 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-
         let mut attempts = 0u8;
         loop {
             let rx = self.enqueue_body(request.to_bytes());
             let res = self.step_until_receive(rx).await;
             match res {
                 Ok(ok) => break Ok(ok),
-                Err(err) => {
-                    match &err {
-                        InvocationError::Read(read) if read.to_string().contains("read 0 bytes") => {
-                            if attempts > 5 {
-                                log::error!("attempted more than {} times for reconnection and failed",attempts);
-                                break Err(err);
-                            }
-                            *self = Sender::connect(self.transport.clone(), self.mtp.clone(), self.addr).await.unwrap().0;
+                Err(err) => match &err {
+                    InvocationError::Read(read) if read.to_string().contains("read 0 bytes") => {
+                        if attempts > 5 {
+                            log::error!(
+                                "attempted more than {} times for reconnection and failed",
+                                attempts
+                            );
+                            break Err(err);
                         }
-                        _ => break Err(err),
+                        *self =
+                            Sender::connect(self.transport.clone(), self.mtp.clone(), self.addr)
+                                .await
+                                .unwrap()
+                                .0;
                     }
-                }
+                    _ => break Err(err),
+                },
             }
 
             attempts += 1;
@@ -532,7 +535,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     ping_id,
                     disconnect_delay: NO_PING_DISCONNECT,
                 }
-                    .to_bytes(),
+                .to_bytes(),
             ),
         );
         self.next_ping = Instant::now() + PING_DELAY;
@@ -639,8 +642,11 @@ pub async fn connect<T: Transport>(
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy<'a, T: Transport>(transport: T, addr: std::net::SocketAddr, proxy_url: &str) ->
-Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+pub async fn connect_via_proxy<'a, T: Transport>(
+    transport: T,
+    addr: std::net::SocketAddr,
+    proxy_url: &str,
+) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let (sender, enqueuer) =
         Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
     generate_auth_key(sender, enqueuer).await
@@ -712,5 +718,5 @@ pub async fn connect_via_proxy_with_auth<'a, T: Transport>(
         addr,
         proxy_url,
     )
-        .await
+    .await
 }
