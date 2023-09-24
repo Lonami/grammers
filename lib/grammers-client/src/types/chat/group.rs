@@ -129,6 +129,23 @@ impl Group {
         }
     }
 
+    // Return photo of this group, if any.
+    pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
+        match &self.0 {
+            tl::enums::Chat::Empty(_)
+            | tl::enums::Chat::Forbidden(_)
+            | tl::enums::Chat::ChannelForbidden(_) => None,
+            tl::enums::Chat::Chat(chat) => match &chat.photo {
+                tl::enums::ChatPhoto::Empty => None,
+                tl::enums::ChatPhoto::Photo(photo) => Some(photo),
+            },
+            tl::enums::Chat::Channel(channel) => match &channel.photo {
+                tl::enums::ChatPhoto::Empty => None,
+                tl::enums::ChatPhoto::Photo(photo) => Some(photo),
+            },
+        }
+    }
+
     /// Returns true if this group is a megagroup (also known as supergroups).
     ///
     /// In case inner type of group is Channel, that means it's a megagroup.

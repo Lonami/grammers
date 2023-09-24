@@ -199,6 +199,17 @@ impl User {
         self.0.phone.as_deref()
     }
 
+    /// Return the photo of this user, if any.
+    pub fn photo(&self) -> Option<&tl::types::UserProfilePhoto> {
+        match self.0.photo.as_ref() {
+            Some(maybe_photo) => match maybe_photo {
+                tl::enums::UserProfilePhoto::Empty => None,
+                tl::enums::UserProfilePhoto::Photo(photo) => Some(photo),
+            },
+            None => None,
+        }
+    }
+
     /// Does this user represent the account that's currently logged in?
     pub fn is_self(&self) -> bool {
         // TODO if is_self is false, check in chat cache if id == ourself

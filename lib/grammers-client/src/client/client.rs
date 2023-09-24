@@ -68,11 +68,12 @@ pub struct InitParams {
     /// 17 seconds. If the error was for 21s, it would propagate the error instead.
     ///
     /// By default, the library will sleep on flood-waits below or equal to one minute (60
-    /// seconds), but this can be disabled by passing `None`.
+    /// seconds), but this can be disabled by passing `0` (since all flood errors would be
+    /// higher and exceed the threshold).
     ///
     /// On flood, the library will retry *once*. If the flood error occurs a second time after
     /// sleeping, the error will be returned.
-    pub flood_sleep_threshold: Option<u32>,
+    pub flood_sleep_threshold: u32,
     /// How many updates may be buffered by the client at any given time.
     ///
     /// Telegram passively sends updates to the client through the open connection, so they must
@@ -170,7 +171,7 @@ impl Default for InitParams {
             lang_code,
             catch_up: false,
             server_addr: None,
-            flood_sleep_threshold: Some(60),
+            flood_sleep_threshold: 60,
             update_queue_limit: Some(100),
             #[cfg(feature = "proxy")]
             proxy_url: None,

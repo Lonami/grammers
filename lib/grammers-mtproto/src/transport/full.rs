@@ -198,6 +198,26 @@ mod tests {
     }
 
     #[test]
+    fn unpack_two_at_once() {
+        let (expected_output, mut transport, input, mut output) = setup_unpack(128);
+        let two_input = input
+            .iter()
+            .copied()
+            .chain(input.iter().copied())
+            .collect::<Vec<_>>();
+        let n = transport.unpack(&two_input, &mut output).unwrap();
+        assert_eq!(output, expected_output);
+        assert_eq!(n, input.len());
+        assert!(matches!(
+            transport.unpack(&input, &mut output),
+            Err(Error::BadSeq {
+                expected: 1,
+                got: 0
+            })
+        ));
+    }
+
+    #[test]
     fn unpack_twice() {
         let (mut transport, input, mut packed) = setup_pack(128);
         let mut unpacked = BytesMut::new();

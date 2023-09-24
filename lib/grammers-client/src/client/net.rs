@@ -261,7 +261,7 @@ impl Client {
         notifier: &Notify,
     ) -> Result<R::Return, InvocationError> {
         let mut slept_flood = false;
-        let sleep_thresh = self.0.config.params.flood_sleep_threshold.unwrap_or(0);
+        let sleep_thresh = self.0.config.params.flood_sleep_threshold;
 
         let mut rx = enqueuer.lock("invoke").enqueue(request);
         loop {

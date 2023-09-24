@@ -21,6 +21,11 @@ pub(super) const NO_SEQ: i32 = 0;
 /// Not ignoring the `pts` information in those updates can lead to failures resolving gaps.
 pub(super) const NO_PTS: i32 = 0;
 
+/// Non-update types like `messages.affectedMessages` can contain `pts` that should still be
+/// processed. Because there's no `date`, a value of `0` is used as the sentinel value for
+/// the `date` when constructing the dummy `Updates` (in order to handle them uniformly).
+pub(super) const NO_DATE: i32 = 0;
+
 // See https://core.telegram.org/method/updates.getChannelDifference.
 pub(super) const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
 pub(super) const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
