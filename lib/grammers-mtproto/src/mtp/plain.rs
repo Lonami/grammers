@@ -26,6 +26,7 @@ use grammers_tl_types::{Cursor, Deserializable, Serializable};
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 /// [`Mtp`]: struct.Mtp.html
 #[non_exhaustive]
+#[derive(Clone)]
 pub struct Plain {
     buffer: Vec<u8>,
 }

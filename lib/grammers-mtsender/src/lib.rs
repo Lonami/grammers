@@ -22,7 +22,7 @@ use std::time::SystemTime;
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{ReadHalf, WriteHalf};
-use tokio::net::{TcpStream, ToSocketAddrs};
+use tokio::net::{TcpStream};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
@@ -32,7 +32,6 @@ use {
     std::io::ErrorKind,
     std::net::{IpAddr, SocketAddr},
     tokio_socks::tcp::Socks5Stream,
-    tokio_socks::IntoTargetAddr,
     trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
     trust_dns_resolver::AsyncResolver,
     url::Host,
@@ -79,6 +78,7 @@ pub(crate) fn generate_random_id() -> i64 {
     LAST_ID.fetch_add(1, Ordering::SeqCst)
 }
 
+
 pub enum NetStream {
     Tcp(TcpStream),
     #[cfg(feature = "proxy")]
@@ -96,12 +96,13 @@ impl NetStream {
 }
 
 // Manages enqueuing requests, matching them to their response, and IO.
+
 pub struct Sender<T: Transport, M: Mtp> {
     stream: NetStream,
     transport: T,
     mtp: M,
     mtp_buffer: BytesMut,
-
+    addr: std::net::SocketAddr,
     requests: Vec<Request>,
     request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
@@ -154,23 +155,21 @@ impl Enqueuer {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect<'a, A: ToSocketAddrs>(
+    async fn connect<'a>(
         transport: T,
         mtp: M,
-        addr: A,
+        addr: std::net::SocketAddr,
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
-
-        let stream = NetStream::Tcp(TcpStream::connect(addr).await?);
+        let stream = NetStream::Tcp(TcpStream::connect(addr.clone()).await?);
         let (tx, rx) = mpsc::unbounded_channel();
-
         Ok((
             Self {
                 stream,
                 transport,
                 mtp,
                 mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-
+                addr,
                 requests: vec![],
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
@@ -184,10 +183,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     #[cfg(feature = "proxy")]
-    async fn connect_via_proxy<'a, A: IntoTargetAddr<'a>>(
+    async fn connect_via_proxy<'a>(
         transport: T,
         mtp: M,
-        addr: A,
+        addr: SocketAddr,
         proxy_url: &str,
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
@@ -233,8 +232,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
                             socks_addr, addr, username, password,
                         )
-                        .await
-                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                            .await
+                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     )
                 }
             }
@@ -254,7 +253,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 transport,
                 mtp,
                 mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-
+                addr,
                 requests: vec![],
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
@@ -268,8 +267,29 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-        let rx = self.enqueue_body(request.to_bytes());
-        self.step_until_receive(rx).await
+
+        let mut attempts = 0u8;
+        loop {
+            let rx = self.enqueue_body(request.to_bytes());
+            let res = self.step_until_receive(rx).await;
+            match res {
+                Ok(ok) => break Ok(ok),
+                Err(err) => {
+                    match &err {
+                        InvocationError::Read(read) if read.to_string().contains("read 0 bytes") => {
+                            if attempts > 5 {
+                                log::error!("attempted more than {} times for reconnection and failed",attempts);
+                                break Err(err);
+                            }
+                            *self = Sender::connect(self.transport.clone(), self.mtp.clone(), self.addr).await.unwrap().0;
+                        }
+                        _ => break Err(err),
+                    }
+                }
+            }
+
+            attempts += 1;
+        }
     }
 
     /// Like `invoke` but raw data.
@@ -512,7 +532,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     ping_id,
                     disconnect_delay: NO_PING_DISCONNECT,
                 }
-                .to_bytes(),
+                    .to_bytes(),
             ),
         );
         self.next_ping = Instant::now() + PING_DELAY;
@@ -610,20 +630,17 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
     }
 }
 
-pub async fn connect<T: Transport, A: ToSocketAddrs>(
+pub async fn connect<T: Transport>(
     transport: T,
-    addr: A,
+    addr: std::net::SocketAddr,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr).await?;
     generate_auth_key(sender, enqueuer).await
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy<'a, T: Transport, A: IntoTargetAddr<'a>>(
-    transport: T,
-    addr: A,
-    proxy_url: &str,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+pub async fn connect_via_proxy<'a, T: Transport>(transport: T, addr: std::net::SocketAddr, proxy_url: &str) ->
+Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let (sender, enqueuer) =
         Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
     generate_auth_key(sender, enqueuer).await
@@ -668,23 +685,24 @@ pub async fn generate_auth_key<T: Transport>(
             read_buffer: sender.read_buffer,
             write_buffer: sender.write_buffer,
             write_index: sender.write_index,
+            addr: sender.addr,
         },
         enqueuer,
     ))
 }
 
-pub async fn connect_with_auth<T: Transport, A: ToSocketAddrs>(
+pub async fn connect_with_auth<T: Transport>(
     transport: T,
-    addr: A,
+    addr: std::net::SocketAddr,
     auth_key: [u8; 256],
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
     Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
 }
 
 #[cfg(feature = "proxy")]
-pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: IntoTargetAddr<'a>>(
+pub async fn connect_via_proxy_with_auth<'a, T: Transport>(
     transport: T,
-    addr: A,
+    addr: std::net::SocketAddr,
     auth_key: [u8; 256],
     proxy_url: &str,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
@@ -694,5 +712,5 @@ pub async fn connect_via_proxy_with_auth<'a, T: Transport, A: IntoTargetAddr<'a>
         addr,
         proxy_url,
     )
-    .await
+        .await
 }

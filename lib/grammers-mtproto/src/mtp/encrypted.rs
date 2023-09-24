@@ -50,6 +50,7 @@ pub struct Builder {
 /// (encrypted) messages.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+#[derive(Clone)]
 pub struct Encrypted {
     /// The authorization key to use to encrypt payload.
     auth_key: AuthKey,

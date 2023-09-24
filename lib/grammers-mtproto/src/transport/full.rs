@@ -26,6 +26,7 @@ use crc32fast::Hasher;
 /// ```
 ///
 /// [full transport]: https://core.telegram.org/mtproto/mtproto-transports#full
+#[derive(Clone)]
 pub struct Full {
     send_seq: i32,
     recv_seq: i32,
