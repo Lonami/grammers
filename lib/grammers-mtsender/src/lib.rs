@@ -364,24 +364,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ///
     /// Updates received during this step, if any, are returned.
     pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, ReadError> {
-        self.try_fill_write();
-
-        // TODO probably want to properly set the request state on disconnect (read fail)
-
-        let write_len = self.write_buffer.len() - self.write_index;
-
-        let (mut reader, mut writer) = self.stream.split();
-        // TODO this always has to read the header of the packet and then the rest (2 or more calls)
-        // it would be better to always perform calls in a circular buffer to have as much data from
-        // the network as possible at all times, not just reading what's needed
-        // (perhaps something similar could be done with the write buffer to write packet after packet)
-        //
-        // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
-        trace!(
-            "reading bytes and sending up to {} bytes via network",
-            write_len
-        );
-
         enum Sel {
             Sleep,
             Request(Option<Request>),
@@ -389,40 +371,93 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             Write(io::Result<usize>),
         }
 
-        let sel = {
-            let sleep = pin!(async { sleep_until(self.next_ping).await });
-            let recv_req = pin!(async { self.request_rx.recv().await });
-            let recv_data = pin!(async { reader.read_buf(&mut self.read_buffer).await });
-            let send_data = pin!(async {
-                if self.write_buffer.is_empty() {
-                    pending().await
-                } else {
-                    writer.write(&self.write_buffer[self.write_index..]).await
+        let mut attempts = 0u8;
+        loop {
+            if attempts > 5 {
+                log::error!(
+                    "attempted more than {} times for reconnection and failed",
+                    attempts
+                );
+                return Err(ReadError::Io(io::Error::new(
+                    io::ErrorKind::ConnectionReset,
+                    "read 0 bytes",
+                )));
+            }
+
+            self.try_fill_write();
+
+            // TODO probably want to properly set the request state on disconnect (read fail)
+
+            let write_len = self.write_buffer.len() - self.write_index;
+
+            let (mut reader, mut writer) = self.stream.split();
+            // TODO this always has to read the header of the packet and then the rest (2 or more calls)
+            // it would be better to always perform calls in a circular buffer to have as much data from
+            // the network as possible at all times, not just reading what's needed
+            // (perhaps something similar could be done with the write buffer to write packet after packet)
+            //
+            // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
+            trace!(
+                "reading bytes and sending up to {} bytes via network",
+                write_len
+            );
+
+            let sel = {
+                let sleep = pin!(async { sleep_until(self.next_ping).await });
+                let recv_req = pin!(async { self.request_rx.recv().await });
+                let recv_data = pin!(async { reader.read_buf(&mut self.read_buffer).await });
+                let send_data = pin!(async {
+                    if self.write_buffer.is_empty() {
+                        pending().await
+                    } else {
+                        writer.write(&self.write_buffer[self.write_index..]).await
+                    }
+                });
+
+                match select(select(sleep, recv_req), select(recv_data, send_data)).await {
+                    Either::Left((Either::Left(_), _)) => Sel::Sleep,
+                    Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
+                    Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
+                    Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
                 }
-            });
+            };
 
-            match select(select(sleep, recv_req), select(recv_data, send_data)).await {
-                Either::Left((Either::Left(_), _)) => Sel::Sleep,
-                Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
-                Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
-                Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
-            }
-        };
+            let res = match sel {
+                Sel::Request(request) => {
+                    self.requests.push(request.unwrap());
+                    Ok(Vec::new())
+                }
+                Sel::Read(n) => self.on_net_read(n?),
+                Sel::Write(n) => {
+                    self.on_net_write(n?);
+                    Ok(Vec::new())
+                }
+                Sel::Sleep => {
+                    self.on_ping_timeout();
+                    Ok(Vec::new())
+                }
+            };
 
-        match sel {
-            Sel::Request(request) => {
-                self.requests.push(request.unwrap());
-                Ok(Vec::new())
+            match res {
+                Ok(ok) => break Ok(ok),
+                Err(err) if err.to_string().contains("0 bytes") => {
+                    self.stream = match &self.stream {
+                        NetStream::Tcp(_) => Sender::<T, M>::connect_stream(&self.addr).await?,
+                        #[cfg(feature = "proxy")]
+                        NetStream::ProxySocks5(_) => Sender::<T, M>::connect_proxy_stream(
+                            &self.addr,
+                            self.proxy_url.as_ref().unwrap(),
+                        )
+                        .await
+                        .unwrap(),
+                    };
+                }
+                Err(e) => break Err(e),
             }
-            Sel::Read(n) => self.on_net_read(n?),
-            Sel::Write(n) => {
-                self.on_net_write(n?);
-                Ok(Vec::new())
-            }
-            Sel::Sleep => {
-                self.on_ping_timeout();
-                Ok(Vec::new())
-            }
+
+            //what to do ?
+
+            attempts += 1;
         }
     }
 
@@ -493,6 +528,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             )));
         }
 
+        /*
+         */
         trace!("read {} bytes from the network", n);
 
         trace!(
