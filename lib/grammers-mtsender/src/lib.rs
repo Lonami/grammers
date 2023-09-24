@@ -27,6 +27,7 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{sleep_until, Duration, Instant};
+
 #[cfg(feature = "proxy")]
 use {
     std::io::ErrorKind,
@@ -102,6 +103,8 @@ pub struct Sender<T: Transport, M: Mtp> {
     mtp: M,
     mtp_buffer: BytesMut,
     addr: std::net::SocketAddr,
+    #[cfg(feature = "proxy")]
+    proxy_url: Option<String>,
     requests: Vec<Request>,
     request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
@@ -168,6 +171,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 mtp,
                 mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
                 addr,
+                #[cfg(feature = "proxy")]
+                proxy_url: None,
                 requests: vec![],
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
@@ -180,7 +185,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         ))
     }
 
-    async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, io::Error> {
+    async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, std::io::Error> {
         info!("connecting...");
         Ok(NetStream::Tcp(TcpStream::connect(addr.clone()).await?))
     }
@@ -194,6 +199,35 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
+        let stream = Sender::<T, M>::connect_proxy_stream(&addr, proxy_url).await?;
+
+        let (tx, rx) = mpsc::unbounded_channel();
+
+        Ok((
+            Self {
+                stream,
+                transport,
+                mtp,
+                mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                addr,
+                proxy_url: Some(proxy_url.to_string()),
+                requests: vec![],
+                request_rx: rx,
+                next_ping: Instant::now() + PING_DELAY,
+
+                read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_index: 0,
+            },
+            Enqueuer(tx),
+        ))
+    }
+
+    #[cfg(feature = "proxy")]
+    async fn connect_proxy_stream(
+        addr: &SocketAddr,
+        proxy_url: &str,
+    ) -> Result<NetStream, std::io::Error> {
         let proxy = url::Url::parse(proxy_url)
             .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
         let scheme = proxy.scheme();
@@ -222,51 +256,29 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
         };
 
-        let stream = match scheme {
+        match scheme {
             "socks5" => {
                 if username.is_empty() {
-                    NetStream::ProxySocks5(
+                    Ok(NetStream::ProxySocks5(
                         tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
                             .await
                             .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
-                    )
+                    ))
                 } else {
-                    NetStream::ProxySocks5(
+                    Ok(NetStream::ProxySocks5(
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
                             socks_addr, addr, username, password,
                         )
                         .await
                         .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
-                    )
+                    ))
                 }
             }
-            scheme => {
-                return Err(io::Error::new(
-                    ErrorKind::ConnectionAborted,
-                    format!("proxy scheme not supported: {}", scheme),
-                ));
-            }
-        };
-
-        let (tx, rx) = mpsc::unbounded_channel();
-
-        Ok((
-            Self {
-                stream,
-                transport,
-                mtp,
-                mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-                addr,
-                requests: vec![],
-                request_rx: rx,
-                next_ping: Instant::now() + PING_DELAY,
-
-                read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-                write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-                write_index: 0,
-            },
-            Enqueuer(tx),
-        ))
+            scheme => Err(io::Error::new(
+                ErrorKind::ConnectionAborted,
+                format!("proxy scheme not supported: {}", scheme),
+            )),
+        }
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
@@ -285,7 +297,18 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             );
                             break Err(err);
                         }
-                        self.stream = Sender::<T, M>::connect_stream(&self.addr).await.unwrap();
+                        self.stream = match &self.stream {
+                            NetStream::Tcp(_) => {
+                                Sender::<T, M>::connect_stream(&self.addr).await.unwrap()
+                            }
+                            #[cfg(feature = "proxy")]
+                            NetStream::ProxySocks5(_) => Sender::<T, M>::connect_proxy_stream(
+                                &self.addr,
+                                self.proxy_url.as_ref().unwrap(),
+                            )
+                            .await
+                            .unwrap(),
+                        };
                     }
                     _ => break Err(err),
                 },
@@ -692,6 +715,8 @@ pub async fn generate_auth_key<T: Transport>(
             write_buffer: sender.write_buffer,
             write_index: sender.write_index,
             addr: sender.addr,
+            #[cfg(feature = "proxy")]
+            proxy_url: sender.proxy_url,
         },
         enqueuer,
     ))
