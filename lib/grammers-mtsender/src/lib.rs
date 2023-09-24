@@ -159,8 +159,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         mtp: M,
         addr: std::net::SocketAddr,
     ) -> Result<(Self, Enqueuer), io::Error> {
-        info!("connecting...");
-        let stream = NetStream::Tcp(TcpStream::connect(addr.clone()).await?);
+        let stream = Sender::<T, M>::connect_stream(&addr).await?;
         let (tx, rx) = mpsc::unbounded_channel();
         Ok((
             Self {
@@ -179,6 +178,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             },
             Enqueuer(tx),
         ))
+    }
+
+    async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, io::Error> {
+        info!("connecting...");
+        Ok(NetStream::Tcp(TcpStream::connect(addr.clone()).await?))
     }
 
     #[cfg(feature = "proxy")]
@@ -281,12 +285,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             );
                             break Err(err);
                         }
-                        self.stream =
-                            Sender::connect(self.transport.clone(), self.mtp.clone(), self.addr)
-                                .await
-                                .unwrap()
-                                .0
-                                .stream;
+                        self.stream = Sender::<T, M>::connect_stream(&self.addr).await.unwrap();
                     }
                     _ => break Err(err),
                 },
