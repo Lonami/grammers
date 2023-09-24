@@ -25,7 +25,6 @@ use bytes::{Buf, BufMut, BytesMut};
 /// ```
 ///
 /// [intermediate transport]: https://core.telegram.org/mtproto/mtproto-transports#intermediate
-#[derive(Clone)]
 pub struct Intermediate {
     init: bool,
 }

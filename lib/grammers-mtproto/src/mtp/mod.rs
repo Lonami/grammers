@@ -288,7 +288,7 @@ impl From<tl::deserialize::Error> for RequestError {
 /// messages and deserialize incoming ones into proper responses.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto/description
-pub trait Mtp: Clone {
+pub trait Mtp {
     /// Serializes one request to the internal buffer, which can be later retrieved by calling
     /// `finalize` after one or more `push` have been made.
     ///

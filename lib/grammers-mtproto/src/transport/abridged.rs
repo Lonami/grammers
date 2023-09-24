@@ -34,7 +34,6 @@ use bytes::{BufMut, BytesMut};
 /// ```
 ///
 /// [abridged transport]: https://core.telegram.org/mtproto/mtproto-transports#abridged
-#[derive(Clone)]
 pub struct Abridged {
     init: bool,
 }

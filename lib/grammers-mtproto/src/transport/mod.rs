@@ -61,7 +61,7 @@ impl fmt::Display for Error {
 }
 
 /// The trait used by the transports to create instances of themselves.
-pub trait Transport: Clone {
+pub trait Transport {
     /// Packs and writes `input` into `output`.
     ///
     /// Previous contents in `output` are not cleared before this operation.
