@@ -442,14 +442,20 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 Ok(ok) => break Ok(ok),
                 Err(err) if err.to_string().contains("0 bytes") => {
                     self.stream = match &self.stream {
-                        NetStream::Tcp(_) => Sender::<T, M>::connect_stream(&self.addr).await?,
+                        NetStream::Tcp(_) => {
+                            log::info!("reconnecting...");
+                            Sender::<T, M>::connect_stream(&self.addr).await?
+                        }
                         #[cfg(feature = "proxy")]
-                        NetStream::ProxySocks5(_) => Sender::<T, M>::connect_proxy_stream(
-                            &self.addr,
-                            self.proxy_url.as_ref().unwrap(),
-                        )
-                        .await
-                        .unwrap(),
+                        NetStream::ProxySocks5(_) => {
+                            log::info!("reconnecting through proxy...");
+                            Sender::<T, M>::connect_proxy_stream(
+                                &self.addr,
+                                self.proxy_url.as_ref().unwrap(),
+                            )
+                            .await
+                            .unwrap()
+                        }
                     };
                 }
                 Err(e) => break Err(e),
