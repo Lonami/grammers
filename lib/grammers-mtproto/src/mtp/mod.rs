@@ -320,6 +320,8 @@ pub trait Mtp {
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;
+
+    fn reset(&mut self);
 }
 
 #[cfg(test)]
