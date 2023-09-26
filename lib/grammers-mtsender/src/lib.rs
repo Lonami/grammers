@@ -428,11 +428,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     self.requests.push(request.unwrap());
                     Ok(Vec::new())
                 }
-                Sel::Read(n) => self.on_net_read(n?),
-                Sel::Write(n) => {
-                    self.on_net_write(n?);
-                    Ok(Vec::new())
-                }
+                Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
+                Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
+                    self.on_net_write(n);
+                    Vec::new()
+                }),
                 Sel::Sleep => {
                     self.on_ping_timeout();
                     Ok(Vec::new())
@@ -442,16 +442,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match res {
                 Ok(ok) => break Ok(ok),
                 Err(err) => {
-                    /*if matches!(&err,ReadError::Io(_))
                     match err {
-                        ReadError::Io(io_err) => {}
-                        ReadError::Transport(_) => {}
-                        ReadError::Deserialize(_) => {}
-                    }*/
-                    let s = err.to_string();
-                    if !s.contains("0 bytes") && !s.contains("connection") && !s.contains("reset") {
-                        log::warn!("unhandled error: {}",&err);
-                        break Err(err);
+                        ReadError::Io(_) => {}
+                        _ => {
+                            log::warn!("unhandled error: {}", &err);
+                            break Err(err);
+                        }
                     }
 
                     self.transport = self.transport.new();
@@ -459,7 +455,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
-                            Sender::<T, M>::connect_stream(&self.addr).await?
+                            loop {
+                                match Sender::<T, M>::connect_stream(&self.addr).await {
+                                    Ok(x) => break x,
+                                    Err(e) => {
+                                        log::warn!("this is so sad: {}", e);
+                                        tokio::time::sleep(Duration::from_secs(2)).await;
+
+                                        attempts += 1;
+
+                                        if attempts > 5 {
+                                            log::error!(
+                                                "attempted more than {} times for reconnection and failed",
+                                                attempts
+                                            );
+                                            return Err(ReadError::Io(e));
+                                        }
+                                    }
+                                }
+                            }
                         }
                         #[cfg(feature = "proxy")]
                         NetStream::ProxySocks5(_) => {
