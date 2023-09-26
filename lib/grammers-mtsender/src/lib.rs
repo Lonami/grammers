@@ -282,40 +282,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-        let mut attempts = 0u8;
-        loop {
-            let rx = self.enqueue_body(request.to_bytes());
-            let res = self.step_until_receive(rx).await;
-            match res {
-                Ok(ok) => break Ok(ok),
-                Err(err) => match &err {
-                    InvocationError::Read(read) if read.to_string().contains("read 0 bytes") => {
-                        if attempts > 5 {
-                            log::error!(
-                                "attempted more than {} times for reconnection and failed",
-                                attempts
-                            );
-                            break Err(err);
-                        }
-                        self.stream = match &self.stream {
-                            NetStream::Tcp(_) => {
-                                Sender::<T, M>::connect_stream(&self.addr).await.unwrap()
-                            }
-                            #[cfg(feature = "proxy")]
-                            NetStream::ProxySocks5(_) => Sender::<T, M>::connect_proxy_stream(
-                                &self.addr,
-                                self.proxy_url.as_ref().unwrap(),
-                            )
-                            .await
-                            .unwrap(),
-                        };
-                    }
-                    _ => break Err(err),
-                },
-            }
-
-            attempts += 1;
-        }
+        let rx = self.enqueue_body(request.to_bytes());
+        self.step_until_receive(rx).await
     }
 
     /// Like `invoke` but raw data.
