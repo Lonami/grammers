@@ -422,6 +422,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     self.mtp.reset();
                     self.mtp_buffer.clear();
                     self.read_buffer.clear();
+                    self.write_index = 0;
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
