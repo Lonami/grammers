@@ -440,14 +440,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
             match res {
                 Ok(ok) => break Ok(ok),
-                Err(err) if matches!(&err,ReadError::Io(_)) => {
-                    /*match err {
+                Err(err) => {
+                    /*if matches!(&err,ReadError::Io(_))
+                    match err {
                         ReadError::Io(io_err) => {}
                         ReadError::Transport(_) => {}
                         ReadError::Deserialize(_) => {}
                     }*/
                     let s = err.to_string();
                     if !s.contains("0 bytes") && !s.contains("connection") && !s.contains("reset") {
+                        log::warn!("unhandled error: {}",&err);
                         break Err(err);
                     }
 
@@ -470,7 +472,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         }
                     };
                 }
-                Err(e) => break Err(e),
             }
 
             //what to do ?
