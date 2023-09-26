@@ -97,6 +97,10 @@ impl Transport for Abridged {
         output.put(&input[header_len..header_len + len]);
         Ok(header_len + len)
     }
+
+    fn new(&mut self) ->Self {
+        Abridged::new()
+    }
 }
 
 #[cfg(test)]

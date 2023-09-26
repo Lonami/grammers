@@ -115,6 +115,10 @@ impl Transport for Full {
         output.extend_from_slice(&input[8..len - 4]);
         Ok(len)
     }
+
+    fn new(&mut self) -> Self {
+        Full::new()
+    }
 }
 
 #[cfg(test)]

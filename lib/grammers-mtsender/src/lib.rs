@@ -441,6 +441,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match res {
                 Ok(ok) => break Ok(ok),
                 Err(err) if err.to_string().contains("0 bytes") => {
+                    /*match err {
+                        ReadError::Io(io_err) => {}
+                        ReadError::Transport(_) => {}
+                        ReadError::Deserialize(_) => {}
+                    }*/
+                    self.transport = self.transport.new();
                     self.mtp.reset();
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {

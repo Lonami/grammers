@@ -75,4 +75,6 @@ pub trait Transport {
     ///
     /// If successful, returns how many bytes of `input` were used.
     fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error>;
+
+    fn new(&mut self) -> Self;
 }
