@@ -1254,6 +1254,8 @@ impl Mtp for Encrypted {
         self.last_msg_id = 0;
         self.msg_count = 0;
         self.salts.clear();
+        self.buffer.clear();
+        self.msg_count = 0;
     }
 }
 
