@@ -422,6 +422,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             };
 
+            log::debug!("m Sel");
             let res = match sel {
                 Sel::Request(request) => {
                     self.requests.push(request.unwrap());
@@ -474,7 +475,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             }
 
-            //what to do ?
+            log::info!("retrying the call");
 
             attempts += 1;
         }
