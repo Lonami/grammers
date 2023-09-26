@@ -440,12 +440,17 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
             match res {
                 Ok(ok) => break Ok(ok),
-                Err(err) if err.to_string().contains("0 bytes") => {
+                Err(err) if matches!(&err,ReadError::Io(_)) => {
                     /*match err {
                         ReadError::Io(io_err) => {}
                         ReadError::Transport(_) => {}
                         ReadError::Deserialize(_) => {}
                     }*/
+                    let s = err.to_string();
+                    if !s.contains("0 bytes") && !s.contains("connection") && !s.contains("reset") {
+                        break Err(err);
+                    }
+
                     self.transport = self.transport.new();
                     self.mtp.reset();
                     self.stream = match &self.stream {
