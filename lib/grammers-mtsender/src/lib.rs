@@ -423,6 +423,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     self.mtp_buffer.clear();
                     self.read_buffer.clear();
                     self.write_index = 0;
+                    self.write_buffer.clear();
+                    self.requests.iter_mut().for_each(|r|r.state = RequestState::NotSerialized);
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
