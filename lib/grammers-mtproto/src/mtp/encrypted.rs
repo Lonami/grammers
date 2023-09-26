@@ -1253,6 +1253,7 @@ impl Mtp for Encrypted {
         self.sequence = 0;
         self.last_msg_id = 0;
         self.msg_count = 0;
+        self.salts.clear();
     }
 }
 
