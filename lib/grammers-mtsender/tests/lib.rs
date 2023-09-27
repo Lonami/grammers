@@ -14,6 +14,7 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 use grammers_mtproto::transport;
 use grammers_mtsender::connect;
 use grammers_tl_types::{enums, functions, Deserializable, RemoteCall, LAYER};
+use std::str::FromStr;
 
 use simple_logger::SimpleLogger;
 use tokio::runtime;
@@ -30,9 +31,12 @@ fn test_invoke_encrypted_method() {
         .build()
         .unwrap();
     rt.block_on(async {
-        let (mut sender, enqueuer) = connect(transport::Full::new(), TELEGRAM_TEST_DC_2)
-            .await
-            .unwrap();
+        let (mut sender, enqueuer) = connect(
+            transport::Full::new(),
+            std::net::SocketAddr::from_str(TELEGRAM_TEST_DC_2).unwrap(),
+        )
+        .await
+        .unwrap();
 
         let mut rx = enqueuer.enqueue(&functions::InvokeWithLayer {
             layer: LAYER,
