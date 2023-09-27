@@ -98,8 +98,8 @@ impl Transport for Abridged {
         Ok(header_len + len)
     }
 
-    fn new(&mut self) ->Self {
-        Abridged::new()
+    fn reset(&mut self) {
+        self.init = false;
     }
 }
 

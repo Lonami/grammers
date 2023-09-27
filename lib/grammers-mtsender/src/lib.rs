@@ -418,7 +418,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         }
                     }
 
-                    self.transport = self.transport.new();
+                    self.transport.reset();
                     self.mtp.reset();
                     self.mtp_buffer.clear();
                     self.read_buffer.clear();

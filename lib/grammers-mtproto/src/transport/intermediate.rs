@@ -67,8 +67,8 @@ impl Transport for Intermediate {
         Ok(len + 4)
     }
 
-    fn new(&mut self) -> Self {
-        Intermediate::new()
+    fn reset(&mut self) {
+        self.init = false;
     }
 }
 
