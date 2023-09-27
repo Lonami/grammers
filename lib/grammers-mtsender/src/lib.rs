@@ -164,7 +164,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         mtp: M,
         addr: std::net::SocketAddr,
     ) -> Result<(Self, Enqueuer), io::Error> {
-        let stream = Sender::<T, M>::connect_stream(&addr).await?;
+        let stream = connect_stream(&addr).await?;
         let (tx, rx) = mpsc::unbounded_channel();
         Ok((
             Self {
@@ -187,11 +187,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         ))
     }
 
-    async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, std::io::Error> {
-        info!("connecting...");
-        Ok(NetStream::Tcp(TcpStream::connect(addr.clone()).await?))
-    }
-
     #[cfg(feature = "proxy")]
     async fn connect_via_proxy<'a>(
         transport: T,
@@ -201,7 +196,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
-        let stream = Sender::<T, M>::connect_proxy_stream(&addr, proxy_url).await?;
+        let stream = connect_proxy_stream(&addr, proxy_url).await?;
 
         let (tx, rx) = mpsc::unbounded_channel();
 
@@ -223,64 +218,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             },
             Enqueuer(tx),
         ))
-    }
-
-    #[cfg(feature = "proxy")]
-    async fn connect_proxy_stream(
-        addr: &SocketAddr,
-        proxy_url: &str,
-    ) -> Result<NetStream, std::io::Error> {
-        let proxy = url::Url::parse(proxy_url)
-            .map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
-        let scheme = proxy.scheme();
-        let host = proxy.host().ok_or(io::Error::new(
-            ErrorKind::NotFound,
-            format!("proxy host is missing from url: {}", proxy_url),
-        ))?;
-        let port = proxy.port().ok_or(io::Error::new(
-            ErrorKind::NotFound,
-            format!("proxy port is missing from url: {}", proxy_url),
-        ))?;
-        let username = proxy.username();
-        let password = proxy.password().unwrap_or("");
-        let socks_addr = match host {
-            Host::Domain(domain) => {
-                let resolver =
-                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
-                let response = resolver.lookup_ip(domain).await?;
-                let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
-                    ErrorKind::NotFound,
-                    format!("proxy host did not return any ip address: {}", domain),
-                ))?;
-                SocketAddr::new(socks_ip_addr, port)
-            }
-            Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
-            Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
-        };
-
-        match scheme {
-            "socks5" => {
-                if username.is_empty() {
-                    Ok(NetStream::ProxySocks5(
-                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
-                            .await
-                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
-                    ))
-                } else {
-                    Ok(NetStream::ProxySocks5(
-                        tokio_socks::tcp::Socks5Stream::connect_with_password(
-                            socks_addr, addr, username, password,
-                        )
-                        .await
-                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
-                    ))
-                }
-            }
-            scheme => Err(io::Error::new(
-                ErrorKind::ConnectionAborted,
-                format!("proxy scheme not supported: {}", scheme),
-            )),
-        }
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
@@ -447,13 +384,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         loop {
             #[cfg(feature = "proxy")]
             let res = if proxy.is_some() {
-                Sender::<T, M>::connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
+                connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
             } else {
-                Sender::<T, M>::connect_stream(addr).await
+                connect_stream(addr).await
             };
 
             #[cfg(not(feature = "proxy"))]
-            let res = Sender::<T, M>::connect_stream(addr).await;
+            let res = connect_stream(addr).await;
 
             match res {
                 Ok(result) => return Ok(result),
@@ -757,6 +694,68 @@ pub async fn connect_via_proxy<'a, T: Transport>(
     let (sender, enqueuer) =
         Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
     generate_auth_key(sender, enqueuer).await
+}
+
+async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, std::io::Error> {
+    info!("connecting...");
+    Ok(NetStream::Tcp(TcpStream::connect(addr.clone()).await?))
+}
+
+#[cfg(feature = "proxy")]
+async fn connect_proxy_stream(
+    addr: &SocketAddr,
+    proxy_url: &str,
+) -> Result<NetStream, std::io::Error> {
+    let proxy =
+        url::Url::parse(proxy_url).map_err(|err| io::Error::new(ErrorKind::InvalidData, err))?;
+    let scheme = proxy.scheme();
+    let host = proxy.host().ok_or(io::Error::new(
+        ErrorKind::NotFound,
+        format!("proxy host is missing from url: {}", proxy_url),
+    ))?;
+    let port = proxy.port().ok_or(io::Error::new(
+        ErrorKind::NotFound,
+        format!("proxy port is missing from url: {}", proxy_url),
+    ))?;
+    let username = proxy.username();
+    let password = proxy.password().unwrap_or("");
+    let socks_addr = match host {
+        Host::Domain(domain) => {
+            let resolver = AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+            let response = resolver.lookup_ip(domain).await?;
+            let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
+                ErrorKind::NotFound,
+                format!("proxy host did not return any ip address: {}", domain),
+            ))?;
+            SocketAddr::new(socks_ip_addr, port)
+        }
+        Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
+        Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
+    };
+
+    match scheme {
+        "socks5" => {
+            if username.is_empty() {
+                Ok(NetStream::ProxySocks5(
+                    tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                ))
+            } else {
+                Ok(NetStream::ProxySocks5(
+                    tokio_socks::tcp::Socks5Stream::connect_with_password(
+                        socks_addr, addr, username, password,
+                    )
+                    .await
+                    .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                ))
+            }
+        }
+        scheme => Err(io::Error::new(
+            ErrorKind::ConnectionAborted,
+            format!("proxy scheme not supported: {}", scheme),
+        )),
+    }
 }
 
 pub async fn generate_auth_key<T: Transport>(
