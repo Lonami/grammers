@@ -343,7 +343,10 @@ impl Client {
                 mutex.insert(dc_id, new_downloader.clone());
                 Ok(new_downloader.clone())
             }
-            Err(e) => panic!("Cannot obtain new sender to datacenter {}", e),
+            Err(AuthorizationError::Invoke(e)) => Err(e),
+            Err(AuthorizationError::Gen(e)) => {
+                panic!("authorization key generation failed: {}", e)
+            }
         }
     }
 
