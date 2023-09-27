@@ -269,8 +269,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
                             socks_addr, addr, username, password,
                         )
-                            .await
-                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     ))
                 }
             }
@@ -449,8 +449,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                                 &self.addr,
                                 self.proxy_url.as_ref().unwrap(),
                             )
-                                .await
-                                .unwrap()
+                            .await
+                            .unwrap()
                         }
                     };
                 }
@@ -596,7 +596,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     ping_id,
                     disconnect_delay: NO_PING_DISCONNECT,
                 }
-                    .to_bytes(),
+                .to_bytes(),
             ),
         );
         self.next_ping = Instant::now() + PING_DELAY;
@@ -619,18 +619,18 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     // update that actually occured.
                     match tl::enums::messages::AffectedMessages::from_bytes(update) {
                         Ok(tl::enums::messages::AffectedMessages::Messages(
-                               tl::types::messages::AffectedMessages { pts, pts_count },
-                           )) => Some(
+                            tl::types::messages::AffectedMessages { pts, pts_count },
+                        )) => Some(
                             tl::types::UpdateShort {
                                 update: tl::types::UpdateDeleteMessages {
                                     messages: Vec::new(),
                                     pts,
                                     pts_count,
                                 }
-                                    .into(),
+                                .into(),
                                 date: 0,
                             }
-                                .into(),
+                            .into(),
                         ),
                         Err(_) => {
                             warn!(
@@ -715,7 +715,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.read_buffer.clear();
         self.write_index = 0;
         self.write_buffer.clear();
-        self.requests.iter_mut().for_each(|r| r.state = RequestState::NotSerialized);
+        self.requests
+            .iter_mut()
+            .for_each(|r| r.state = RequestState::NotSerialized);
     }
 }
 
@@ -812,5 +814,5 @@ pub async fn connect_via_proxy_with_auth<'a, T: Transport>(
         addr,
         proxy_url,
     )
-        .await
+    .await
 }
