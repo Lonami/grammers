@@ -17,6 +17,7 @@ use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
 use std::io::Error;
+use std::net::SocketAddr;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
@@ -28,12 +29,11 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{sleep_until, Duration, Instant};
-use std::net::SocketAddr;
 
 #[cfg(feature = "proxy")]
 use {
     std::io::ErrorKind,
-    std::net::{IpAddr},
+    std::net::IpAddr,
     tokio_socks::tcp::Socks5Stream,
     trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
     trust_dns_resolver::AsyncResolver,
@@ -392,7 +392,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             };
 
-
             let res = match sel {
                 Sel::Request(request) => {
                     self.requests.push(request.unwrap());
@@ -425,7 +424,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
-                            Self::try_connect(&self.addr,&None).await?
+                            Self::try_connect(&self.addr, &None).await?
                         }
                         #[cfg(feature = "proxy")]
                         NetStream::ProxySocks5(_) => {
@@ -443,10 +442,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     #[allow(unused_variables)]
-    async fn try_connect(addr: &SocketAddr,proxy: &Option<String>) -> Result<NetStream, Error> {
+    async fn try_connect(addr: &SocketAddr, proxy: &Option<String>) -> Result<NetStream, Error> {
         let mut attempts = 0;
         loop {
-
             #[cfg(feature = "proxy")]
             let res = if proxy.is_some() {
                 Sender::<T, M>::connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
@@ -455,7 +453,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             };
 
             #[cfg(not(feature = "proxy"))]
-            let res =  Sender::<T, M>::connect_stream(addr).await;
+            let res = Sender::<T, M>::connect_stream(addr).await;
 
             match res {
                 Ok(result) => return Ok(result),
