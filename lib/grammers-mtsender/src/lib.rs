@@ -16,6 +16,8 @@ use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
+use std::io::Error;
+use std::net::SocketAddr;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
@@ -31,7 +33,7 @@ use tokio::time::{sleep_until, Duration, Instant};
 #[cfg(feature = "proxy")]
 use {
     std::io::ErrorKind,
-    std::net::{IpAddr, SocketAddr},
+    std::net::IpAddr,
     tokio_socks::tcp::Socks5Stream,
     trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
     trust_dns_resolver::AsyncResolver,
@@ -390,17 +392,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             };
 
-            log::debug!("m Sel");
             let res = match sel {
                 Sel::Request(request) => {
                     self.requests.push(request.unwrap());
                     Ok(Vec::new())
                 }
-                Sel::Read(n) => self.on_net_read(n?),
-                Sel::Write(n) => {
-                    self.on_net_write(n?);
-                    Ok(Vec::new())
-                }
+                Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
+                Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
+                    self.on_net_write(n);
+                    Vec::new()
+                }),
                 Sel::Sleep => {
                     self.on_ping_timeout();
                     Ok(Vec::new())
@@ -410,34 +411,25 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match res {
                 Ok(ok) => break Ok(ok),
                 Err(err) => {
-                    /*if matches!(&err,ReadError::Io(_))
                     match err {
-                        ReadError::Io(io_err) => {}
-                        ReadError::Transport(_) => {}
-                        ReadError::Deserialize(_) => {}
-                    }*/
-                    let s = err.to_string();
-                    if !s.contains("0 bytes") && !s.contains("connection") && !s.contains("reset") {
-                        log::warn!("unhandled error: {}",&err);
-                        break Err(err);
+                        ReadError::Io(_) => {}
+                        _ => {
+                            log::warn!("unhandled error: {}", &err);
+                            break Err(err);
+                        }
                     }
 
-                    self.transport = self.transport.new();
-                    self.mtp.reset();
+                    self.reset_state();
+
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
-                            Sender::<T, M>::connect_stream(&self.addr).await?
+                            Self::try_connect(&self.addr, &None).await?
                         }
                         #[cfg(feature = "proxy")]
                         NetStream::ProxySocks5(_) => {
                             log::info!("reconnecting through proxy...");
-                            Sender::<T, M>::connect_proxy_stream(
-                                &self.addr,
-                                self.proxy_url.as_ref().unwrap(),
-                            )
-                            .await
-                            .unwrap()
+                            Self::try_connect(&self.addr, &self.proxy_url).await?
                         }
                     };
                 }
@@ -446,6 +438,40 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             log::info!("retrying the call");
 
             attempts += 1;
+        }
+    }
+
+    #[allow(unused_variables)]
+    async fn try_connect(addr: &SocketAddr, proxy: &Option<String>) -> Result<NetStream, Error> {
+        let mut attempts = 0;
+        loop {
+            #[cfg(feature = "proxy")]
+            let res = if proxy.is_some() {
+                Sender::<T, M>::connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
+            } else {
+                Sender::<T, M>::connect_stream(addr).await
+            };
+
+            #[cfg(not(feature = "proxy"))]
+            let res = Sender::<T, M>::connect_stream(addr).await;
+
+            match res {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    log::warn!("err: {}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+
+                    attempts += 1;
+
+                    if attempts > 5 {
+                        log::error!(
+                            "attempted more than {} times for reconnection and failed",
+                            attempts
+                        );
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 
@@ -693,6 +719,18 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         Ok(())
+    }
+
+    fn reset_state(&mut self) {
+        self.transport.reset();
+        self.mtp.reset();
+        self.mtp_buffer.clear();
+        self.read_buffer.clear();
+        self.write_index = 0;
+        self.write_buffer.clear();
+        self.requests
+            .iter_mut()
+            .for_each(|r| r.state = RequestState::NotSerialized);
     }
 }
 

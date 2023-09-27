@@ -116,8 +116,9 @@ impl Transport for Full {
         Ok(len)
     }
 
-    fn new(&mut self) -> Self {
-        Full::new()
+    fn reset(&mut self) {
+        self.recv_seq = 0;
+        self.send_seq = 0;
     }
 }
 

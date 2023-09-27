@@ -1,5 +1,3 @@
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::SystemTime;
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -23,21 +21,4 @@ pub(crate) fn check_message_buffer(message: &[u8]) -> Result<(), DeserializeErro
     } else {
         Ok(())
     }
-}
-
-pub(crate) fn generate_random_id() -> i64 {
-    static LAST_ID: AtomicI64 = AtomicI64::new(0);
-
-    if LAST_ID.load(Ordering::SeqCst) == 0 {
-        let now = SystemTime::now()
-            .duration_since(SystemTime::UNIX_EPOCH)
-            .expect("system time is before epoch")
-            .as_nanos() as i64;
-
-        LAST_ID
-            .compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst)
-            .unwrap();
-    }
-
-    LAST_ID.fetch_add(1, Ordering::SeqCst)
 }
