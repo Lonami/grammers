@@ -115,7 +115,7 @@ impl Mtp for Plain {
     }
 
     fn reset(&mut self) {
-        self.buffer = Vec::new();
+        self.buffer.clear();
     }
 }
 

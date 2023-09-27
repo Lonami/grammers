@@ -479,8 +479,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             )));
         }
 
-        /*
-         */
         trace!("read {} bytes from the network", n);
 
         trace!(
