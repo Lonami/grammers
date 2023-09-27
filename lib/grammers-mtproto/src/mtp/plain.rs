@@ -113,6 +113,10 @@ impl Mtp for Plain {
             updates: Vec::new(),
         })
     }
+
+    fn reset(&mut self) {
+        self.buffer.clear();
+    }
 }
 
 #[cfg(test)]

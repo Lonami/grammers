@@ -115,6 +115,11 @@ impl Transport for Full {
         output.extend_from_slice(&input[8..len - 4]);
         Ok(len)
     }
+
+    fn reset(&mut self) {
+        self.recv_seq = 0;
+        self.send_seq = 0;
+    }
 }
 
 #[cfg(test)]
