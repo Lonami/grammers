@@ -13,7 +13,6 @@ use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serial
 use log::info;
 use std::mem;
 use std::time::{Instant, SystemTime, UNIX_EPOCH};
-use crate::utils::generate_random_id;
 
 /// How many future salts to fetch or have stored at a given time.
 ///

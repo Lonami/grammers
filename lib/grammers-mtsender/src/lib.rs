@@ -16,6 +16,7 @@ use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
+use std::io::Error;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
@@ -27,11 +28,12 @@ use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{sleep_until, Duration, Instant};
+use std::net::SocketAddr;
 
 #[cfg(feature = "proxy")]
 use {
     std::io::ErrorKind,
-    std::net::{IpAddr, SocketAddr},
+    std::net::{IpAddr},
     tokio_socks::tcp::Socks5Stream,
     trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
     trust_dns_resolver::AsyncResolver,
@@ -390,7 +392,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             };
 
-            log::debug!("m Sel");
+
             let res = match sel {
                 Sel::Request(request) => {
                     self.requests.push(request.unwrap());
@@ -419,38 +421,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     }
 
                     self.reset_state();
+
                     self.stream = match &self.stream {
                         NetStream::Tcp(_) => {
                             log::info!("reconnecting...");
-                            loop {
-                                match Sender::<T, M>::connect_stream(&self.addr).await {
-                                    Ok(x) => break x,
-                                    Err(e) => {
-                                        log::warn!("this is so sad: {}", e);
-                                        tokio::time::sleep(Duration::from_secs(2)).await;
-
-                                        attempts += 1;
-
-                                        if attempts > 5 {
-                                            log::error!(
-                                                "attempted more than {} times for reconnection and failed",
-                                                attempts
-                                            );
-                                            return Err(ReadError::Io(e));
-                                        }
-                                    }
-                                }
-                            }
+                            Self::try_connect(&self.addr,&None).await?
                         }
                         #[cfg(feature = "proxy")]
                         NetStream::ProxySocks5(_) => {
                             log::info!("reconnecting through proxy...");
-                            Sender::<T, M>::connect_proxy_stream(
-                                &self.addr,
-                                self.proxy_url.as_ref().unwrap(),
-                            )
-                            .await
-                            .unwrap()
+                            Self::try_connect(&self.addr, &self.proxy_url).await?
                         }
                     };
                 }
@@ -459,6 +439,41 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             log::info!("retrying the call");
 
             attempts += 1;
+        }
+    }
+
+    #[allow(unused_variables)]
+    async fn try_connect(addr: &SocketAddr,proxy: &Option<String>) -> Result<NetStream, Error> {
+        let mut attempts = 0;
+        loop {
+
+            #[cfg(feature = "proxy")]
+            let res = if proxy.is_some() {
+                Sender::<T, M>::connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
+            } else {
+                Sender::<T, M>::connect_stream(addr).await
+            };
+
+            #[cfg(not(feature = "proxy"))]
+            let res =  Sender::<T, M>::connect_stream(addr).await;
+
+            match res {
+                Ok(result) => return Ok(result),
+                Err(e) => {
+                    log::warn!("err: {}", e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
+
+                    attempts += 1;
+
+                    if attempts > 5 {
+                        log::error!(
+                            "attempted more than {} times for reconnection and failed",
+                            attempts
+                        );
+                        return Err(e);
+                    }
+                }
+            }
         }
     }
 
