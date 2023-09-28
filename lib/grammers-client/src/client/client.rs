@@ -104,6 +104,17 @@ pub struct InitParams {
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
 
+    /// specify the reconnection policy which will be used by client to determine whether to re-connect on failure or not.
+    ///
+    ///it can be one of the 2 default implementation [`NoReconnect`] and [`FixedReconnect`];
+    ///
+    /// **OR** your own custom implementation of trait [`ReconnectionPolicy`].
+    ///
+    /// for more details refer to [`examples`](lib/grammers-client/examples/reconnection.rs)
+    ///
+    /// [`NoReconnect`]: grammers_mtsender::NoReconnect
+    /// [`FixedReconnect`]: grammers_mtsender::FixedReconnect
+    /// [`ReconnectionPolicy`]: grammers_mtsender::ReconnectionPolicy
     pub reconnection_policy: &'static dyn ReconnectionPolicy,
 }
 
@@ -177,7 +188,7 @@ impl Default for InitParams {
             update_queue_limit: Some(100),
             #[cfg(feature = "proxy")]
             proxy_url: None,
-            reconnection_policy: &grammers_mtsender::AlwaysReconnect,
+            reconnection_policy: &grammers_mtsender::NoReconnect,
         }
     }
 }
