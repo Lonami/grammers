@@ -6,7 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 mod errors;
+mod reconnection;
 
+pub use crate::reconnection::*;
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures_util::future::{pending, select, Either};
@@ -17,7 +19,7 @@ use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, info, trace, warn};
 use std::io;
 use std::io::Error;
-use std::net::SocketAddr;
+use std::ops::ControlFlow;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
@@ -33,7 +35,7 @@ use tokio::time::{sleep_until, Duration, Instant};
 #[cfg(feature = "proxy")]
 use {
     std::io::ErrorKind,
-    std::net::IpAddr,
+    std::net::{IpAddr, SocketAddr},
     tokio_socks::tcp::Socks5Stream,
     trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
     trust_dns_resolver::AsyncResolver,
@@ -110,6 +112,7 @@ pub struct Sender<T: Transport, M: Mtp> {
     requests: Vec<Request>,
     request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
+    reconnection_policy: &'static dyn ReconnectionPolicy,
 
     // Transport-level buffers and positions
     read_buffer: BytesMut,
@@ -163,6 +166,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         transport: T,
         mtp: M,
         addr: std::net::SocketAddr,
+        reconnection_policy: &'static dyn ReconnectionPolicy,
     ) -> Result<(Self, Enqueuer), io::Error> {
         let stream = connect_stream(&addr).await?;
         let (tx, rx) = mpsc::unbounded_channel();
@@ -178,6 +182,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 requests: vec![],
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
+                reconnection_policy,
 
                 read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
                 write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
@@ -193,6 +198,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         mtp: M,
         addr: SocketAddr,
         proxy_url: &str,
+        reconnection_policy: &'static dyn ReconnectionPolicy,
     ) -> Result<(Self, Enqueuer), io::Error> {
         info!("connecting...");
 
@@ -211,6 +217,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 requests: vec![],
                 request_rx: rx,
                 next_ping: Instant::now() + PING_DELAY,
+                reconnection_policy,
 
                 read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
                 write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
@@ -358,17 +365,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
                     self.reset_state();
 
-                    self.stream = match &self.stream {
-                        NetStream::Tcp(_) => {
-                            log::info!("reconnecting...");
-                            Self::try_connect(&self.addr, &None).await?
-                        }
-                        #[cfg(feature = "proxy")]
-                        NetStream::ProxySocks5(_) => {
-                            log::info!("reconnecting through proxy...");
-                            Self::try_connect(&self.addr, &self.proxy_url).await?
-                        }
-                    };
+                    self.try_connect().await?;
                 }
             }
 
@@ -379,33 +376,41 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     #[allow(unused_variables)]
-    async fn try_connect(addr: &SocketAddr, proxy: &Option<String>) -> Result<NetStream, Error> {
+    async fn try_connect(&mut self) -> Result<(), Error> {
         let mut attempts = 0;
         loop {
             #[cfg(feature = "proxy")]
-            let res = if proxy.is_some() {
-                connect_proxy_stream(addr, proxy.as_ref().unwrap()).await
+            let res = if self.proxy_url.is_some() {
+                connect_proxy_stream(&self.addr, self.proxy_url.as_ref().unwrap()).await
             } else {
-                connect_stream(addr).await
+                connect_stream(&self.addr).await
             };
 
             #[cfg(not(feature = "proxy"))]
-            let res = connect_stream(addr).await;
+            let res = connect_stream(&self.addr).await;
 
             match res {
-                Ok(result) => return Ok(result),
+                Ok(result) => {
+                    self.stream = result;
+                    return Ok(());
+                }
                 Err(e) => {
                     log::warn!("err: {}", e);
                     tokio::time::sleep(Duration::from_secs(1)).await;
 
                     attempts += 1;
 
-                    if attempts > 5 {
-                        log::error!(
-                            "attempted more than {} times for reconnection and failed",
-                            attempts
-                        );
-                        return Err(e);
+                    match self.reconnection_policy.should_retry(attempts) {
+                        ControlFlow::Break(_) => {
+                            log::error!(
+                                "attempted more than {} times for reconnection and failed",
+                                attempts
+                            );
+                            return Err(e);
+                        }
+                        ControlFlow::Continue(duration) => {
+                            tokio::time::sleep(duration).await;
+                        }
                     }
                 }
             }
@@ -678,8 +683,9 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
 pub async fn connect<T: Transport>(
     transport: T,
     addr: std::net::SocketAddr,
+    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr).await?;
+    let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, rc_policy).await?;
     generate_auth_key(sender, enqueuer).await
 }
 
@@ -688,9 +694,10 @@ pub async fn connect_via_proxy<'a, T: Transport>(
     transport: T,
     addr: std::net::SocketAddr,
     proxy_url: &str,
+    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let (sender, enqueuer) =
-        Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url).await?;
+        Sender::connect_via_proxy(transport, mtp::Plain::new(), addr, proxy_url, rc_policy).await?;
     generate_auth_key(sender, enqueuer).await
 }
 
@@ -798,6 +805,7 @@ pub async fn generate_auth_key<T: Transport>(
             addr: sender.addr,
             #[cfg(feature = "proxy")]
             proxy_url: sender.proxy_url,
+            reconnection_policy: sender.reconnection_policy,
         },
         enqueuer,
     ))
@@ -807,8 +815,15 @@ pub async fn connect_with_auth<T: Transport>(
     transport: T,
     addr: std::net::SocketAddr,
     auth_key: [u8; 256],
+    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
-    Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
+    Sender::connect(
+        transport,
+        mtp::Encrypted::build().finish(auth_key),
+        addr,
+        rc_policy,
+    )
+    .await
 }
 
 #[cfg(feature = "proxy")]
@@ -817,12 +832,14 @@ pub async fn connect_via_proxy_with_auth<'a, T: Transport>(
     addr: std::net::SocketAddr,
     auth_key: [u8; 256],
     proxy_url: &str,
+    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
     Sender::connect_via_proxy(
         transport,
         mtp::Encrypted::build().finish(auth_key),
         addr,
         proxy_url,
+        rc_policy,
     )
     .await
 }

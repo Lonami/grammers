@@ -7,7 +7,7 @@
 // except according to those terms.
 use crate::utils::{AsyncMutex, Mutex};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{Enqueuer, Sender};
+use grammers_mtsender::{Enqueuer, ReconnectionPolicy, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -103,6 +103,8 @@ pub struct InitParams {
     /// host manually and selecting an IP address of your choice.
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
+
+    pub reconnection_policy: &'static dyn ReconnectionPolicy,
 }
 
 pub(crate) struct ClientInner {
@@ -175,6 +177,7 @@ impl Default for InitParams {
             update_queue_limit: Some(100),
             #[cfg(feature = "proxy")]
             proxy_url: None,
+            reconnection_policy: &grammers_mtsender::AlwaysReconnect,
         }
     }
 }
