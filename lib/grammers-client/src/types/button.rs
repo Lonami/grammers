@@ -95,7 +95,8 @@ pub fn webview<T: Into<String>, U: Into<String>>(text: T, url: U) -> Inline {
         tl::types::KeyboardButtonWebView {
             text: text.into(),
             url: url.into(),
-        }.into(),
+        }
+        .into(),
     )
 }
 
