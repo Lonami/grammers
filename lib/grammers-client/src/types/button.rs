@@ -89,6 +89,17 @@ pub fn url<T: Into<String>, U: Into<String>>(text: T, url: U) -> Inline {
     )
 }
 
+/// An inline button that when clicked will open the specified URL in an in-app browser.
+pub fn webview<T: Into<String>, U: Into<String>>(text: T, url: U) -> Inline {
+    Inline(
+        tl::types::KeyboardButtonWebView {
+            text: text.into(),
+            url: url.into(),
+        }
+        .into(),
+    )
+}
+
 /// A keyboard button in its simplest form.
 ///
 /// When pressed, the button's text will be sent as a normal message, as if the user had typed it.
