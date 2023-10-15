@@ -7,7 +7,7 @@
 // except according to those terms.
 use crate::utils::{AsyncMutex, Mutex};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{Enqueuer, Sender};
+use grammers_mtsender::{Enqueuer, ReconnectionPolicy, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -103,6 +103,19 @@ pub struct InitParams {
     /// host manually and selecting an IP address of your choice.
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
+
+    /// specify the reconnection policy which will be used by client to determine whether to re-connect on failure or not.
+    ///
+    ///it can be one of the 2 default implementation [`NoReconnect`] and [`FixedReconnect`];
+    ///
+    /// **OR** your own custom implementation of trait [`ReconnectionPolicy`].
+    ///
+    /// for more details refer to [`examples`](lib/grammers-client/examples/reconnection.rs)
+    ///
+    /// [`NoReconnect`]: grammers_mtsender::NoReconnect
+    /// [`FixedReconnect`]: grammers_mtsender::FixedReconnect
+    /// [`ReconnectionPolicy`]: grammers_mtsender::ReconnectionPolicy
+    pub reconnection_policy: &'static dyn ReconnectionPolicy,
 }
 
 pub(crate) struct ClientInner {
@@ -175,6 +188,7 @@ impl Default for InitParams {
             update_queue_limit: Some(100),
             #[cfg(feature = "proxy")]
             proxy_url: None,
+            reconnection_policy: &grammers_mtsender::NoReconnect,
         }
     }
 }

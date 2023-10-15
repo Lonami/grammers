@@ -1159,19 +1159,27 @@ impl Mtp for Encrypted {
         // Check to see if the next salt can be used already. If it can, drop the current one and,
         // if the next salt is the last one, fetch more.
         if let Some((start_secs, start_instant)) = self.start_salt_time {
-            if let Some(salt) = self.salts.get(self.salts.len() - 2) {
-                let now = start_secs + start_instant.elapsed().as_secs() as i32;
-                if now >= salt.valid_since + SALT_USE_DELAY {
-                    self.salts.pop();
-                    if self.salts.len() == 1 {
-                        info!("only one future salt remaining; asking for more salts");
-                        let body = tl::functions::GetFutureSalts {
-                            num: NUM_FUTURE_SALTS,
+            let should_fetch_salts = self.salts.len() < 2
+                || 'value: {
+                    if let Some(salt) = self.salts.get(self.salts.len() - 2) {
+                        let now = start_secs + start_instant.elapsed().as_secs() as i32;
+                        if now >= salt.valid_since + SALT_USE_DELAY {
+                            self.salts.pop();
+                            if self.salts.len() == 1 {
+                                info!("only one future salt remaining; asking for more salts");
+                                break 'value true;
+                            }
                         }
-                        .to_bytes();
-                        self.serialize_msg(&body, true);
                     }
+                    false
+                };
+
+            if should_fetch_salts {
+                let body = tl::functions::GetFutureSalts {
+                    num: NUM_FUTURE_SALTS,
                 }
+                .to_bytes();
+                self.serialize_msg(&body, true);
             }
         }
 
@@ -1245,6 +1253,18 @@ impl Mtp for Encrypted {
             rpc_results: mem::take(&mut self.rpc_results),
             updates: mem::take(&mut self.updates),
         })
+    }
+
+    fn reset(&mut self) {
+        self.client_id = {
+            let mut buffer = [0u8; 8];
+            getrandom(&mut buffer).expect("failed to generate a secure client_id");
+            i64::from_le_bytes(buffer)
+        };
+        self.sequence = 0;
+        self.last_msg_id = 0;
+        self.pending_ack.clear();
+        self.msg_count = 0;
     }
 }
 

@@ -59,13 +59,22 @@ pub(crate) async fn connect_sender(
 
         #[cfg(feature = "proxy")]
         if let Some(url) = config.params.proxy_url.as_ref() {
-            sender::connect_via_proxy_with_auth(transport, addr, auth_key, url).await?
+            sender::connect_via_proxy_with_auth(
+                transport,
+                addr,
+                auth_key,
+                url,
+                config.params.reconnection_policy,
+            )
+            .await?
         } else {
-            sender::connect_with_auth(transport, addr, auth_key).await?
+            sender::connect_with_auth(transport, addr, auth_key, config.params.reconnection_policy)
+                .await?
         }
 
         #[cfg(not(feature = "proxy"))]
-        sender::connect_with_auth(transport, addr, auth_key).await?
+        sender::connect_with_auth(transport, addr, auth_key, config.params.reconnection_policy)
+            .await?
     } else {
         info!(
             "creating a new sender and auth key in dc {} {:?}",
@@ -74,13 +83,15 @@ pub(crate) async fn connect_sender(
 
         #[cfg(feature = "proxy")]
         let (sender, tx) = if let Some(url) = config.params.proxy_url.as_ref() {
-            sender::connect_via_proxy(transport, addr, url).await?
+            sender::connect_via_proxy(transport, addr, url, config.params.reconnection_policy)
+                .await?
         } else {
-            sender::connect(transport, addr).await?
+            sender::connect(transport, addr, config.params.reconnection_policy).await?
         };
 
         #[cfg(not(feature = "proxy"))]
-        let (sender, tx) = sender::connect(transport, addr).await?;
+        let (sender, tx) =
+            sender::connect(transport, addr, config.params.reconnection_policy).await?;
 
         config.session.insert_dc(dc_id, addr, sender.auth_key());
         (sender, tx)
@@ -343,7 +354,10 @@ impl Client {
                 mutex.insert(dc_id, new_downloader.clone());
                 Ok(new_downloader.clone())
             }
-            Err(e) => panic!("Cannot obtain new sender to datacenter {}", e),
+            Err(AuthorizationError::Invoke(e)) => Err(e),
+            Err(AuthorizationError::Gen(e)) => {
+                panic!("authorization key generation failed: {}", e)
+            }
         }
     }
 

@@ -66,6 +66,10 @@ impl Transport for Intermediate {
 
         Ok(len + 4)
     }
+
+    fn reset(&mut self) {
+        self.init = false;
+    }
 }
 
 #[cfg(test)]
