@@ -208,6 +208,12 @@ impl MessageIter {
         self
     }
 
+    /// return only messages with message IDs less than max_id
+    pub fn max_id(mut self, max_id: i32) -> Self {
+        self.request.max_id = max_id;
+        self
+    }
+
     /// Determines how many messages there are in total.
     ///
     /// This only performs a network call if `next` has not been called before.
