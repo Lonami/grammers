@@ -254,7 +254,7 @@ impl InputMessage {
     ///
     /// You can use this to send media from another message without re-uploading it.
     pub fn copy_media(mut self, media: &Media) -> Self {
-        self.media = Some(media.to_input_media());
+        self.media = media.to_input_media();
         self
     }
 
