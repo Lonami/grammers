@@ -347,9 +347,33 @@ impl Message {
     }
 
     /// How many replies does this message have, when applicable.
-    pub fn reply_count(&self) -> Option<tl::enums::MessageReplies> {
-        // TODO return int instead
-        self.msg.replies.clone()
+    pub fn reply_count(&self) -> Option<i32> {
+        match &self.msg.replies {
+            None => None,
+            Some(replies) => {
+                let tl::enums::MessageReplies::Replies(replies) = replies;
+                Some(replies.replies)
+            }
+        }
+    }
+
+    /// How many reactions does this message have, when applicable.
+    pub fn reaction_count(&self) -> Option<i32> {
+        match &self.msg.reactions {
+            None => None,
+            Some(reactions) => {
+                let tl::enums::MessageReactions::Reactions(reactions) = reactions;
+                let count = reactions
+                    .results
+                    .iter()
+                    .map(|reaction: &tl::enums::ReactionCount| {
+                        let tl::enums::ReactionCount::Count(reaction) = reaction;
+                        reaction.count
+                    })
+                    .sum();
+                Some(count)
+            }
+        }
     }
 
     /// The date when this message was last edited.
