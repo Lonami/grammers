@@ -75,8 +75,10 @@ pub(crate) fn always_find_entity(
         };
         client
             .0
+            .state
+            .read()
+            .unwrap()
             .chat_hashes
-            .lock("always_find_entity")
             .get(id)
             .unwrap_or(PackedChat {
                 ty,

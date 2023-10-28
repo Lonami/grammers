@@ -80,17 +80,18 @@ pub(crate) fn parse_mention_entities(
     mut entities: Vec<tl::enums::MessageEntity>,
 ) -> Option<Vec<tl::enums::MessageEntity>> {
     if entities.is_empty() {
-        None
-    } else {
-        for entitie in entities.iter_mut() {
-            if let tl::enums::MessageEntity::MentionName(mention_name) = entitie {
-                if let Some(packed_user) = client
-                    .0
-                    .chat_hashes
-                    .lock("messages.parse_mention_entities")
-                    .get(mention_name.user_id)
-                {
-                    *entitie = tl::types::InputMessageEntityMentionName {
+        return None;
+    }
+
+    if entities
+        .iter()
+        .any(|e| matches!(e, tl::enums::MessageEntity::MentionName(_)))
+    {
+        let state = client.0.state.read().unwrap();
+        for entity in entities.iter_mut() {
+            if let tl::enums::MessageEntity::MentionName(mention_name) = entity {
+                if let Some(packed_user) = state.chat_hashes.get(mention_name.user_id) {
+                    *entity = tl::types::InputMessageEntityMentionName {
                         offset: mention_name.offset,
                         length: mention_name.length,
                         user_id: packed_user.to_input_user_lossy(),
@@ -99,9 +100,9 @@ pub(crate) fn parse_mention_entities(
                 }
             }
         }
-
-        Some(entities)
     }
+
+    Some(entities)
 }
 
 const MAX_LIMIT: usize = 100;
@@ -160,10 +161,11 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let mut chat_hashes = self.client.0.chat_hashes.lock("iter_messages");
-        // Telegram can return peers without hash (e.g. Users with 'min: true')
-        let _ = chat_hashes.extend(&users, &chats);
-        drop(chat_hashes);
+        {
+            let mut state = self.client.0.state.write().unwrap();
+            // Telegram can return peers without hash (e.g. Users with 'min: true')
+            let _ = state.chat_hashes.extend(&users, &chats);
+        }
 
         let chats = ChatMap::new(users, chats);
 

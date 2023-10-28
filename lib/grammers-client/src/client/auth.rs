@@ -84,30 +84,30 @@ impl Client {
         &self,
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
+        // In the extremely rare case where `Err` happens, there's not much we can do.
+        // `message_box` will try to correct its state as updates arrive.
+        let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();
+
         let user = User::from_raw(auth.user);
-        self.0.config.session.set_user(
-            user.id(),
-            *self.0.dc_id.lock("client.complete_login"),
-            user.is_bot(),
-        );
 
-        self.0
-            .chat_hashes
-            .lock("client.complete_login")
-            .set_self_user(user.pack());
+        let sync_state = {
+            let mut state = self.0.state.write().unwrap();
+            self.0
+                .config
+                .session
+                .set_user(user.id(), state.dc_id, user.is_bot());
 
-        match self.invoke(&tl::functions::updates::GetState {}).await {
-            Ok(state) => {
-                self.0
-                    .message_box
-                    .lock("client.complete_login")
-                    .set_state(state);
-                self.sync_update_state();
+            state.chat_hashes.set_self_user(user.pack());
+            if let Some(us) = update_state {
+                state.message_box.set_state(us);
+                true
+            } else {
+                false
             }
-            Err(_err) => {
-                // In the extremely rare case where this happens, there's not much we can do.
-                // `message_box` will try to correct its state as updates arrive.
-            }
+        };
+
+        if sync_state {
+            self.sync_update_state();
         }
 
         Ok(user)
@@ -155,8 +155,11 @@ impl Client {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock("client.bot_sign_in").await = sender;
-                *self.0.request_tx.lock("client.bot_sign_in") = request_tx;
-                *self.0.dc_id.lock("client.bot_sign_in") = dc_id;
+                {
+                    let mut state = self.0.state.write().unwrap();
+                    state.request_tx = request_tx;
+                    state.dc_id = dc_id;
+                }
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -231,8 +234,11 @@ impl Client {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
                 *self.0.sender.lock("client.request_login_code").await = sender;
-                *self.0.request_tx.lock("client.request_login_code") = request_tx;
-                *self.0.dc_id.lock("client.request_login_code") = dc_id;
+                {
+                    let mut state = self.0.state.write().unwrap();
+                    state.request_tx = request_tx;
+                    state.dc_id = dc_id;
+                }
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),

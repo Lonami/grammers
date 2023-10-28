@@ -1,3 +1,4 @@
+use super::client::ClientState;
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -19,9 +20,9 @@ use mtp::Encrypted;
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::Arc;
+use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{Notify, RwLock as AsyncRwLock};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -183,39 +184,32 @@ impl Client {
 
         let self_user = config.session.get_user();
 
+        // Don't bother getting pristine update state if we're not logged in.
+        let should_get_state = message_box.is_empty() && config.session.signed_in();
+
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             sender: AsyncMutex::new("client.sender", sender),
+            state: RwLock::new(ClientState {
+                dc_id,
+                message_box,
+                chat_hashes: ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
+                last_update_limit_warn: None,
+                updates,
+                request_tx,
+            }),
             stepping_done: Notify::new(),
-            dc_id: Mutex::new("client.dc_id", dc_id),
             config,
-            message_box: Mutex::new("client.message_box", message_box),
-            chat_hashes: Mutex::new(
-                "client.chat_hashes",
-                ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
-            ),
-            last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
-            updates: Mutex::new("client.updates", updates),
-            request_tx: Mutex::new("client.request_tx", request_tx),
-            downloader_map: RwLock::new(HashMap::new()),
+            downloader_map: AsyncRwLock::new(HashMap::new()),
         }));
 
-        // Don't bother getting pristine state if we're not logged in.
-        if client
-            .0
-            .message_box
-            .lock("client.connect.is_empty")
-            .is_empty()
-            && client.0.config.session.signed_in()
-        {
+        if should_get_state {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    client
-                        .0
-                        .message_box
-                        .lock("client.connect.set_state")
-                        .set_state(state);
+                    {
+                        client.0.state.write().unwrap().message_box.set_state(state);
+                    }
                     client.sync_update_state();
                 }
                 Err(_err) => {
