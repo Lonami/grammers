@@ -7,7 +7,7 @@ use super::client::ClientState;
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner, Config};
-use crate::utils::{self, AsyncMutex};
+use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
 use grammers_mtproto::transport;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
@@ -19,7 +19,7 @@ use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
 use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{Notify, RwLock as AsyncRwLock};
+use tokio::sync::{Mutex as AsyncMutex, Notify, RwLock as AsyncRwLock};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -366,7 +366,7 @@ impl Client {
 impl Connection {
     fn new(sender: Sender<transport::Full, mtp::Encrypted>, request_tx: Enqueuer) -> Self {
         Self {
-            sender: AsyncMutex::new("client.sender", sender),
+            sender: AsyncMutex::new(sender),
             request_tx: RwLock::new(request_tx),
             stepping_done: Notify::new(),
         }
@@ -415,7 +415,7 @@ impl Connection {
     }
 
     async fn step(&self) -> Result<Vec<tl::enums::Updates>, sender::ReadError> {
-        match self.sender.try_lock("client.step") {
+        match self.sender.try_lock() {
             Ok(mut sender) => {
                 // Sender was unlocked, we're the ones that will perform the network step.
                 let updates = sender.step().await?;
