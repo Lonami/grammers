@@ -24,8 +24,26 @@ impl Key {
     }
 }
 
+/// Increment data by 1 when interpreted as a big-endian big int.
+fn increment(data: &mut [u8]) {
+    let mut i = data.len() - 1;
+    loop {
+        let (n, overflow) = data[i].overflowing_add(1);
+        data[i] = n;
+        if overflow {
+            if let Some(ni) = i.checked_sub(1) {
+                i = ni
+            } else {
+                i = data.len() - 1;
+            }
+        } else {
+            break;
+        }
+    }
+}
+
 /// Encrypt the given data, prefixing it with a hash before, using RSA.
-pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u8> {
+pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 224]) -> Vec<u8> {
     // https://core.telegram.org/mtproto/auth_key#41-rsa-paddata-server-public-key-mentioned-above-is-implemented-as-follows
 
     // data_with_padding := data + random_padding_bytes; -- where random_padding_bytes are chosen so that the resulting length of data_with_padding is precisely 192 bytes, and data is the TL-serialized data to be encrypted as before. One has to check that data is not longer than 144 bytes.
@@ -40,17 +58,10 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u
     // data_pad_reversed := BYTE_REVERSE(data_with_padding); -- is obtained from data_with_padding by reversing the byte order.
     let data_pad_reversed = data_with_padding.iter().copied().rev().collect::<Vec<u8>>();
 
-    let mut attempt = 0;
+    // a random 32-byte temp_key is generated.
+    let mut temp_key: [u8; 32] = random_bytes[192..192 + 32].try_into().unwrap();
+
     let key_aes_encrypted = loop {
-        if 192 + 32 * attempt + 32 > random_bytes.len() {
-            panic!("ran out of entropy");
-        }
-
-        // a random 32-byte temp_key is generated.
-        let temp_key = &random_bytes[192 + 32 * attempt..192 + 32 * attempt + 32]
-            .try_into()
-            .unwrap();
-
         // data_with_hash := data_pad_reversed + SHA256(temp_key + data_with_padding); -- after this assignment, data_with_hash is exactly 224 bytes long.
         let data_with_hash = {
             let mut buffer = Vec::with_capacity(224);
@@ -80,12 +91,15 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 256]) -> Vec<u
             buffer
         };
 
-        // The value of key_aes_encrypted is compared with the RSA-modulus of server_pubkey as a big-endian 2048-bit (256-byte) unsigned integer. If key_aes_encrypted turns out to be greater than or equal to the RSA modulus, the previous steps starting from the generation of new random temp_key are repeated. Otherwise the final step is performed:
-        if BigUint::from_bytes_be(&key_aes_encrypted) < key.n {
-            break key_aes_encrypted;
+        // The value of key_aes_encrypted is compared with the RSA-modulus of server_pubkey as a big-endian 2048-bit (256-byte) unsigned integer.
+        if BigUint::from_bytes_be(&key_aes_encrypted) >= key.n {
+            // If key_aes_encrypted turns out to be greater than or equal to the RSA modulus, the previous steps starting from the generation of new random temp_key are repeated.
+            increment(&mut temp_key);
+            continue;
         }
 
-        attempt += 1;
+        // Otherwise the final step is performed:
+        break key_aes_encrypted;
     };
 
     // encrypted_data := RSA(key_aes_encrypted, server_pubkey); -- 256-byte big-endian integer is elevated to the requisite power from the RSA public key modulo the RSA modulus, and the result is stored as a big-endian integer consisting of exactly 256 bytes (with leading zero bytes if required).
@@ -110,11 +124,11 @@ mod tests {
         let result = encrypt_hashed(
             &hex::from_hex("955ff5a9081a8e635f5743de9b00000004453dc27100000004622f1fcb000000f7a81627bbf511fa4afef71e94a0937474586c1add9198dda81a5df8393871c8293623c5fb968894af1be7dfe9c7be813f9307789242fd0cb0c16a5cb39a8d3e"),
             &key,
-            hex::from_hex("12270000635593b03fee033d0672f9afddf9124de9e77df6251806cba93482e4c9e6e06e7d44e4c4baae821aff91af44789689faaee9bdfc7b2df8c08709afe57396c4638ceaa0dc30114f82447e81d3b53edc423b32660c43a5b8ad057b64500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007dada0920c4973913229e0f881aec7b9db0c392d34f52fb0995ea493ecb4c09daaf68fe9554ec7a59c03e4035952b220b47a8d06aad71134110d8c44948901f8").as_slice().try_into().unwrap(),
+            hex::from_hex("12270000635593b03fee033d0672f9afddf9124de9e77df6251806cba93482e4c9e6e06e7d44e4c4baae821aff91af44789689faaee9bdfc7b2df8c08709afe57396c4638ceaa0dc30114f82447e81d3b53edc423b32660c43a5b8ad057b64500000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000000007dada0920c4973913229e0f881aec7b9db0c392d34f52fb0995ea493ecb4c09d").as_slice().try_into().unwrap(),
         );
         assert_eq!(
             result,
-            hex::from_hex("c6d211349fc10cda6983276250b09f4be9b39f533b5d314b732b51a6dd72234dab4224209992c894e0e4c9f30249f1dbbd1630a27b98f2f92a53c00baabbd46f380bd35f417e5ec2edb43f7644b5c81af011d736eb369265e848b553ae5e6350dd5695efc72bde0e35f3c3fc827b91eb97cf1efdbff12269b9c33f81645adebc89ed167edc19d285237a754bf629aa358ed08498863b2aec8b7139001627bbe8bdef239474a5a43e664d278f39e72d694a206d7b838fd40868a71c4bfbffa38b7679faa502b7795cbe5ae1bd05ca7eb01ff5b05107265fd39bd5b4e19d392b735a3b0b5b21473062981bff86ff9084a7b594775e3127c05fd454e19f794a4ab4")
+            hex::from_hex("b610642a828b4a61fe32931815cae318d311660580f1e0df768f3140f4d37dfcfcac0c2870318de4ff2d2e0e9669bcfdc0bad06cadb1b59d9726b427368a9c7b4fc0d5e7b2e99fc571968705c03acf5341fd7021bef653fa77b3776ae430e366fc46d232459ebe128b08d80e049ae579a48b56ca93b520709468587c81af96666046e9ea85091d729e921e8d8a36f57b27644052dae7387c7f4131701d59cda75251dac66c94276280ef950d3c44c21e5a2454f7da7a6818cf23ae9c490b72b2170d7cbc24f8a93db739d76f2d241c78b80123faaff3e664f074d6375d794dbf2800a0b5bb48d54eceafedfb355bfbebd287d9023264e3b53627888250787a9e")
         );
     }
 }
