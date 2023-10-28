@@ -175,30 +175,32 @@ impl Client {
         }
 
         let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
-        let state = &mut *self.0.state.write().unwrap();
+        {
+            let state = &mut *self.0.state.write().unwrap();
 
-        for updates in all_updates {
-            if state
-                .message_box
-                .ensure_known_peer_hashes(&updates, &mut state.chat_hashes)
-                .is_err()
-            {
-                return;
-            }
-            match state
-                .message_box
-                .process_updates(updates, &state.chat_hashes)
-            {
-                Ok(tup) => {
-                    if let Some(res) = result.as_mut() {
-                        res.0.extend(tup.0);
-                        res.1.extend(tup.1);
-                        res.2.extend(tup.2);
-                    } else {
-                        result = Some(tup);
-                    }
+            for updates in all_updates {
+                if state
+                    .message_box
+                    .ensure_known_peer_hashes(&updates, &mut state.chat_hashes)
+                    .is_err()
+                {
+                    return;
                 }
-                Err(_) => return,
+                match state
+                    .message_box
+                    .process_updates(updates, &state.chat_hashes)
+                {
+                    Ok(tup) => {
+                        if let Some(res) = result.as_mut() {
+                            res.0.extend(tup.0);
+                            res.1.extend(tup.1);
+                            res.2.extend(tup.2);
+                        } else {
+                            result = Some(tup);
+                        }
+                    }
+                    Err(_) => return,
+                }
             }
         }
 
