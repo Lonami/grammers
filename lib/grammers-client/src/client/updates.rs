@@ -175,7 +175,7 @@ impl Client {
         }
 
         let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
-        let mut state = &mut *self.0.state.write().unwrap();
+        let state = &mut *self.0.state.write().unwrap();
 
         for updates in all_updates {
             if state

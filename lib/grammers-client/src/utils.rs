@@ -105,39 +105,10 @@ pub(crate) fn always_find_entity(
     }
 }
 
-pub(crate) struct Mutex<T: ?Sized> {
-    name: &'static str,
-    mutex: std::sync::Mutex<T>,
-}
-
 pub(crate) struct MutexGuard<'a, T: ?Sized> {
     name: &'static str,
     reason: &'static str,
     guard: std::sync::MutexGuard<'a, T>,
-}
-
-impl<T> Mutex<T> {
-    pub fn new(name: &'static str, value: T) -> Self {
-        Self {
-            name,
-            mutex: std::sync::Mutex::new(value),
-        }
-    }
-
-    pub fn lock(&self, reason: &'static str) -> MutexGuard<T> {
-        trace!("locking {} for {}", self.name, reason);
-        MutexGuard {
-            name: self.name,
-            reason,
-            guard: self.mutex.lock().unwrap(),
-        }
-    }
-}
-
-impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.mutex.fmt(f)
-    }
 }
 
 impl<T: ?Sized> std::ops::Deref for MutexGuard<'_, T> {
