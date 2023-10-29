@@ -17,9 +17,10 @@ use log::{debug, info};
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
+use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{Mutex as AsyncMutex, Notify, RwLock as AsyncRwLock};
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -40,7 +41,7 @@ const DEFAULT_DC: i32 = 2;
 pub(crate) struct Connection {
     pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
     pub(crate) request_tx: RwLock<Enqueuer>,
-    pub(crate) stepping_done: Notify,
+    pub(crate) step_counter: AtomicU32,
 }
 
 pub(crate) async fn connect_sender(
@@ -368,7 +369,7 @@ impl Connection {
         Self {
             sender: AsyncMutex::new(sender),
             request_tx: RwLock::new(request_tx),
-            stepping_done: Notify::new(),
+            step_counter: AtomicU32::new(0),
         }
     }
 
@@ -415,23 +416,17 @@ impl Connection {
     }
 
     async fn step(&self) -> Result<Vec<tl::enums::Updates>, sender::ReadError> {
-        match self.sender.try_lock() {
-            Ok(mut sender) => {
-                // Sender was unlocked, we're the ones that will perform the network step.
-                let updates = sender.step().await?;
-                self.stepping_done.notify_waiters();
-
-                // TODO request cancellation if this is Err
-                // (perhaps a method on the sender to cancel_all)
-                Ok(updates)
-            }
-            Err(_) => {
-                // Someone else is already performing the network step. Wait for the step to
-                // complete and return immediately without stepping again. The caller wants
-                // *one* step to complete, but it doesn't care *who* completes it.
-                self.stepping_done.notified().await;
-                Ok(Vec::new())
-            }
+        let ticket_number = self.step_counter.load(Ordering::SeqCst);
+        let mut sender = self.sender.lock().await;
+        match self.step_counter.compare_exchange(
+            ticket_number,
+            // As long as the counter's modulo is larger than the amount of concurrent tasks, we're fine.
+            ticket_number.wrapping_add(1),
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => sender.step().await, // We're the one to drive IO.
+            Err(_) => Ok(Vec::new()),     // A different task drove IO.
         }
     }
 }
