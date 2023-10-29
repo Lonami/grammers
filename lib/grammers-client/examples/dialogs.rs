@@ -16,7 +16,7 @@ use log;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
-use tokio::{runtime, task};
+use tokio::runtime;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -92,17 +92,7 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
-    //
-    // This handle can be `clone()`'d around and freely moved into other tasks, so you can invoke
-    // methods concurrently if you need to. While you do this, the single owned `client` is the
-    // one that communicates with the network.
-    //
-    // The design's annoying to use for trivial sequential tasks, but is otherwise scalable.
-    let client_handle = client.clone();
-    let network_handle = task::spawn(async move { client.run_until_disconnected().await });
-
-    let mut dialogs = client_handle.iter_dialogs();
+    let mut dialogs = client.iter_dialogs();
 
     println!("Showing up to {} dialogs:", dialogs.total().await?);
     while let Some(dialog) = dialogs.next().await? {
@@ -112,10 +102,9 @@ async fn async_main() -> Result<()> {
 
     if sign_out {
         // TODO revisit examples and get rid of "handle references" (also, this panics)
-        drop(client_handle.sign_out_disconnect().await);
+        drop(client.sign_out_disconnect().await);
     }
 
-    network_handle.await??;
     Ok(())
 }
 
