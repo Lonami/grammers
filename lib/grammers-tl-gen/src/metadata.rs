@@ -7,12 +7,13 @@
 // except according to those terms.
 use std::collections::{HashMap, HashSet};
 
-use grammers_tl_parser::tl::{Category, Definition, ParameterType, Type};
+use grammers_tl_parser::tl::{Category, Definition, Parameter, ParameterType, Type};
 
 /// Additional metadata required by several parts of the generation.
 pub(crate) struct Metadata<'a> {
     recursing_defs: HashSet<u32>,
     defs_with_type: HashMap<(&'a Vec<String>, &'a String), Vec<&'a Definition>>,
+    unused_flags: HashMap<(&'a Vec<String>, &'a String), Vec<&'a Parameter>>,
 }
 
 impl<'a> Metadata<'a> {
@@ -20,7 +21,28 @@ impl<'a> Metadata<'a> {
         let mut metadata = Self {
             recursing_defs: HashSet::new(),
             defs_with_type: HashMap::new(),
+            unused_flags: HashMap::new(),
         };
+
+        definitions.iter().for_each(|d| {
+            d.params
+                .iter()
+                .filter(|pf| matches!(pf.ty, ParameterType::Flags))
+                .for_each(|pf| {
+                    if !d.params.iter().any(|pn| match &pn.ty {
+                        ParameterType::Normal {
+                            flag: Some(flag), ..
+                        } => flag.name == pf.name,
+                        _ => false,
+                    }) {
+                        metadata
+                            .unused_flags
+                            .entry((&d.namespace, &d.name))
+                            .or_insert_with(Vec::new)
+                            .push(pf)
+                    }
+                })
+        });
 
         let type_definitions = definitions
             .iter()
@@ -42,6 +64,13 @@ impl<'a> Metadata<'a> {
         });
 
         metadata
+    }
+
+    pub fn is_unused_flag(&self, def: &Definition, flag: &Parameter) -> bool {
+        self.unused_flags
+            .get(&(&def.namespace, &def.name))
+            .map(|flags| flags.iter().any(|f| *f == flag))
+            .unwrap_or(false)
     }
 
     /// Returns `true` if any of the parameters of `Definition` eventually
