@@ -253,7 +253,11 @@ impl Client {
     ) -> Result<R::Return, InvocationError> {
         self.0
             .conn
-            .invoke(request, self.0.config.params.flood_sleep_threshold)
+            .invoke(
+                request,
+                self.0.config.params.flood_sleep_threshold,
+                |updates| self.process_socket_updates(updates),
+            )
             .await
     }
 
@@ -288,7 +292,7 @@ impl Client {
                     bytes: authorization.bytes,
                 };
                 new_downloader
-                    .invoke(&request, self.0.config.params.flood_sleep_threshold)
+                    .invoke(&request, self.0.config.params.flood_sleep_threshold, drop)
                     .await?;
 
                 mutex.insert(dc_id, new_downloader.clone());
@@ -318,7 +322,7 @@ impl Client {
             Some(fd) => fd,
         };
         downloader
-            .invoke(request, self.0.config.params.flood_sleep_threshold)
+            .invoke(request, self.0.config.params.flood_sleep_threshold, drop)
             .await
     }
 
@@ -373,10 +377,11 @@ impl Connection {
         }
     }
 
-    pub(crate) async fn invoke<R: tl::RemoteCall>(
+    pub(crate) async fn invoke<R: tl::RemoteCall, F: Fn(Vec<tl::enums::Updates>) -> ()>(
         &self,
         request: &R,
         flood_sleep_threshold: u32,
+        on_updates: F,
     ) -> Result<R::Return, InvocationError> {
         let mut slept_flood = false;
 
@@ -406,7 +411,7 @@ impl Connection {
                     Err(e) => break Err(e),
                 },
                 Err(TryRecvError::Empty) => {
-                    self.step().await?;
+                    on_updates(self.step().await?);
                 }
                 Err(TryRecvError::Closed) => {
                     panic!("request channel dropped before receiving a result")
