@@ -479,8 +479,16 @@ impl Client {
                 background: message.background,
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
-                reply_to_msg_id: message.reply_to,
-                top_msg_id: None,
+                reply_to: message.reply_to.map(|reply_to_msg_id| {
+                    tl::types::InputReplyToMessage {
+                        reply_to_msg_id,
+                        top_msg_id: None,
+                        reply_to_peer_id: None,
+                        quote_text: None,
+                        quote_entities: None,
+                    }
+                    .into()
+                }),
                 media,
                 message: message.text.clone(),
                 random_id,
@@ -490,6 +498,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
+                invert_media: false,
             })
             .await
         } else {
@@ -499,8 +508,16 @@ impl Client {
                 background: message.background,
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
-                reply_to_msg_id: message.reply_to,
-                top_msg_id: None,
+                reply_to: message.reply_to.map(|reply_to_msg_id| {
+                    tl::types::InputReplyToMessage {
+                        reply_to_msg_id,
+                        top_msg_id: None,
+                        reply_to_peer_id: None,
+                        quote_text: None,
+                        quote_entities: None,
+                    }
+                    .into()
+                }),
                 message: message.text.clone(),
                 random_id,
                 reply_markup: message.reply_markup.clone(),
@@ -509,6 +526,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
+                invert_media: false,
             })
             .await
         }?;
@@ -553,6 +571,7 @@ impl Client {
         let entities = parse_mention_entities(self, new_message.entities);
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
+            invert_media: false,
             peer: chat.into().to_input_peer(),
             id: message_id,
             message: Some(new_message.text),

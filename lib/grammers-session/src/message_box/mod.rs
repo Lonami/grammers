@@ -632,6 +632,7 @@ impl MessageBox {
 
                 let gd = tl::functions::updates::GetDifference {
                     pts: self.map[&Entry::AccountWide].pts,
+                    pts_limit: None,
                     pts_total_limit: None,
                     date: self.date,
                     qts: if self.map.contains_key(&Entry::SecretChats) {
@@ -639,6 +640,7 @@ impl MessageBox {
                     } else {
                         NO_PTS
                     },
+                    qts_limit: None,
                 };
                 trace!("requesting {:?}", gd);
                 return Some(gd);

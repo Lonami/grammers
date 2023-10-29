@@ -29,6 +29,9 @@ impl Permissions {
             manage_call: true,
             other: true,
             manage_topics: true,
+            post_stories: true,
+            edit_stories: true,
+            delete_stories: true,
         })
     }
 

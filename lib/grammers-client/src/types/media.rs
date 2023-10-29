@@ -324,7 +324,9 @@ impl Document {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     match attr {
-                        tl::enums::DocumentAttribute::Video(v) => return Some(v.duration),
+                        tl::enums::DocumentAttribute::Video(v) => {
+                            return Some(v.duration.max(i32::MAX as _) as i32)
+                        }
                         tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration),
                         _ => {}
                     }
@@ -844,6 +846,8 @@ impl Media {
             M::GeoLive(geolive) => Some(Self::GeoLive(GeoLive::from_media(geolive))),
             M::Poll(poll) => Some(Self::Poll(Poll::from_media(poll))),
             M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
+            M::Story(_) => None,
+            M::Giveaway(_) => None,
         }
     }
 

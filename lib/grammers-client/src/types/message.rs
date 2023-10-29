@@ -68,6 +68,7 @@ impl Message {
                     edit_hide: false,
                     pinned: false,
                     noforwards: false,
+                    invert_media: false,
                     id: msg.id,
                     from_id: msg.from_id,
                     peer_id: msg.peer_id,
@@ -114,6 +115,7 @@ impl Message {
                 edit_hide: false,
                 pinned: false,
                 noforwards: false, // TODO true if channel has noforwads?
+                invert_media: false,
                 id: updates.id,
                 from_id: None, // TODO self
                 peer_id: chat.to_peer(),
@@ -123,9 +125,14 @@ impl Message {
                     tl::types::MessageReplyHeader {
                         reply_to_scheduled: false,
                         forum_topic: false,
-                        reply_to_msg_id,
+                        quote: false,
+                        reply_to_msg_id: Some(reply_to_msg_id),
                         reply_to_peer_id: None,
+                        reply_from: None,
+                        reply_media: None,
                         reply_to_top_id: None,
+                        quote_text: None,
+                        quote_entities: None,
                     }
                     .into()
                 }),
@@ -411,7 +418,7 @@ impl Message {
     /// If this message is replying to another message, return the replied message ID.
     pub fn reply_to_message_id(&self) -> Option<i32> {
         if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.msg.reply_to {
-            Some(m.reply_to_msg_id)
+            m.reply_to_msg_id
         } else {
             None
         }

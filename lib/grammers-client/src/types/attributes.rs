@@ -59,9 +59,11 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
             } => Self::Video(tl::types::DocumentAttributeVideo {
                 round_message,
                 supports_streaming,
-                duration: duration.as_secs().try_into().unwrap(),
+                nosound: false,
+                duration: duration.as_secs_f64(),
                 w,
                 h,
+                preload_prefix_size: None,
             }),
             FileName(file_name) => {
                 Self::Filename(tl::types::DocumentAttributeFilename { file_name })

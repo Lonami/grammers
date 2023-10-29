@@ -54,6 +54,7 @@ pub fn switch_inline<T: Into<String>, Q: Into<String>>(text: T, query: Q) -> Inl
             text: text.into(),
             query: query.into(),
             same_peer: true,
+            peer_types: None,
         }
         .into(),
     )
@@ -70,6 +71,7 @@ pub fn switch_inline_elsewhere<T: Into<String>, Q: Into<String>>(text: T, query:
             text: text.into(),
             query: query.into(),
             same_peer: false,
+            peer_types: None,
         }
         .into(),
     )

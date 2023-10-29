@@ -58,6 +58,7 @@ pub(super) fn update_short_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                invert_media: false,
                 reactions: None,
                 id: short.id,
                 from_id: Some(
@@ -112,6 +113,7 @@ pub(super) fn update_short_chat_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                invert_media: false,
                 reactions: None,
                 id: short.id,
                 from_id: Some(
@@ -266,6 +268,7 @@ impl PtsInfo {
             ChatParticipants(_) => None,
             UserStatus(_) => None,
             UserName(_) => None,
+            NewAuthorization(_) => None,
             NewEncryptedMessage(u) => Some(Self {
                 pts: u.qts,
                 pts_count: 1,
@@ -465,6 +468,11 @@ impl PtsInfo {
             User(_) => None,
             AutoSaveSettings => None,
             GroupInvitePrivacyForbidden(_) => None,
+            Story(_) => None,
+            ReadStories(_) => None,
+            StoryId(_) => None,
+            StoriesStealthMode(_) => None,
+            SentStoryReaction(_) => None,
         }
         .filter(|info| info.pts != NO_PTS)
     }

@@ -217,6 +217,7 @@ impl From<Article> for InlineResult {
                 send_message: tl::enums::InputBotInlineMessage::Text(
                     tl::types::InputBotInlineMessageText {
                         no_webpage: !article.input_message.link_preview,
+                        invert_media: false,
                         message: article.input_message.text,
                         entities: Some(article.input_message.entities),
                         reply_markup: article.input_message.reply_markup,
