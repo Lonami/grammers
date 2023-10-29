@@ -5,16 +5,17 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::net::Connection;
-use grammers_mtsender::ReconnectionPolicy;
+use grammers_mtproto::{mtp, transport};
+use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
+use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::net::SocketAddr;
-use std::sync::Arc;
-use std::sync::RwLock;
+use std::sync::atomic::AtomicU32;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tokio::sync::RwLock as AsyncRwLock;
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -136,6 +137,12 @@ pub(crate) struct ClientState {
     // This is used to avoid spamming the log.
     pub(crate) last_update_limit_warn: Option<Instant>,
     pub(crate) updates: VecDeque<crate::types::Update>,
+}
+
+pub(crate) struct Connection {
+    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
+    pub(crate) request_tx: RwLock<Enqueuer>,
+    pub(crate) step_counter: AtomicU32,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.

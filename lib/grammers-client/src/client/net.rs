@@ -1,4 +1,3 @@
-use super::client::ClientState;
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -6,6 +5,7 @@ use super::client::ClientState;
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::client::{ClientState, Connection};
 use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
@@ -37,12 +37,6 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
 ];
 
 const DEFAULT_DC: i32 = 2;
-
-pub(crate) struct Connection {
-    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
-    pub(crate) request_tx: RwLock<Enqueuer>,
-    pub(crate) step_counter: AtomicU32,
-}
 
 pub(crate) async fn connect_sender(
     dc_id: i32,
