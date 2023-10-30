@@ -154,9 +154,9 @@ impl Client {
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                *self.0.conn.sender.lock().await = sender;
-                *self.0.conn.request_tx.write().unwrap() = request_tx;
                 {
+                    *self.0.conn.sender.lock().await = sender;
+                    *self.0.conn.request_tx.write().unwrap() = request_tx;
                     let mut state = self.0.state.write().unwrap();
                     state.dc_id = dc_id;
                 }
@@ -233,9 +233,9 @@ impl Client {
                 // before trying again.
                 let dc_id = err.value.unwrap() as i32;
                 let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                *self.0.conn.sender.lock().await = sender;
-                *self.0.conn.request_tx.write().unwrap() = request_tx;
                 {
+                    *self.0.conn.sender.lock().await = sender;
+                    *self.0.conn.request_tx.write().unwrap() = request_tx;
                     let mut state = self.0.state.write().unwrap();
                     state.dc_id = dc_id;
                 }
