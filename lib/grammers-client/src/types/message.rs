@@ -335,9 +335,9 @@ impl Message {
 
     /// The formatting entities used to format this message, such as bold, italic, with their
     /// offsets and lengths.
-    pub fn fmt_entities(&self) -> Option<&Vec<tl::enums::MessageEntity>> {
+    pub fn fmt_entities(&self) -> Vec<MessageEntity> {
         // TODO correct the offsets and lengths to match the byte offsets
-        self.msg.entities.as_ref()
+        MessageEntity::_from_message(self.text(), self.msg.entities.clone())
     }
 
     /// How many views does this message have, when applicable.
@@ -606,5 +606,136 @@ impl fmt::Debug for Message {
             .field("restriction_reason", &self.restriction_reason())
             .field("action", &self.action())
             .finish()
+    }
+}
+
+#[derive(Debug)]
+pub enum MessageEntityType {
+    Unknown,
+    Mention,
+    Hashtag,
+    BotCommand,
+    Url,
+    Email,
+    Bold,
+    Italic,
+    Code,
+    Pre(String),
+    TextUrl(String),
+    MentionName(i64),
+    InputMessageEntityMentionName(types::input_user::InputUser),
+    Phone,
+    Cashtag,
+    Underline,
+    Strike,
+    BankCard,
+    Spoiler,
+    CustomEmoji(i64),
+    Blockquote,
+}
+
+impl From<tl::enums::MessageEntity> for MessageEntityType {
+    fn from(entity: tl::enums::MessageEntity) -> Self {
+        use tl::enums::MessageEntity as TlMessageEntity;
+        match entity {
+            TlMessageEntity::Unknown(_) => Self::Unknown,
+            TlMessageEntity::Mention(_) => Self::Mention,
+            TlMessageEntity::Hashtag(_) => Self::Hashtag,
+            TlMessageEntity::BotCommand(_) => Self::BotCommand,
+            TlMessageEntity::Url(_) => Self::Url,
+            TlMessageEntity::Email(_) => Self::Email,
+            TlMessageEntity::Bold(_) => Self::Bold,
+            TlMessageEntity::Italic(_) => Self::Italic,
+            TlMessageEntity::Code(_) => Self::Code,
+            TlMessageEntity::Pre(pre) => Self::Pre(pre.language.clone()),
+            TlMessageEntity::TextUrl(text_url) => Self::TextUrl(text_url.url.clone()),
+            TlMessageEntity::MentionName(user) => Self::MentionName(user.user_id.clone()),
+            TlMessageEntity::InputMessageEntityMentionName(user) => {
+                Self::InputMessageEntityMentionName(types::input_user::InputUser::_from_raw(
+                    user.user_id.clone(),
+                ))
+            }
+            TlMessageEntity::Phone(_) => Self::Phone,
+            TlMessageEntity::Cashtag(_) => Self::Cashtag,
+            TlMessageEntity::Underline(_) => Self::Underline,
+            TlMessageEntity::Strike(_) => Self::Strike,
+            TlMessageEntity::BankCard(_) => Self::BankCard,
+            TlMessageEntity::Spoiler(_) => Self::Spoiler,
+            TlMessageEntity::CustomEmoji(emoji) => Self::CustomEmoji(emoji.document_id),
+            TlMessageEntity::Blockquote(_) => Self::Blockquote,
+        }
+    }
+}
+
+#[derive(Debug)]
+pub struct MessageEntity {
+    r#type: MessageEntityType,
+    text: String,
+}
+
+impl MessageEntity {
+    fn _from_message(
+        text: &str,
+        message_entities: Option<Vec<tl::enums::MessageEntity>>,
+    ) -> Vec<MessageEntity> {
+        let mut entities = vec![];
+        if let Some(original_entities) = message_entities {
+            for msg_entity in original_entities {
+                entities.push(Self::_tranform(text, &msg_entity));
+            }
+        }
+        entities
+    }
+
+    fn _tranform(message_text: &str, entity: &tl::enums::MessageEntity) -> Self {
+        let text_u16 = message_text
+            .encode_utf16()
+            .skip(entity.offset() as usize)
+            .take(entity.length() as usize)
+            .collect::<Vec<u16>>();
+
+        Self {
+            r#type: entity.clone().into(),
+            text: String::from_utf16(&text_u16).unwrap_or_default(),
+        }
+    }
+
+    pub fn _type(&self) -> &MessageEntityType {
+        &self.r#type
+    }
+    pub fn text(&self) -> &str {
+        &self.text
+    }
+
+    pub fn username(&self) -> Option<String> {
+        let entity_text = self.text();
+        let username = match self._type() {
+            MessageEntityType::TextUrl(url) => Self::parse_username_from_string(&url),
+            MessageEntityType::Url
+            | MessageEntityType::InputMessageEntityMentionName(_)
+            | MessageEntityType::MentionName(_) => Self::parse_username_from_string(entity_text),
+            _ => None,
+        };
+        username
+    }
+
+    fn parse_username_from_string(entity_text: &str) -> Option<String> {
+        if entity_text.starts_with("https://t.me") {
+            let new = entity_text.replace("https://t.me/", "");
+            if new.starts_with('+') {
+                return None;
+            }
+            return Some(new);
+        }
+
+        if entity_text.starts_with('@') {
+            let username = entity_text.replace('@', "");
+            if username.contains('/') {
+                let urls = username.split('/').collect::<Vec<&str>>();
+                return Some(urls[0].to_string());
+            }
+            return Some(username);
+        }
+        None
     }
 }
