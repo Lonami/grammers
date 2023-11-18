@@ -361,6 +361,7 @@ impl ChatHashCache {
                 U::StoryId(_) => true,
                 U::StoriesStealthMode(_) => true,
                 U::SentStoryReaction(u) => self.has_peer(&u.peer),
+                U::BotChatBoost(u) => self.has_peer(&u.peer),
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).

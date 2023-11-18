@@ -473,6 +473,11 @@ impl PtsInfo {
             StoryId(_) => None,
             StoriesStealthMode(_) => None,
             SentStoryReaction(_) => None,
+            BotChatBoost(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
         }
         .filter(|info| info.pts != NO_PTS)
     }
