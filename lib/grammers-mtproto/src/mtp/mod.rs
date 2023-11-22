@@ -316,6 +316,8 @@ pub trait Mtp {
     ///
     /// Note that even if there are no requests to serialize, the protocol may
     /// produce data that has to be sent after deserializing incoming messages.
+    ///
+    /// If the buffer is empty, the function will not be called.
     fn finalize<F: FnMut(&[u8])>(&mut self, func: F);
 
     /// Deserializes a single incoming message payload into zero or more responses.

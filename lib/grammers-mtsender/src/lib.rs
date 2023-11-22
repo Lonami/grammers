@@ -424,53 +424,37 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         // TODO add a test to make sure we only ever send the same request once
-        let requests = self
+        for request in self
             .requests
             .iter_mut()
-            .filter(|r| match r.state {
-                RequestState::NotSerialized => true,
-                RequestState::Serialized(_) | RequestState::Sent(_) => false,
-            })
-            .collect::<Vec<_>>();
-
-        // TODO add a test to make sure we don't send empty data
-        if requests.is_empty() {
-            return;
-        }
-
-        // TODO make mtp itself use BytesMut to avoid copies
-        let mut msg_ids = Vec::new();
-        for request in requests.iter() {
+            .filter(|r| matches!(r.state, RequestState::NotSerialized))
+        {
+            // TODO make mtp itself use BytesMut to avoid copies
             if let Some(msg_id) = self.mtp.push(&request.body) {
-                msg_ids.push(msg_id);
-            } else {
-                break;
-            }
-        }
-        self.write_buffer.clear();
-        self.mtp
-            .finalize(|mtp_buffer| self.transport.pack(&mtp_buffer, &mut self.write_buffer));
-
-        // NOTE: we have to use the FILTERED requests, not the saved ones.
-        // The key to finding this was printing the old and new state (but took ~2h to find).
-        // Otherwise we will likely change from Sent to Serialized and enter an infinite loop.
-        // This will very easily cause transport flood (using self, trying to upload two files at once).
-        // TODO add a test for this
-        requests
-            .into_iter()
-            .zip(msg_ids.into_iter())
-            .for_each(|(req, msg_id)| {
-                assert!(req.body.len() >= 4);
-                let req_id =
-                    u32::from_le_bytes([req.body[0], req.body[1], req.body[2], req.body[3]]);
+                assert!(request.body.len() >= 4);
+                let req_id = u32::from_le_bytes([
+                    request.body[0],
+                    request.body[1],
+                    request.body[2],
+                    request.body[3],
+                ]);
                 debug!(
                     "serialized request {:x} ({}) with {:?}",
                     req_id,
                     tl::name_for_id(req_id),
                     msg_id
                 );
-                req.state = RequestState::Serialized(msg_id);
-            });
+                // Note how only NotSerialized become Serialized.
+                // Nasty bugs that take ~2h to find occur otherwise!
+                // (e.g. infinite loops leading to transport flood.)
+                request.state = RequestState::Serialized(msg_id);
+            } else {
+                break;
+            }
+        }
+
+        self.mtp
+            .finalize(|mtp_buffer| self.transport.pack(&mtp_buffer, &mut self.write_buffer));
     }
 
     /// Handle `n` more read bytes being ready to process by the transport.

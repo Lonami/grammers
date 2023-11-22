@@ -65,8 +65,10 @@ impl Mtp for Plain {
     }
 
     fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
-        func(self.buffer.as_slice());
-        self.buffer.clear();
+        if !self.buffer.is_empty() {
+            func(self.buffer.as_slice());
+            self.buffer.clear();
+        }
     }
 
     /// Validates that the returned data is a correct plain message, and

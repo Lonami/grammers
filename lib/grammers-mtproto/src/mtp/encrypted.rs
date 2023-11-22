@@ -1223,9 +1223,7 @@ impl Mtp for Encrypted {
 
     fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
         self.finalize_plain();
-        if self.buffer.is_empty() {
-            func(self.buffer.as_slice());
-        } else {
+        if !self.buffer.is_empty() {
             func(encrypt_data_v2(&self.buffer, &self.auth_key).as_slice());
             self.buffer.clear()
         }
