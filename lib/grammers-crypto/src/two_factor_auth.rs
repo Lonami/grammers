@@ -74,7 +74,7 @@ pub fn calculate_2fa(
     // s_a := pow(t, a + u * x) mod p
     let first = u * x;
     let second = big_a + first;
-    let big_s_a = big_t.modpow(&(second), &big_p);
+    let big_s_a = big_t.modpow(&second, &big_p);
 
     // k_a := H(s_a)
     let k_a = h!(&pad_to_256(&big_s_a.to_bytes_be()));
