@@ -1324,7 +1324,7 @@ mod tests {
         let buffer = mtproto.finalize_plain();
 
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
-        ensure_buffer_is_message(buffer, b"Hey!", 1);
+        ensure_buffer_is_message(buffer, REQUEST, 1);
     }
 
     #[test]
@@ -1352,10 +1352,10 @@ mod tests {
         assert_eq!(&buffer[20..24], [2, 0, 0, 0]);
 
         // buffer[24..44] is an inner message
-        ensure_buffer_is_message(&buffer[24..44], b"Hey!", 1);
+        ensure_buffer_is_message(&buffer[24..44], REQUEST, 1);
 
         // buffer[44..] is the other inner message
-        ensure_buffer_is_message(&buffer[44..], b"Bye!", 3);
+        ensure_buffer_is_message(&buffer[44..], REQUEST_B, 3);
     }
 
     #[test]
