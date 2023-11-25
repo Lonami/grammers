@@ -12,6 +12,7 @@ pub use crate::reconnection::*;
 use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures_util::future::{pending, select, Either};
+use grammers_crypto::RingBuffer;
 use grammers_mtproto::mtp::{self, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
@@ -52,6 +53,8 @@ use {
 /// so to account for the transports' own overhead, we add a few extra
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1024 * 1024) + (8 * 1024);
+
+const LEADING_BUFFER_SPACE: usize = 100; // idk lol
 
 /// Every how often are pings sent?
 const PING_DELAY: Duration = Duration::from_secs(60);
@@ -116,7 +119,7 @@ pub struct Sender<T: Transport, M: Mtp> {
 
     // Transport-level buffers and positions
     read_buffer: BytesMut,
-    write_buffer: BytesMut,
+    write_buffer: RingBuffer<u8>,
     write_index: usize,
 }
 
@@ -185,7 +188,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 reconnection_policy,
 
                 read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-                write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
             Enqueuer(tx),
@@ -220,7 +223,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 reconnection_policy,
 
                 read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
-                write_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
             Enqueuer(tx),

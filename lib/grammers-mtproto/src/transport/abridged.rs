@@ -7,6 +7,7 @@
 // except according to those terms.
 use super::{Error, Transport};
 use bytes::{BufMut, BytesMut};
+use grammers_crypto::RingBuffer;
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -46,22 +47,22 @@ impl Abridged {
 }
 
 impl Transport for Abridged {
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
+    fn pack(&mut self, input: &[u8], output: &mut RingBuffer<u8>) {
         assert_eq!(input.len() % 4, 0);
 
         if !self.init {
-            output.put_u8(0xef);
+            output.push(0xef);
             self.init = true;
         }
 
         let len = input.len() / 4;
         if len < 127 {
-            output.put_u8(len as u8);
-            output.put(input);
+            output.push(len as u8);
+            output.extend(input);
         } else {
-            output.put_u8(0x7f);
-            output.put_uint_le(len as _, 3);
-            output.put(input);
+            output.push(0x7f);
+            output.extend(&(len as u32).to_le_bytes()[..3]);
+            output.extend(input);
         }
     }
 
@@ -108,9 +109,9 @@ mod tests {
     use super::*;
 
     /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, BytesMut) {
+    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, RingBuffer<u8>) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Abridged::new(), input, BytesMut::new())
+        (Abridged::new(), input, RingBuffer::with_capacity(0, 0))
     }
 
     #[test]
@@ -169,10 +170,11 @@ mod tests {
         let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         let two_input = packed
+            .as_ref()
             .iter()
             .copied()
             .skip(1)
-            .chain(packed.iter().copied().skip(1))
+            .chain(packed.as_ref().iter().copied().skip(1))
             .collect::<Vec<_>>();
         let n = transport.unpack(&two_input, &mut unpacked).unwrap();
         assert_eq!(input, unpacked);

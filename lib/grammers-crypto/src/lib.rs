@@ -6,15 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub mod aes;
-pub mod auth_key;
+mod auth_key;
 pub mod factorize;
 pub mod hex;
+pub mod ring_buffer;
 pub mod rsa;
 pub mod sha;
 pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
+pub use ring_buffer::RingBuffer;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]

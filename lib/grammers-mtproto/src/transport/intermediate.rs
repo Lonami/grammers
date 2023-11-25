@@ -7,6 +7,7 @@
 // except according to those terms.
 use super::{Error, Transport};
 use bytes::{Buf, BufMut, BytesMut};
+use grammers_crypto::RingBuffer;
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -37,16 +38,16 @@ impl Intermediate {
 }
 
 impl Transport for Intermediate {
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
+    fn pack(&mut self, input: &[u8], output: &mut RingBuffer<u8>) {
         assert_eq!(input.len() % 4, 0);
 
         if !self.init {
-            output.put_u32_le(0xee_ee_ee_ee);
+            output.extend(0xee_ee_ee_ee_u32.to_le_bytes());
             self.init = true;
         }
 
-        output.put_i32_le(input.len() as _);
-        output.put(input);
+        output.extend((input.len() as i32).to_le_bytes());
+        output.extend(input);
     }
 
     fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
@@ -77,9 +78,9 @@ mod tests {
     use super::*;
 
     /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, BytesMut) {
+    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, RingBuffer<u8>) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Intermediate::new(), input, BytesMut::new())
+        (Intermediate::new(), input, RingBuffer::with_capacity(0, 0))
     }
 
     #[test]
@@ -130,10 +131,11 @@ mod tests {
         let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
         let two_input = packed
+            .as_ref()
             .iter()
             .copied()
             .skip(4)
-            .chain(packed.iter().copied().skip(4))
+            .chain(packed.as_ref().iter().copied().skip(4))
             .collect::<Vec<_>>();
         let n = transport.unpack(&two_input, &mut unpacked).unwrap();
         assert_eq!(input, unpacked);

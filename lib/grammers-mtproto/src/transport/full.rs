@@ -8,6 +8,7 @@
 use super::{Error, Transport};
 use bytes::{Buf, BufMut, BytesMut};
 use crc32fast::Hasher;
+use grammers_crypto::RingBuffer;
 
 /// The basic MTProto transport protocol. This is an implementation of the
 /// [full transport].
@@ -42,23 +43,23 @@ impl Full {
 }
 
 impl Transport for Full {
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
+    fn pack(&mut self, input: &[u8], output: &mut RingBuffer<u8>) {
         assert_eq!(input.len() % 4, 0);
 
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = input.len() + 4 + 4 + 4;
-        output.reserve(len);
 
-        let buf_start = output.len();
-        output.put_i32_le(len as _);
-        output.put_i32_le(self.send_seq);
-        output.put(input);
+        let mut header = output.shift(4 + 4);
+        header.put_i32_le(len as _);
+        header.put_i32_le(self.send_seq);
+        output.extend(input);
+
         let crc = {
             let mut hasher = Hasher::new();
-            hasher.update(&output[buf_start..]);
+            hasher.update(output.as_ref());
             hasher.finalize()
         };
-        output.put_u32_le(crc);
+        output.extend(crc.to_le_bytes());
 
         self.send_seq += 1;
     }
@@ -127,9 +128,9 @@ mod tests {
     use super::*;
 
     /// Returns a new full transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Full, Vec<u8>, BytesMut) {
+    fn setup_pack(n: u32) -> (Full, Vec<u8>, RingBuffer<u8>) {
         let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Full::new(), input, BytesMut::new())
+        (Full::new(), input, RingBuffer::with_capacity(0, 0))
     }
 
     /// Returns the expected data after unpacking, a new full transport, input data and an empty output buffer.
@@ -140,7 +141,7 @@ mod tests {
         (
             expected_output,
             Full::new(),
-            input.to_vec(),
+            input.as_ref().to_vec(),
             BytesMut::new(),
         )
     }
@@ -227,13 +228,13 @@ mod tests {
         let (mut transport, input, mut packed) = setup_pack(128);
         let mut unpacked = BytesMut::new();
         transport.pack(&input, &mut packed);
-        transport.unpack(&packed, &mut unpacked).unwrap();
+        transport.unpack(packed.as_ref(), &mut unpacked).unwrap();
         assert_eq!(input, unpacked);
 
         packed.clear();
         unpacked.clear();
         transport.pack(&input, &mut packed);
-        transport.unpack(&packed, &mut unpacked).unwrap();
+        transport.unpack(packed.as_ref(), &mut unpacked).unwrap();
         assert_eq!(input, unpacked);
     }
 
@@ -259,7 +260,7 @@ mod tests {
         packed.clear();
         transport.pack(&input, &mut packed);
         assert_eq!(
-            transport.unpack(&packed, &mut unpacked),
+            transport.unpack(packed.as_ref(), &mut unpacked),
             Err(Error::BadSeq {
                 expected: 0,
                 got: 1,

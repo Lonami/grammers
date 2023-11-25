@@ -17,6 +17,7 @@ mod intermediate;
 
 pub use abridged::Abridged;
 pub use full::Full;
+use grammers_crypto::RingBuffer;
 pub use intermediate::Intermediate;
 use std::fmt;
 
@@ -67,7 +68,7 @@ pub trait Transport {
     /// Previous contents in `output` are not cleared before this operation.
     ///
     /// Panics if `input.len()` is not divisible by 4.
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut);
+    fn pack(&mut self, input: &[u8], output: &mut RingBuffer<u8>);
 
     /// Unpacks the content from `input` into `output`.
     ///
