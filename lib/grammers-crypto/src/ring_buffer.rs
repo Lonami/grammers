@@ -9,6 +9,11 @@ pub struct RingBuffer<T: Copy + Default> {
     default_head: usize,
 }
 
+pub struct View<'a, T: Copy + Default> {
+    pub view: &'a mut [T],
+    pub pos: usize,
+}
+
 impl<T: Copy + Default> RingBuffer<T> {
     pub fn with_capacity(capacity: usize, default_head: usize) -> Self {
         let mut buffer = Vec::with_capacity(default_head + capacity);
@@ -26,7 +31,7 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.head = self.default_head;
     }
 
-    pub fn shift(&mut self, amount: usize) -> &mut [T] {
+    pub fn shift<'a>(&'a mut self, amount: usize) -> View<'a, T> {
         if self.head >= amount {
             self.head -= amount
         } else {
@@ -35,7 +40,10 @@ impl<T: Copy + Default> RingBuffer<T> {
             self.buffer.rotate_right(shift);
             self.head = 0;
         }
-        &mut self.buffer[self.head..self.head + amount]
+        View {
+            view: &mut self.buffer[self.head..self.head + amount],
+            pos: 0,
+        }
     }
 
     pub fn push(&mut self, value: T) {
@@ -86,6 +94,15 @@ impl<T: Copy + Default> Extend<T> for RingBuffer<T> {
 impl<'a, T: Copy + Default + 'a> Extend<&'a T> for RingBuffer<T> {
     fn extend<I: IntoIterator<Item = &'a T>>(&mut self, iter: I) {
         self.buffer.extend(iter)
+    }
+}
+
+impl<'a, T: Copy + Default> Extend<T> for View<'a, T> {
+    fn extend<I: IntoIterator<Item = T>>(&mut self, iter: I) {
+        iter.into_iter().for_each(|value| {
+            self.view[self.pos] = value;
+            self.pos += 1;
+        });
     }
 }
 
@@ -148,25 +165,25 @@ mod tests {
     fn shift_extends_if_needed() {
         let mut buffer = RingBuffer::<u8>::with_capacity(2, 4);
 
-        assert_eq!(buffer.shift(3), vec![0; 3]);
+        assert_eq!(buffer.shift(3).view, vec![0; 3]);
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[ 0|0 0 0 ? ? ]");
 
-        assert_eq!(buffer.shift(1), vec![0; 1]);
+        assert_eq!(buffer.shift(1).view, vec![0; 1]);
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[|0 0 0 0 ? ? ]");
 
-        assert_eq!(buffer.shift(2), vec![0; 2]);
+        assert_eq!(buffer.shift(2).view, vec![0; 2]);
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[|0 0 0 0 0 0 ]");
 
         let mut buffer = RingBuffer::<u8>::with_capacity(2, 4);
 
-        assert_eq!(buffer.shift(5), vec![0; 5]);
+        assert_eq!(buffer.shift(5).view, vec![0; 5]);
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[|0 0 0 0 0 ? ]");
 
-        assert_eq!(buffer.shift(2), vec![0; 2]);
+        assert_eq!(buffer.shift(2).view, vec![0; 2]);
         sanity_checks(&buffer);
         assert!(repr(&buffer).starts_with("[|0 0 0 0 0 0 0 ?")); // don't assume Vec's growth
     }
@@ -183,8 +200,8 @@ mod tests {
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[ 0 0 0 0|1 2 3 ? ? ? ]");
 
-        let head = buffer.shift(3);
-        head.copy_from_slice(&[4, 5, 6]);
+        let mut head = buffer.shift(3);
+        head.extend([4, 5, 6].into_iter());
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[ 0|4 5 6 1 2 3 ? ? ? ]");
 

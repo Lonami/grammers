@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport};
-use bytes::{Buf, BufMut, BytesMut};
+use bytes::{Buf, BytesMut};
 use crc32fast::Hasher;
 use grammers_crypto::RingBuffer;
 
@@ -50,8 +50,8 @@ impl Transport for Full {
         let len = input.len() + 4 + 4 + 4;
 
         let mut header = output.shift(4 + 4);
-        header.put_i32_le(len as _);
-        header.put_i32_le(self.send_seq);
+        header.extend((len as i32).to_le_bytes());
+        header.extend(self.send_seq.to_le_bytes());
         output.extend(input);
 
         let crc = {
