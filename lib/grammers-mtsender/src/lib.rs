@@ -433,7 +433,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .filter(|r| matches!(r.state, RequestState::NotSerialized))
         {
             // TODO make mtp itself use BytesMut to avoid copies
-            if let Some(msg_id) = self.mtp.push(&request.body) {
+            if let Some(msg_id) = self.mtp.push(&mut self.write_buffer, &request.body) {
                 assert!(request.body.len() >= 4);
                 let req_id = u32::from_le_bytes([
                     request.body[0],
@@ -456,8 +456,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             }
         }
 
-        self.mtp
-            .finalize(|mtp_buffer| self.transport.pack(&mtp_buffer, &mut self.write_buffer));
+        self.mtp.finalize(&mut self.write_buffer);
+        if !self.write_buffer.is_empty() {
+            self.transport.pack(&mut self.write_buffer)
+        }
     }
 
     /// Handle `n` more read bytes being ready to process by the transport.
@@ -483,12 +485,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let mut updates = Vec::new();
         while !self.read_buffer.is_empty() {
             self.mtp_buffer.clear();
-            match self
-                .transport
-                .unpack(&self.read_buffer, &mut self.mtp_buffer)
-            {
-                Ok(n) => {
-                    self.read_buffer.advance(n);
+            let mut buffer = RingBuffer::with_capacity(self.read_buffer.len(), 0);
+            buffer.extend(self.read_buffer.iter());
+            match self.transport.unpack(&mut buffer) {
+                Ok(offset) => {
+                    self.mtp_buffer
+                        .extend(&self.read_buffer[offset.data_start..offset.data_end]);
+                    drop(buffer);
+
+                    self.read_buffer.advance(offset.next_offset);
                     self.process_mtp_buffer(&mut updates)?;
                 }
                 Err(transport::Error::MissingBytes) => break,

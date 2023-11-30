@@ -171,7 +171,7 @@ fn write_common_field_impl<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::serialize::Buffer) {
+///     fn serialize(&self, buf: &mut impl Extend<u8>) {
 ///         use crate::Identifiable;
 ///         match self {
 ///             Self::Variant(x) => {
@@ -196,7 +196,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, buf: crate::serialize::Buffer) {{",
+        "{}    fn serialize(&self, buf: &mut impl Extend<u8>) {{",
         indent
     )?;
 

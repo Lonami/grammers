@@ -3,6 +3,7 @@ use std::{
     slice::SliceIndex,
 };
 
+#[derive(Clone, Debug)]
 pub struct RingBuffer<T: Copy + Default> {
     buffer: Vec<T>,
     head: usize,
@@ -44,6 +45,11 @@ impl<T: Copy + Default> RingBuffer<T> {
             view: &mut self.buffer[self.head..self.head + amount],
             pos: 0,
         }
+    }
+
+    pub fn skip(&mut self, amount: usize) {
+        self.head += amount;
+        assert!(self.head <= self.buffer.len());
     }
 
     pub fn push(&mut self, value: T) {

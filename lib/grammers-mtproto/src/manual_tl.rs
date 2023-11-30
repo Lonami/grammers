@@ -53,11 +53,11 @@ impl Message {
 }
 
 impl Serializable for Message {
-    fn serialize(&self, buf: &mut Vec<u8>) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         self.msg_id.serialize(buf);
         self.seq_no.serialize(buf);
         (self.body.len() as i32).serialize(buf);
-        buf.extend(&self.body);
+        buf.extend(self.body.iter().copied());
     }
 }
 
@@ -225,7 +225,7 @@ impl Identifiable for GzipPacked {
 }
 
 impl Serializable for GzipPacked {
-    fn serialize(&self, buf: &mut Vec<u8>) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         Self::CONSTRUCTOR_ID.serialize(buf);
         self.packed_data.serialize(buf);
     }

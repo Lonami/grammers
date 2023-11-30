@@ -127,7 +127,7 @@ fn write_identifiable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::serialize::Buffer) {
+///     fn serialize(&self, buf: &mut impl Extend<u8>) {
 ///         self.field.serialize(buf);
 ///     }
 /// }
@@ -148,7 +148,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, {}buf: crate::serialize::Buffer) {{",
+        "{}    fn serialize(&self, {}buf: &mut impl Extend<u8>) {{",
         indent,
         if def.category == Category::Types && def.params.is_empty() {
             "_"
