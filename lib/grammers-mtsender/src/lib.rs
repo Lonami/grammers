@@ -55,6 +55,7 @@ const MAXIMUM_DATA: usize = (1024 * 1024) + (8 * 1024);
 
 /// How much leading space should be reserved in a buffer to avoid moving memory.
 const LEADING_BUFFER_SPACE: usize = mtp::MAX_TRANSPORT_HEADER_LEN
+    + mtp::ENCRYPTED_PACKET_HEADER_LEN
     + mtp::PLAIN_PACKET_HEADER_LEN
     + mtp::MESSAGE_CONTAINER_HEADER_LEN;
 

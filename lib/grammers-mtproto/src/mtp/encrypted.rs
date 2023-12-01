@@ -1105,10 +1105,13 @@ impl Encrypted {
 }
 
 /// The maximum header length used by any available transport (`Full`, 4 bytes for `len` and `seq`).
-pub const MAX_TRANSPORT_HEADER_LEN: usize = 8;
+pub const MAX_TRANSPORT_HEADER_LEN: usize = 4 + 4;
+
+/// Data prepended after encrypting a packet, `key_id` and `msg_key`.
+pub const ENCRYPTED_PACKET_HEADER_LEN: usize = 8 + 16;
 
 /// The first actual message comes after `salt`, `client_id` (8 bytes each).
-pub const PLAIN_PACKET_HEADER_LEN: usize = 16;
+pub const PLAIN_PACKET_HEADER_LEN: usize = 8 + 8;
 
 /// The message header for the container occupies the size of the message header
 /// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
@@ -1202,9 +1205,7 @@ impl Mtp for Encrypted {
     fn finalize(&mut self, buffer: &mut RingBuffer<u8>) {
         self.finalize_plain(buffer);
         if !buffer.is_empty() {
-            let new = encrypt_data_v2(buffer.as_ref(), &self.auth_key);
-            buffer.clear();
-            buffer.extend(new);
+            encrypt_data_v2(buffer, &self.auth_key);
         }
     }
 

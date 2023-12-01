@@ -63,7 +63,7 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 224]) -> Vec<u
 
     let key_aes_encrypted = loop {
         // data_with_hash := data_pad_reversed + SHA256(temp_key + data_with_padding); -- after this assignment, data_with_hash is exactly 224 bytes long.
-        let data_with_hash = {
+        let mut data_with_hash = {
             let mut buffer = Vec::with_capacity(224);
             buffer.extend(&data_pad_reversed);
             buffer.extend(sha256!(&temp_key, &data_with_padding));
@@ -71,7 +71,8 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 224]) -> Vec<u
         };
 
         // aes_encrypted := AES256_IGE(data_with_hash, temp_key, 0); -- AES256-IGE encryption with zero IV.
-        let aes_encrypted = ige_encrypt(&data_with_hash, &temp_key, &[0u8; 32]);
+        ige_encrypt(data_with_hash.as_mut(), &temp_key, &[0u8; 32]);
+        let aes_encrypted = data_with_hash;
 
         // temp_key_xor := temp_key XOR SHA256(aes_encrypted); -- adjusted key, 32 bytes
         let temp_key_xor = {

@@ -22,7 +22,8 @@ mod plain;
 use crate::MsgId;
 use crypto::RingBuffer;
 pub use encrypted::{
-    Encrypted, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN, PLAIN_PACKET_HEADER_LEN,
+    Encrypted, ENCRYPTED_PACKET_HEADER_LEN, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
+    PLAIN_PACKET_HEADER_LEN,
 };
 use grammers_crypto as crypto;
 use grammers_tl_types as tl;
