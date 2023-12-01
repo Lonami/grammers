@@ -231,7 +231,7 @@ impl Encrypted {
             // Prepend a container, setting its message ID and sequence number.
             // + 8 because it has to include the constructor ID and length (4 bytes each).
             let len = (buffer.len() + 8) as i32;
-            let mut header = buffer.shift(CONTAINER_HEADER_LEN);
+            let mut header = buffer.shift(MESSAGE_CONTAINER_HEADER_LEN);
 
             // Manually `serialize_msg` because the container body was already written.
             self.get_new_msg_id().serialize(&mut header);
@@ -245,7 +245,7 @@ impl Encrypted {
 
         {
             // Prepend the message header
-            let mut header = buffer.shift(HEADER_LEN);
+            let mut header = buffer.shift(PLAIN_PACKET_HEADER_LEN);
             self.salts
                 .last()
                 .map(|s| s.salt)
@@ -1104,12 +1104,15 @@ impl Encrypted {
     }
 }
 
-// The first actual message comes after `salt`, `client_id` (8 bytes each).
-const HEADER_LEN: usize = 16;
+/// The maximum header length used by any available transport (`Full`, 4 bytes for `len` and `seq`).
+pub const MAX_TRANSPORT_HEADER_LEN: usize = 8;
 
-// The message header for the container occupies the size of the message header
-// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
-const CONTAINER_HEADER_LEN: usize = (8 + 4 + 4) + (4 + 4);
+/// The first actual message comes after `salt`, `client_id` (8 bytes each).
+pub const PLAIN_PACKET_HEADER_LEN: usize = 16;
+
+/// The message header for the container occupies the size of the message header
+/// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
+pub const MESSAGE_CONTAINER_HEADER_LEN: usize = (8 + 4 + 4) + (4 + 4);
 
 impl Mtp for Encrypted {
     /// Pushes a request into the internal buffer by manually serializing the messages for maximum

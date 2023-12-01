@@ -21,7 +21,9 @@ mod plain;
 
 use crate::MsgId;
 use crypto::RingBuffer;
-pub use encrypted::Encrypted;
+pub use encrypted::{
+    Encrypted, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN, PLAIN_PACKET_HEADER_LEN,
+};
 use grammers_crypto as crypto;
 use grammers_tl_types as tl;
 pub use plain::Plain;

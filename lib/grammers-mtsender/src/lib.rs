@@ -53,7 +53,10 @@ use {
 /// kilobytes to the maximum data size.
 const MAXIMUM_DATA: usize = (1024 * 1024) + (8 * 1024);
 
-const LEADING_BUFFER_SPACE: usize = 100; // idk lol
+/// How much leading space should be reserved in a buffer to avoid moving memory.
+const LEADING_BUFFER_SPACE: usize = mtp::MAX_TRANSPORT_HEADER_LEN
+    + mtp::PLAIN_PACKET_HEADER_LEN
+    + mtp::MESSAGE_CONTAINER_HEADER_LEN;
 
 /// Every how often are pings sent?
 const PING_DELAY: Duration = Duration::from_secs(60);
