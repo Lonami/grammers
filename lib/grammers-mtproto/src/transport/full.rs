@@ -63,13 +63,17 @@ impl Transport for Full {
         self.send_seq += 1;
     }
 
-    fn unpack(&mut self, buffer: &mut RingBuffer<u8>) -> Result<UnpackedOffset, Error> {
+    fn unpack(
+        &mut self,
+        buffer: &mut RingBuffer<u8>,
+        available: usize,
+    ) -> Result<UnpackedOffset, Error> {
         // Need 4 bytes for the initial length
-        if buffer.len() < 4 {
+        if available < 4 {
             return Err(Error::MissingBytes);
         }
 
-        let total_len = buffer.len() as i32;
+        let total_len = available as i32;
 
         // payload len
         let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
@@ -183,7 +187,8 @@ mod tests {
         let mut transport = Full::new();
         let mut buffer = RingBuffer::with_capacity(3, 0);
         buffer.extend([0, 1, 3]);
-        assert_eq!(transport.unpack(&mut buffer), Err(Error::MissingBytes));
+        let len = buffer.len();
+        assert_eq!(transport.unpack(&mut buffer, len), Err(Error::MissingBytes));
     }
 
     #[test]
@@ -191,7 +196,8 @@ mod tests {
         let (mut transport, mut buffer) = setup_pack(128);
         let orig = buffer.clone();
         transport.pack(&mut buffer);
-        let offset = transport.unpack(&mut buffer).unwrap();
+        let len = buffer.len();
+        let offset = transport.unpack(&mut buffer, len).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -209,12 +215,13 @@ mod tests {
         transport.pack(&mut buffer);
         two_buffer.extend(&buffer[..]);
 
-        let offset = transport.unpack(&mut two_buffer).unwrap();
+        let len = two_buffer.len();
+        let offset = transport.unpack(&mut two_buffer, len).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         two_buffer.skip(offset.next_offset);
-        let offset = transport.unpack(&mut two_buffer).unwrap();
+        let offset = transport.unpack(&mut two_buffer, len).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -224,8 +231,9 @@ mod tests {
         transport.pack(&mut buffer);
         buffer[4] = 1;
 
+        let len = buffer.len();
         assert_eq!(
-            transport.unpack(&mut buffer),
+            transport.unpack(&mut buffer, len),
             Err(Error::BadSeq {
                 expected: 0,
                 got: 1,
@@ -240,8 +248,9 @@ mod tests {
         let len = buffer.len();
         buffer[len - 1] ^= 0xff;
 
+        let len = buffer.len();
         assert_eq!(
-            transport.unpack(&mut buffer),
+            transport.unpack(&mut buffer, len),
             Err(Error::BadCrc {
                 expected: 932541318,
                 got: 3365237638,

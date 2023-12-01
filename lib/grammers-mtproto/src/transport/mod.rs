@@ -74,7 +74,14 @@ pub trait Transport {
     fn pack(&mut self, buffer: &mut RingBuffer<u8>);
 
     /// Unpacks the input buffer in-place.
-    fn unpack(&mut self, buffer: &mut RingBuffer<u8>) -> Result<UnpackedOffset, Error>;
+    ///
+    /// The buffer may be initialized with default data beyond what is accessible.
+    /// The amount that is allowed to be used by the unpacking is set in `available`.
+    fn unpack(
+        &mut self,
+        buffer: &mut RingBuffer<u8>,
+        available: usize,
+    ) -> Result<UnpackedOffset, Error>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);

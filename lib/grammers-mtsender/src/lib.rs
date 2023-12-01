@@ -477,17 +477,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         self.read_index += n;
         trace!("read {} bytes from the network", n);
-
-        trace!(
-            "trying to unpack buffer of {} bytes...",
-            self.read_buffer.len()
-        );
+        trace!("trying to unpack buffer of {} bytes...", self.read_index);
 
         // TODO the buffer might have multiple transport packets, what should happen with the
         // updates successfully read if subsequent packets fail to be deserialized properly?
         let mut updates = Vec::new();
         while self.read_index != 0 {
-            match self.transport.unpack(&mut self.read_buffer) {
+            match self
+                .transport
+                .unpack(&mut self.read_buffer, self.read_index)
+            {
                 Ok(offset) => {
                     debug!("deserializing valid transport packet...");
                     let result = self
@@ -505,7 +504,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         self.read_buffer.reclaim_leading();
         self.read_buffer.fill_remaining();
-        self.read_index = 0;
 
         Ok(updates)
     }
