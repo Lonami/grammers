@@ -56,6 +56,23 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.buffer.push(value)
     }
 
+    /// Reclaim leading data, by shifting it to start at the default head.
+    pub fn reclaim_leading(&mut self) {
+        if self.head <= self.default_head {
+            return;
+        }
+
+        let len = self.buffer.len();
+        self.buffer.copy_within(self.head..len, self.default_head);
+        self.buffer.truncate(self.default_head + len - self.head);
+        self.head = self.default_head;
+    }
+
+    pub fn fill_remaining(&mut self) {
+        let missing = self.buffer.capacity() - self.buffer.len();
+        self.buffer.extend((0..missing).map(|_| T::default()));
+    }
+
     pub fn is_empty(&self) -> bool {
         self.head == self.buffer.len()
     }
@@ -213,5 +230,38 @@ mod tests {
 
         buffer.clear();
         assert_eq!(repr(&buffer), "[ 0 0 0 0|? ? ? ? ? ? ]");
+    }
+
+    #[test]
+    fn reclaims_as_expected() {
+        let mut buffer = RingBuffer::<u8>::with_capacity(6, 4);
+        buffer.extend([1, 2, 3, 4, 5, 6]);
+        assert_eq!(repr(&buffer), "[ 0 0 0 0|1 2 3 4 5 6 ]");
+        buffer.reclaim_leading();
+        assert_eq!(repr(&buffer), "[ 0 0 0 0|1 2 3 4 5 6 ]");
+
+        buffer.skip(2);
+        assert_eq!(repr(&buffer), "[ 0 0 0 0 1 2|3 4 5 6 ]");
+        buffer.reclaim_leading();
+        assert_eq!(repr(&buffer), "[ 0 0 0 0|3 4 5 6 ? ? ]");
+        buffer.reclaim_leading();
+
+        buffer.shift(2);
+        assert_eq!(repr(&buffer), "[ 0 0|0 0 3 4 5 6 ? ? ]");
+        buffer.reclaim_leading();
+        assert_eq!(repr(&buffer), "[ 0 0|0 0 3 4 5 6 ? ? ]");
+
+        buffer.clear();
+        buffer.shift(2);
+        buffer.extend([1, 2, 3, 4, 5, 6]);
+        assert_eq!(repr(&buffer), "[ 0 0|0 0 1 2 3 4 5 6 ]");
+        buffer.reclaim_leading();
+
+        buffer.skip(4);
+        assert_eq!(repr(&buffer), "[ 0 0 0 0 1 2|3 4 5 6 ]");
+        buffer.reclaim_leading();
+        assert_eq!(repr(&buffer), "[ 0 0 0 0|3 4 5 6 ? ? ]");
+        buffer.fill_remaining();
+        assert_eq!(repr(&buffer), "[ 0 0 0 0|3 4 5 6 0 0 ]");
     }
 }

@@ -9,11 +9,10 @@ mod errors;
 mod reconnection;
 
 pub use crate::reconnection::*;
-use bytes::{Buf, BytesMut};
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures_util::future::{pending, select, Either};
 use grammers_crypto::RingBuffer;
-use grammers_mtproto::mtp::{self, Mtp};
+use grammers_mtproto::mtp::{self, Deserialization, Mtp};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
@@ -108,7 +107,6 @@ pub struct Sender<T: Transport, M: Mtp> {
     stream: NetStream,
     transport: T,
     mtp: M,
-    mtp_buffer: BytesMut,
     addr: std::net::SocketAddr,
     #[cfg(feature = "proxy")]
     proxy_url: Option<String>,
@@ -118,7 +116,8 @@ pub struct Sender<T: Transport, M: Mtp> {
     reconnection_policy: &'static dyn ReconnectionPolicy,
 
     // Transport-level buffers and positions
-    read_buffer: BytesMut,
+    read_buffer: RingBuffer<u8>,
+    read_index: usize,
     write_buffer: RingBuffer<u8>,
     write_index: usize,
 }
@@ -173,12 +172,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> Result<(Self, Enqueuer), io::Error> {
         let stream = connect_stream(&addr).await?;
         let (tx, rx) = mpsc::unbounded_channel();
+        let mut read_buffer = RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE);
+        read_buffer.fill_remaining();
         Ok((
             Self {
                 stream,
                 transport,
                 mtp,
-                mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
                 addr,
                 #[cfg(feature = "proxy")]
                 proxy_url: None,
@@ -187,7 +187,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 next_ping: Instant::now() + PING_DELAY,
                 reconnection_policy,
 
-                read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                read_buffer,
+                read_index: 0,
                 write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
@@ -206,15 +207,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         info!("connecting...");
 
         let stream = connect_proxy_stream(&addr, proxy_url).await?;
-
         let (tx, rx) = mpsc::unbounded_channel();
-
+        let mut read_buffer = RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE);
+        read_buffer.fill_remaining();
         Ok((
             Self {
                 stream,
                 transport,
                 mtp,
-                mtp_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
                 addr,
                 proxy_url: Some(proxy_url.to_string()),
                 requests: vec![],
@@ -222,7 +222,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 next_ping: Instant::now() + PING_DELAY,
                 reconnection_policy,
 
-                read_buffer: BytesMut::with_capacity(MAXIMUM_DATA),
+                read_buffer,
+                read_index: 0,
                 write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
@@ -322,7 +323,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             let sel = {
                 let sleep = pin!(async { sleep_until(self.next_ping).await });
                 let recv_req = pin!(async { self.request_rx.recv().await });
-                let recv_data = pin!(async { reader.read_buf(&mut self.read_buffer).await });
+                let recv_data =
+                    pin!(async { reader.read(&mut self.read_buffer[self.read_index..]).await });
                 let send_data = pin!(async {
                     if self.write_buffer.is_empty() {
                         pending().await
@@ -473,6 +475,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             )));
         }
 
+        self.read_index += n;
         trace!("read {} bytes from the network", n);
 
         trace!(
@@ -483,23 +486,26 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         // TODO the buffer might have multiple transport packets, what should happen with the
         // updates successfully read if subsequent packets fail to be deserialized properly?
         let mut updates = Vec::new();
-        while !self.read_buffer.is_empty() {
-            self.mtp_buffer.clear();
-            let mut buffer = RingBuffer::with_capacity(self.read_buffer.len(), 0);
-            buffer.extend(self.read_buffer.iter());
-            match self.transport.unpack(&mut buffer) {
+        while self.read_index != 0 {
+            match self.transport.unpack(&mut self.read_buffer) {
                 Ok(offset) => {
-                    self.mtp_buffer
-                        .extend(&self.read_buffer[offset.data_start..offset.data_end]);
-                    drop(buffer);
+                    debug!("deserializing valid transport packet...");
+                    let result = self
+                        .mtp
+                        .deserialize(&self.read_buffer[offset.data_start..offset.data_end])?;
 
-                    self.read_buffer.advance(offset.next_offset);
-                    self.process_mtp_buffer(&mut updates)?;
+                    self.process_mtp_buffer(result, &mut updates);
+                    self.read_buffer.skip(offset.next_offset);
+                    self.read_index -= offset.next_offset;
                 }
                 Err(transport::Error::MissingBytes) => break,
                 Err(err) => return Err(err.into()),
             }
         }
+
+        self.read_buffer.reclaim_leading();
+        self.read_buffer.fill_remaining();
+        self.read_index = 0;
 
         Ok(updates)
     }
@@ -547,14 +553,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.next_ping = Instant::now() + PING_DELAY;
     }
 
-    /// Process the `mtp_buffer` contents and dispatch the results and errors.
+    /// Process the result of deserializing an MTP buffer.
     fn process_mtp_buffer(
         &mut self,
+        result: Deserialization,
         updates: &mut Vec<tl::enums::Updates>,
-    ) -> Result<(), mtp::DeserializeError> {
-        debug!("deserializing valid transport packet...");
-        let result = self.mtp.deserialize(&self.mtp_buffer)?;
-
+    ) {
         updates.extend(result.updates.iter().filter_map(|update| {
             match tl::enums::Updates::from_bytes(update) {
                 Ok(u) => Some(u),
@@ -649,14 +653,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 info!("got rpc result {:?} but no such request is saved", msg_id);
             }
         }
-
-        Ok(())
     }
 
     fn reset_state(&mut self) {
         self.transport.reset();
         self.mtp.reset();
-        self.mtp_buffer.clear();
         self.read_buffer.clear();
         self.write_index = 0;
         self.write_buffer.clear();
@@ -787,11 +788,11 @@ pub async fn generate_auth_key<T: Transport>(
                 .time_offset(time_offset)
                 .first_salt(first_salt)
                 .finish(auth_key),
-            mtp_buffer: sender.mtp_buffer,
             requests: sender.requests,
             request_rx: sender.request_rx,
             next_ping: Instant::now() + PING_DELAY,
             read_buffer: sender.read_buffer,
+            read_index: sender.read_index,
             write_buffer: sender.write_buffer,
             write_index: sender.write_index,
             addr: sender.addr,
