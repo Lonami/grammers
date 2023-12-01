@@ -49,17 +49,13 @@ impl Transport for Intermediate {
         }
     }
 
-    fn unpack(
-        &mut self,
-        buffer: &mut RingBuffer<u8>,
-        available: usize,
-    ) -> Result<UnpackedOffset, Error> {
-        if available < 4 {
+    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error> {
+        if buffer.len() < 4 {
             return Err(Error::MissingBytes);
         }
 
         let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
-        if (available as i32) < len {
+        if (buffer.len() as i32) < len {
             return Err(Error::MissingBytes);
         }
 
@@ -116,8 +112,7 @@ mod tests {
         let mut transport = Intermediate::new();
         let mut buffer = RingBuffer::with_capacity(1, 0);
         buffer.extend([1]);
-        let len = buffer.len();
-        assert_eq!(transport.unpack(&mut buffer, len), Err(Error::MissingBytes));
+        assert_eq!(transport.unpack(&buffer[..],), Err(Error::MissingBytes));
     }
 
     #[test]
@@ -126,8 +121,7 @@ mod tests {
         let orig = buffer.clone();
         transport.pack(&mut buffer);
         buffer.skip(4); // init bytes
-        let len = buffer.len();
-        let offset = transport.unpack(&mut buffer, len).unwrap();
+        let offset = transport.unpack(&buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -145,13 +139,12 @@ mod tests {
         transport.pack(&mut buffer);
         two_buffer.extend(&buffer[..]);
 
-        let len = two_buffer.len();
-        let offset = transport.unpack(&mut two_buffer, len).unwrap();
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         two_buffer.skip(offset.next_offset);
-        let offset = transport.unpack(&mut two_buffer, len).unwrap();
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 }

@@ -483,10 +483,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         // updates successfully read if subsequent packets fail to be deserialized properly?
         let mut updates = Vec::new();
         while self.read_index != 0 {
-            match self
-                .transport
-                .unpack(&mut self.read_buffer, self.read_index)
-            {
+            match self.transport.unpack(&self.read_buffer[..self.read_index]) {
                 Ok(offset) => {
                     debug!("deserializing valid transport packet...");
                     let result = self
