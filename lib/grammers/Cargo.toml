@@ -1,16 +1,16 @@
 [package]
 name = "grammers"
 version = "0.1.0"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 A messaging application for Telegram.
 """
-homepage = "https://github.com/Lonami/grammers"
-repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
+homepage.workspace = true
+repository.workspace = true
+keywords.workspace = true
 categories = []
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-grammers-client = "0.5.0"
+grammers-client.workspace = true

@@ -1,36 +1,36 @@
 [package]
 name = "grammers-mtsender"
 version = "0.5.0"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 A sender implementation using the Mobile Transport Protocol.
 """
-homepage = "https://github.com/Lonami/grammers"
+homepage.workspace = true
 documentation = "https://docs.rs/grammers-mtsender"
-repository = "https://github.com/Lonami/grammers"
+repository.workspace = true
 keywords = ["api", "mtproto", "telegram", "tl"]
 categories = ["api-bindings", "network-programming"]
-edition = "2021"
+edition.workspace = true
 
 [features]
 proxy = ["tokio-socks", "trust-dns-resolver", "url"]
 
 [dependencies]
-bytes = "1.5.0"
-futures-util = { version = "0.3.15", default_features = false, features = [
+bytes.workspace = true
+futures-util = { workspace = true, default_features = false, features = [
     "alloc"
 ] }
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
-grammers-mtproto = { path = "../grammers-mtproto", version = "0.5.0" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1", features = [ "tl-mtproto" ] }
-log = "0.4.20"
-tokio = { version = "1.5.0", default_features = false, features = ["net", "io-util", "sync", "time"] }
-tokio-socks = { version = "0.5.1", optional = true }
-trust-dns-resolver = { version = "0.23.2", optional = true }
-url = { version = "2.4.1", optional = true }
+grammers-crypto = { workspace = true, version = "0.5.1" }
+grammers-mtproto = { workspace = true, version = "0.5.0" }
+grammers-tl-types = { workspace = true, features = [ "tl-mtproto" ] }
+log.workspace = true
+tokio = { workspace = true,  default_features = false, features = ["net", "io-util", "sync", "time"] }
+tokio-socks = { workspace = true, optional = true }
+trust-dns-resolver = { workspace = true, optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
-simple_logger = { version = "4.2.0", default-features = false, features = ["colors"] }
-tokio = { version = "1.34.0", features = ["rt"] }
-toml = "0.8.8"
+simple_logger = { workspace = true, default-features = false, features = ["colors"] }
+tokio = { workspace = true, features = ["rt"] }
+toml.workspace = true

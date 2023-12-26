@@ -1,17 +1,17 @@
 [package]
 name = "grammers-client"
 version = "0.5.0"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 A high level client to interact with Telegram's API.
 """
-homepage = "https://github.com/Lonami/grammers"
+homepage.workspace = true
 documentation = "https://docs.rs/grammers-client"
-repository = "https://github.com/Lonami/grammers"
+repository.workspace = true
 keywords = ["mtproto", "telegram", "tl"]
 categories = ["api-bindings"]
-edition = "2021"
+edition.workspace = true
 
 [features]
 markdown = ["pulldown-cmark"]
@@ -21,36 +21,36 @@ parse_invite_link = ["url"]
 unstable_raw = []
 
 [dependencies]
-chrono = "0.4.31"
-futures-util = { version = "0.3.15", default_features = false, features = [
+chrono.workspace = true
+futures-util = { workspace = true, default_features = false, features = [
     "alloc"
 ] }
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
-grammers-mtproto = { path = "../grammers-mtproto", version = "0.5.0" }
-grammers-mtsender = { path = "../grammers-mtsender", version = "0.5.0" }
-grammers-session = { path = "../grammers-session", version = "0.5.1" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1", features = [
+grammers-crypto.workspace = true
+grammers-mtproto.workspace = true
+grammers-mtsender.workspace = true
+grammers-session.workspace = true
+grammers-tl-types = { workspace = true,  features = [
     "tl-mtproto",
 ] }
 html5ever = { version = "0.26.0", optional = true }
-locate-locale = "0.2.0"
-log = "0.4.20"
-md5 = "0.7.0"
-mime_guess = "2.0.4"
-os_info = { version = "3.0.4", default_features = false }
-pin-project-lite = "0.2"
-pulldown-cmark = { version = "0.9.3", default-features = false, optional = true }
-tokio = { version = "1.34.0", default-features = false, features = [
+locate-locale.workspace = true
+log.workspace = true
+md5.workspace = true
+mime_guess.workspace = true
+os_info = { workspace = true, default_features = false }
+pin-project-lite.workspace = true
+pulldown-cmark = { workspace = true, default-features = false, optional = true }
+tokio = { workspace = true, features = [
     "fs",
     "rt",
 ] }
-url = { version = "2.4.1", optional = true }
+url = { workspace = true, optional = true }
 
 [dev-dependencies]
-tokio = { version = "1.34.0", default-features = false, features = [
+tokio = { workspace = true, features = [
     "signal",
 ] }
-simple_logger = { version = "4.2.0", default-features = false, features = [
+simple_logger = { workspace = true, default-features = false, features = [
     "colors",
 ] }
-toml = "0.8.8"
+toml.workspace = true

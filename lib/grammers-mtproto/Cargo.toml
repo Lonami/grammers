@@ -1,28 +1,28 @@
 [package]
 name = "grammers-mtproto"
 version = "0.5.0"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 An implementation of the Mobile Transport Protocol.
 """
-homepage = "https://github.com/Lonami/grammers"
+homepage.workspace = true
 documentation = "https://docs.rs/grammers-mtproto"
-repository = "https://github.com/Lonami/grammers"
+repository.workspace = true
 keywords = ["mtproto", "telegram", "tl"]
 categories = ["network-programming"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-bytes = "1.5.0"
-crc32fast = "1.3.2"
-flate2 = "1.0.28"
-getrandom = "0.2.11"
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1", features = ["tl-mtproto"] }
-log = "0.4.20"
-num-bigint = "0.4.4"
-sha1 = "0.10.6"
+bytes.workspace = true
+crc32fast.workspace = true
+flate2.workspace = true
+getrandom.workspace = true
+grammers-crypto.workspace = true
+grammers-tl-types = { workspace = true,  features = ["tl-mtproto"] }
+log.workspace = true
+num-bigint.workspace = true
+sha1.workspace = true
 
 [dev-dependencies]
-toml = "0.8.8"
+toml.workspace = true

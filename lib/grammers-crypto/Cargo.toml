@@ -1,31 +1,32 @@
 [package]
 name = "grammers-crypto"
 version = "0.5.1"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 Several cryptographic utilities to work with Telegram's data.
 """
-homepage = "https://github.com/Lonami/grammers"
+homepage.workspace = true
 documentation = "https://docs.rs/grammers-crypto"
-repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
+repository.workspace = true
+keywords.workspace = true
 categories = ["cryptography"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-aes = "0.8.3"
-getrandom = "0.2.11"
-glass_pumpkin = "1.6.0"
-hmac = "0.12.1"
-num-bigint = "0.4.4"
-pbkdf2 = "0.12.2"
-sha1 = "0.10.6"
-sha2 = "0.10.8"
+aes.workspace = true
+getrandom.workspace = true
+glass_pumpkin.workspace = true
+hmac.workspace = true
+num-bigint.workspace = true
+pbkdf2.workspace = true
+sha1.workspace = true
+sha2.workspace = true
 
 [dev-dependencies]
-bencher = "0.1.5"
-toml = "0.8.8"
+bencher.workspace = true
+toml.workspace = true
+
 
 [[bench]]
 name = "cipher"

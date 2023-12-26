@@ -9,18 +9,18 @@ Different session storages for Telegram data.
 homepage = "https://github.com/Lonami/grammers"
 documentation = "https://docs.rs/grammers-session"
 repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
+keywords.workspace = true
 categories = []
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1" }
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
-log = "0.4.20"
+grammers-tl-types.workspace = true
+grammers-crypto.workspace = true 
+log.workspace = true
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.5.1" }
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.1" }
+grammers-tl-gen.workspace = true
+grammers-tl-parser.workspace = true
 
 [dev-dependencies]
-toml = "0.8.8"
+toml.workspace = true

@@ -1,20 +1,20 @@
 [package]
 name = "grammers-tl-parser"
 version = "1.1.1"
-authors = ["Lonami Exo <totufals@hotmail.com>"]
-license = "MIT OR Apache-2.0"
+authors.workspace = true
+license.workspace = true
 description = """
 A parser for Type Language definitions.
 """
-homepage = "https://github.com/Lonami/grammers"
+homepage.workspace = true
 documentation = "https://docs.rs/grammers-tl-parser"
-repository = "https://github.com/Lonami/grammers"
-keywords = ["telegram", "tl"]
+repository.workspace = true
+keywords.workspace = true
 categories = ["parser-implementations"]
-edition = "2021"
+edition.workspace = true
 
 [dependencies]
-crc32fast = "1.3.2"
+crc32fast.workspace = true
 
 [dev-dependencies]
-toml = "0.8.8"
+toml.workspace = true
