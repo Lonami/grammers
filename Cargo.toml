@@ -58,12 +58,12 @@ serde_json = "1.0.108"
 futures = "0.3.29"
 
 
-grammers-client = { path = "lib/grammers-client" }
-grammers-crypto = { path = "lib/grammers-crypto" }
-grammers-mtproto = { path = "lib/grammers-mtproto" }
-grammers-mtsender = { path = "lib/grammers-mtsender" }
-grammers-session = { path = "lib/grammers-session" }
-grammers-tl-gen = { path = "lib/grammers-tl-gen" }
-grammers-tl-parser = { path = "lib/grammers-tl-parser" }
-grammers-tl-types = { path = "lib/grammers-tl-types" }
+grammers-client = { path = "lib/grammers-client", version = "0.5.0" }
+grammers-crypto = { path = "lib/grammers-crypto", version = "0.5.1" }
+grammers-mtproto = { path = "lib/grammers-mtproto", version = "0.5.0" }
+grammers-mtsender = { path = "lib/grammers-mtsender", version = "0.5.0" }
+grammers-session = { path = "lib/grammers-session", version = "0.5.1" }
+grammers-tl-gen = { path = "lib/grammers-tl-gen", version = "0.5.1" }
+grammers-tl-parser = { path = "lib/grammers-tl-parser", version = "1.1.1" }
+grammers-tl-types = { path = "lib/grammers-tl-types", version = "0.5.1" }
 
