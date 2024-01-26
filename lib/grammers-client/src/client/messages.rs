@@ -253,6 +253,8 @@ impl SearchIter {
                 peer: peer.to_input_peer(),
                 q: String::new(),
                 from_id: None,
+                saved_peer_id: None,
+                saved_reaction: None,
                 top_msg_id: None,
                 filter: tl::enums::MessagesFilter::InputMessagesFilterEmpty,
                 min_date: 0,
@@ -486,6 +488,7 @@ impl Client {
                         reply_to_peer_id: None,
                         quote_text: None,
                         quote_entities: None,
+                        quote_offset: None,
                     }
                     .into()
                 }),
@@ -515,6 +518,7 @@ impl Client {
                         reply_to_peer_id: None,
                         quote_text: None,
                         quote_entities: None,
+                        quote_offset: None,
                     }
                     .into()
                 }),

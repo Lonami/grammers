@@ -96,6 +96,7 @@ impl User {
                 close_friend: false,
                 stories_hidden: false,
                 stories_unavailable: true,
+                contact_require_premium: false,
                 id: empty.id,
                 access_hash: None,
                 first_name: None,
@@ -112,7 +113,7 @@ impl User {
                 usernames: None,
                 stories_max_id: None,
                 color: None,
-                background_emoji_id: None,
+                profile_color: None,
             },
             tl::enums::User::User(user) => user,
         })

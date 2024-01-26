@@ -848,6 +848,7 @@ impl Media {
             M::Dice(dice) => Some(Self::Dice(Dice::from_media(dice))),
             M::Story(_) => None,
             M::Giveaway(_) => None,
+            M::GiveawayResults(_) => None,
         }
     }
 

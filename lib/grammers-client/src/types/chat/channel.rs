@@ -80,7 +80,9 @@ impl Channel {
                         usernames: None,
                         stories_max_id: None,
                         color: None,
-                        background_emoji_id: None,
+                        profile_color: None,
+                        emoji_status: None,
+                        level: None,
                     })
                 } else {
                     panic!("tried to create broadcast channel from megagroup");

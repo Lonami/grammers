@@ -72,6 +72,7 @@ impl Message {
                     id: msg.id,
                     from_id: msg.from_id,
                     peer_id: msg.peer_id,
+                    saved_peer_id: None,
                     fwd_from: None,
                     via_bot_id: None,
                     reply_to: msg.reply_to,
@@ -119,6 +120,7 @@ impl Message {
                 id: updates.id,
                 from_id: None, // TODO self
                 peer_id: chat.to_peer(),
+                saved_peer_id: None,
                 fwd_from: None,
                 via_bot_id: None,
                 reply_to: input.reply_to.map(|reply_to_msg_id| {
@@ -133,6 +135,7 @@ impl Message {
                         reply_to_top_id: None,
                         quote_text: None,
                         quote_entities: None,
+                        quote_offset: None,
                     }
                     .into()
                 }),
