@@ -43,7 +43,7 @@ fn modpow(mut n: u128, mut e: u128, m: u128) -> u128 {
 #[allow(clippy::many_single_char_names)]
 pub fn factorize(pq: u64) -> (u64, u64) {
     if pq % 2 == 0 {
-        return (2, pq);
+        return (2, pq / 2);
     }
 
     let pq = pq as u128;

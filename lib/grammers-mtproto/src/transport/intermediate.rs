@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Error, Transport};
-use bytes::{Buf, BufMut, BytesMut};
+use super::{Error, Transport, UnpackedOffset};
+use grammers_crypto::RingBuffer;
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -37,34 +37,35 @@ impl Intermediate {
 }
 
 impl Transport for Intermediate {
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
-        assert_eq!(input.len() % 4, 0);
+    fn pack(&mut self, buffer: &mut RingBuffer<u8>) {
+        let len = buffer.len();
+        assert_eq!(len % 4, 0);
+
+        buffer.shift(4).extend((len as i32).to_le_bytes());
 
         if !self.init {
-            output.put_u32_le(0xee_ee_ee_ee);
+            buffer.shift(4).extend(0xee_ee_ee_ee_u32.to_le_bytes());
             self.init = true;
         }
-
-        output.put_i32_le(input.len() as _);
-        output.put(input);
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
-        if input.len() < 4 {
+    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error> {
+        if buffer.len() < 4 {
             return Err(Error::MissingBytes);
         }
-        let needle = &mut &input[..];
 
-        let len = needle.get_i32_le();
-        if (needle.len() as i32) < len {
+        let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
+        if (buffer.len() as i32) < len {
             return Err(Error::MissingBytes);
         }
 
         let len = len as usize;
 
-        output.put(&needle[..len]);
-
-        Ok(len + 4)
+        Ok(UnpackedOffset {
+            data_start: 4,
+            data_end: 4 + len,
+            next_offset: 4 + len,
+        })
     }
 
     fn reset(&mut self) {
@@ -76,67 +77,74 @@ impl Transport for Intermediate {
 mod tests {
     use super::*;
 
-    /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Intermediate, Vec<u8>, BytesMut) {
-        let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Intermediate::new(), input, BytesMut::new())
+    /// Returns a full intermediate transport, and `n` bytes of input data for it.
+    fn setup_pack(n: usize) -> (Intermediate, RingBuffer<u8>) {
+        let mut buffer = RingBuffer::with_capacity(n, 0);
+        buffer.extend((0..n).map(|x| (x & 0xff) as u8));
+        (Intermediate::new(), buffer)
     }
 
     #[test]
     fn pack_empty() {
-        let (mut transport, input, mut output) = setup_pack(0);
-        transport.pack(&input, &mut output);
-        assert_eq!(&output[..], &[0xee, 0xee, 0xee, 0xee, 0, 0, 0, 0]);
+        let (mut transport, mut buffer) = setup_pack(0);
+        transport.pack(&mut buffer);
+        assert_eq!(&buffer[..], &[0xee, 0xee, 0xee, 0xee, 0, 0, 0, 0]);
     }
 
     #[test]
     #[should_panic]
     fn pack_non_padded() {
-        let (mut transport, input, mut output) = setup_pack(7);
-        transport.pack(&input, &mut output);
+        let (mut transport, mut buffer) = setup_pack(7);
+        transport.pack(&mut buffer);
     }
 
     #[test]
     fn pack_normal() {
-        let (mut transport, input, mut output) = setup_pack(128);
-        transport.pack(&input, &mut output);
-        assert_eq!(&output[..8], &[0xee, 0xee, 0xee, 0xee, 128, 0, 0, 0]);
-        assert_eq!(&output[8..output.len()], &input[..]);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        assert_eq!(&buffer[..8], &[0xee, 0xee, 0xee, 0xee, 128, 0, 0, 0]);
+        assert_eq!(&buffer[8..buffer.len()], &orig[..]);
     }
 
     #[test]
     fn unpack_small() {
         let mut transport = Intermediate::new();
-        let input = [1];
-        let mut output = BytesMut::new();
-        assert_eq!(
-            transport.unpack(&input, &mut output),
-            Err(Error::MissingBytes)
-        );
+        let mut buffer = RingBuffer::with_capacity(1, 0);
+        buffer.extend([1]);
+        assert_eq!(transport.unpack(&buffer[..],), Err(Error::MissingBytes));
     }
 
     #[test]
     fn unpack_normal() {
-        let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = BytesMut::new();
-        transport.pack(&input, &mut packed);
-        transport.unpack(&packed[4..], &mut unpacked).unwrap();
-        assert_eq!(input, unpacked);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        buffer.skip(4); // init bytes
+        let offset = transport.unpack(&buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
     #[test]
     fn unpack_two_at_once() {
-        let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = BytesMut::new();
-        transport.pack(&input, &mut packed);
-        let two_input = packed
-            .iter()
-            .copied()
-            .skip(4)
-            .chain(packed.iter().copied().skip(4))
-            .collect::<Vec<_>>();
-        let n = transport.unpack(&two_input, &mut unpacked).unwrap();
-        assert_eq!(input, unpacked);
-        assert_eq!(n, packed.len() - 4);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+
+        let mut two_buffer = RingBuffer::with_capacity(0, 0);
+        transport.pack(&mut buffer);
+        two_buffer.extend(&buffer[4..]); // init bytes
+        let single_size = two_buffer.len();
+
+        buffer = orig.clone();
+        transport.pack(&mut buffer);
+        two_buffer.extend(&buffer[..]);
+
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(offset.next_offset, single_size);
+
+        two_buffer.skip(offset.next_offset);
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 }

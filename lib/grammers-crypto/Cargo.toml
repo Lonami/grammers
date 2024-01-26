@@ -1,6 +1,6 @@
 [package]
 name = "grammers-crypto"
-version = "0.4.0"
+version = "0.5.1"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -15,17 +15,17 @@ edition = "2021"
 
 [dependencies]
 aes = "0.8.3"
-getrandom = "0.2.10"
+getrandom = "0.2.11"
 glass_pumpkin = "1.6.0"
 hmac = "0.12.1"
 num-bigint = "0.4.4"
 pbkdf2 = "0.12.2"
-sha1 = "0.10.5"
-sha2 = "0.10.7"
+sha1 = "0.10.6"
+sha2 = "0.10.8"
 
 [dev-dependencies]
 bencher = "0.1.5"
-toml = "0.7.6"
+toml = "0.8.8"
 
 [[bench]]
 name = "cipher"

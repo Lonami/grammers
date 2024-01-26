@@ -131,6 +131,9 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                     manage_call: false,
                     other: false,
                     manage_topics: false,
+                    post_stories: false,
+                    edit_stories: false,
+                    delete_stories: false,
                 },
             }),
             gen,
@@ -200,6 +203,9 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         manage_call: true,
                         other: true,
                         manage_topics: true,
+                        post_stories: true,
+                        edit_stories: true,
+                        delete_stories: true,
                     };
                     break;
                 }

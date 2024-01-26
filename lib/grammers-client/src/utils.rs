@@ -10,7 +10,6 @@ use crate::types;
 use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
-use log::trace;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::SystemTime;
 
@@ -49,12 +48,12 @@ pub(crate) fn date(date: i32) -> Date {
 
 pub(crate) fn extract_password_parameters(
     current_algo: &tl::enums::PasswordKdfAlgo,
-) -> (&Vec<u8>, &Vec<u8>, &i32, &Vec<u8>) {
-    let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, g, p } = match current_algo {
+) -> (&Vec<u8>, &Vec<u8>, &Vec<u8>, &i32) {
+    let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, p, g } = match current_algo {
         tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
         tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
     };
-    (salt1, salt2, g, p)
+    (salt1, salt2, p, g)
 }
 
 /// Get a `Chat`, no matter what.
@@ -75,8 +74,10 @@ pub(crate) fn always_find_entity(
         };
         client
             .0
+            .state
+            .read()
+            .unwrap()
             .chat_hashes
-            .lock("always_find_entity")
             .get(id)
             .unwrap_or(PackedChat {
                 ty,
@@ -100,127 +101,5 @@ pub(crate) fn always_find_entity(
             chat
         }
         None => types::Chat::unpack(get_packed()),
-    }
-}
-
-pub(crate) struct Mutex<T: ?Sized> {
-    name: &'static str,
-    mutex: std::sync::Mutex<T>,
-}
-
-pub(crate) struct MutexGuard<'a, T: ?Sized> {
-    name: &'static str,
-    reason: &'static str,
-    guard: std::sync::MutexGuard<'a, T>,
-}
-
-impl<T> Mutex<T> {
-    pub fn new(name: &'static str, value: T) -> Self {
-        Self {
-            name,
-            mutex: std::sync::Mutex::new(value),
-        }
-    }
-
-    pub fn lock(&self, reason: &'static str) -> MutexGuard<T> {
-        trace!("locking {} for {}", self.name, reason);
-        MutexGuard {
-            name: self.name,
-            reason,
-            guard: self.mutex.lock().unwrap(),
-        }
-    }
-}
-
-impl<T: ?Sized + std::fmt::Debug> std::fmt::Debug for Mutex<T> {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        self.mutex.fmt(f)
-    }
-}
-
-impl<T: ?Sized> std::ops::Deref for MutexGuard<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.guard.deref()
-    }
-}
-
-impl<T: ?Sized> std::ops::DerefMut for MutexGuard<'_, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.guard.deref_mut()
-    }
-}
-
-impl<'a, T: ?Sized> Drop for MutexGuard<'a, T> {
-    fn drop(&mut self) {
-        trace!("unlocking {} for {}", self.name, self.reason);
-    }
-}
-
-pub(crate) struct AsyncMutex<T: ?Sized> {
-    name: &'static str,
-    mutex: tokio::sync::Mutex<T>,
-}
-
-pub(crate) struct AsyncMutexGuard<'a, T: ?Sized> {
-    name: &'static str,
-    reason: &'static str,
-    guard: tokio::sync::MutexGuard<'a, T>,
-}
-
-impl<T> AsyncMutex<T> {
-    pub fn new(name: &'static str, value: T) -> Self {
-        Self {
-            name,
-            mutex: tokio::sync::Mutex::new(value),
-        }
-    }
-
-    pub fn try_lock<'a>(
-        &'a self,
-        reason: &'static str,
-    ) -> Result<AsyncMutexGuard<'a, T>, tokio::sync::TryLockError> {
-        let guard = self.mutex.try_lock();
-        trace!(
-            "try-async-locking {} for {} ({})",
-            self.name,
-            reason,
-            if guard.is_ok() { "success" } else { "failure" }
-        );
-        guard.map(|guard| AsyncMutexGuard {
-            name: self.name,
-            reason,
-            guard,
-        })
-    }
-
-    pub async fn lock<'a>(&'a self, reason: &'static str) -> AsyncMutexGuard<'a, T> {
-        trace!("async-locking {} for {}", self.name, reason);
-        AsyncMutexGuard {
-            name: self.name,
-            reason,
-            guard: self.mutex.lock().await,
-        }
-    }
-}
-
-impl<T: ?Sized> std::ops::Deref for AsyncMutexGuard<'_, T> {
-    type Target = T;
-
-    fn deref(&self) -> &T {
-        self.guard.deref()
-    }
-}
-
-impl<T: ?Sized> std::ops::DerefMut for AsyncMutexGuard<'_, T> {
-    fn deref_mut(&mut self) -> &mut T {
-        self.guard.deref_mut()
-    }
-}
-
-impl<'a, T: ?Sized> Drop for AsyncMutexGuard<'a, T> {
-    fn drop(&mut self) {
-        trace!("async-unlocking {} for {}", self.name, self.reason);
     }
 }

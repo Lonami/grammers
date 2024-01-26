@@ -62,6 +62,9 @@ impl Channel {
                         noforwards: false,
                         join_request: false,
                         forum: false,
+                        stories_hidden: false,
+                        stories_hidden_min: false,
+                        stories_unavailable: true,
                         join_to_send: false,
                         id: channel.id,
                         access_hash: Some(channel.access_hash),
@@ -75,6 +78,11 @@ impl Channel {
                         default_banned_rights: None,
                         participants_count: None,
                         usernames: None,
+                        stories_max_id: None,
+                        color: None,
+                        profile_color: None,
+                        emoji_status: None,
+                        level: None,
                     })
                 } else {
                     panic!("tried to create broadcast channel from megagroup");
@@ -151,6 +159,9 @@ impl Channel {
                 manage_call: true,
                 pin_messages: true,
                 manage_topics: true,
+                post_stories: true,
+                edit_stories: true,
+                delete_stories: true,
             }),
             None => None,
         }

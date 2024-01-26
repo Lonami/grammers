@@ -21,7 +21,7 @@ use grammers_client::{Client, Config, SignInError};
 use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
-use tokio::{runtime, task};
+use tokio::runtime;
 
 use grammers_client::types::Media::{Contact, Document, Photo, Sticker};
 use grammers_client::types::*;
@@ -88,21 +88,11 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    // Obtain a `ClientHandle` to perform remote calls while `Client` drives the connection.
-    //
-    // This handle can be `clone()`'d around and freely moved into other tasks, so you can invoke
-    // methods concurrently if you need to. While you do this, the single owned `client` is the
-    // one that communicates with the network.
-    //
-    // The design's annoying to use for trivial sequential tasks, but is otherwise scalable.
-    let client_handle = client.clone();
-    let network_handle = task::spawn(async move { client.run_until_disconnected().await });
-
-    let maybe_chat = client_handle.resolve_username(chat_name.as_str()).await?;
+    let maybe_chat = client.resolve_username(chat_name.as_str()).await?;
 
     let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {} could not be found", chat_name));
 
-    let mut messages = client_handle.iter_messages(&chat);
+    let mut messages = client.iter_messages(&chat);
 
     println!(
         "Chat {} has {} total messages.",
@@ -121,7 +111,7 @@ async fn async_main() -> Result<()> {
                 &msg.id().to_string(),
                 get_file_extension(&media)
             );
-            client_handle
+            client
                 .download_media(&Downloadable::Media(media), &Path::new(dest.as_str()))
                 .await
                 .expect("Error downloading message");
@@ -132,10 +122,9 @@ async fn async_main() -> Result<()> {
 
     if sign_out {
         // TODO revisit examples and get rid of "handle references" (also, this panics)
-        drop(client_handle.sign_out_disconnect().await);
+        drop(client.sign_out_disconnect().await);
     }
 
-    network_handle.await??;
     Ok(())
 }
 

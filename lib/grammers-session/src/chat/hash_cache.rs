@@ -66,6 +66,13 @@ impl ChatHashCache {
         }
     }
 
+    fn has_dialog_peer(&self, peer: &tl::enums::DialogPeer) -> bool {
+        match peer {
+            tl::enums::DialogPeer::Peer(p) => self.has_peer(&p.peer),
+            tl::enums::DialogPeer::Folder(_) => true,
+        }
+    }
+
     fn has_user(&self, peer: &tl::enums::InputUser) -> bool {
         match peer {
             tl::enums::InputUser::Empty => true,
@@ -181,6 +188,7 @@ impl ChatHashCache {
                 },
                 U::UserStatus(u) => self.has(u.user_id),
                 U::UserName(u) => self.has(u.user_id),
+                U::NewAuthorization(_) => true,
                 U::NewEncryptedMessage(_) => true,
                 U::EncryptedChatTyping(_) => true,
                 U::Encryption(_) => true,
@@ -226,15 +234,9 @@ impl ChatHashCache {
                 U::Config => true,
                 U::PtsChanged => true,
                 U::ChannelWebPage(u) => self.has(u.channel_id),
-                U::DialogPinned(u) => match &u.peer {
-                    tl::enums::DialogPeer::Peer(p) => self.has_peer(&p.peer),
-                    tl::enums::DialogPeer::Folder(_) => true,
-                },
+                U::DialogPinned(u) => self.has_dialog_peer(&u.peer),
                 U::PinnedDialogs(u) => match &u.order {
-                    Some(o) => o.iter().all(|d| match d {
-                        tl::enums::DialogPeer::Peer(p) => self.has_peer(&p.peer),
-                        tl::enums::DialogPeer::Folder(_) => true,
-                    }),
+                    Some(o) => o.iter().all(|d| self.has_dialog_peer(d)),
                     None => true,
                 },
                 U::BotWebhookJson(_) => true,
@@ -248,10 +250,7 @@ impl ChatHashCache {
                 U::ChannelReadMessagesContents(u) => self.has(u.channel_id),
                 U::ContactsReset => true,
                 U::ChannelAvailableMessages(u) => self.has(u.channel_id),
-                U::DialogUnreadMark(u) => match &u.peer {
-                    tl::enums::DialogPeer::Peer(p) => self.has_peer(&p.peer),
-                    tl::enums::DialogPeer::Folder(_) => true,
-                },
+                U::DialogUnreadMark(u) => self.has_dialog_peer(&u.peer),
                 U::MessagePoll(_) => true,
                 U::ChatDefaultBannedRights(u) => self.has_peer(&u.peer),
                 U::FolderPeers(u) => u.folder_peers.iter().all(|f| match f {
@@ -267,7 +266,7 @@ impl ChatHashCache {
                 U::Theme(_) => true,
                 U::GeoLiveViewed(u) => self.has_peer(&u.peer),
                 U::LoginToken => true,
-                U::MessagePollVote(u) => self.has(u.user_id),
+                U::MessagePollVote(u) => self.has_peer(&u.peer),
                 U::DialogFilter(_) => true,
                 U::DialogFilterOrder(_) => true,
                 U::DialogFilters => true,
@@ -355,6 +354,19 @@ impl ChatHashCache {
                 U::User(u) => self.has(u.user_id),
                 U::AutoSaveSettings => true,
                 U::GroupInvitePrivacyForbidden(u) => self.has(u.user_id),
+                U::Story(u) => self.has_peer(&u.peer),
+                U::ReadStories(u) => self.has_peer(&u.peer),
+                U::StoryId(_) => true,
+                U::StoriesStealthMode(_) => true,
+                U::SentStoryReaction(u) => self.has_peer(&u.peer),
+                U::BotChatBoost(u) => self.has_peer(&u.peer),
+                U::ChannelViewForumAsMessages(u) => self.has(u.channel_id),
+                U::PeerWallpaper(u) => self.has_peer(&u.peer),
+                U::BotMessageReaction(u) => self.has_peer(&u.peer),
+                U::BotMessageReactions(u) => self.has_peer(&u.peer),
+                U::SavedDialogPinned(u) => self.has_dialog_peer(&u.peer),
+                U::PinnedSavedDialogs(_) => true,
+                U::SavedReactionTags => true,
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
@@ -372,6 +384,7 @@ impl ChatHashCache {
     // It won't actually extend, because it can't, but it will make sure the hash is known.
     fn extend_from_message(&mut self, message: &tl::enums::Message) -> bool {
         use tl::enums::MessageAction as MA;
+        use tl::enums::MessageReplyHeader as MRH;
 
         match message {
             tl::enums::Message::Empty(m) => match &m.peer_id {
@@ -397,11 +410,11 @@ impl ChatHashCache {
                         None => true,
                     }
                     && match &m.reply_to {
-                        Some(tl::enums::MessageReplyHeader::Header(r)) => match &r.reply_to_peer_id
-                        {
+                        Some(MRH::Header(r)) => match &r.reply_to_peer_id {
                             Some(p) => self.has_peer(p),
                             None => true,
                         },
+                        Some(MRH::MessageReplyStoryHeader(r)) => self.has(r.user_id),
                         None => true,
                     }
                     && match &m.reply_markup {
@@ -482,11 +495,11 @@ impl ChatHashCache {
                     None => true,
                 }) && self.has_peer(&m.peer_id)
                     && match &m.reply_to {
-                        Some(tl::enums::MessageReplyHeader::Header(r)) => match &r.reply_to_peer_id
-                        {
+                        Some(MRH::Header(r)) => match &r.reply_to_peer_id {
                             Some(p) => self.has_peer(p),
                             None => true,
                         },
+                        Some(MRH::MessageReplyStoryHeader(r)) => self.has(r.user_id),
                         None => true,
                     }
                     && match &m.action {
@@ -528,7 +541,14 @@ impl ChatHashCache {
                         MA::TopicCreate(_) => true,
                         MA::TopicEdit(_) => true,
                         MA::SuggestProfilePhoto(_) => true,
-                        MA::RequestedPeer(c) => self.has_peer(&c.peer),
+                        MA::RequestedPeer(c) => c.peers.iter().all(|p| self.has_peer(p)),
+                        MA::SetChatWallPaper(_) => true,
+                        MA::GiftCode(c) => match &c.boost_peer {
+                            Some(p) => self.has_peer(p),
+                            None => true,
+                        },
+                        MA::GiveawayLaunch => true,
+                        MA::GiveawayResults(_) => true,
                     }
             }
         }

@@ -6,19 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-/// The problem with being generic over `std::io::Write` is that it's
-/// fallible, but in practice, we're always going to serialize in-memory,
-/// so instead we just use a `Vec<u8>` as our buffer.
-// TODO this is only public for session
-pub type Buffer<'a> = &'a mut Vec<u8>;
-
 /// This trait allows for concrete instances to be serialized into
 /// binary data as specified by the [Binary Data Serialization].
 ///
 /// [Binary Data Serialization]: https://core.telegram.org/mtproto/serialize
 pub trait Serializable {
     /// Serializes the instance into the given buffer.
-    fn serialize(&self, buf: Buffer);
+    fn serialize(&self, buf: &mut impl Extend<u8>);
 
     /// Convenience function to serialize the object into a new buffer
     /// and return its bytes. It is more efficient to reuse a existing
@@ -45,7 +39,7 @@ impl Serializable for bool {
     /// assert_eq!(false.to_bytes(), [0x37, 0x97, 0x79, 0xbc]);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         if *self { 0x997275b5u32 } else { 0xbc799737u32 }.serialize(buf)
     }
 }
@@ -67,8 +61,8 @@ impl Serializable for i32 {
     /// assert_eq!(i32::max_value().to_bytes(), [0xff, 0xff, 0xff, 0x7f]);
     /// assert_eq!(i32::min_value().to_bytes(), [0x00, 0x00, 0x00, 0x80]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(&self.to_le_bytes())
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.to_le_bytes().iter().copied())
     }
 }
 
@@ -88,8 +82,8 @@ impl Serializable for u32 {
     /// assert_eq!(u32::max_value().to_bytes(), [0xff, 0xff, 0xff, 0xff]);
     /// assert_eq!(u32::min_value().to_bytes(), [0x00, 0x00, 0x00, 0x00]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(&self.to_le_bytes())
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.to_le_bytes().iter().copied())
     }
 }
 
@@ -110,8 +104,8 @@ impl Serializable for i64 {
     /// assert_eq!(i64::max_value().to_bytes(), [0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0xff, 0x7f]);
     /// assert_eq!(i64::min_value().to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x80]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(&self.to_le_bytes())
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.to_le_bytes().iter().copied())
     }
 }
 
@@ -129,8 +123,8 @@ impl Serializable for [u8; 16] {
     ///
     /// assert_eq!(data.to_bytes(), data);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(self)
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.iter().copied())
     }
 }
 
@@ -149,8 +143,8 @@ impl Serializable for [u8; 32] {
     ///
     /// assert_eq!(data.to_bytes(), data);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(self)
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.iter().copied())
     }
 }
 
@@ -172,8 +166,8 @@ impl Serializable for f64 {
     /// assert_eq!(f64::INFINITY.to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0x7f]);
     /// assert_eq!(f64::NEG_INFINITY.to_bytes(), [0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0xf0, 0xff]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
-        buf.extend(&self.to_le_bytes())
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
+        buf.extend(self.to_le_bytes().iter().copied())
     }
 }
 
@@ -193,7 +187,7 @@ impl<T: Serializable> Serializable for Vec<T> {
     ///            [0x15, 0xc4, 0xb5, 0x1c, 0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
     /// ```
     #[allow(clippy::unreadable_literal)]
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         0x1cb5c415u32.serialize(buf);
         (self.len() as i32).serialize(buf);
         self.iter().for_each(|x| x.serialize(buf));
@@ -214,7 +208,7 @@ impl<T: Serializable> Serializable for crate::RawVec<T> {
     /// assert_eq!(RawVec(Vec::<i32>::new()).to_bytes(), [0x0, 0x0, 0x0, 0x0]);
     /// assert_eq!(RawVec(vec![0x7f_i32]).to_bytes(), [0x1, 0x0, 0x0, 0x0, 0x7f, 0x0, 0x0, 0x0]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         (self.0.len() as i32).serialize(buf);
         self.0.iter().for_each(|x| x.serialize(buf));
     }
@@ -257,7 +251,7 @@ impl Serializable for String {
     ///      &[0x00, 0x00, 0x00]
     /// );
     /// ```
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         self.as_bytes().serialize(buf)
     }
 }
@@ -276,7 +270,7 @@ impl Serializable for Vec<u8> {
     /// assert_eq!(Vec::<u8>::new().to_bytes(), &[0x00, 0x00, 0x00, 0x00]);
     /// assert_eq!(vec![0x7f_u8].to_bytes(), &[0x01, 0x7f, 0x00, 0x00]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         (&self[..]).serialize(buf)
     }
 }
@@ -293,22 +287,25 @@ impl Serializable for &[u8] {
     ///
     /// assert_eq!((&[0x7f_u8][..]).to_bytes(), &[0x01, 0x7f, 0x00, 0x00]);
     /// ```
-    fn serialize(&self, buf: Buffer) {
+    fn serialize(&self, buf: &mut impl Extend<u8>) {
         let len = if self.len() <= 253 {
-            buf.push(self.len() as u8);
+            buf.extend([self.len() as u8]);
             self.len() + 1
         } else {
-            buf.extend(&[
-                254,
-                (self.len() & 0xff) as u8,
-                ((self.len() >> 8) & 0xff) as u8,
-                ((self.len() >> 16) & 0xff) as u8,
-            ]);
+            buf.extend(
+                [
+                    254,
+                    (self.len() & 0xff) as u8,
+                    ((self.len() >> 8) & 0xff) as u8,
+                    ((self.len() >> 16) & 0xff) as u8,
+                ]
+                .into_iter(),
+            );
             self.len()
         };
         let padding = (4 - (len % 4)) % 4;
 
-        buf.extend(*self);
-        (0..padding).for_each(|_| buf.push(0));
+        buf.extend(self.iter().copied());
+        buf.extend((0..padding).map(|_| 0));
     }
 }

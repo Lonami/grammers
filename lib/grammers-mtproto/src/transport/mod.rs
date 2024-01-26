@@ -17,10 +17,9 @@ mod intermediate;
 
 pub use abridged::Abridged;
 pub use full::Full;
+use grammers_crypto::RingBuffer;
 pub use intermediate::Intermediate;
 use std::fmt;
-
-use bytes::BytesMut;
 
 /// The error type reported by the different transports when something is wrong.
 ///
@@ -40,6 +39,13 @@ pub enum Error {
 
     /// The checksum of the packet does not match its expected value.
     BadCrc { expected: u32, got: u32 },
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub struct UnpackedOffset {
+    pub data_start: usize,
+    pub data_end: usize,
+    pub next_offset: usize,
 }
 
 impl std::error::Error for Error {}
@@ -62,19 +68,13 @@ impl fmt::Display for Error {
 
 /// The trait used by the transports to create instances of themselves.
 pub trait Transport {
-    /// Packs and writes `input` into `output`.
-    ///
-    /// Previous contents in `output` are not cleared before this operation.
+    /// Packs the input buffer in-place.
     ///
     /// Panics if `input.len()` is not divisible by 4.
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut);
+    fn pack(&mut self, buffer: &mut RingBuffer<u8>);
 
-    /// Unpacks the content from `input` into `output`.
-    ///
-    /// Previous contents in `output` are not cleared before this operation.
-    ///
-    /// If successful, returns how many bytes of `input` were used.
-    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error>;
+    /// Unpacks the input buffer in-place.
+    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);

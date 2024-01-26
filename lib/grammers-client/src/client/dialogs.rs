@@ -82,10 +82,11 @@ impl DialogIter {
             }
         };
 
-        let mut chat_hashes = self.client.0.chat_hashes.lock("iter_dialogs");
-        // Telegram can return peers without hash (e.g. Users with 'min: true')
-        let _ = chat_hashes.extend(&users, &chats);
-        drop(chat_hashes);
+        {
+            let mut state = self.client.0.state.write().unwrap();
+            // Telegram can return peers without hash (e.g. Users with 'min: true')
+            let _ = state.chat_hashes.extend(&users, &chats);
+        }
 
         let chats = ChatMap::new(users, chats);
         let mut messages = messages
@@ -94,19 +95,22 @@ impl DialogIter {
             .map(|m| ((&m.msg.peer_id).into(), m))
             .collect::<HashMap<_, _>>();
 
-        let mut message_box = self.client.0.message_box.lock("iter_dialogs");
-        self.buffer.extend(dialogs.into_iter().map(|dialog| {
-            if let tl::enums::Dialog::Dialog(tl::types::Dialog {
-                peer: tl::enums::Peer::Channel(channel),
-                pts: Some(pts),
-                ..
-            }) = &dialog
-            {
-                message_box.try_set_channel_state(channel.channel_id, *pts);
-            }
-            Dialog::new(dialog, &mut messages, &chats)
-        }));
-        drop(message_box);
+        {
+            let mut state = self.client.0.state.write().unwrap();
+            self.buffer.extend(dialogs.into_iter().map(|dialog| {
+                if let tl::enums::Dialog::Dialog(tl::types::Dialog {
+                    peer: tl::enums::Peer::Channel(channel),
+                    pts: Some(pts),
+                    ..
+                }) = &dialog
+                {
+                    state
+                        .message_box
+                        .try_set_channel_state(channel.channel_id, *pts);
+                }
+                Dialog::new(dialog, &mut messages, &chats)
+            }));
+        }
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {

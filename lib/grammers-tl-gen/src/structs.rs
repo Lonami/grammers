@@ -127,7 +127,7 @@ fn write_identifiable<W: Write>(
 ///
 /// ```ignore
 /// impl crate::Serializable for Name {
-///     fn serialize(&self, buf: crate::serialize::Buffer) {
+///     fn serialize(&self, buf: &mut impl Extend<u8>) {
 ///         self.field.serialize(buf);
 ///     }
 /// }
@@ -148,7 +148,7 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, {}buf: crate::serialize::Buffer) {{",
+        "{}    fn serialize(&self, {}buf: &mut impl Extend<u8>) {{",
         indent,
         if def.category == Category::Types && def.params.is_empty() {
             "_"
@@ -248,7 +248,7 @@ fn write_deserializable<W: Write>(
     file: &mut W,
     indent: &str,
     def: &Definition,
-    _metadata: &Metadata,
+    metadata: &Metadata,
 ) -> io::Result<()> {
     writeln!(
         file,
@@ -271,7 +271,12 @@ fn write_deserializable<W: Write>(
             ParameterType::Flags => {
                 writeln!(
                     file,
-                    "let {} = u32::deserialize(buf)?;",
+                    "let {}{} = u32::deserialize(buf)?;",
+                    if metadata.is_unused_flag(def, param) {
+                        "_"
+                    } else {
+                        ""
+                    },
                     rustifier::parameters::attr_name(param)
                 )?;
             }

@@ -6,15 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 pub mod aes;
-pub mod auth_key;
+mod auth_key;
 pub mod factorize;
 pub mod hex;
+pub mod ring_buffer;
 pub mod rsa;
 pub mod sha;
 pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
+pub use ring_buffer::RingBuffer;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -100,21 +102,18 @@ fn determine_padding_v2_length(len: usize) -> usize {
 }
 
 // Inner body of `encrypt_data_v2`, separated for testing purposes.
-fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8; 32]) -> Vec<u8> {
-    let padded_plaintext = {
-        // "Note that MTProto 2.0 requires from 12 to 1024 bytes of padding"
-        // "[...] the resulting message length be divisible by 16 bytes"
-        let padding_len = determine_padding_v2_length(plaintext.len());
-        // `.concat()` is faster than `.extend()` according to flamegraph
-        vec![plaintext, &random_padding[..padding_len]].concat()
-    };
+fn do_encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey, random_padding: &[u8; 32]) {
+    // "Note that MTProto 2.0 requires from 12 to 1024 bytes of padding"
+    // "[...] the resulting message length be divisible by 16 bytes"
+    let padding_len = determine_padding_v2_length(buffer.len());
+    buffer.extend(random_padding.iter().take(padding_len));
 
     // Encryption is done by the client
     let side = Side::Client;
     let x = side.x();
 
     // msg_key_large = SHA256 (substr (auth_key, 88+x, 32) + plaintext + random_padding);
-    let msg_key_large = sha256!(&auth_key.data[88 + x..88 + x + 32], &padded_plaintext);
+    let msg_key_large = sha256!(&auth_key.data[88 + x..88 + x + 32], &buffer[..]);
 
     // msg_key = substr (msg_key_large, 8, 16);
     let msg_key = {
@@ -126,29 +125,25 @@ fn do_encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey, random_padding: &[u8
     // Calculate the key
     let (key, iv) = calc_key(auth_key, &msg_key, side);
 
-    let ciphertext = { aes::ige_encrypt(&padded_plaintext, &key, &iv) };
+    aes::ige_encrypt(&mut buffer[..], &key, &iv);
 
-    let mut result = Vec::with_capacity(auth_key.key_id.len() + msg_key.len() + ciphertext.len());
-    result.extend(&auth_key.key_id);
-    result.extend(&msg_key);
-    result.extend(&ciphertext);
-
-    result
+    let mut head = buffer.shift(auth_key.key_id.len() + msg_key.len());
+    head.extend(auth_key.key_id.iter().copied());
+    head.extend(msg_key.iter().copied());
 }
 
 /// This function implements the [MTProto 2.0 algorithm] for computing
 /// `aes_key` and `aes_iv` from `auth_key` and `msg_key` as specified
 ///
 /// [MTProto 2.0 algorithm]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
-#[must_use]
-pub fn encrypt_data_v2(plaintext: &[u8], auth_key: &AuthKey) -> Vec<u8> {
+pub fn encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey) {
     let random_padding = {
-        let mut buffer = [0; 32];
-        getrandom(&mut buffer).expect("failed to generate a secure padding");
-        buffer
+        let mut rnd = [0; 32];
+        getrandom(&mut rnd).expect("failed to generate a secure padding");
+        rnd
     };
 
-    do_encrypt_data_v2(plaintext, auth_key, &random_padding)
+    do_encrypt_data_v2(buffer, auth_key, &random_padding)
 }
 
 /// This method is the inverse of `encrypt_data_v2`.
@@ -218,22 +213,21 @@ pub fn generate_key_data_from_nonce(
 
 /// Encrypt data using AES-IGE.
 pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    let mut padded: Vec<u8>;
-    let padded_plaintext = if plaintext.len() % 16 == 0 {
-        plaintext
+    let mut padded = if plaintext.len() % 16 == 0 {
+        plaintext.to_vec()
     } else {
         let pad_len = (16 - (plaintext.len() % 16)) % 16;
-        padded = Vec::with_capacity(plaintext.len() + pad_len);
+        let mut padded = Vec::with_capacity(plaintext.len() + pad_len);
         padded.extend(plaintext);
 
         let mut buffer = vec![0; pad_len];
         getrandom(&mut buffer).expect("failed to generate random padding for encryption");
         padded.extend(&buffer);
-
-        &padded
+        padded
     };
 
-    aes::ige_encrypt(padded_plaintext, key, iv)
+    aes::ige_encrypt(padded.as_mut(), key, iv);
+    padded
 }
 
 /// Decrypt data using AES-IGE. Panics if the plaintext is not padded
@@ -312,7 +306,8 @@ mod tests {
 
     #[test]
     fn encrypt_client_data_v2() {
-        let plaintext = b"Hello, world! This data should remain secure!".to_vec();
+        let mut buffer = RingBuffer::with_capacity(0, 0);
+        buffer.extend(b"Hello, world! This data should remain secure!");
         let auth_key = get_test_auth_key();
         let random_padding = [0; 32];
         let expected = vec![
@@ -323,10 +318,8 @@ mod tests {
             36, 61, 86, 62, 161, 128, 210, 24, 238, 117, 124, 154,
         ];
 
-        assert_eq!(
-            do_encrypt_data_v2(&plaintext, &auth_key, &random_padding),
-            expected
-        );
+        do_encrypt_data_v2(&mut buffer, &auth_key, &random_padding);
+        assert_eq!(&buffer[..], expected);
     }
 
     #[test]

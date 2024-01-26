@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::types::{Downloadable, Media, Uploaded};
-use crate::utils::{generate_random_id, AsyncMutex};
+use crate::utils::generate_random_id;
 use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
 use grammers_mtsender::InvocationError;
@@ -17,6 +17,7 @@ use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
     fs,
     io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    sync::Mutex as AsyncMutex,
 };
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
@@ -482,13 +483,10 @@ impl<'a, S: AsyncRead + Unpin> PartStream<'a, S> {
     fn new(stream: &'a mut S, size: usize) -> Self {
         let total_parts = ((size + MAX_CHUNK_SIZE as usize - 1) / MAX_CHUNK_SIZE as usize) as i32;
         Self {
-            inner: AsyncMutex::new(
-                "upload_stream",
-                PartStreamInner {
-                    stream,
-                    current_part: 0,
-                },
-            ),
+            inner: AsyncMutex::new(PartStreamInner {
+                stream,
+                current_part: 0,
+            }),
             total_parts,
         }
     }
@@ -498,7 +496,7 @@ impl<'a, S: AsyncRead + Unpin> PartStream<'a, S> {
     }
 
     async fn next_part(&self) -> Result<Option<(i32, Vec<u8>)>, io::Error> {
-        let mut lock = self.inner.lock("read part").await;
+        let mut lock = self.inner.lock().await;
         if lock.current_part >= self.total_parts {
             return Ok(None);
         }

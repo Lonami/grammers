@@ -20,7 +20,11 @@ mod encrypted;
 mod plain;
 
 use crate::MsgId;
-pub use encrypted::Encrypted;
+use crypto::RingBuffer;
+pub use encrypted::{
+    Encrypted, ENCRYPTED_PACKET_HEADER_LEN, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
+    PLAIN_PACKET_HEADER_LEN,
+};
 use grammers_crypto as crypto;
 use grammers_tl_types as tl;
 pub use plain::Plain;
@@ -289,8 +293,8 @@ impl From<tl::deserialize::Error> for RequestError {
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto/description
 pub trait Mtp {
-    /// Serializes one request to the internal buffer, which can be later retrieved by calling
-    /// `finalize` after one or more `push` have been made.
+    /// Serializes one request to the input buffer.
+    /// The same buffer should be used until `finalize` is called.
     ///
     /// Returns the message ID assigned the request if it was serialized, or `None` if the buffer
     /// is full and cannot hold more requests.
@@ -309,14 +313,15 @@ pub trait Mtp {
     ///
     /// The definition of "too large" is roughly 1MB, so as long as the
     /// payload is below that mark, it's safe to call.
-    fn push(&mut self, request: &[u8]) -> Option<MsgId>;
+    fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId>;
 
-    /// Finalizes the internal buffer of requests. A reference to the buffer is
-    /// passed to the callback, and then the buffer is emptied for later reuse.
+    /// Finalizes the buffer of requests.
     ///
     /// Note that even if there are no requests to serialize, the protocol may
     /// produce data that has to be sent after deserializing incoming messages.
-    fn finalize<F: FnMut(&[u8])>(&mut self, func: F);
+    ///
+    /// The buffer may remain empty if there are no actions to take.
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>);
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;

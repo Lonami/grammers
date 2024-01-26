@@ -34,8 +34,7 @@ impl InlineResult {
                 clear_draft: false,
                 hide_via: false,
                 peer: chat.into().to_input_peer(),
-                reply_to_msg_id: None,
-                top_msg_id: None,
+                reply_to: None,
                 random_id: generate_random_id(),
                 query_id: self.query_id,
                 id: self.id().to_string(),
@@ -168,6 +167,7 @@ impl Client {
                 entities,
                 no_webpage: !message.link_preview,
                 reply_markup: message.reply_markup,
+                invert_media: false,
             })
             .await?;
         Ok(result)

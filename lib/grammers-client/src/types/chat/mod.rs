@@ -171,6 +171,34 @@ impl Chat {
             },
         }
     }
+
+    // get an chat photo downloadable
+    pub fn photo_downloadable(&self, big: bool) -> Option<crate::types::Downloadable> {
+        let peer = self.pack().to_input_peer();
+        match self {
+            Self::User(user) => user.photo().map(|x| {
+                crate::types::Downloadable::UserProfilePhoto(crate::types::UserProfilePhoto {
+                    big,
+                    peer,
+                    photo: x.clone(),
+                })
+            }),
+            Self::Group(group) => group.photo().map(|x| {
+                crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
+                    big,
+                    peer,
+                    photo: x.clone(),
+                })
+            }),
+            Self::Channel(channel) => channel.photo().map(|x| {
+                crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
+                    big,
+                    peer,
+                    photo: x.clone(),
+                })
+            }),
+        }
+    }
 }
 
 impl From<Chat> for PackedChat {

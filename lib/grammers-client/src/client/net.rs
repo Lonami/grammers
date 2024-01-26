@@ -5,23 +5,22 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use super::client::{ClientState, Connection};
 use super::{Client, ClientInner, Config};
-use crate::client::client::FileDownloader;
-use crate::utils::{self, AsyncMutex, Mutex};
+use crate::utils;
 use grammers_mtproto::mtp::{self, RpcError};
 use grammers_mtproto::transport;
-use grammers_mtproto::transport::Full;
 use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, Sender};
 use grammers_session::{ChatHashCache, MessageBox};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::{debug, info};
-use mtp::Encrypted;
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::net::{Ipv4Addr, SocketAddr};
-use std::sync::Arc;
+use std::sync::atomic::{AtomicU32, Ordering};
+use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 /// Socket addresses to Telegram datacenters, where the index into this array
 /// represents the data center ID.
@@ -183,39 +182,30 @@ impl Client {
 
         let self_user = config.session.get_user();
 
+        // Don't bother getting pristine update state if we're not logged in.
+        let should_get_state = message_box.is_empty() && config.session.signed_in();
+
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
-            sender: AsyncMutex::new("client.sender", sender),
-            stepping_done: Notify::new(),
-            dc_id: Mutex::new("client.dc_id", dc_id),
             config,
-            message_box: Mutex::new("client.message_box", message_box),
-            chat_hashes: Mutex::new(
-                "client.chat_hashes",
-                ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
-            ),
-            last_update_limit_warn: Mutex::new("client.last_update_limit_warn", None),
-            updates: Mutex::new("client.updates", updates),
-            request_tx: Mutex::new("client.request_tx", request_tx),
-            downloader_map: RwLock::new(HashMap::new()),
+            conn: Connection::new(sender, request_tx),
+            state: RwLock::new(ClientState {
+                dc_id,
+                message_box,
+                chat_hashes: ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
+                last_update_limit_warn: None,
+                updates,
+            }),
+            downloader_map: AsyncRwLock::new(HashMap::new()),
         }));
 
-        // Don't bother getting pristine state if we're not logged in.
-        if client
-            .0
-            .message_box
-            .lock("client.connect.is_empty")
-            .is_empty()
-            && client.0.config.session.signed_in()
-        {
+        if should_get_state {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    client
-                        .0
-                        .message_box
-                        .lock("client.connect.set_state")
-                        .set_state(state);
+                    {
+                        client.0.state.write().unwrap().message_box.set_state(state);
+                    }
                     client.sync_update_state();
                 }
                 Err(_err) => {
@@ -255,58 +245,14 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        self.invoke_request(
-            request,
-            &self.0.request_tx,
-            &self.0.sender,
-            &self.0.stepping_done,
-        )
-        .await
-    }
-
-    pub(crate) async fn invoke_request<R: tl::RemoteCall>(
-        &self,
-        request: &R,
-        enqueuer: &Mutex<Enqueuer>,
-        sender: &AsyncMutex<Sender<Full, Encrypted>>,
-        notifier: &Notify,
-    ) -> Result<R::Return, InvocationError> {
-        let mut slept_flood = false;
-        let sleep_thresh = self.0.config.params.flood_sleep_threshold;
-
-        let mut rx = enqueuer.lock("invoke").enqueue(request);
-        loop {
-            match rx.try_recv() {
-                Ok(response) => match response {
-                    Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
-                    Err(InvocationError::Rpc(RpcError {
-                        name,
-                        code: 420,
-                        value: Some(seconds),
-                        ..
-                    })) if !slept_flood && seconds <= sleep_thresh => {
-                        let delay = std::time::Duration::from_secs(seconds as _);
-                        info!(
-                            "sleeping on {} for {:?} before retrying {}",
-                            name,
-                            delay,
-                            std::any::type_name::<R>()
-                        );
-                        tokio::time::sleep(delay).await;
-                        slept_flood = true;
-                        rx = enqueuer.lock("invoke").enqueue(request);
-                        continue;
-                    }
-                    Err(e) => break Err(e),
-                },
-                Err(TryRecvError::Empty) => {
-                    self.step_sender(sender, notifier).await?;
-                }
-                Err(TryRecvError::Closed) => {
-                    panic!("request channel dropped before receiving a result")
-                }
-            }
-        }
+        self.0
+            .conn
+            .invoke(
+                request,
+                self.0.config.params.flood_sleep_threshold,
+                |updates| self.process_socket_updates(updates),
+            )
+            .await
     }
 
     async fn export_authorization(
@@ -324,16 +270,12 @@ impl Client {
         }
     }
 
-    async fn connect_sender(&self, dc_id: i32) -> Result<Arc<FileDownloader>, InvocationError> {
+    async fn connect_sender(&self, dc_id: i32) -> Result<Arc<Connection>, InvocationError> {
         let mut mutex = self.0.downloader_map.write().await;
         debug!("Connecting new datacenter {}", dc_id);
         match connect_sender(dc_id, &self.0.config).await {
             Ok((new_sender, new_tx)) => {
-                let new_downloader = Arc::new(FileDownloader {
-                    sender: AsyncMutex::new("dc_sender", new_sender),
-                    request_tx: Mutex::new("dc_enqueuer", new_tx),
-                    stepping_done: Notify::new(),
-                });
+                let new_downloader = Arc::new(Connection::new(new_sender, new_tx));
 
                 // export auth
                 let authorization = self.export_authorization(dc_id).await?;
@@ -343,13 +285,9 @@ impl Client {
                     id: authorization.id,
                     bytes: authorization.bytes,
                 };
-                self.invoke_request(
-                    &request,
-                    &new_downloader.request_tx,
-                    &new_downloader.sender,
-                    &new_downloader.stepping_done,
-                )
-                .await?;
+                new_downloader
+                    .invoke(&request, self.0.config.params.flood_sleep_threshold, drop)
+                    .await?;
 
                 mutex.insert(dc_id, new_downloader.clone());
                 Ok(new_downloader.clone())
@@ -361,10 +299,7 @@ impl Client {
         }
     }
 
-    async fn get_downloader(
-        &self,
-        dc_id: i32,
-    ) -> Result<Option<Arc<FileDownloader>>, InvocationError> {
+    async fn get_downloader(&self, dc_id: i32) -> Result<Option<Arc<Connection>>, InvocationError> {
         return Ok({
             let guard = self.0.downloader_map.read().await;
             guard.get(&dc_id).cloned()
@@ -380,13 +315,9 @@ impl Client {
             None => self.connect_sender(dc_id).await?,
             Some(fd) => fd,
         };
-        self.invoke_request(
-            request,
-            &downloader.request_tx,
-            &downloader.sender,
-            &downloader.stepping_done,
-        )
-        .await
+        downloader
+            .invoke(request, self.0.config.params.flood_sleep_threshold, drop)
+            .await
     }
 
     /// Perform a single network step.
@@ -406,33 +337,9 @@ impl Client {
     /// # }
     /// ```
     pub async fn step(&self) -> Result<(), sender::ReadError> {
-        self.step_sender(&self.0.sender, &self.0.stepping_done)
-            .await
-    }
-    async fn step_sender(
-        &self,
-        sender: &AsyncMutex<Sender<Full, Encrypted>>,
-        notifier: &Notify,
-    ) -> Result<(), sender::ReadError> {
-        match sender.try_lock("client.step") {
-            Ok(mut sender) => {
-                // Sender was unlocked, we're the ones that will perform the network step.
-                let updates = sender.step().await?;
-                notifier.notify_waiters();
-                self.process_socket_updates(updates);
-
-                // TODO request cancellation if this is Err
-                // (perhaps a method on the sender to cancel_all)
-                Ok(())
-            }
-            Err(_) => {
-                // Someone else is already performing the network step. Wait for the step to
-                // complete and return immediately without stepping again. The caller wants
-                // *one* step to complete, but it doesn't care *who* completes it.
-                notifier.notified().await;
-                Ok(())
-            }
-        }
+        let updates = self.0.conn.step().await?;
+        self.process_socket_updates(updates);
+        Ok(())
     }
 
     /// Run the client by repeatedly calling [`Client::step`] until a graceful disconnection
@@ -451,6 +358,74 @@ impl Client {
         loop {
             // TODO review doc comments regarding disconnects
             self.step().await?;
+        }
+    }
+}
+
+impl Connection {
+    fn new(sender: Sender<transport::Full, mtp::Encrypted>, request_tx: Enqueuer) -> Self {
+        Self {
+            sender: AsyncMutex::new(sender),
+            request_tx: RwLock::new(request_tx),
+            step_counter: AtomicU32::new(0),
+        }
+    }
+
+    pub(crate) async fn invoke<R: tl::RemoteCall, F: Fn(Vec<tl::enums::Updates>) -> ()>(
+        &self,
+        request: &R,
+        flood_sleep_threshold: u32,
+        on_updates: F,
+    ) -> Result<R::Return, InvocationError> {
+        let mut slept_flood = false;
+
+        let mut rx = { self.request_tx.read().unwrap().enqueue(request) };
+        loop {
+            match rx.try_recv() {
+                Ok(response) => match response {
+                    Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
+                    Err(InvocationError::Rpc(RpcError {
+                        name,
+                        code: 420,
+                        value: Some(seconds),
+                        ..
+                    })) if !slept_flood && seconds <= flood_sleep_threshold => {
+                        let delay = std::time::Duration::from_secs(seconds as _);
+                        info!(
+                            "sleeping on {} for {:?} before retrying {}",
+                            name,
+                            delay,
+                            std::any::type_name::<R>()
+                        );
+                        tokio::time::sleep(delay).await;
+                        slept_flood = true;
+                        rx = self.request_tx.read().unwrap().enqueue(request);
+                        continue;
+                    }
+                    Err(e) => break Err(e),
+                },
+                Err(TryRecvError::Empty) => {
+                    on_updates(self.step().await?);
+                }
+                Err(TryRecvError::Closed) => {
+                    panic!("request channel dropped before receiving a result")
+                }
+            }
+        }
+    }
+
+    async fn step(&self) -> Result<Vec<tl::enums::Updates>, sender::ReadError> {
+        let ticket_number = self.step_counter.load(Ordering::SeqCst);
+        let mut sender = self.sender.lock().await;
+        match self.step_counter.compare_exchange(
+            ticket_number,
+            // As long as the counter's modulo is larger than the amount of concurrent tasks, we're fine.
+            ticket_number.wrapping_add(1),
+            Ordering::SeqCst,
+            Ordering::SeqCst,
+        ) {
+            Ok(_) => sender.step().await, // We're the one to drive IO.
+            Err(_) => Ok(Vec::new()),     // A different task drove IO.
         }
     }
 }

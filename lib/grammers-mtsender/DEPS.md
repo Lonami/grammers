@@ -1,5 +1,9 @@
 # Dependencies
 
+## grammers-crypto
+
+Used for its `RingBuffer` type.
+
 ## grammers-mtproto
 
 Contains the actual implementation of the protocol without performing any IO. This crate's job

@@ -7,6 +7,7 @@
 // except according to those terms.
 use super::{Deserialization, DeserializeError, Mtp};
 use crate::MsgId;
+use grammers_crypto::RingBuffer;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
 
 /// An implementation of the [Mobile Transport Protocol] for plaintext
@@ -26,14 +27,12 @@ use grammers_tl_types::{Cursor, Deserializable, Serializable};
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 /// [`Mtp`]: struct.Mtp.html
 #[non_exhaustive]
-pub struct Plain {
-    buffer: Vec<u8>,
-}
+pub struct Plain;
 
 #[allow(clippy::new_without_default)]
 impl Plain {
     pub fn new() -> Self {
-        Self { buffer: Vec::new() }
+        Self
     }
 }
 
@@ -46,28 +45,25 @@ impl Mtp for Plain {
     /// the authorization key itself.
     ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
-    fn push(&mut self, request: &[u8]) -> Option<MsgId> {
-        if !self.buffer.is_empty() {
+    fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId> {
+        if !buffer.is_empty() {
             return None;
         }
 
-        0i64.serialize(&mut self.buffer); // auth_key_id = 0
+        0i64.serialize(buffer); // auth_key_id = 0
 
         // Even though https://core.telegram.org/mtproto/samples-auth_key
         // seems to imply the `msg_id` has to follow some rules, there is
         // no need to generate a valid `msg_id`, it seems. Just use `0`.
-        0i64.serialize(&mut self.buffer); // message_id
+        0i64.serialize(buffer); // message_id
 
-        (request.len() as i32).serialize(&mut self.buffer); // message_data_length
-        self.buffer.extend_from_slice(request); // message_data
+        (request.len() as i32).serialize(buffer); // message_data_length
+        buffer.extend(request); // message_data
 
         Some(MsgId(0))
     }
 
-    fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
-        func(self.buffer.as_slice());
-        self.buffer.clear();
-    }
+    fn finalize(&mut self, _buffer: &mut RingBuffer<u8>) {}
 
     /// Validates that the returned data is a correct plain message, and
     /// if it is, the method returns the inner contents of the message.
@@ -114,9 +110,7 @@ impl Mtp for Plain {
         })
     }
 
-    fn reset(&mut self) {
-        self.buffer.clear();
-    }
+    fn reset(&mut self) {}
 }
 
 #[cfg(test)]
@@ -126,21 +120,21 @@ mod tests {
     const REQUEST: &[u8] = b"Hey!";
 
     #[test]
-    fn ensure_finalize_clears_buffer() {
+    fn ensure_finalize_preserves_buffer() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtp = Plain::new();
 
-        mtp.push(REQUEST);
-        mtp.finalize(|buffer| assert_eq!(buffer.len(), 24));
-
-        mtp.push(REQUEST);
-        mtp.finalize(|buffer| assert_eq!(buffer.len(), 24));
+        mtp.push(&mut buffer, REQUEST);
+        mtp.finalize(&mut buffer);
+        assert_eq!(&buffer[buffer.len() - REQUEST.len()..], REQUEST);
     }
 
     #[test]
     fn ensure_only_one_push_allowed() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtp = Plain::new();
 
-        assert!(mtp.push(REQUEST).is_some());
-        assert!(mtp.push(REQUEST).is_none());
+        assert!(mtp.push(&mut buffer, REQUEST).is_some());
+        assert!(mtp.push(&mut buffer, REQUEST).is_none());
     }
 }

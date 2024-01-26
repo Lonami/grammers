@@ -8,7 +8,7 @@
 use super::{Deserialization, DeserializeError, Mtp, RequestError};
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
-use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey};
+use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, RingBuffer};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
 use log::info;
 use std::mem;
@@ -96,9 +96,6 @@ pub struct Encrypted {
     /// Temporary updates that came in a response.
     updates: Vec<Vec<u8>>,
 
-    /// Buffer were requests are pushed to.
-    buffer: Vec<u8>,
-
     /// How many messages are there in the buffer.
     msg_count: usize,
 }
@@ -144,7 +141,6 @@ impl Builder {
             compression_threshold: self.compression_threshold,
             rpc_results: Vec::new(),
             updates: Vec::new(),
-            buffer: Vec::new(),
             msg_count: 0,
         }
     }
@@ -206,13 +202,18 @@ impl Encrypted {
         }
     }
 
-    fn serialize_msg(&mut self, body: &[u8], content_related: bool) -> MsgId {
+    fn serialize_msg(
+        &mut self,
+        buffer: &mut RingBuffer<u8>,
+        body: &[u8],
+        content_related: bool,
+    ) -> MsgId {
         let msg_id = self.get_new_msg_id();
 
-        msg_id.serialize(&mut self.buffer);
-        self.get_seq_no(content_related).serialize(&mut self.buffer);
-        (body.len() as i32).serialize(&mut self.buffer);
-        self.buffer.extend_from_slice(body);
+        msg_id.serialize(buffer);
+        self.get_seq_no(content_related).serialize(buffer);
+        (body.len() as i32).serialize(buffer);
+        buffer.extend(body);
 
         self.msg_count += 1;
         MsgId(msg_id)
@@ -221,47 +222,40 @@ impl Encrypted {
     /// `finalize`, but without encryption.
     ///
     /// The buffer is *not* cleared, but is instead returned.
-    fn finalize_plain(&mut self) -> &[u8] {
+    fn finalize_plain(&mut self, buffer: &mut RingBuffer<u8>) {
         if self.msg_count == 0 {
-            return &[];
+            return;
         }
 
-        if self.msg_count == 1 {
-            // Won't be writing the message for the container.
-            self.buffer.drain(..CONTAINER_HEADER_LEN);
+        if self.msg_count != 1 {
+            // Prepend a container, setting its message ID and sequence number.
+            // + 8 because it has to include the constructor ID and length (4 bytes each).
+            let len = (buffer.len() + 8) as i32;
+            let mut header = buffer.shift(MESSAGE_CONTAINER_HEADER_LEN);
+
+            // Manually `serialize_msg` because the container body was already written.
+            self.get_new_msg_id().serialize(&mut header);
+            self.get_seq_no(false).serialize(&mut header);
+
+            len.serialize(&mut header);
+
+            manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut header);
+            (self.msg_count as i32).serialize(&mut header);
         }
 
         {
-            let mut tmp = Vec::with_capacity(HEADER_LEN);
+            // Prepend the message header
+            let mut header = buffer.shift(PLAIN_PACKET_HEADER_LEN);
             self.salts
                 .last()
                 .map(|s| s.salt)
                 .unwrap_or(0)
-                .serialize(&mut tmp); // 8 bytes
+                .serialize(&mut header); // 8 bytes
 
-            self.client_id.serialize(&mut tmp); // 8 bytes
-            self.buffer[0..tmp.len()].copy_from_slice(&tmp)
-        }
-
-        if self.msg_count != 1 {
-            // Give the container its message ID and sequence number.
-            let mut tmp = Vec::with_capacity(CONTAINER_HEADER_LEN);
-
-            // Manually `serialize_msg` because the container body was already written.
-            self.get_new_msg_id().serialize(&mut tmp);
-            self.get_seq_no(false).serialize(&mut tmp);
-
-            // + 8 because it has to include the constructor ID and length (4 bytes each).
-            let len = (self.buffer.len() - HEADER_LEN - CONTAINER_HEADER_LEN + 8) as i32;
-            len.serialize(&mut tmp);
-
-            manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut tmp);
-            (self.msg_count as i32).serialize(&mut tmp);
-            self.buffer[HEADER_LEN..HEADER_LEN + CONTAINER_HEADER_LEN].copy_from_slice(&tmp);
+            self.client_id.serialize(&mut header); // 8 bytes
         }
 
         self.msg_count = 0;
-        self.buffer.as_slice()
     }
 
     fn process_message(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
@@ -611,21 +605,7 @@ impl Encrypted {
                     salt: x.new_server_salt,
                 });
 
-                // Try enqueuing a request to get future salts, in order to prevent this from happening for longer.
-                if self
-                    .push(
-                        &tl::functions::GetFutureSalts {
-                            num: NUM_FUTURE_SALTS,
-                        }
-                        .to_bytes(),
-                    )
-                    .is_some()
-                {
-                    info!("got bad salt; asking for more salts");
-                } else {
-                    info!("got bad salt, but cannot ask for future salts because buffer is full");
-                }
-
+                info!("got bad salt; salts have been reset down to a single one");
                 return Ok(());
             }
         };
@@ -1124,25 +1104,26 @@ impl Encrypted {
     }
 }
 
-// The first actual message comes after `salt`, `client_id` (8 bytes each).
-const HEADER_LEN: usize = 16;
+/// The maximum header length used by any available transport (`Full`, 4 bytes for `len` and `seq`).
+pub const MAX_TRANSPORT_HEADER_LEN: usize = 4 + 4;
 
-// The message header for the container occupies the size of the message header
-// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
-const CONTAINER_HEADER_LEN: usize = (8 + 4 + 4) + (4 + 4);
+/// Data prepended after encrypting a packet, `key_id` and `msg_key`.
+pub const ENCRYPTED_PACKET_HEADER_LEN: usize = 8 + 16;
+
+/// The first actual message comes after `salt`, `client_id` (8 bytes each).
+pub const PLAIN_PACKET_HEADER_LEN: usize = 8 + 8;
+
+/// The message header for the container occupies the size of the message header
+/// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
+pub const MESSAGE_CONTAINER_HEADER_LEN: usize = (8 + 4 + 4) + (4 + 4);
 
 impl Mtp for Encrypted {
     /// Pushes a request into the internal buffer by manually serializing the messages for maximum
     /// efficiency. If the buffer is full, returns `None`.
     ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
-    fn push(&mut self, request: &[u8]) -> Option<MsgId> {
+    fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId> {
         // TODO rather than taking in bytes, take requests, serialize them in place, and if too large drop the last part of the buffer
-
-        if self.buffer.is_empty() {
-            // First push, reserve enough space for `finalize`.
-            self.buffer.resize(HEADER_LEN + CONTAINER_HEADER_LEN, 0);
-        }
 
         // If we need to acknowledge messages, this notification goes in with the rest of requests
         // so that we can also include it. It has priority over user requests because these should
@@ -1153,7 +1134,7 @@ impl Mtp for Encrypted {
                 msg_ids: mem::take(&mut self.pending_ack),
             })
             .to_bytes();
-            self.serialize_msg(&body, false);
+            self.serialize_msg(buffer, &body, false);
         }
 
         // Check to see if the next salt can be used already. If it can, drop the current one and,
@@ -1179,7 +1160,7 @@ impl Mtp for Encrypted {
                     num: NUM_FUTURE_SALTS,
                 }
                 .to_bytes();
-                self.serialize_msg(&body, true);
+                self.serialize_msg(buffer, &body, true);
             }
         }
 
@@ -1211,23 +1192,20 @@ impl Mtp for Encrypted {
             }
         }
 
-        let new_size = self.buffer.len() + body.len() + manual_tl::Message::SIZE_OVERHEAD;
+        let new_size = buffer.len() + body.len() + manual_tl::Message::SIZE_OVERHEAD;
         if new_size >= manual_tl::MessageContainer::MAXIMUM_SIZE {
             // No more messages fit in this container.
             return None;
         }
 
         // This request still fits in the container, so give it a message ID.
-        Some(self.serialize_msg(body, true))
+        Some(self.serialize_msg(buffer, body, true))
     }
 
-    fn finalize<F: FnMut(&[u8])>(&mut self, mut func: F) {
-        self.finalize_plain();
-        if self.buffer.is_empty() {
-            func(self.buffer.as_slice());
-        } else {
-            func(encrypt_data_v2(&self.buffer, &self.auth_key).as_slice());
-            self.buffer.clear()
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) {
+        self.finalize_plain(buffer);
+        if !buffer.is_empty() {
+            encrypt_data_v2(buffer, &self.auth_key);
         }
     }
 
@@ -1301,10 +1279,11 @@ mod tests {
 
     #[test]
     fn ensure_serialization_has_salt_client_id() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build().finish(auth_key());
 
-        mtproto.push(REQUEST);
-        let buffer = mtproto.finalize_plain();
+        mtproto.push(&mut buffer, REQUEST);
+        mtproto.finalize_plain(&mut buffer);
 
         // salt comes first, it's zero by default.
         assert_eq!(&buffer[0..8], [0, 0, 0, 0, 0, 0, 0, 0]);
@@ -1318,24 +1297,26 @@ mod tests {
 
     #[test]
     fn ensure_correct_single_serialization() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build().finish(auth_key());
 
-        assert!(mtproto.push(REQUEST).is_some());
-        let buffer = mtproto.finalize_plain();
+        assert!(mtproto.push(&mut buffer, REQUEST).is_some());
+        mtproto.finalize_plain(&mut buffer);
 
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
-        ensure_buffer_is_message(buffer, b"Hey!", 1);
+        ensure_buffer_is_message(buffer, REQUEST, 1);
     }
 
     #[test]
     fn ensure_correct_multi_serialization() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build()
             .compression_threshold(None)
             .finish(auth_key());
 
-        assert!(mtproto.push(REQUEST).is_some());
-        assert!(mtproto.push(REQUEST_B).is_some());
-        let buffer = mtproto.finalize_plain();
+        assert!(mtproto.push(&mut buffer, REQUEST).is_some());
+        assert!(mtproto.push(&mut buffer, REQUEST_B).is_some());
+        mtproto.finalize_plain(&mut buffer);
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
 
         // buffer[0..8] is the msg_id for the container
@@ -1352,21 +1333,22 @@ mod tests {
         assert_eq!(&buffer[20..24], [2, 0, 0, 0]);
 
         // buffer[24..44] is an inner message
-        ensure_buffer_is_message(&buffer[24..44], b"Hey!", 1);
+        ensure_buffer_is_message(&buffer[24..44], REQUEST, 1);
 
         // buffer[44..] is the other inner message
-        ensure_buffer_is_message(&buffer[44..], b"Bye!", 3);
+        ensure_buffer_is_message(&buffer[44..], REQUEST_B, 3);
     }
 
     #[test]
     fn ensure_correct_single_large_serialization() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build()
             .compression_threshold(None)
             .finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
-        assert!(mtproto.push(&data).is_some());
-        let buffer = mtproto.finalize_plain();
+        assert!(mtproto.push(&mut buffer, &data).is_some());
+        mtproto.finalize_plain(&mut buffer);
 
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
         assert_eq!(buffer.len(), 16 + data.len());
@@ -1374,16 +1356,17 @@ mod tests {
 
     #[test]
     fn ensure_correct_multi_large_serialization() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build()
             .compression_threshold(None)
             .finish(auth_key());
         let data = vec![0x7f; 768 * 1024];
 
-        assert!(mtproto.push(&data).is_some());
-        assert!(mtproto.push(&data).is_none());
+        assert!(mtproto.push(&mut buffer, &data).is_some());
+        assert!(mtproto.push(&mut buffer, &data).is_none());
 
         // No container should be used, only the `salt` + `client_id` (16 bytes) should count.
-        let buffer = mtproto.finalize_plain();
+        mtproto.finalize_plain(&mut buffer);
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
         assert_eq!(buffer.len(), 16 + data.len());
     }
@@ -1391,29 +1374,32 @@ mod tests {
     #[test]
     #[should_panic]
     fn ensure_large_payload_panics() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build().finish(auth_key());
 
-        mtproto.push(&vec![0; 2 * 1024 * 1024]);
+        mtproto.push(&mut buffer, &vec![0; 2 * 1024 * 1024]);
     }
 
     #[test]
     #[should_panic]
     fn ensure_non_padded_payload_panics() {
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build().finish(auth_key());
 
-        mtproto.push(&[1, 2, 3]);
+        mtproto.push(&mut buffer, &[1, 2, 3]);
     }
 
     #[test]
     fn ensure_no_compression_is_honored() {
         // A large vector of null bytes should compress
+        let mut buffer = RingBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build()
             .compression_threshold(None)
             .finish(auth_key());
 
-        mtproto.push(&vec![0; 512 * 1024]);
-        let buffer = mtproto.finalize_plain();
-        assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+        mtproto.push(&mut buffer, &vec![0; 512 * 1024]);
+        mtproto.finalize_plain(&mut buffer);
+        assert!(!buffer.as_ref().windows(4).any(|w| w == GZIP_PACKED_HEADER));
     }
 
     #[test]
@@ -1421,28 +1407,31 @@ mod tests {
         // A large vector of null bytes should compress
         {
             // High threshold not reached, should not compress
+            let mut buffer = RingBuffer::with_capacity(0, 0);
             let mut mtproto = Encrypted::build()
                 .compression_threshold(Some(768 * 1024))
                 .finish(auth_key());
-            mtproto.push(&vec![0; 512 * 1024]);
-            let buffer = mtproto.finalize_plain();
-            assert!(!buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+            mtproto.push(&mut buffer, &vec![0; 512 * 1024]);
+            mtproto.finalize_plain(&mut buffer);
+            assert!(!buffer.as_ref().windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
         {
             // Low threshold is exceeded, should compress
+            let mut buffer = RingBuffer::with_capacity(0, 0);
             let mut mtproto = Encrypted::build()
                 .compression_threshold(Some(256 * 1024))
                 .finish(auth_key());
-            mtproto.push(&vec![0; 512 * 1024]);
-            let buffer = mtproto.finalize_plain();
-            assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+            mtproto.push(&mut buffer, &vec![0; 512 * 1024]);
+            mtproto.finalize_plain(&mut buffer);
+            assert!(buffer.as_ref().windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
         {
             // The default should compress
+            let mut buffer = RingBuffer::with_capacity(0, 0);
             let mut mtproto = Encrypted::build().finish(auth_key());
-            mtproto.push(&vec![0; 512 * 1024]);
-            let buffer = mtproto.finalize_plain();
-            assert!(buffer.windows(4).any(|w| w == GZIP_PACKED_HEADER));
+            mtproto.push(&mut buffer, &vec![0; 512 * 1024]);
+            mtproto.finalize_plain(&mut buffer);
+            assert!(buffer.as_ref().windows(4).any(|w| w == GZIP_PACKED_HEADER));
         }
     }
 }

@@ -68,9 +68,11 @@ impl Message {
                     edit_hide: false,
                     pinned: false,
                     noforwards: false,
+                    invert_media: false,
                     id: msg.id,
                     from_id: msg.from_id,
                     peer_id: msg.peer_id,
+                    saved_peer_id: None,
                     fwd_from: None,
                     via_bot_id: None,
                     reply_to: msg.reply_to,
@@ -114,18 +116,26 @@ impl Message {
                 edit_hide: false,
                 pinned: false,
                 noforwards: false, // TODO true if channel has noforwads?
+                invert_media: false,
                 id: updates.id,
                 from_id: None, // TODO self
                 peer_id: chat.to_peer(),
+                saved_peer_id: None,
                 fwd_from: None,
                 via_bot_id: None,
                 reply_to: input.reply_to.map(|reply_to_msg_id| {
                     tl::types::MessageReplyHeader {
                         reply_to_scheduled: false,
                         forum_topic: false,
-                        reply_to_msg_id,
+                        quote: false,
+                        reply_to_msg_id: Some(reply_to_msg_id),
                         reply_to_peer_id: None,
+                        reply_from: None,
+                        reply_media: None,
                         reply_to_top_id: None,
+                        quote_text: None,
+                        quote_entities: None,
+                        quote_offset: None,
                     }
                     .into()
                 }),
@@ -347,9 +357,33 @@ impl Message {
     }
 
     /// How many replies does this message have, when applicable.
-    pub fn reply_count(&self) -> Option<tl::enums::MessageReplies> {
-        // TODO return int instead
-        self.msg.replies.clone()
+    pub fn reply_count(&self) -> Option<i32> {
+        match &self.msg.replies {
+            None => None,
+            Some(replies) => {
+                let tl::enums::MessageReplies::Replies(replies) = replies;
+                Some(replies.replies)
+            }
+        }
+    }
+
+    /// How many reactions does this message have, when applicable.
+    pub fn reaction_count(&self) -> Option<i32> {
+        match &self.msg.reactions {
+            None => None,
+            Some(reactions) => {
+                let tl::enums::MessageReactions::Reactions(reactions) = reactions;
+                let count = reactions
+                    .results
+                    .iter()
+                    .map(|reaction: &tl::enums::ReactionCount| {
+                        let tl::enums::ReactionCount::Count(reaction) = reaction;
+                        reaction.count
+                    })
+                    .sum();
+                Some(count)
+            }
+        }
     }
 
     /// The date when this message was last edited.
@@ -387,7 +421,7 @@ impl Message {
     /// If this message is replying to another message, return the replied message ID.
     pub fn reply_to_message_id(&self) -> Option<i32> {
         if let Some(tl::enums::MessageReplyHeader::Header(m)) = &self.msg.reply_to {
-            Some(m.reply_to_msg_id)
+            m.reply_to_msg_id
         } else {
             None
         }

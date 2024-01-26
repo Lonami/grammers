@@ -5,16 +5,17 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::utils::{AsyncMutex, Mutex};
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{Enqueuer, ReconnectionPolicy, Sender};
+use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
+use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
 use std::net::SocketAddr;
-use std::sync::Arc;
+use std::sync::atomic::AtomicU32;
+use std::sync::{Arc, RwLock};
 use std::time::Instant;
-use tokio::sync::{Notify, RwLock};
+use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -121,26 +122,27 @@ pub struct InitParams {
 pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
-    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
-    pub(crate) stepping_done: Notify,
-    pub(crate) dc_id: Mutex<i32>,
     pub(crate) config: Config,
-    pub(crate) message_box: Mutex<MessageBox>,
-    pub(crate) chat_hashes: Mutex<ChatHashCache>,
-    // When did we last warn the user that the update queue filled up?
-    // This is used to avoid spamming the log.
-    pub(crate) last_update_limit_warn: Mutex<Option<Instant>>,
-    pub(crate) updates: Mutex<VecDeque<crate::types::Update>>,
-    // Used to avoid locking the entire sender when enqueueing requests.
-    pub(crate) request_tx: Mutex<Enqueuer>,
+    pub(crate) conn: Connection,
+    pub(crate) state: RwLock<ClientState>,
     // Stores per-datacenter downloader instances
-    pub(crate) downloader_map: RwLock<HashMap<i32, Arc<FileDownloader>>>,
+    pub(crate) downloader_map: AsyncRwLock<HashMap<i32, Arc<Connection>>>,
 }
 
-pub(crate) struct FileDownloader {
+pub(crate) struct ClientState {
+    pub(crate) dc_id: i32,
+    pub(crate) message_box: MessageBox,
+    pub(crate) chat_hashes: ChatHashCache,
+    // When did we last warn the user that the update queue filled up?
+    // This is used to avoid spamming the log.
+    pub(crate) last_update_limit_warn: Option<Instant>,
+    pub(crate) updates: VecDeque<crate::types::Update>,
+}
+
+pub(crate) struct Connection {
     pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
-    pub(crate) request_tx: Mutex<Enqueuer>,
-    pub(crate) stepping_done: Notify,
+    pub(crate) request_tx: RwLock<Enqueuer>,
+    pub(crate) step_counter: AtomicU32,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -204,7 +206,7 @@ impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO show more info, like user id and session name if present
         f.debug_struct("Client")
-            .field("dc_id", &self.0.dc_id)
+            .field("dc_id", &self.0.state.read().unwrap().dc_id)
             .finish()
     }
 }

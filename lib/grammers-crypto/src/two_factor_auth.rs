@@ -21,8 +21,8 @@ use crate::sha256 as h;
 pub fn calculate_2fa(
     salt1: &[u8],
     salt2: &[u8],
-    g: &i32,
     p: &[u8],
+    g: &i32,
     g_b: Vec<u8>,
     a: Vec<u8>,
     password: impl AsRef<[u8]>,
@@ -74,7 +74,7 @@ pub fn calculate_2fa(
     // s_a := pow(t, a + u * x) mod p
     let first = u * x;
     let second = big_a + first;
-    let big_s_a = big_t.modpow(&(second), &big_p);
+    let big_s_a = big_t.modpow(&second, &big_p);
 
     // k_a := H(s_a)
     let k_a = h!(&pad_to_256(&big_s_a.to_bytes_be()));
@@ -91,7 +91,7 @@ pub fn calculate_2fa(
 }
 
 /// Validation for parameters required for two-factor authentication
-pub fn check_p_and_g(g: &i32, p: &[u8]) -> bool {
+pub fn check_p_and_g(p: &[u8], g: &i32) -> bool {
     if !check_p_len(p) {
         return false;
     }
@@ -182,7 +182,7 @@ mod tests {
         let a = vec![6];
         let password = vec![7];
 
-        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &g, &p, g_b, a, password);
+        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &p, &g, g_b, a, password);
 
         let expected_m1 = vec![
             157, 131, 196, 103, 0, 184, 116, 232, 7, 196, 85, 231, 17, 36, 30, 222, 158, 234, 98,
@@ -279,7 +279,7 @@ mod tests {
         ];
         let password = vec![50, 51, 52, 53, 54, 55];
 
-        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &g, &p, g_b, a, password);
+        let (m1, g_a) = calculate_2fa(&salt1, &salt2, &p, &g, g_b, a, password);
 
         let expected_m1 = vec![
             77, 122, 244, 18, 197, 162, 231, 177, 84, 103, 55, 107, 209, 24, 184, 83, 96, 78, 104,

@@ -50,35 +50,31 @@ impl Client {
     /// ```
     pub async fn next_update(&self) -> Result<Option<Update>, InvocationError> {
         loop {
-            if let Some(updates) = self.0.updates.lock("client.next_update").pop_front() {
-                return Ok(Some(updates));
-            }
+            let (deadline, get_diff, get_channel_diff) = {
+                let state = &mut *self.0.state.write().unwrap();
+                if let Some(updates) = state.updates.pop_front() {
+                    return Ok(Some(updates));
+                }
+                (
+                    state.message_box.check_deadlines(), // first, as it might trigger differences
+                    state.message_box.get_difference(),
+                    state.message_box.get_channel_difference(&state.chat_hashes),
+                )
+            };
 
-            if let Some(request) = {
-                let mut message_box = self.0.message_box.lock("client.next_update");
-                // This temporary is needed or message_box's lifetime is extended too much.
-                // See https://github.com/rust-lang/rust/issues/102423.
-                #[allow(clippy::let_and_return)]
-                let diff = message_box.get_difference();
-                diff
-            } {
+            if let Some(request) = get_diff {
                 let response = self.invoke(&request).await?;
-                let mut message_box = self.0.message_box.lock("client.next_update/get_difference");
-                let mut chat_hashes = self.0.chat_hashes.lock("client.next_update/get_difference");
-                let (updates, users, chats) =
-                    message_box.apply_difference(response, &mut chat_hashes);
-
+                let (updates, users, chats) = {
+                    let state = &mut *self.0.state.write().unwrap();
+                    state
+                        .message_box
+                        .apply_difference(response, &mut state.chat_hashes)
+                };
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
 
-            if let Some(request) = {
-                let mut message_box = self.0.message_box.lock("client.next_update");
-                let chat_hashes = self.0.chat_hashes.lock("client.next_update");
-                #[allow(clippy::let_and_return)]
-                let diff = message_box.get_channel_difference(&chat_hashes);
-                diff
-            } {
+            if let Some(request) = get_channel_diff {
                 let maybe_response = self.invoke(&request).await;
 
                 let response = match maybe_response {
@@ -96,16 +92,17 @@ impl Client {
                         // This is a bit hacky because MessageBox doesn't really have a way to "not update" the pts.
                         // Instead we manually extract the previously-known pts and use that.
                         log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
-
-                        let mut message_box = self
-                            .0
-                            .message_box
-                            .lock("client.next_update/end_channel_difference");
-
-                        message_box.end_channel_difference(
-                            &request,
-                            PrematureEndReason::TemporaryServerIssues,
-                        );
+                        {
+                            self.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(
+                                    &request,
+                                    PrematureEndReason::TemporaryServerIssues,
+                                );
+                        }
                         continue;
                     }
                     Err(e) if e.is("CHANNEL_PRIVATE") => {
@@ -115,54 +112,46 @@ impl Client {
                                 .map(|i| i.to_string())
                                 .unwrap_or_else(|| "empty channel".into())
                         );
-
-                        let mut message_box = self
-                            .0
-                            .message_box
-                            .lock("client.next_update/end_channel_difference");
-
-                        message_box.end_channel_difference(&request, PrematureEndReason::Banned);
+                        {
+                            self.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(&request, PrematureEndReason::Banned);
+                        }
                         continue;
                     }
                     Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
                         log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
-                        let mut message_box = self
-                            .0
-                            .message_box
-                            .lock("client.next_update/end_channel_difference");
-
-                        message_box.end_channel_difference(
-                            &request,
-                            PrematureEndReason::TemporaryServerIssues,
-                        );
+                        {
+                            self.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(
+                                    &request,
+                                    PrematureEndReason::TemporaryServerIssues,
+                                );
+                        }
                         continue;
                     }
                     Err(e) => return Err(e),
                 };
 
                 let (updates, users, chats) = {
-                    let mut message_box = self
-                        .0
-                        .message_box
-                        .lock("client.next_update/get_channel_difference");
-
-                    let mut chat_hashes = self
-                        .0
-                        .chat_hashes
-                        .lock("client.next_update/get_channel_difference");
-
-                    message_box.apply_channel_difference(request, response, &mut chat_hashes)
+                    let state = &mut *self.0.state.write().unwrap();
+                    state.message_box.apply_channel_difference(
+                        request,
+                        response,
+                        &mut state.chat_hashes,
+                    )
                 };
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
-
-            let deadline = {
-                let mut message_box = self.0.message_box.lock("client.next_update");
-
-                message_box.check_deadlines()
-            };
 
             let step = {
                 let sleep = pin!(async { sleep_until(deadline.into()).await });
@@ -186,27 +175,32 @@ impl Client {
         }
 
         let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
-        let mut message_box = self.0.message_box.lock("client.process_socket_updates");
-        let mut chat_hashes = self.0.chat_hashes.lock("client.process_socket_updates");
+        {
+            let state = &mut *self.0.state.write().unwrap();
 
-        for updates in all_updates {
-            if message_box
-                .ensure_known_peer_hashes(&updates, &mut chat_hashes)
-                .is_err()
-            {
-                return;
-            }
-            match message_box.process_updates(updates, &chat_hashes) {
-                Ok(tup) => {
-                    if let Some(res) = result.as_mut() {
-                        res.0.extend(tup.0);
-                        res.1.extend(tup.1);
-                        res.2.extend(tup.2);
-                    } else {
-                        result = Some(tup);
-                    }
+            for updates in all_updates {
+                if state
+                    .message_box
+                    .ensure_known_peer_hashes(&updates, &mut state.chat_hashes)
+                    .is_err()
+                {
+                    return;
                 }
-                Err(_) => return,
+                match state
+                    .message_box
+                    .process_updates(updates, &state.chat_hashes)
+                {
+                    Ok(tup) => {
+                        if let Some(res) = result.as_mut() {
+                            res.0.extend(tup.0);
+                            res.1.extend(tup.1);
+                            res.2.extend(tup.2);
+                        } else {
+                            result = Some(tup);
+                        }
+                    }
+                    Err(_) => return,
+                }
             }
         }
 
@@ -216,17 +210,13 @@ impl Client {
     }
 
     fn extend_update_queue(&self, mut updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
-        let mut guard = self.0.updates.lock("client.extend_update_queue");
+        let mut state = self.0.state.write().unwrap();
 
         if let Some(limit) = self.0.config.params.update_queue_limit {
-            if let Some(exceeds) = (guard.len() + updates.len()).checked_sub(limit + 1) {
+            if let Some(exceeds) = (state.updates.len() + updates.len()).checked_sub(limit + 1) {
                 let exceeds = exceeds + 1;
                 let now = Instant::now();
-                let mut warn_guard = self
-                    .0
-                    .last_update_limit_warn
-                    .lock("client.extend_update_queue");
-                let notify = match *warn_guard {
+                let notify = match state.last_update_limit_warn {
                     None => true,
                     Some(instant) => now - instant > UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN,
                 };
@@ -239,11 +229,11 @@ impl Client {
                     );
                 }
 
-                *warn_guard = Some(now);
+                state.last_update_limit_warn = Some(now);
             }
         }
 
-        guard.extend(
+        state.updates.extend(
             updates
                 .into_iter()
                 .flat_map(|u| Update::new(self, u, &chat_map)),
@@ -252,12 +242,11 @@ impl Client {
 
     /// Synchronize the updates state to the session.
     pub fn sync_update_state(&self) {
-        self.0.config.session.set_state(
-            self.0
-                .message_box
-                .lock("client.sync_update_state")
-                .session_state(),
-        );
+        let state = self.0.state.read().unwrap();
+        self.0
+            .config
+            .session
+            .set_state(state.message_box.session_state());
     }
 }
 

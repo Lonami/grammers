@@ -25,7 +25,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
-use grammers_tl_types::{deserialize, serialize, Deserializable, Identifiable, Serializable};
+use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
 
 pub struct Session {
     session: Mutex<types::Session>,

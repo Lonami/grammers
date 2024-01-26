@@ -80,17 +80,18 @@ pub(crate) fn parse_mention_entities(
     mut entities: Vec<tl::enums::MessageEntity>,
 ) -> Option<Vec<tl::enums::MessageEntity>> {
     if entities.is_empty() {
-        None
-    } else {
-        for entitie in entities.iter_mut() {
-            if let tl::enums::MessageEntity::MentionName(mention_name) = entitie {
-                if let Some(packed_user) = client
-                    .0
-                    .chat_hashes
-                    .lock("messages.parse_mention_entities")
-                    .get(mention_name.user_id)
-                {
-                    *entitie = tl::types::InputMessageEntityMentionName {
+        return None;
+    }
+
+    if entities
+        .iter()
+        .any(|e| matches!(e, tl::enums::MessageEntity::MentionName(_)))
+    {
+        let state = client.0.state.read().unwrap();
+        for entity in entities.iter_mut() {
+            if let tl::enums::MessageEntity::MentionName(mention_name) = entity {
+                if let Some(packed_user) = state.chat_hashes.get(mention_name.user_id) {
+                    *entity = tl::types::InputMessageEntityMentionName {
                         offset: mention_name.offset,
                         length: mention_name.length,
                         user_id: packed_user.to_input_user_lossy(),
@@ -99,9 +100,9 @@ pub(crate) fn parse_mention_entities(
                 }
             }
         }
-
-        Some(entities)
     }
+
+    Some(entities)
 }
 
 const MAX_LIMIT: usize = 100;
@@ -160,10 +161,11 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let mut chat_hashes = self.client.0.chat_hashes.lock("iter_messages");
-        // Telegram can return peers without hash (e.g. Users with 'min: true')
-        let _ = chat_hashes.extend(&users, &chats);
-        drop(chat_hashes);
+        {
+            let mut state = self.client.0.state.write().unwrap();
+            // Telegram can return peers without hash (e.g. Users with 'min: true')
+            let _ = state.chat_hashes.extend(&users, &chats);
+        }
 
         let chats = ChatMap::new(users, chats);
 
@@ -251,6 +253,8 @@ impl SearchIter {
                 peer: peer.to_input_peer(),
                 q: String::new(),
                 from_id: None,
+                saved_peer_id: None,
+                saved_reaction: None,
                 top_msg_id: None,
                 filter: tl::enums::MessagesFilter::InputMessagesFilterEmpty,
                 min_date: 0,
@@ -477,8 +481,17 @@ impl Client {
                 background: message.background,
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
-                reply_to_msg_id: message.reply_to,
-                top_msg_id: None,
+                reply_to: message.reply_to.map(|reply_to_msg_id| {
+                    tl::types::InputReplyToMessage {
+                        reply_to_msg_id,
+                        top_msg_id: None,
+                        reply_to_peer_id: None,
+                        quote_text: None,
+                        quote_entities: None,
+                        quote_offset: None,
+                    }
+                    .into()
+                }),
                 media,
                 message: message.text.clone(),
                 random_id,
@@ -488,6 +501,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
+                invert_media: false,
             })
             .await
         } else {
@@ -497,8 +511,17 @@ impl Client {
                 background: message.background,
                 clear_draft: message.clear_draft,
                 peer: chat.to_input_peer(),
-                reply_to_msg_id: message.reply_to,
-                top_msg_id: None,
+                reply_to: message.reply_to.map(|reply_to_msg_id| {
+                    tl::types::InputReplyToMessage {
+                        reply_to_msg_id,
+                        top_msg_id: None,
+                        reply_to_peer_id: None,
+                        quote_text: None,
+                        quote_entities: None,
+                        quote_offset: None,
+                    }
+                    .into()
+                }),
                 message: message.text.clone(),
                 random_id,
                 reply_markup: message.reply_markup.clone(),
@@ -507,6 +530,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
+                invert_media: false,
             })
             .await
         }?;
@@ -551,6 +575,7 @@ impl Client {
         let entities = parse_mention_entities(self, new_message.entities);
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
+            invert_media: false,
             peer: chat.into().to_input_peer(),
             id: message_id,
             message: Some(new_message.text),

@@ -1,6 +1,6 @@
 [package]
 name = "grammers-tl-types"
-version = "0.4.0"
+version = "0.5.1"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -19,11 +19,11 @@ include = [
 ]
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.4.1" }
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.0" }
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.5.1" }
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.1" }
 
 [dev-dependencies]
-toml = "0.7.6"
+toml = "0.8.8"
 
 [features]
 default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]

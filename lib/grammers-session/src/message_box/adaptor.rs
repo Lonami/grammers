@@ -58,6 +58,7 @@ pub(super) fn update_short_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                invert_media: false,
                 reactions: None,
                 id: short.id,
                 from_id: Some(
@@ -70,6 +71,7 @@ pub(super) fn update_short_message(
                     chat_id: short.user_id,
                 }
                 .into(),
+                saved_peer_id: None,
                 fwd_from: short.fwd_from,
                 via_bot_id: short.via_bot_id,
                 reply_to: short.reply_to,
@@ -112,6 +114,7 @@ pub(super) fn update_short_chat_message(
                 edit_hide: false,
                 pinned: false,
                 noforwards: false,
+                invert_media: false,
                 reactions: None,
                 id: short.id,
                 from_id: Some(
@@ -124,6 +127,7 @@ pub(super) fn update_short_chat_message(
                     chat_id: short.chat_id,
                 }
                 .into(),
+                saved_peer_id: None,
                 fwd_from: short.fwd_from,
                 via_bot_id: short.via_bot_id,
                 reply_to: short.reply_to,
@@ -266,6 +270,7 @@ impl PtsInfo {
             ChatParticipants(_) => None,
             UserStatus(_) => None,
             UserName(_) => None,
+            NewAuthorization(_) => None,
             NewEncryptedMessage(u) => Some(Self {
                 pts: u.qts,
                 pts_count: 1,
@@ -465,6 +470,31 @@ impl PtsInfo {
             User(_) => None,
             AutoSaveSettings => None,
             GroupInvitePrivacyForbidden(_) => None,
+            Story(_) => None,
+            ReadStories(_) => None,
+            StoryId(_) => None,
+            StoriesStealthMode(_) => None,
+            SentStoryReaction(_) => None,
+            BotChatBoost(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            ChannelViewForumAsMessages(_) => None,
+            PeerWallpaper(_) => None,
+            BotMessageReaction(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            BotMessageReactions(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 0,
+                entry: Entry::SecretChats,
+            }),
+            SavedDialogPinned(_) => None,
+            PinnedSavedDialogs(_) => None,
+            SavedReactionTags => None,
         }
         .filter(|info| info.pts != NO_PTS)
     }

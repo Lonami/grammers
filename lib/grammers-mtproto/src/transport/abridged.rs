@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Error, Transport};
-use bytes::{BufMut, BytesMut};
+use super::{Error, Transport, UnpackedOffset};
+use grammers_crypto::RingBuffer;
 
 /// The lightest MTProto transport protocol available. This is an
 /// implementation of the [abridged transport].
@@ -46,56 +46,57 @@ impl Abridged {
 }
 
 impl Transport for Abridged {
-    fn pack(&mut self, input: &[u8], output: &mut BytesMut) {
-        assert_eq!(input.len() % 4, 0);
+    fn pack(&mut self, buffer: &mut RingBuffer<u8>) {
+        let len = buffer.len();
+        assert_eq!(len % 4, 0);
 
-        if !self.init {
-            output.put_u8(0xef);
-            self.init = true;
+        let len = len / 4;
+        if len < 127 {
+            buffer.shift(1).extend([len as u8]);
+        } else {
+            buffer
+                .shift(4)
+                .extend((0x7f | ((len as u32) << 8)).to_le_bytes());
         }
 
-        let len = input.len() / 4;
-        if len < 127 {
-            output.put_u8(len as u8);
-            output.put(input);
-        } else {
-            output.put_u8(0x7f);
-            output.put_uint_le(len as _, 3);
-            output.put(input);
+        if !self.init {
+            buffer.shift(1).extend([0xef]);
+            self.init = true;
         }
     }
 
-    fn unpack(&mut self, input: &[u8], output: &mut BytesMut) -> Result<usize, Error> {
-        if input.is_empty() {
+    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error> {
+        if buffer.is_empty() {
             return Err(Error::MissingBytes);
         }
 
         let header_len;
-        let len = input[0];
+        let len = buffer[0];
         let len = if len < 127 {
             header_len = 1;
             len as i32
         } else {
-            if input.len() < 4 {
+            if buffer.len() < 4 {
                 return Err(Error::MissingBytes);
             }
 
             header_len = 4;
-            let mut len = [0; 4];
-            len[..3].copy_from_slice(&input[1..4]);
-            i32::from_le_bytes(len)
+            i32::from_le_bytes(buffer[0..4].try_into().unwrap()) >> 8
         };
 
         let len = len * 4;
-        if (input.len() as i32) < header_len + len {
+        if (buffer.len() as i32) < header_len + len {
             return Err(Error::MissingBytes);
         }
 
         let header_len = header_len as usize;
         let len = len as usize;
 
-        output.put(&input[header_len..header_len + len]);
-        Ok(header_len + len)
+        Ok(UnpackedOffset {
+            data_start: header_len,
+            data_end: header_len + len,
+            next_offset: header_len + len,
+        })
     }
 
     fn reset(&mut self) {
@@ -107,84 +108,93 @@ impl Transport for Abridged {
 mod tests {
     use super::*;
 
-    /// Returns a new abridged transport, `n` bytes of input data for it, and an empty output buffer.
-    fn setup_pack(n: u32) -> (Abridged, Vec<u8>, BytesMut) {
-        let input = (0..n).map(|x| (x & 0xff) as u8).collect();
-        (Abridged::new(), input, BytesMut::new())
+    /// Returns a new abridged transport, and `n` bytes of input data for it.
+    fn setup_pack(n: usize) -> (Abridged, RingBuffer<u8>) {
+        let mut buffer = RingBuffer::with_capacity(n, 0);
+        buffer.extend((0..n).map(|x| (x & 0xff) as u8));
+        (Abridged::new(), buffer)
     }
 
     #[test]
     fn pack_empty() {
-        let (mut transport, input, mut output) = setup_pack(0);
-        transport.pack(&input, &mut output);
-        assert_eq!(&output[..], &[0xef, 0]);
+        let (mut transport, mut buffer) = setup_pack(0);
+        transport.pack(&mut buffer);
+        assert_eq!(&buffer[..], &[0xef, 0]);
     }
 
     #[test]
     #[should_panic]
     fn pack_non_padded() {
-        let (mut transport, input, mut output) = setup_pack(7);
-        transport.pack(&input, &mut output);
+        let (mut transport, mut buffer) = setup_pack(7);
+        transport.pack(&mut buffer);
     }
 
     #[test]
     fn pack_normal() {
-        let (mut transport, input, mut output) = setup_pack(128);
-        transport.pack(&input, &mut output);
-        assert_eq!(&output[..2], &[0xef, 32]);
-        assert_eq!(&output[2..output.len()], &input[..]);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        assert_eq!(&buffer[..2], &[0xef, 32]);
+        assert_eq!(&buffer[2..], &orig[..]);
     }
 
     #[test]
     fn pack_large() {
-        let (mut transport, input, mut output) = setup_pack(1024);
-        transport.pack(&input, &mut output);
-        assert_eq!(&output[..5], &[0xef, 127, 0, 1, 0]);
-        assert_eq!(&output[5..], &input[..]);
+        let (mut transport, mut buffer) = setup_pack(1024);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        assert_eq!(&buffer[..5], &[0xef, 127, 0, 1, 0]);
+        assert_eq!(&buffer[5..], &orig[..]);
     }
 
     #[test]
     fn unpack_small() {
         let mut transport = Abridged::new();
-        let input = [1];
-        let mut output = BytesMut::new();
-        assert_eq!(
-            transport.unpack(&input, &mut output),
-            Err(Error::MissingBytes)
-        );
+        let mut buffer = RingBuffer::with_capacity(1, 0);
+        buffer.extend([1]);
+        assert_eq!(transport.unpack(&buffer[..]), Err(Error::MissingBytes));
     }
 
     #[test]
     fn unpack_normal() {
-        let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = BytesMut::new();
-        transport.pack(&input, &mut packed);
-        transport.unpack(&packed[1..], &mut unpacked).unwrap();
-        assert_eq!(input, unpacked);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        buffer.skip(1); // init byte
+        let offset = transport.unpack(&buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
     #[test]
     fn unpack_two_at_once() {
-        let (mut transport, input, mut packed) = setup_pack(128);
-        let mut unpacked = BytesMut::new();
-        transport.pack(&input, &mut packed);
-        let two_input = packed
-            .iter()
-            .copied()
-            .skip(1)
-            .chain(packed.iter().copied().skip(1))
-            .collect::<Vec<_>>();
-        let n = transport.unpack(&two_input, &mut unpacked).unwrap();
-        assert_eq!(input, unpacked);
-        assert_eq!(n, packed.len() - 1);
+        let (mut transport, mut buffer) = setup_pack(128);
+        let orig = buffer.clone();
+
+        let mut two_buffer = RingBuffer::with_capacity(0, 0);
+        transport.pack(&mut buffer);
+        two_buffer.extend(&buffer[1..]); // init byte
+        let single_size = two_buffer.len();
+
+        buffer = orig.clone();
+        transport.pack(&mut buffer);
+        two_buffer.extend(&buffer[..]);
+
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(offset.next_offset, single_size);
+
+        two_buffer.skip(offset.next_offset);
+        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
     #[test]
     fn unpack_large() {
-        let (mut transport, input, mut packed) = setup_pack(1024);
-        let mut unpacked = BytesMut::new();
-        transport.pack(&input, &mut packed);
-        transport.unpack(&packed[1..], &mut unpacked).unwrap();
-        assert_eq!(input, unpacked);
+        let (mut transport, mut buffer) = setup_pack(1024);
+        let orig = buffer.clone();
+        transport.pack(&mut buffer);
+        buffer.skip(1); // init byte
+        let offset = transport.unpack(&buffer[..]).unwrap();
+        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 }
