@@ -52,9 +52,9 @@ pub fn factorize(pq: u64) -> (u64, u64) {
     }
 
     // Random values in the range of 1..pq, chosen by fair dice roll.
-    let mut y = pq / 4;
-    let c = 2 * pq / 4;
-    let m = 3 * pq / 4;
+    let mut y = 3 * (pq / 7);
+    let c = 5 * (pq / 11);
+    let m = 7 * (pq / 13);
     let mut g = 1u128;
     let mut r = 1u128;
     let mut q = 1u128;
@@ -110,5 +110,11 @@ mod tests {
     fn test_factorization_2() {
         let pq = factorize(2363612107535801713);
         assert_eq!(pq, (1518968219, 1556064227));
+    }
+
+    #[test]
+    fn test_factorization_3() {
+        let pq = factorize(2804275833720261793);
+        assert_eq!(pq, (1555252417, 1803100129));
     }
 }

@@ -172,6 +172,12 @@ impl Client {
                 }
             }
         }
+        if downloadable.to_input_location().is_none() {
+            return Err(io::Error::new(
+                io::ErrorKind::Other,
+                "media not downloadable",
+            ));
+        }
 
         let mut download = self.iter_download(downloadable);
         Client::load(path, &mut download).await
