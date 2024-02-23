@@ -319,15 +319,13 @@ impl Document {
     }
 
     /// Duration of video/audio, in seconds
-    pub fn duration(&self) -> Option<i32> {
+    pub fn duration(&self) -> Option<f64> {
         match self.document.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     match attr {
-                        tl::enums::DocumentAttribute::Video(v) => {
-                            return Some(v.duration.min(i32::MAX as _) as i32)
-                        }
-                        tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration),
+                        tl::enums::DocumentAttribute::Video(v) => return Some(v.duration),
+                        tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration as _),
                         _ => {}
                     }
                 }
