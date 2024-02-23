@@ -325,7 +325,7 @@ impl Document {
                 for attr in &d.attributes {
                     match attr {
                         tl::enums::DocumentAttribute::Video(v) => {
-                            return Some(v.duration.max(i32::MAX as _) as i32)
+                            return Some(v.duration.min(i32::MAX as _) as i32)
                         }
                         tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration),
                         _ => {}
