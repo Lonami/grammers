@@ -15,7 +15,7 @@ edition = "2021"
 
 [dependencies]
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1" }
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
+grammers-crypto = { path = "../grammers-crypto", version = "0.6.0" }
 log = "0.4.20"
 
 [build-dependencies]

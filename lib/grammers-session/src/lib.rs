@@ -165,6 +165,7 @@ impl Session {
             .collect()
     }
 
+    #[must_use]
     pub fn save(&self) -> Vec<u8> {
         enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
     }

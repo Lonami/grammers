@@ -25,7 +25,7 @@ chrono = "0.4.31"
 futures-util = { version = "0.3.15", default_features = false, features = [
     "alloc"
 ] }
-grammers-crypto = { path = "../grammers-crypto", version = "0.5.1" }
+grammers-crypto = { path = "../grammers-crypto", version = "0.6.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.5.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.5.0" }
 grammers-session = { path = "../grammers-session", version = "0.5.1" }
