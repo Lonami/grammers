@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::utils;
+use chrono::{DateTime, Utc};
 use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -133,7 +134,7 @@ impl Restrictions {
         self.0.pin_messages
     }
 
-    pub fn due(&self) -> utils::Date {
+    pub fn due(&self) -> DateTime<Utc> {
         utils::date(self.0.until_date)
     }
 }

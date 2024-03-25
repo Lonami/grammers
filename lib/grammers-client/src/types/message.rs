@@ -11,6 +11,7 @@ use crate::types::{Downloadable, InputMessage, Media, Photo};
 use crate::utils;
 use crate::ChatMap;
 use crate::{types, Client};
+use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
@@ -277,7 +278,7 @@ impl Message {
     }
 
     /// The date when this message was produced.
-    pub fn date(&self) -> utils::Date {
+    pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.msg.date)
     }
 
@@ -391,7 +392,7 @@ impl Message {
     }
 
     /// The date when this message was last edited.
-    pub fn edit_date(&self) -> Option<utils::Date> {
+    pub fn edit_date(&self) -> Option<DateTime<Utc>> {
         self.msg.edit_date.map(utils::date)
     }
 
