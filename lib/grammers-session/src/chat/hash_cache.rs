@@ -367,6 +367,12 @@ impl ChatHashCache {
                 U::SavedDialogPinned(u) => self.has_dialog_peer(&u.peer),
                 U::PinnedSavedDialogs(_) => true,
                 U::SavedReactionTags => true,
+                U::SmsJob(_) => true,
+                U::QuickReplies(_) => true,
+                U::NewQuickReply(_) => true,
+                U::DeleteQuickReply(_) => true,
+                U::QuickReplyMessage(u) => self.extend_from_message(&u.message),
+                U::DeleteQuickReplyMessages(_) => true,
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
@@ -414,7 +420,7 @@ impl ChatHashCache {
                             Some(p) => self.has_peer(p),
                             None => true,
                         },
-                        Some(MRH::MessageReplyStoryHeader(r)) => self.has(r.user_id),
+                        Some(MRH::MessageReplyStoryHeader(r)) => self.has_peer(&r.peer),
                         None => true,
                     }
                     && match &m.reply_markup {
@@ -499,7 +505,7 @@ impl ChatHashCache {
                             Some(p) => self.has_peer(p),
                             None => true,
                         },
-                        Some(MRH::MessageReplyStoryHeader(r)) => self.has(r.user_id),
+                        Some(MRH::MessageReplyStoryHeader(r)) => self.has_peer(&r.peer),
                         None => true,
                     }
                     && match &m.action {
@@ -549,6 +555,7 @@ impl ChatHashCache {
                         },
                         MA::GiveawayLaunch => true,
                         MA::GiveawayResults(_) => true,
+                        MA::BoostApply(_) => true,
                     }
             }
         }
