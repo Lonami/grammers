@@ -60,6 +60,9 @@ fn map_random_ids_to_messages(
                         message,
                         ..
                     }) => Some(message),
+                    tl::enums::Update::NewScheduledMessage(
+                        tl::types::UpdateNewScheduledMessage { message, .. },
+                    ) => Some(message),
                     _ => None,
                 })
                 .filter_map(|message| Message::new(client, message, &chats))

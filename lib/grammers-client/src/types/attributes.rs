@@ -44,7 +44,7 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
                 waveform: None,
             }),
             Voice { duration, waveform } => Self::Audio(tl::types::DocumentAttributeAudio {
-                voice: false,
+                voice: true,
                 duration: duration.as_secs().try_into().unwrap(),
                 title: None,
                 performer: None,

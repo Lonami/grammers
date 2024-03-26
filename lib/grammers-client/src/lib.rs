@@ -37,7 +37,10 @@
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
 pub mod client;
+#[cfg(not(feature = "unstable_raw"))]
 mod parsers;
+#[cfg(feature = "unstable_raw")]
+pub mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
