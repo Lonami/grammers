@@ -7,7 +7,8 @@
 // except according to those terms.
 #![cfg(any(feature = "markdown", feature = "html"))]
 use grammers_tl_types as tl;
-use std::borrow::Cow;
+use std::cmp::Ordering;
+use std::fmt::{self, Write as _};
 
 #[cfg(feature = "html")]
 const CODE_LANG_PREFIX: &str = "language-";
@@ -168,6 +169,90 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
     (text, entities)
 }
 
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
+enum Edge {
+    After,
+    Before,
+}
+
+#[derive(Debug, PartialEq, Eq)]
+struct Position {
+    offset: i32,
+    edge: Edge,
+    index: usize,
+    part: u8,
+}
+
+#[derive(Debug)]
+enum Segment<'a> {
+    Fixed(&'static str),
+    String(&'a str),
+    Number(i64),
+}
+
+impl<'a> Segment<'a> {
+    fn len(&self) -> usize {
+        match self {
+            Self::Fixed(s) => s.len(),
+            Self::String(s) => s.len(),
+            Self::Number(n) => {
+                let minus_sign = if *n < 0 { 1 } else { 0 };
+                let digits = n.abs().ilog10() as usize + 1;
+                minus_sign + digits
+            }
+        }
+    }
+}
+
+impl<'a> fmt::Display for Segment<'a> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Fixed(s) => f.write_str(s),
+            Self::String(s) => f.write_str(s),
+            Self::Number(s) => write!(f, "{}", s),
+        }
+    }
+}
+
+impl Ord for Position {
+    fn cmp(&self, other: &Self) -> Ordering {
+        self.offset
+            .cmp(&other.offset)
+            .then_with(|| self.edge.cmp(&other.edge))
+            .then_with(|| match self.edge {
+                Edge::Before => self.index.cmp(&other.index),
+                Edge::After => other.index.cmp(&self.index),
+            })
+            .then_with(|| self.part.cmp(&other.part))
+    }
+}
+
+impl PartialOrd for Position {
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[inline(always)]
+fn before(index: usize, part: u8, offset: i32) -> Position {
+    Position {
+        index,
+        offset,
+        edge: Edge::Before,
+        part,
+    }
+}
+
+#[inline(always)]
+fn after(index: usize, part: u8, offset: i32) -> Position {
+    Position {
+        index,
+        offset,
+        edge: Edge::After,
+        part,
+    }
+}
+
 #[cfg(feature = "markdown")]
 pub fn generate_markdown_message(message: &str, entities: &[tl::enums::MessageEntity]) -> String {
     // Getting this wrong isn't the end of the world so the wildcard pattern is used
@@ -179,62 +264,78 @@ pub fn generate_markdown_message(message: &str, entities: &[tl::enums::MessageEn
                 ME::Bold(_) => 2,
                 ME::Italic(_) => 2,
                 ME::Code(_) => 2,
-                ME::Pre(_) => 2,
-                ME::TextUrl(_) => 2,
-                ME::MentionName(_) => 2,
+                ME::Pre(e) => {
+                    if e.language.is_empty() {
+                        2
+                    } else {
+                        4
+                    }
+                }
+                ME::TextUrl(_) => 4,
+                ME::MentionName(_) => 4,
                 _ => 0,
             })
             .sum(),
     );
-
     use tl::enums::MessageEntity as ME;
-    entities.iter().for_each(|entity| match entity {
-        ME::Unknown(_) => {}
-        ME::Mention(_) => {}
-        ME::Hashtag(_) => {}
-        ME::BotCommand(_) => {}
-        ME::Url(_) => {}
-        ME::Email(_) => {}
-        ME::Bold(e) => {
-            insertions.push((e.offset, Cow::Borrowed("**")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("**")));
-        }
-        ME::Italic(e) => {
-            insertions.push((e.offset, Cow::Borrowed("_")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("_")));
-        }
-        ME::Code(e) => {
-            insertions.push((e.offset, Cow::Borrowed("`")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("`")));
-        }
-        ME::Pre(e) => {
-            // Both this and URLs could be improved by having a custom Insertion with prefix,
-            // formatted and suffix values separatedly. Or perhaps it's possible to use a
-            // formatter into our buffer directly.
-            insertions.push((e.offset, Cow::Owned(format!("```{}\n", e.language))));
-            insertions.push((e.offset + e.length, Cow::Borrowed("```\n")));
-        }
-        ME::TextUrl(e) => {
-            insertions.push((e.offset, Cow::Borrowed("[")));
-            insertions.push((e.offset + e.length, Cow::Owned(format!("]({})", e.url))));
-        }
-        ME::MentionName(e) => {
-            insertions.push((e.offset, Cow::Borrowed("[")));
-            insertions.push((
-                e.offset + e.length,
-                Cow::Owned(format!("]({}{})", MENTION_URL_PREFIX, e.user_id)),
-            ));
-        }
-        ME::InputMessageEntityMentionName(_) => {}
-        ME::Phone(_) => {}
-        ME::Cashtag(_) => {}
-        ME::Underline(_) => {}
-        ME::Strike(_) => {}
-        ME::Blockquote(_) => {}
-        ME::BankCard(_) => {}
-        ME::Spoiler(_) => {}
-        ME::CustomEmoji(_) => {}
-    });
+    entities
+        .iter()
+        .enumerate()
+        .for_each(|(i, entity)| match entity {
+            ME::Unknown(_) => {}
+            ME::Mention(_) => {}
+            ME::Hashtag(_) => {}
+            ME::BotCommand(_) => {}
+            ME::Url(_) => {}
+            ME::Email(_) => {}
+            ME::Bold(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("**")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("**")));
+            }
+            ME::Italic(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("_")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("_")));
+            }
+            ME::Code(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("`")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("`")));
+            }
+            ME::Pre(e) => {
+                if e.language.is_empty() {
+                    insertions.push((before(i, 0, e.offset), Segment::Fixed("```\n")));
+                    insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("```\n")));
+                } else {
+                    insertions.push((before(i, 0, e.offset), Segment::Fixed("```")));
+                    insertions.push((before(i, 1, e.offset), Segment::String(&e.language)));
+                    insertions.push((before(i, 2, e.offset), Segment::Fixed("\n")));
+                    insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("```\n")));
+                }
+            }
+            ME::TextUrl(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("[")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("](")));
+                insertions.push((after(i, 1, e.offset + e.length), Segment::String(&e.url)));
+                insertions.push((after(i, 2, e.offset + e.length), Segment::Fixed(")")));
+            }
+            ME::MentionName(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("[")));
+                insertions.push((
+                    after(i, 0, e.offset + e.length),
+                    Segment::Fixed("](tg://user?id="),
+                ));
+                insertions.push((after(i, 1, e.offset + e.length), Segment::Number(e.user_id)));
+                insertions.push((after(i, 2, e.offset + e.length), Segment::Fixed(")")));
+            }
+            ME::InputMessageEntityMentionName(_) => {}
+            ME::Phone(_) => {}
+            ME::Cashtag(_) => {}
+            ME::Underline(_) => {}
+            ME::Strike(_) => {}
+            ME::Blockquote(_) => {}
+            ME::BankCard(_) => {}
+            ME::Spoiler(_) => {}
+            ME::CustomEmoji(_) => {}
+        });
 
     inject_into_message(message, insertions)
 }
@@ -428,9 +529,15 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
                 ME::Bold(_) => 2,
                 ME::Italic(_) => 2,
                 ME::Code(_) => 2,
-                ME::Pre(_) => 2,
-                ME::TextUrl(_) => 2,
-                ME::MentionName(_) => 2,
+                ME::Pre(e) => {
+                    if e.language.is_empty() {
+                        2
+                    } else {
+                        4
+                    }
+                }
+                ME::TextUrl(_) => 4,
+                ME::MentionName(_) => 4,
                 ME::Underline(_) => 2,
                 ME::Strike(_) => 2,
                 ME::Blockquote(_) => 2,
@@ -440,106 +547,112 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
             .sum(),
     );
 
-    entities.iter().for_each(|entity| match entity {
-        ME::Unknown(_) => {}
-        ME::Mention(_) => {}
-        ME::Hashtag(_) => {}
-        ME::BotCommand(_) => {}
-        ME::Url(_) => {}
-        ME::Email(_) => {}
-        ME::Bold(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<b>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</b>")));
-        }
-        ME::Italic(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<i>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</i>")));
-        }
-        ME::Code(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<code>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</code>")));
-        }
-        ME::Pre(e) => {
-            // See markdown implementation: this could be more efficient.
-            if e.language.is_empty() {
-                insertions.push((e.offset, Cow::Borrowed("<pre>")));
-                insertions.push((e.offset + e.length, Cow::Borrowed("</pre>")));
-            } else {
-                insertions.push((
-                    e.offset,
-                    Cow::Owned(format!(
-                        "<pre><code class=\"{}{}\">",
-                        CODE_LANG_PREFIX, e.language
-                    )),
-                ));
-                insertions.push((e.offset + e.length, Cow::Borrowed("</code></pre>")));
+    entities
+        .iter()
+        .enumerate()
+        .for_each(|(i, entity)| match entity {
+            ME::Unknown(_) => {}
+            ME::Mention(_) => {}
+            ME::Hashtag(_) => {}
+            ME::BotCommand(_) => {}
+            ME::Url(_) => {}
+            ME::Email(_) => {}
+            ME::Bold(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<b>")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</b>")));
             }
-        }
-        ME::TextUrl(e) => {
-            insertions.push((e.offset, Cow::Owned(format!("<a href=\"{}\">", e.url))));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</a>")));
-        }
-        ME::MentionName(e) => {
-            insertions.push((
-                e.offset,
-                Cow::Owned(format!("<a href=\"{}{}\">", MENTION_URL_PREFIX, e.user_id)),
-            ));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</a>")));
-        }
-        ME::InputMessageEntityMentionName(_) => {}
-        ME::Phone(_) => {}
-        ME::Cashtag(_) => {}
-        ME::Underline(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<u>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</u>")));
-        }
-        ME::Strike(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<del>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</del>")));
-        }
-        ME::Blockquote(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<blockquote>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</blockquote>")));
-        }
-        ME::BankCard(_) => {}
-        ME::Spoiler(e) => {
-            insertions.push((e.offset, Cow::Borrowed("<details>")));
-            insertions.push((e.offset + e.length, Cow::Borrowed("</details>")));
-        }
-        ME::CustomEmoji(_) => {}
-    });
+            ME::Italic(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<i>")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</i>")));
+            }
+            ME::Code(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<code>")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</code>")));
+            }
+            ME::Pre(e) => {
+                if e.language.is_empty() {
+                    insertions.push((before(i, 0, e.offset), Segment::Fixed("<pre>")));
+                    insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</pre>")));
+                } else {
+                    insertions.push((
+                        before(i, 0, e.offset),
+                        Segment::Fixed("<pre><code class=\"language-"),
+                    ));
+                    insertions.push((before(i, 1, e.offset), Segment::String(&e.language)));
+                    insertions.push((before(i, 2, e.offset), Segment::Fixed("\">")));
+                    insertions.push((
+                        after(i, 0, e.offset + e.length),
+                        Segment::Fixed("</code></pre>"),
+                    ));
+                }
+            }
+            ME::TextUrl(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<a href=\"")));
+                insertions.push((before(i, 1, e.offset), Segment::String(&e.url)));
+                insertions.push((before(i, 2, e.offset), Segment::Fixed("\">")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</a>")));
+            }
+            ME::MentionName(e) => {
+                insertions.push((
+                    before(i, 0, e.offset),
+                    Segment::Fixed("<a href=\"tg://user?id="),
+                ));
+                insertions.push((before(i, 1, e.offset), Segment::Number(e.user_id)));
+                insertions.push((before(i, 2, e.offset), Segment::Fixed("\">")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</a>")));
+            }
+            ME::InputMessageEntityMentionName(_) => {}
+            ME::Phone(_) => {}
+            ME::Cashtag(_) => {}
+            ME::Underline(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<u>")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</u>")));
+            }
+            ME::Strike(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<del>")));
+                insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</del>")));
+            }
+            ME::Blockquote(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<blockquote>")));
+                insertions.push((
+                    after(i, 0, e.offset + e.length),
+                    Segment::Fixed("</blockquote>"),
+                ));
+            }
+            ME::BankCard(_) => {}
+            ME::Spoiler(e) => {
+                insertions.push((before(i, 0, e.offset), Segment::Fixed("<details>")));
+                insertions.push((
+                    after(i, 0, e.offset + e.length),
+                    Segment::Fixed("</details>"),
+                ));
+            }
+            ME::CustomEmoji(_) => {}
+        });
 
     inject_into_message(message, insertions)
 }
 
-fn inject_into_message(message: &str, mut insertions: Vec<(i32, Cow<str>)>) -> String {
-    // Allocate exactly as much as needed, then walk through the message string
-    // and insertions in order, without inserting in the middle of a UTF-8 encoded
-    // character or UTF-16 pairs.
-    //
-    // Insertion offset could probably be avoided by walking the strings in reverse,
-    // but that complicates things even more.
-    let mut result =
-        vec![0; message.len() + insertions.iter().map(|(_, what)| what.len()).sum::<usize>()];
+fn inject_into_message(message: &str, mut insertions: Vec<(Position, Segment)>) -> String {
+    // Allocate exactly as much as needed, then walk through the UTF-16-encoded message,
+    // applying insertions at the exact position they occur.
+    let mut result = String::with_capacity(
+        message.len() + insertions.iter().map(|(_, what)| what.len()).sum::<usize>(),
+    );
 
-    insertions.sort_by_key(|(at, _)| -*at);
+    insertions.sort_unstable_by(|(a, _), (b, _)| b.cmp(a)); // sort in reverse so we can pop
 
-    let mut index = 0usize; // current index into the result
-    let mut tg_index = 0usize; // current index as seen by telegram
-    let mut tg_ins_offset = 0usize; // offset introduced by previous insertions as seen by telegram
+    let mut char_buffer = [0u8; 4]; // temporary storage to re-encode chars as utf-8
     let mut prev_point = None; // temporary storage for utf-16 surrogate pairs
-    let mut insertion = insertions.pop(); // next insertion to apply
 
-    for point in message.encode_utf16() {
-        if let Some((at, what)) = &insertion {
-            let at = *at as usize;
-            debug_assert!(at + tg_ins_offset >= tg_index, "insertion left behind");
-            if at + tg_ins_offset == tg_index {
-                result[index..index + what.len()].copy_from_slice(what.as_bytes());
-                index += what.len();
-                tg_index += telegram_string_len(&what) as usize;
-                tg_ins_offset += telegram_string_len(&what) as usize;
-                insertion = insertions.pop();
+    for (index, point) in message.encode_utf16().enumerate() {
+        loop {
+            match insertions.last() {
+                Some((at, what)) if at.offset as usize == index => {
+                    write!(result, "{}", what).unwrap();
+                    insertions.pop();
+                }
+                _ => break,
             }
         }
 
@@ -553,28 +666,19 @@ fn inject_into_message(message: &str, mut insertions: Vec<(i32, Cow<str>)>) -> S
                 Ok(c) => c,
                 Err(unpaired) => {
                     prev_point = Some(unpaired.unpaired_surrogate());
-                    tg_index += 1;
                     continue;
                 }
             }
         };
 
-        index += c.encode_utf8(&mut result[index..]).len();
-        tg_index += 1;
+        result.push_str(c.encode_utf8(&mut char_buffer));
     }
 
-    if let Some(ins) = insertion {
-        insertions.push(ins);
-    }
     while let Some((_, what)) = insertions.pop() {
-        // The remaining insertion offsets are assumed to be correct at the end.
-        // Even if they were not, they couldn't really skip past the source message,
-        // which has already reached the end.
-        result[index..index + what.len()].copy_from_slice(what.as_bytes());
-        index += what.len();
+        write!(result, "{}", what).unwrap();
     }
 
-    String::from_utf8(result).unwrap()
+    result
 }
 
 #[cfg(all(test, feature = "markdown"))]
@@ -722,6 +826,14 @@ mod markdown_tests {
         let markdown = "Some **bold 🤷🏽‍♀️**, _italics_, inline `🤷🏽‍♀️ code`, \
         a\n\n```rust\npre\n```\nblock, a [**link**](https://example.com), and \
         [mentions](tg://user?id=12345678)";
+        let (text, entities) = parse_markdown_message(markdown);
+        let generated = generate_markdown_message(&text, &entities);
+        assert_eq!(generated, markdown);
+    }
+
+    #[test]
+    fn parse_then_unparse_overlapping() {
+        let markdown = "_a_[**b**](https://example.com)`c`";
         let (text, entities) = parse_markdown_message(markdown);
         let generated = generate_markdown_message(&text, &entities);
         assert_eq!(generated, markdown);
@@ -943,5 +1055,13 @@ mod html_tests {
         let (text, entities) = parse_html_message(html);
         let generated = generate_html_message(&text, &entities);
         assert_eq!(generated, html);
+    }
+
+    #[test]
+    fn parse_then_unparse_overlapping() {
+        let markdown = "<i>a</i><a href=\"https://example.com\"><b>b</b></a><code>c</code>";
+        let (text, entities) = parse_html_message(markdown);
+        let generated = generate_html_message(&text, &entities);
+        assert_eq!(generated, markdown);
     }
 }
