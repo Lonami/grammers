@@ -10,7 +10,7 @@
 use super::common::{
     after, before, inject_into_message, telegram_string_len, Segment, MENTION_URL_PREFIX,
 };
-use crate::{push_entity, update_entity_len};
+use crate::update_entity_len;
 use grammers_tl_types as tl;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag};
 
@@ -19,6 +19,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
     let mut entities = Vec::new();
 
     let mut offset = 0;
+    let length = 0;
     Parser::new(message).for_each(|event| match event {
         // text
         Event::Text(string) => {
@@ -36,34 +37,48 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
 
         // **bold text**
         Event::Start(Tag::Strong) => {
-            push_entity!(MessageEntityBold(offset) => entities);
+            entities.push(tl::types::MessageEntityBold { offset, length }.into());
         }
         Event::End(Tag::Strong) => {
-            update_entity_len!(Bold(offset) => entities);
+            update_entity_len!(Bold(offset) in entities);
         }
 
         // *italic text*
         Event::Start(Tag::Emphasis) => {
-            push_entity!(MessageEntityItalic(offset) => entities);
+            entities.push(tl::types::MessageEntityItalic { offset, length }.into());
         }
         Event::End(Tag::Emphasis) => {
-            update_entity_len!(Italic(offset) => entities);
+            update_entity_len!(Italic(offset) in entities);
         }
 
         // [text link](https://example.com) or [user mention](tg://user?id=12345678)
         Event::Start(Tag::Link(_kind, url, _title)) => {
             if url.starts_with(MENTION_URL_PREFIX) {
                 let user_id = url[MENTION_URL_PREFIX.len()..].parse::<i64>().unwrap();
-                push_entity!(MessageEntityMentionName(offset, user_id = user_id) => entities);
+                entities.push(
+                    tl::types::MessageEntityMentionName {
+                        offset,
+                        length,
+                        user_id: user_id,
+                    }
+                    .into(),
+                );
             } else {
-                push_entity!(MessageEntityTextUrl(offset, url = url.to_string()) => entities);
+                entities.push(
+                    tl::types::MessageEntityTextUrl {
+                        offset,
+                        length,
+                        url: url.to_string(),
+                    }
+                    .into(),
+                );
             }
         }
         Event::End(Tag::Link(_kindd, url, _title)) => {
             if url.starts_with(MENTION_URL_PREFIX) {
-                update_entity_len!(MentionName(offset) => entities);
+                update_entity_len!(MentionName(offset) in entities);
             } else {
-                update_entity_len!(TextUrl(offset) => entities);
+                update_entity_len!(TextUrl(offset) in entities);
             }
         }
 
@@ -75,10 +90,17 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
             }
             .to_string();
 
-            push_entity!(MessageEntityPre(offset, language = lang) => entities);
+            entities.push(
+                tl::types::MessageEntityPre {
+                    offset,
+                    length,
+                    language: lang,
+                }
+                .into(),
+            );
         }
         Event::End(Tag::CodeBlock(_kind)) => {
-            update_entity_len!(Pre(offset) => entities);
+            update_entity_len!(Pre(offset) in entities);
         }
         // "\\\n"
         Event::HardBreak => {

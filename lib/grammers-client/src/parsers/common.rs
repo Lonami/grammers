@@ -20,38 +20,6 @@ pub fn telegram_string_len(string: &str) -> i32 {
     string.encode_utf16().count() as i32
 }
 
-/// Pushes a new `MessageEntity` instance with zero-length to the specified vector.
-///
-/// # Examples
-///
-/// ```notrust
-/// let mut vec = Vec::new();
-/// push_entity!(MessageEntityBold(1) => vec);
-/// push_entity!(MessageEntityPre(2, language = "rust".to_string()) => vec);
-/// ```
-#[macro_export]
-macro_rules! push_entity {
-    ( $ty:ident($offset:expr) => $vector:expr ) => {
-        $vector.push(
-            tl::types::$ty {
-                offset: $offset,
-                length: 0,
-            }
-            .into(),
-        )
-    };
-    ( $ty:ident($offset:expr, $field:ident = $value:expr) => $vector:expr ) => {
-        $vector.push(
-            tl::types::$ty {
-                offset: $offset,
-                length: 0,
-                $field: $value,
-            }
-            .into(),
-        )
-    };
-}
-
 /// Updates the length of the latest `MessageEntity` inside the specified vector.
 ///
 /// # Examples
@@ -63,7 +31,7 @@ macro_rules! push_entity {
 /// ```
 #[macro_export]
 macro_rules! update_entity_len {
-    ( $ty:ident($end_offset:expr) => $vector:expr ) => {
+    ( $ty:ident($end_offset:expr) in $vector:expr ) => {
         let mut remove = false;
         let end_offset = $end_offset;
         let pos = $vector.iter_mut().rposition(|e| match e {
