@@ -627,7 +627,7 @@ mod markdown_tests {
     fn parse_all_entities() {
         let (text, entities) = parse_markdown_message(
             "Some **bold** (__strong__), *italics* (_cursive_), inline `code`, \
-            a\n```rust\npre\n```\nblock, a [link](https://example.com), and \
+            a\n```rust\npre\n```\nblock, a [**link**](https://example.com), and \
             [mentions](tg://user?id=12345678)",
         );
 
@@ -675,6 +675,11 @@ mod markdown_tests {
                     url: "https://example.com".to_string()
                 }
                 .into(),
+                tl::types::MessageEntityBold {
+                    offset: 68,
+                    length: 4,
+                }
+                .into(),
                 tl::types::MessageEntityMentionName {
                     offset: 78,
                     length: 8,
@@ -715,7 +720,7 @@ mod markdown_tests {
     #[test]
     fn parse_then_unparse() {
         let markdown = "Some **bold 🤷🏽‍♀️**, _italics_, inline `🤷🏽‍♀️ code`, \
-        a\n\n```rust\npre\n```\nblock, a [link](https://example.com), and \
+        a\n\n```rust\npre\n```\nblock, a [**link**](https://example.com), and \
         [mentions](tg://user?id=12345678)";
         let (text, entities) = parse_markdown_message(markdown);
         let generated = generate_markdown_message(&text, &entities);
@@ -775,7 +780,7 @@ mod html_tests {
         let (text, entities) = parse_html_message(
             "Some <b>bold</b> (<strong>strong</strong>), <i>italics</i> \
             (<em>cursive</em>), inline <code>code</code>, a <pre>pre</pre> \
-            block, a <a href=\"https://example.com\">link</a>, \
+            block, a <a href=\"https://example.com\"><b>link</b></a>, \
             <details>spoilers</details> and <a href=\"tg://user?id=12345678\">mentions</a>",
         );
 
@@ -821,6 +826,11 @@ mod html_tests {
                     offset: 67,
                     length: 4,
                     url: "https://example.com".to_string()
+                }
+                .into(),
+                tl::types::MessageEntityBold {
+                    offset: 67,
+                    length: 4,
                 }
                 .into(),
                 tl::types::MessageEntitySpoiler {
@@ -928,7 +938,7 @@ mod html_tests {
     fn parse_then_unparse() {
         let html = "Some <b>bold</b>, <i>italics</i> inline <code>code</code>, \
         a <pre>pre</pre> block <pre><code class=\"language-rs\">use rust;</code></pre>, \
-        a <a href=\"https://example.com\">link</a>, <details>spoilers</details> and \
+        a <a href=\"https://example.com\"><b>link</b></a>, <details>spoilers</details> and \
         <a href=\"tg://user?id=12345678\">mentions</a>";
         let (text, entities) = parse_html_message(html);
         let generated = generate_html_message(&text, &entities);
