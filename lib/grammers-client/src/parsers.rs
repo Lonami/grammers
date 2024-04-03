@@ -577,13 +577,12 @@ fn inject_into_message(message: &str, mut insertions: Vec<(i32, Cow<str>)>) -> S
     String::from_utf8(result).unwrap()
 }
 
-#[cfg(test)]
-mod tests {
+#[cfg(all(test, feature = "markdown"))]
+mod markdown_tests {
     use super::*;
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_leading_markdown() {
+    fn parse_leading() {
         let (text, entities) = parse_markdown_message("**Hello** world!");
         assert_eq!(text, "Hello world!");
         assert_eq!(
@@ -597,8 +596,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_trailing_markdown() {
+    fn parse_trailing() {
         let (text, entities) = parse_markdown_message("Hello **world!**");
         assert_eq!(text, "Hello world!");
         assert_eq!(
@@ -612,8 +610,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_emoji_markdown() {
+    fn parse_emoji() {
         let (text, entities) = parse_markdown_message("A **little 🦀** here");
         assert_eq!(text, "A little 🦀 here");
         assert_eq!(
@@ -627,8 +624,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_all_entities_markdown() {
+    fn parse_all_entities() {
         let (text, entities) = parse_markdown_message(
             "Some **bold** (__strong__), *italics* (_cursive_), inline `code`, \
             a\n```rust\npre\n```\nblock, a [link](https://example.com), and \
@@ -690,8 +686,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_nested_entities_markdown() {
+    fn parse_nested_entities() {
         // CommonMark won't allow the following: "Some **bold _both** italics_"
         let (text, entities) = parse_markdown_message("Some **bold _both_** _italics_");
         assert_eq!(text, "Some bold both italics");
@@ -718,8 +713,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "markdown")]
-    fn parse_then_unparse_markdown() {
+    fn parse_then_unparse() {
         let markdown = "Some **bold 🤷🏽‍♀️**, _italics_, inline `🤷🏽‍♀️ code`, \
         a\n\n```rust\npre\n```\nblock, a [link](https://example.com), and \
         [mentions](tg://user?id=12345678)";
@@ -727,10 +721,14 @@ mod tests {
         let generated = generate_markdown_message(&text, &entities);
         assert_eq!(generated, markdown);
     }
+}
+
+#[cfg(all(test, feature = "html"))]
+mod html_tests {
+    use super::*;
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_leading_html() {
+    fn parse_leading() {
         // Intentionally use different casing to make sure that is handled well
         let (text, entities) = parse_html_message("<B>Hello</b> world!");
         assert_eq!(text, "Hello world!");
@@ -745,8 +743,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_trailing_html() {
+    fn parse_trailing() {
         let (text, entities) = parse_html_message("Hello <strong>world!</strong>");
         assert_eq!(text, "Hello world!");
         assert_eq!(
@@ -760,8 +757,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_emoji_html() {
+    fn parse_emoji() {
         let (text, entities) = parse_html_message("A <b>little 🦀</b> here");
         assert_eq!(text, "A little 🦀 here");
         assert_eq!(
@@ -775,8 +771,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_all_entities_html() {
+    fn parse_all_entities() {
         let (text, entities) = parse_html_message(
             "Some <b>bold</b> (<strong>strong</strong>), <i>italics</i> \
             (<em>cursive</em>), inline <code>code</code>, a <pre>pre</pre> \
@@ -844,8 +839,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_pre_with_lang_html() {
+    fn parse_pre_with_lang() {
         let (text, entities) = parse_html_message(
             "Some <pre>pre</pre>, <code>normal</code> and \
             <pre><code class=\"language-rust\">rusty</code></pre> code",
@@ -877,8 +871,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_empty_pre_and_lang_html() {
+    fn parse_empty_pre_and_lang() {
         let (text, entities) = parse_html_message(
             "Some empty <pre></pre> and <code class=\"language-rust\">code</code>",
         );
@@ -895,8 +888,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_link_no_href_html() {
+    fn parse_link_no_href() {
         let (text, entities) = parse_html_message("Some <a>empty link</a>, it does nothing");
 
         assert_eq!(text, "Some empty link, it does nothing");
@@ -912,8 +904,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_nested_entities_html() {
+    fn parse_nested_entities() {
         let (text, entities) = parse_html_message("Some <b>bold <i>both</b> italics</i>");
         assert_eq!(text, "Some bold both italics");
         assert_eq!(
@@ -934,8 +925,7 @@ mod tests {
     }
 
     #[test]
-    #[cfg(feature = "html")]
-    fn parse_then_unparse_html() {
+    fn parse_then_unparse() {
         let html = "Some <b>bold</b>, <i>italics</i> inline <code>code</code>, \
         a <pre>pre</pre> block <pre><code class=\"language-rs\">use rust;</code></pre>, \
         a <a href=\"https://example.com\">link</a>, <details>spoilers</details> and \
