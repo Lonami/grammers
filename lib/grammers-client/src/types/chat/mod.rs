@@ -104,9 +104,15 @@ impl Chat {
 
     pub(crate) fn unpack(packed: PackedChat) -> Self {
         match packed.ty {
-            PackedType::User | PackedType::Bot => {
+            PackedType::User => {
                 let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
                 user.0.access_hash = packed.access_hash;
+                Chat::User(user)
+            }
+            PackedType::Bot => {
+                let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
+                user.0.access_hash = packed.access_hash;
+                user.0.bot = true;
                 Chat::User(user)
             }
             PackedType::Chat => Chat::Group(Group::from_raw(
