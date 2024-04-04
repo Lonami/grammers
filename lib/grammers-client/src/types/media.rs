@@ -5,9 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::photo_sizes::{PhotoSize, VecExt};
+use crate::types::photo_sizes::{ PhotoSize, VecExt };
 use crate::Client;
-use chrono::{DateTime, Utc};
+use chrono::{ DateTime, Utc };
 use grammers_tl_types as tl;
 use std::fmt::Debug;
 
@@ -19,7 +19,7 @@ pub struct Photo {
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
-    document: tl::types::MessageMediaDocument,
+    pub document: tl::types::MessageMediaDocument,
     client: Client,
 }
 
@@ -127,39 +127,38 @@ impl Photo {
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         use tl::enums::Photo as P;
 
-        self.photo.photo.as_ref().and_then(|p| match p {
-            P::Empty(_) => None,
-            P::Photo(photo) => Some(
-                tl::types::InputPhotoFileLocation {
-                    id: photo.id,
-                    access_hash: photo.access_hash,
-                    file_reference: photo.file_reference.clone(),
-                    thumb_size: self
-                        .thumbs()
-                        .largest()
-                        .map(|ps| ps.photo_type())
-                        .unwrap_or(String::from("w")),
-                }
-                .into(),
-            ),
+        self.photo.photo.as_ref().and_then(|p| {
+            match p {
+                P::Empty(_) => None,
+                P::Photo(photo) =>
+                    Some(
+                        (tl::types::InputPhotoFileLocation {
+                            id: photo.id,
+                            access_hash: photo.access_hash,
+                            file_reference: photo.file_reference.clone(),
+                            thumb_size: self
+                                .thumbs()
+                                .largest()
+                                .map(|ps| ps.photo_type())
+                                .unwrap_or(String::from("w")),
+                        }).into()
+                    ),
+            }
         })
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaPhoto {
-        use tl::{
-            enums::{InputPhoto as eInputPhoto, Photo},
-            types::InputPhoto,
-        };
+        use tl::{ enums::{ InputPhoto as eInputPhoto, Photo }, types::InputPhoto };
 
         tl::types::InputMediaPhoto {
             spoiler: false,
             id: match self.photo.photo {
-                Some(Photo::Photo(ref photo)) => InputPhoto {
-                    id: photo.id,
-                    access_hash: photo.access_hash,
-                    file_reference: photo.file_reference.clone(),
-                }
-                .into(),
+                Some(Photo::Photo(ref photo)) =>
+                    (InputPhoto {
+                        id: photo.id,
+                        access_hash: photo.access_hash,
+                        file_reference: photo.file_reference.clone(),
+                    }).into(),
                 _ => eInputPhoto::Empty,
             },
             ttl_seconds: self.photo.ttl_seconds,
@@ -190,16 +189,18 @@ impl Photo {
 
         let photo = match self.photo.photo.as_ref() {
             Some(photo) => photo,
-            None => return vec![],
+            None => {
+                return vec![];
+            }
         };
 
         match photo {
             P::Empty(_) => vec![],
-            P::Photo(photo) => photo
-                .sizes
-                .iter()
-                .map(|x| PhotoSize::make_from(x, photo, self.client.clone()))
-                .collect(),
+            P::Photo(photo) =>
+                photo.sizes
+                    .iter()
+                    .map(|x| PhotoSize::make_from(x, photo, self.client.clone()))
+                    .collect(),
         }
     }
 
@@ -227,35 +228,34 @@ impl Document {
     fn to_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         use tl::enums::Document as D;
 
-        self.document.document.as_ref().and_then(|p| match p {
-            D::Empty(_) => None,
-            D::Document(document) => Some(
-                tl::types::InputDocumentFileLocation {
-                    id: document.id,
-                    access_hash: document.access_hash,
-                    file_reference: document.file_reference.clone(),
-                    thumb_size: String::new(),
-                }
-                .into(),
-            ),
+        self.document.document.as_ref().and_then(|p| {
+            match p {
+                D::Empty(_) => None,
+                D::Document(document) =>
+                    Some(
+                        (tl::types::InputDocumentFileLocation {
+                            id: document.id,
+                            access_hash: document.access_hash,
+                            file_reference: document.file_reference.clone(),
+                            thumb_size: String::new(),
+                        }).into()
+                    ),
+            }
         })
     }
 
     fn to_input_media(&self) -> tl::types::InputMediaDocument {
-        use tl::{
-            enums::{Document, InputDocument as eInputDocument},
-            types::InputDocument,
-        };
+        use tl::{ enums::{ Document, InputDocument as eInputDocument }, types::InputDocument };
 
         tl::types::InputMediaDocument {
             spoiler: false,
             id: match self.document.document {
-                Some(Document::Document(ref document)) => InputDocument {
-                    id: document.id,
-                    access_hash: document.access_hash,
-                    file_reference: document.file_reference.clone(),
-                }
-                .into(),
+                Some(Document::Document(ref document)) =>
+                    (InputDocument {
+                        id: document.id,
+                        access_hash: document.access_hash,
+                        file_reference: document.file_reference.clone(),
+                    }).into(),
                 _ => eInputDocument::Empty,
             },
             ttl_seconds: self.document.ttl_seconds,
@@ -280,14 +280,17 @@ impl Document {
 
         match self.document.document.as_ref().unwrap() {
             D::Empty(_) => "",
-            D::Document(document) => document
-                .attributes
-                .iter()
-                .find_map(|attr| match attr {
-                    tl::enums::DocumentAttribute::Filename(attr) => Some(attr.file_name.as_ref()),
-                    _ => None,
-                })
-                .unwrap_or(""),
+            D::Document(document) =>
+                document.attributes
+                    .iter()
+                    .find_map(|attr| {
+                        match attr {
+                            tl::enums::DocumentAttribute::Filename(attr) =>
+                                Some(attr.file_name.as_ref()),
+                            _ => None,
+                        }
+                    })
+                    .unwrap_or(""),
         }
     }
 
@@ -324,8 +327,12 @@ impl Document {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     match attr {
-                        tl::enums::DocumentAttribute::Video(v) => return Some(v.duration),
-                        tl::enums::DocumentAttribute::Audio(a) => return Some(a.duration as _),
+                        tl::enums::DocumentAttribute::Video(v) => {
+                            return Some(v.duration);
+                        }
+                        tl::enums::DocumentAttribute::Audio(a) => {
+                            return Some(a.duration as _);
+                        }
                         _ => {}
                     }
                 }
@@ -341,8 +348,12 @@ impl Document {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     match attr {
-                        tl::enums::DocumentAttribute::Video(v) => return Some((v.w, v.h)),
-                        tl::enums::DocumentAttribute::ImageSize(i) => return Some((i.w, i.h)),
+                        tl::enums::DocumentAttribute::Video(v) => {
+                            return Some((v.w, v.h));
+                        }
+                        tl::enums::DocumentAttribute::ImageSize(i) => {
+                            return Some((i.w, i.h));
+                        }
                         _ => {}
                     }
                 }
@@ -359,7 +370,9 @@ impl Document {
                 for attr in &d.attributes {
                     #[allow(clippy::single_match)]
                     match attr {
-                        tl::enums::DocumentAttribute::Audio(a) => return a.title.clone(),
+                        tl::enums::DocumentAttribute::Audio(a) => {
+                            return a.title.clone();
+                        }
                         _ => {}
                     }
                 }
@@ -376,7 +389,9 @@ impl Document {
                 for attr in &d.attributes {
                     #[allow(clippy::single_match)]
                     match attr {
-                        tl::enums::DocumentAttribute::Audio(a) => return a.performer.clone(),
+                        tl::enums::DocumentAttribute::Audio(a) => {
+                            return a.performer.clone();
+                        }
                         _ => {}
                     }
                 }
@@ -393,7 +408,9 @@ impl Document {
                 for attr in &d.attributes {
                     #[allow(clippy::single_match)]
                     match attr {
-                        tl::enums::DocumentAttribute::Animated => return true,
+                        tl::enums::DocumentAttribute::Animated => {
+                            return true;
+                        }
                         _ => {}
                     }
                 }
@@ -417,8 +434,12 @@ impl Sticker {
                 let mut sticker_attrs: Option<tl::types::DocumentAttributeSticker> = None;
                 for attr in &doc.attributes {
                     match attr {
-                        tl::enums::DocumentAttribute::Sticker(s) => sticker_attrs = Some(s.clone()),
-                        tl::enums::DocumentAttribute::Animated => animated = true,
+                        tl::enums::DocumentAttribute::Sticker(s) => {
+                            sticker_attrs = Some(s.clone());
+                        }
+                        tl::enums::DocumentAttribute::Animated => {
+                            animated = true;
+                        }
                         _ => (),
                     }
                 }
@@ -552,8 +573,10 @@ impl Poll {
 
     /// Iterator over poll answer options
     pub fn iter_answers(&self) -> impl Iterator<Item = &tl::types::PollAnswer> {
-        self.poll.answers.iter().map(|answer| match answer {
-            tl::enums::PollAnswer::Answer(answer) => answer,
+        self.poll.answers.iter().map(|answer| {
+            match answer {
+                tl::enums::PollAnswer::Answer(answer) => answer,
+            }
         })
     }
 
@@ -567,11 +590,13 @@ impl Poll {
     /// Return details of the voters choices:
     /// how much voters chose each answer and wether current option
     pub fn iter_voters_summary(
-        &self,
+        &self
     ) -> Option<impl Iterator<Item = &tl::types::PollAnswerVoters>> {
         self.results.results.as_ref().map(|results| {
-            results.iter().map(|result| match result {
-                tl::enums::PollAnswerVoters::Voters(voters) => voters,
+            results.iter().map(|result| {
+                match result {
+                    tl::enums::PollAnswerVoters::Voters(voters) => voters,
+                }
             })
         })
     }
@@ -601,17 +626,16 @@ impl Geo {
         use tl::types::InputGeoPoint;
 
         tl::types::InputMediaGeoPoint {
-            geo_point: InputGeoPoint {
+            geo_point: (InputGeoPoint {
                 lat: self.geo.lat,
                 long: self.geo.long,
                 accuracy_radius: self.geo.accuracy_radius,
-            }
-            .into(),
+            }).into(),
         }
     }
 
     pub(crate) fn to_input_geo_point(&self) -> tl::enums::InputGeoPoint {
-        use tl::{enums::InputGeoPoint as eInputGeoPoint, types::InputGeoPoint};
+        use tl::{ enums::InputGeoPoint as eInputGeoPoint, types::InputGeoPoint };
 
         eInputGeoPoint::Point(InputGeoPoint {
             lat: self.geo.lat,
@@ -831,11 +855,13 @@ impl Media {
             M::Unsupported => None,
             M::Document(document) => {
                 let document = Document::from_media(document, client);
-                Some(if let Some(sticker) = Sticker::from_document(&document) {
-                    Self::Sticker(sticker)
-                } else {
-                    Self::Document(document)
-                })
+                Some(
+                    if let Some(sticker) = Sticker::from_document(&document) {
+                        Self::Sticker(sticker)
+                    } else {
+                        Self::Document(document)
+                    }
+                )
             }
             M::WebPage(webpage) => Some(Self::WebPage(WebPage::from_media(webpage))),
             M::Venue(venue) => Some(Self::Venue(Venue::from_media(venue))),
@@ -901,22 +927,22 @@ impl From<Photo> for Media {
 impl From<Media> for tl::enums::MessageMedia {
     fn from(media: Media) -> Self {
         use tl::enums::GeoPoint as eGeoPoint;
-        use tl::types::{MessageMediaGeo, MessageMediaPoll};
+        use tl::types::{ MessageMediaGeo, MessageMediaPoll };
 
         match media {
             Media::Photo(photo) => photo.photo.into(),
             Media::Document(document) => document.document.into(),
             Media::Sticker(sticker) => sticker.document.document.into(),
             Media::Contact(contact) => contact.contact.into(),
-            Media::Poll(Poll { poll, results }) => MessageMediaPoll {
-                poll: poll.into(),
-                results: results.into(),
-            }
-            .into(),
-            Media::Geo(geo) => MessageMediaGeo {
-                geo: eGeoPoint::Point(geo.geo),
-            }
-            .into(),
+            Media::Poll(Poll { poll, results }) =>
+                (MessageMediaPoll {
+                    poll: poll.into(),
+                    results: results.into(),
+                }).into(),
+            Media::Geo(geo) =>
+                (MessageMediaGeo {
+                    geo: eGeoPoint::Point(geo.geo),
+                }).into(),
             Media::Dice(dice) => dice.dice.into(),
             Media::Venue(venue) => venue.venue.into(),
             Media::GeoLive(geolive) => geolive.geolive.into(),
