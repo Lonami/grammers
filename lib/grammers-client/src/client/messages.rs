@@ -60,6 +60,9 @@ fn map_random_ids_to_messages(
                         message,
                         ..
                     }) => Some(message),
+                    tl::enums::Update::NewScheduledMessage(
+                        tl::types::UpdateNewScheduledMessage { message, .. },
+                    ) => Some(message),
                     _ => None,
                 })
                 .filter_map(|message| Message::new(client, message, &chats))
@@ -502,6 +505,7 @@ impl Client {
                 noforwards: false,
                 update_stickersets_order: false,
                 invert_media: false,
+                quick_reply_shortcut: None,
             })
             .await
         } else {
@@ -531,6 +535,7 @@ impl Client {
                 noforwards: false,
                 update_stickersets_order: false,
                 invert_media: false,
+                quick_reply_shortcut: None,
             })
             .await
         }?;
@@ -583,6 +588,7 @@ impl Client {
             reply_markup: new_message.reply_markup,
             entities,
             schedule_date: new_message.schedule_date,
+            quick_reply_shortcut_id: None,
         })
         .await?;
 
@@ -687,6 +693,7 @@ impl Client {
             schedule_date: None,
             send_as: None,
             noforwards: false,
+            quick_reply_shortcut: None,
         };
         let result = self.invoke(&request).await?;
         Ok(map_random_ids_to_messages(self, &request.random_id, result))

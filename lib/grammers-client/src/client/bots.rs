@@ -40,6 +40,7 @@ impl InlineResult {
                 id: self.id().to_string(),
                 schedule_date: None,
                 send_as: None,
+                quick_reply_shortcut: None,
             })
             .await
             .map(drop)

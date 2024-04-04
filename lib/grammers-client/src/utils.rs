@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::types;
-use chrono::{DateTime, NaiveDateTime, TimeZone, Utc};
+use chrono::{DateTime, Utc};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
@@ -17,8 +17,6 @@ use std::time::SystemTime;
 // The worst that can happen if the load and store orderings are wrong is that the IDs
 // are not actually unique which could confuse some of the API results.
 static LAST_ID: AtomicI64 = AtomicI64::new(0);
-
-pub(crate) type Date = DateTime<Utc>;
 
 /// Generate a "random" ID suitable for sending messages or media.
 pub(crate) fn generate_random_id() -> i64 {
@@ -40,10 +38,8 @@ pub(crate) fn generate_random_ids(n: usize) -> Vec<i64> {
     (0..n).map(|_| generate_random_id()).collect()
 }
 
-pub(crate) fn date(date: i32) -> Date {
-    Utc.from_utc_datetime(
-        &NaiveDateTime::from_timestamp_opt(date as i64, 0).expect("date out of range"),
-    )
+pub(crate) fn date(date: i32) -> DateTime<Utc> {
+    DateTime::<Utc>::from_timestamp(date as i64, 0).expect("date out of range")
 }
 
 pub(crate) fn extract_password_parameters(

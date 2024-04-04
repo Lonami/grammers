@@ -67,6 +67,7 @@ pub(super) fn update_short_message(
                     }
                     .into(),
                 ),
+                from_boosts_applied: None,
                 peer_id: tl::types::PeerChat {
                     chat_id: short.user_id,
                 }
@@ -88,6 +89,7 @@ pub(super) fn update_short_message(
                 grouped_id: None,
                 restriction_reason: None,
                 ttl_period: short.ttl_period,
+                quick_reply_shortcut_id: None,
             }
             .into(),
             pts: short.pts,
@@ -123,6 +125,7 @@ pub(super) fn update_short_chat_message(
                     }
                     .into(),
                 ),
+                from_boosts_applied: None,
                 peer_id: tl::types::PeerChat {
                     chat_id: short.chat_id,
                 }
@@ -144,6 +147,7 @@ pub(super) fn update_short_chat_message(
                 grouped_id: None,
                 restriction_reason: None,
                 ttl_period: short.ttl_period,
+                quick_reply_shortcut_id: None,
             }
             .into(),
             pts: short.pts,
@@ -495,6 +499,12 @@ impl PtsInfo {
             SavedDialogPinned(_) => None,
             PinnedSavedDialogs(_) => None,
             SavedReactionTags => None,
+            SmsJob(_) => None,
+            QuickReplies(_) => None,
+            NewQuickReply(_) => None,
+            DeleteQuickReply(_) => None,
+            QuickReplyMessage(_) => None,
+            DeleteQuickReplyMessages(_) => None,
         }
         .filter(|info| info.pts != NO_PTS)
     }

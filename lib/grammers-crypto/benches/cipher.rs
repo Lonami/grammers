@@ -12,12 +12,12 @@ macro_rules! define_benches {
     ($(fn $func:ident($method:ident, $n:expr);)+) => {
         $(
             fn $func(bench: &mut Bencher) {
-                let data = black_box(vec![1; $n]);
+                let mut data = black_box(vec![1; $n]);
                 let key = black_box([2; 32]);
                 let iv = black_box([3; 32]);
 
                 bench.iter(|| {
-                    black_box($method(&data, &key, &iv))
+                    black_box($method(&mut data, &key, &iv))
                 });
                 bench.bytes = data.len() as u64;
 

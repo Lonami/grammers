@@ -7,6 +7,7 @@
 // except according to those terms.
 use super::{Chat, ChatMap, Permissions, Restrictions};
 use crate::utils;
+use chrono::{DateTime, Utc};
 use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -60,7 +61,7 @@ pub struct Participant {
 }
 
 impl Normal {
-    pub fn date(&self) -> utils::Date {
+    pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
@@ -92,7 +93,7 @@ impl Admin {
         self.promoted_by
     }
 
-    pub fn date(&self) -> utils::Date {
+    pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
@@ -114,7 +115,7 @@ impl Banned {
         self.kicked_by
     }
 
-    pub fn date(&self) -> utils::Date {
+    pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
