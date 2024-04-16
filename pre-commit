@@ -27,6 +27,7 @@ def check_fmt():
 def check_license():
 	ok = True
 	for root, _dirs, files in os.walk('./lib/'):
+		root = root.replace(os.path.sep, '/')
 		for file in files:
 			if file.lower().endswith('.rs') and not root.endswith('/examples'):
 				file = os.path.join(root, file)
