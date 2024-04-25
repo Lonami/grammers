@@ -184,7 +184,7 @@ impl Client {
                     .ensure_known_peer_hashes(&updates, &mut state.chat_hashes)
                     .is_err()
                 {
-                    return;
+                    continue;
                 }
                 match state
                     .message_box
