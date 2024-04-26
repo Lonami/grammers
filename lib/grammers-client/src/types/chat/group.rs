@@ -128,23 +128,6 @@ impl Group {
             Chat::Channel(channel) => channel.username.as_deref(),
         }
     }
-    
-    // Return photo of this group, if any.
-    pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
-        match &self.0 {
-            tl::enums::Chat::Empty(_) | tl::enums::Chat::Forbidden(_) | tl::enums::Chat::ChannelForbidden(_) => None,
-            tl::enums::Chat::Chat(chat) => match &chat.photo {
-                tl::enums::ChatPhoto::Empty => None,
-                tl::enums::ChatPhoto::Photo(photo) => Some(photo),
-            },
-            tl::enums::Chat::Channel(channel) => {
-                match &channel.photo{
-                    tl::enums::ChatPhoto::Empty => None,
-                    tl::enums::ChatPhoto::Photo(photo) => Some(photo),
-                }
-            },
-        }
-    }
 
     // Return photo of this group, if any.
     pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
