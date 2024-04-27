@@ -7,7 +7,8 @@
 // except according to those terms.
 use glass_pumpkin::safe_prime;
 use hmac::Hmac;
-use num_bigint::BigUint;
+use num_bigint::{BigInt, BigUint, Sign};
+use num_traits::ops::euclid::Euclid;
 use sha2::Sha512;
 
 // H(data) := sha256(data)
@@ -28,7 +29,7 @@ pub fn calculate_2fa(
     password: impl AsRef<[u8]>,
 ) -> ([u8; 32], [u8; 256]) {
     // Prepare our parameters
-    let big_p = BigUint::from_bytes_be(p);
+    let big_p = BigInt::from_bytes_be(Sign::Plus, p);
 
     let g_b = pad_to_256(&g_b);
     let a = pad_to_256(&a);
@@ -36,26 +37,26 @@ pub fn calculate_2fa(
     let g_for_hash = vec![*g as u8];
     let g_for_hash = pad_to_256(&g_for_hash);
 
-    let big_g_b = BigUint::from_bytes_be(&g_b);
+    let big_g_b = BigInt::from_bytes_be(Sign::Plus, &g_b);
 
-    let big_g = BigUint::from(*g as u32);
-    let big_a = BigUint::from_bytes_be(&a);
+    let big_g = BigInt::from(*g as u32);
+    let big_a = BigInt::from_bytes_be(Sign::Plus, &a);
 
     // k := H(p | g)
     let k = h!(&p, &g_for_hash);
-    let big_k = BigUint::from_bytes_be(&k);
+    let big_k = BigInt::from_bytes_be(Sign::Plus, &k);
 
     // g_a := pow(g, a) mod p
     let g_a = big_g.modpow(&big_a, &big_p);
-    let g_a = pad_to_256(&g_a.to_bytes_be());
+    let g_a = pad_to_256(&g_a.to_bytes_be().1);
 
     // u := H(g_a | g_b)
     let u = h!(&g_a, &g_b);
-    let u = BigUint::from_bytes_be(&u);
+    let u = BigInt::from_bytes_be(Sign::Plus, &u);
 
     // x := PH2(password, salt1, salt2)
     let x = ph2(&password, salt1, salt2);
-    let x = BigUint::from_bytes_be(&x);
+    let x = BigInt::from_bytes_be(Sign::Plus, &x);
 
     // v := pow(g, x) mod p
     let big_v = big_g.modpow(&x, &big_p);
@@ -64,12 +65,7 @@ pub fn calculate_2fa(
     let k_v = (big_k * big_v) % &big_p;
 
     // t := (g_b - k_v) mod p (positive modulo, if the result is negative increment by p)
-    let sub = if big_g_b > k_v {
-        big_g_b - k_v
-    } else {
-        k_v - big_g_b
-    };
-    let big_t = sub % &big_p;
+    let big_t = (big_g_b - k_v).rem_euclid(&big_p);
 
     // s_a := pow(t, a + u * x) mod p
     let first = u * x;
@@ -77,7 +73,7 @@ pub fn calculate_2fa(
     let big_s_a = big_t.modpow(&second, &big_p);
 
     // k_a := H(s_a)
-    let k_a = h!(&pad_to_256(&big_s_a.to_bytes_be()));
+    let k_a = h!(&pad_to_256(&big_s_a.to_bytes_be().1));
 
     // M1 := H(H(p) xor H(g) | H(salt1) | H(salt2) | g_a | g_b | k_a)
     let h_p = h!(&p);
