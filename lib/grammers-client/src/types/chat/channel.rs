@@ -133,6 +133,7 @@ impl Channel {
     pub fn username(&self) -> Option<&str> {
         self.0.username.as_deref()
     }
+
     /// Return the photo of this channel, if any.
     pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
         match &self.0.photo {
