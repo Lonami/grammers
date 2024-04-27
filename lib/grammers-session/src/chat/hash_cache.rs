@@ -353,7 +353,6 @@ impl ChatHashCache {
                 U::ChannelPinnedTopics(u) => self.has(u.channel_id),
                 U::User(u) => self.has(u.user_id),
                 U::AutoSaveSettings => true,
-                U::GroupInvitePrivacyForbidden(u) => self.has(u.user_id),
                 U::Story(u) => self.has_peer(&u.peer),
                 U::ReadStories(u) => self.has_peer(&u.peer),
                 U::StoryId(_) => true,
@@ -373,6 +372,11 @@ impl ChatHashCache {
                 U::DeleteQuickReply(_) => true,
                 U::QuickReplyMessage(u) => self.extend_from_message(&u.message),
                 U::DeleteQuickReplyMessages(_) => true,
+                U::BotNewBusinessMessage(u) => self.extend_from_message(&u.message),
+                U::BotDeleteBusinessMessage(u) => true,
+                U::BotBusinessConnect(u) => match u.connection {
+                    tl::enums::BotBusinessConnection::Connection(con) => self.has(con.user_id),
+                },
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).

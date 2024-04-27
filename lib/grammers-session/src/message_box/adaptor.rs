@@ -473,7 +473,6 @@ impl PtsInfo {
             ChannelPinnedTopics(_) => None,
             User(_) => None,
             AutoSaveSettings => None,
-            GroupInvitePrivacyForbidden(_) => None,
             Story(_) => None,
             ReadStories(_) => None,
             StoryId(_) => None,
