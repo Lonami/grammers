@@ -64,12 +64,17 @@ pub fn calculate_2fa(
     let k_v = (big_k * big_v) % &big_p;
 
     // t := (g_b - k_v) mod p (positive modulo, if the result is negative increment by p)
+    let mut changed_sign = false;
     let sub = if big_g_b > k_v {
         big_g_b - k_v
     } else {
+        changed_sign = true;
         k_v - big_g_b
     };
-    let big_t = sub % &big_p;
+    let mut big_t = sub % &big_p;
+    if changed_sign {
+        big_t = (&big_p - big_t) % &big_p;
+    }
 
     // s_a := pow(t, a + u * x) mod p
     let first = u * x;
