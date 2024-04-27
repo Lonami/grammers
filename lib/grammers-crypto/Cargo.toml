@@ -22,6 +22,7 @@ num-bigint = "0.4.4"
 pbkdf2 = "0.12.2"
 sha1 = "0.10.6"
 sha2 = "0.10.8"
+num-traits = "0.2.18"
 
 [dev-dependencies]
 bencher = "0.1.5"

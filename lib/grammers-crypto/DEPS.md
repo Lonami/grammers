@@ -41,6 +41,10 @@ Used for methods relied on by the 2-factor offered by Telegram.
 
 Used for benchmarking the encryption and decryption methods.
 
+## num-traits
+
+Used for methods relied on by the 2-factor offered by Telegram.
+
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
