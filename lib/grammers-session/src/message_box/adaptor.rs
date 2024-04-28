@@ -90,6 +90,8 @@ pub(super) fn update_short_message(
                 restriction_reason: None,
                 ttl_period: short.ttl_period,
                 quick_reply_shortcut_id: None,
+                offline: false,
+                via_business_bot_id: None,
             }
             .into(),
             pts: short.pts,
@@ -148,6 +150,8 @@ pub(super) fn update_short_chat_message(
                 restriction_reason: None,
                 ttl_period: short.ttl_period,
                 quick_reply_shortcut_id: None,
+                offline: false,
+                via_business_bot_id: None,
             }
             .into(),
             pts: short.pts,
@@ -473,8 +477,8 @@ impl PtsInfo {
             ChannelPinnedTopics(_) => None,
             User(_) => None,
             AutoSaveSettings => None,
-            GroupInvitePrivacyForbidden(_) => None,
             Story(_) => None,
+            NewStoryReaction(_) => None,
             ReadStories(_) => None,
             StoryId(_) => None,
             StoriesStealthMode(_) => None,
@@ -505,6 +509,22 @@ impl PtsInfo {
             DeleteQuickReply(_) => None,
             QuickReplyMessage(_) => None,
             DeleteQuickReplyMessages(_) => None,
+            BotBusinessConnect(_) => None,
+            BotNewBusinessMessage(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 1,
+                entry: Entry::SecretChats,
+            }),
+            BotEditBusinessMessage(u) => Some(Self {
+                pts: u.qts,
+                pts_count: 1,
+                entry: Entry::SecretChats,
+            }),
+            BotDeleteBusinessMessage(u) => Some(Self {
+                pts: u.qts,
+                pts_count: u.messages.len() as i32,
+                entry: Entry::SecretChats,
+            }),
         }
         .filter(|info| info.pts != NO_PTS)
     }
