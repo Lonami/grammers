@@ -213,6 +213,7 @@ impl Client {
                 logout_tokens: None,
                 token: None,
                 app_sandbox: None,
+                unknown_number: false,
             }
             .into(),
         };

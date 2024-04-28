@@ -386,6 +386,7 @@ impl GlobalSearchIter {
                 offset_peer: tl::enums::InputPeer::Empty,
                 offset_id: 0,
                 limit: 0,
+                broadcasts_only: false,
             },
         )
     }

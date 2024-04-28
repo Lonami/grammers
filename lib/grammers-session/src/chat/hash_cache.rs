@@ -73,6 +73,14 @@ impl ChatHashCache {
         }
     }
 
+    fn has_requested_peer(&self, peer: &tl::enums::RequestedPeer) -> bool {
+        match peer {
+            tl::enums::RequestedPeer::User(user) => self.has(user.user_id),
+            tl::enums::RequestedPeer::Chat(_chat) => true, // no hash needed, so we always have it
+            tl::enums::RequestedPeer::Channel(channel) => self.has(channel.channel_id),
+        }
+    }
+
     fn has_user(&self, peer: &tl::enums::InputUser) -> bool {
         match peer {
             tl::enums::InputUser::Empty => true,
@@ -354,6 +362,7 @@ impl ChatHashCache {
                 U::User(u) => self.has(u.user_id),
                 U::AutoSaveSettings => true,
                 U::Story(u) => self.has_peer(&u.peer),
+                U::NewStoryReaction(u) => self.has_peer(&u.peer),
                 U::ReadStories(u) => self.has_peer(&u.peer),
                 U::StoryId(_) => true,
                 U::StoriesStealthMode(_) => true,
@@ -373,8 +382,9 @@ impl ChatHashCache {
                 U::QuickReplyMessage(u) => self.extend_from_message(&u.message),
                 U::DeleteQuickReplyMessages(_) => true,
                 U::BotNewBusinessMessage(u) => self.extend_from_message(&u.message),
+                U::BotEditBusinessMessage(u) => self.extend_from_message(&u.message),
                 U::BotDeleteBusinessMessage(u) => true,
-                U::BotBusinessConnect(u) => match u.connection {
+                U::BotBusinessConnect(u) => match &u.connection {
                     tl::enums::BotBusinessConnection::Connection(con) => self.has(con.user_id),
                 },
             },
@@ -552,6 +562,9 @@ impl ChatHashCache {
                         MA::TopicEdit(_) => true,
                         MA::SuggestProfilePhoto(_) => true,
                         MA::RequestedPeer(c) => c.peers.iter().all(|p| self.has_peer(p)),
+                        MA::RequestedPeerSentMe(c) => {
+                            c.peers.iter().all(|p| self.has_requested_peer(p))
+                        }
                         MA::SetChatWallPaper(_) => true,
                         MA::GiftCode(c) => match &c.boost_peer {
                             Some(p) => self.has_peer(p),

@@ -114,6 +114,7 @@ impl User {
                 stories_max_id: None,
                 color: None,
                 profile_color: None,
+                bot_business: false,
             },
             tl::enums::User::User(user) => user,
         })

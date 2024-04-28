@@ -536,7 +536,7 @@ impl Poll {
     }
 
     /// Return question of the poll
-    pub fn question(&self) -> &str {
+    pub fn question(&self) -> &grammers_tl_types::enums::TextWithEntities {
         &self.poll.question
     }
 
