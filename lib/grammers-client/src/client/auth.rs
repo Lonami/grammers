@@ -7,10 +7,10 @@
 // except according to those terms.
 use super::net::connect_sender;
 use super::Client;
-use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
+use crate::types::{ LoginToken, PasswordToken, TermsOfService, User };
 use crate::utils;
-use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_crypto::two_factor_auth::{ calculate_2fa, check_p_and_g };
+pub use grammers_mtsender::{ AuthorizationError, InvocationError };
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -31,13 +31,8 @@ impl fmt::Display for SignInError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use SignInError::*;
         match self {
-            SignUpRequired {
-                terms_of_service: tos,
-            } => write!(
-                f,
-                "sign in error: sign up with official client required: {:?}",
-                tos
-            ),
+            SignUpRequired { terms_of_service: tos } =>
+                write!(f, "sign in error: sign up with official client required: {:?}", tos),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
@@ -73,7 +68,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn is_authorized(&self) -> Result<bool, InvocationError> {
-        match self.invoke(&tl::functions::updates::GetState {}).await {
+        match self.invoke(&(tl::functions::updates::GetState {})).await {
             Ok(_) => Ok(true),
             Err(InvocationError::Rpc(e)) if e.code == 401 => Ok(false),
             Err(err) => Err(err),
@@ -82,20 +77,17 @@ impl Client {
 
     async fn complete_login(
         &self,
-        auth: tl::types::auth::Authorization,
+        auth: tl::types::auth::Authorization
     ) -> Result<User, InvocationError> {
         // In the extremely rare case where `Err` happens, there's not much we can do.
         // `message_box` will try to correct its state as updates arrive.
-        let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();
+        let update_state = self.invoke(&(tl::functions::updates::GetState {})).await.ok();
 
         let user = User::from_raw(auth.user);
 
         let sync_state = {
             let mut state = self.0.state.write().unwrap();
-            self.0
-                .config
-                .session
-                .set_user(user.id(), state.dc_id, user.is_bot());
+            self.0.config.session.set_user(user.id(), state.dc_id, user.is_bot());
 
             state.chat_hashes.set_self_user(user.pack());
             if let Some(us) = update_state {
@@ -162,7 +154,9 @@ impl Client {
                 }
                 self.invoke(&request).await?
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => {
+                return Err(e.into());
+            }
         };
 
         match result {
@@ -204,7 +198,7 @@ impl Client {
             phone_number: phone.to_string(),
             api_id: self.0.config.api_id,
             api_hash: self.0.config.api_hash.clone(),
-            settings: tl::types::CodeSettings {
+            settings: (tl::types::CodeSettings {
                 allow_flashcall: false,
                 current_number: false,
                 allow_app_hash: false,
@@ -213,17 +207,17 @@ impl Client {
                 logout_tokens: None,
                 token: None,
                 app_sandbox: None,
-            }
-            .into(),
+            }).into(),
         };
 
         use tl::enums::auth::SentCode as SC;
 
         let sent_code: tl::types::auth::SentCode = match self.invoke(&request).await {
-            Ok(x) => match x {
-                SC::Code(code) => code,
-                SC::Success(_) => panic!("should not have logged in yet"),
-            },
+            Ok(x) =>
+                match x {
+                    SC::Code(code) => code,
+                    SC::Success(_) => panic!("should not have logged in yet"),
+                }
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
                 // Since we are not logged in (we're literally requesting for
                 // the code to login now), there's no need to export the current
@@ -244,13 +238,45 @@ impl Client {
                     SC::Success(_) => panic!("should not have logged in yet"),
                 }
             }
-            Err(e) => return Err(e.into()),
+            Err(e) => {
+                return Err(e.into());
+            }
         };
 
         Ok(LoginToken {
             phone: phone.to_string(),
             phone_code_hash: sent_code.phone_code_hash,
         })
+    }
+
+    /// except_ids: A list of user IDs that should not be able to log in with this token.
+    /// Returns a login token that can be used to log in to the account.
+    /// This token can be used to log in to the account by encoding this token into a QR code using
+    ///     tg://tg://login?token={THE TOKEN}.
+    /// The QR code can be scanned by the official Telegram app to log in to the account.
+    ///
+    /// Example:
+    ///
+    /// ```rust
+    /// let token = client.export_login_token(vec![]);
+    /// ```
+    pub async fn export_login_token(
+        &self,
+        except_ids: Vec<i64>
+    ) -> grammers_tl_types::enums::auth::LoginToken {
+        let request = tl::functions::auth::ExportLoginToken {
+            api_id: self.0.config.api_id,
+            api_hash: self.0.config.api_hash.clone(),
+            except_ids: except_ids,
+        };
+        let token = match self.invoke(&request).await {
+            Ok(x) => x,
+            Err(e) => {
+                panic!("Error exporting login token: {}", e);
+            }
+        };
+
+        token
     }
 
     /// Signs in to the user account.
@@ -291,14 +317,15 @@ impl Client {
     /// # }
     /// ```
     pub async fn sign_in(&self, token: &LoginToken, code: &str) -> Result<User, SignInError> {
-        match self
-            .invoke(&tl::functions::auth::SignIn {
-                phone_number: token.phone.clone(),
-                phone_code_hash: token.phone_code_hash.clone(),
-                phone_code: Some(code.to_string()),
-                email_verification: None,
-            })
-            .await
+        match
+            self.invoke(
+                &(tl::functions::auth::SignIn {
+                    phone_number: token.phone.clone(),
+                    phone_code_hash: token.phone_code_hash.clone(),
+                    phone_code: Some(code.to_string()),
+                    email_verification: None,
+                })
+            ).await
         {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 self.complete_login(x).await.map_err(SignInError::Other)
@@ -371,7 +398,7 @@ impl Client {
     pub async fn check_password(
         &self,
         password_token: PasswordToken,
-        password: impl AsRef<[u8]>,
+        password: impl AsRef<[u8]>
     ) -> Result<User, SignInError> {
         let mut password_info = password_token.password;
         let current_algo = password_info.current_algo.unwrap();
@@ -380,14 +407,13 @@ impl Client {
         // Telegram sent us incorrect parameters, trying to get them again
         if !check_p_and_g(params.2, params.3) {
             password_info = self
-                .get_password_information()
-                .await
-                .map_err(SignInError::Other)?
-                .password;
-            params =
-                utils::extract_password_parameters(password_info.current_algo.as_ref().unwrap());
+                .get_password_information().await
+                .map_err(SignInError::Other)?.password;
+            params = utils::extract_password_parameters(
+                password_info.current_algo.as_ref().unwrap()
+            );
             if !check_p_and_g(params.2, params.3) {
-                panic!("Failed to get correct password information from Telegram")
+                panic!("Failed to get correct password information from Telegram");
             }
         }
 
@@ -438,7 +464,7 @@ impl Client {
     /// # }
     /// ```
     pub async fn sign_out(&self) -> Result<tl::enums::auth::LoggedOut, InvocationError> {
-        self.invoke(&tl::functions::auth::LogOut {}).await
+        self.invoke(&(tl::functions::auth::LogOut {})).await
     }
 
     /// Synchronize all state to the session file and provide mutable access to it.
@@ -455,7 +481,7 @@ impl Client {
     ///
     /// The client will be disconnected even if signing out fails.
     pub async fn sign_out_disconnect(&self) -> Result<(), InvocationError> {
-        let _res = self.invoke(&tl::functions::auth::LogOut {}).await;
+        let _res = self.invoke(&(tl::functions::auth::LogOut {})).await;
         panic!("disconnect now only works via dropping");
     }
 }
