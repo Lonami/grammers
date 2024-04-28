@@ -512,17 +512,17 @@ impl PtsInfo {
             BotBusinessConnect(_) => None,
             BotNewBusinessMessage(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             BotEditBusinessMessage(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             BotDeleteBusinessMessage(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: u.messages.len() as i32,
                 entry: Entry::SecretChats,
             }),
         }
