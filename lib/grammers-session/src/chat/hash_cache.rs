@@ -383,7 +383,7 @@ impl ChatHashCache {
                 U::DeleteQuickReplyMessages(_) => true,
                 U::BotNewBusinessMessage(u) => self.extend_from_message(&u.message),
                 U::BotEditBusinessMessage(u) => self.extend_from_message(&u.message),
-                U::BotDeleteBusinessMessage(u) => true,
+                U::BotDeleteBusinessMessage(_) => true,
                 U::BotBusinessConnect(u) => match &u.connection {
                     tl::enums::BotBusinessConnection::Connection(con) => self.has(con.user_id),
                 },
