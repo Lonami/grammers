@@ -580,13 +580,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             }
                             .into(),
                         ),
-                        Err(_) => {
-                            warn!(
-                                "telegram sent updates that failed to be deserialized: {}",
-                                e
-                            );
-                            None
-                        }
+                        Err(_) => match tl::types::messages::InvitedUsers::from_bytes(update) {
+                            Ok(u) => Some(u.updates),
+                            Err(_) => {
+                                warn!(
+                                    "telegram sent updates that failed to be deserialized: {}",
+                                    e
+                                );
+                                None
+                            }
+                        },
                     }
                 }
             }
