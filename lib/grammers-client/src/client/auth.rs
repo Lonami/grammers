@@ -253,6 +253,19 @@ impl Client {
         })
     }
 
+    /// Export login token for the current session.
+    /// This token can be used to login to the account usign qr code by encoding tg://login?token={base64 encoded token}
+    async fn export_login_token(&self, except_ids: Vec<i64>) {
+        let request = tl::functions::auth::ExportLoginToken {
+            except_ids: except_ids,
+            api_hash: self.0.config.api_hash.clone(),
+            api_id: self.0.config.api_id
+        };
+        let token = self.invoke(&request).await.unwrap();
+
+        token
+    }
+
     /// Signs in to the user account.
     ///
     /// You must call [`Client::request_login_code`] before using this method in order to obtain
