@@ -1,6 +1,6 @@
 [package]
 name = "grammers-session"
-version = "0.5.1"
+version = "0.5.2"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -14,12 +14,12 @@ categories = []
 edition = "2021"
 
 [dependencies]
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1" }
-grammers-crypto = { path = "../grammers-crypto", version = "0.6.0" }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.6.0" }
+grammers-crypto = { path = "../grammers-crypto", version = "0.6.1" }
 log = "0.4.20"
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.5.1" }
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.6.0" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.1" }
 
 [dev-dependencies]

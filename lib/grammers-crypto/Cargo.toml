@@ -1,6 +1,6 @@
 [package]
 name = "grammers-crypto"
-version = "0.6.0"
+version = "0.6.1"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """

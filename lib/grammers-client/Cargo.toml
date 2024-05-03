@@ -1,6 +1,6 @@
 [package]
 name = "grammers-client"
-version = "0.5.0"
+version = "0.6.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -25,11 +25,11 @@ chrono = "0.4.31"
 futures-util = { version = "0.3.15", default_features = false, features = [
     "alloc"
 ] }
-grammers-crypto = { path = "../grammers-crypto", version = "0.6.0" }
-grammers-mtproto = { path = "../grammers-mtproto", version = "0.5.0" }
-grammers-mtsender = { path = "../grammers-mtsender", version = "0.5.0" }
-grammers-session = { path = "../grammers-session", version = "0.5.1" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.5.1", features = [
+grammers-crypto = { path = "../grammers-crypto", version = "0.6.1" }
+grammers-mtproto = { path = "../grammers-mtproto", version = "0.6.0" }
+grammers-mtsender = { path = "../grammers-mtsender", version = "0.5.1" }
+grammers-session = { path = "../grammers-session", version = "0.5.2" }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.6.0", features = [
     "tl-mtproto",
 ] }
 html5ever = { version = "0.26.0", optional = true }

@@ -13,4 +13,4 @@ categories = []
 edition = "2021"
 
 [dependencies]
-grammers-client = "0.5.0"
+grammers-client = "0.6.0"

@@ -1,6 +1,6 @@
 [package]
 name = "grammers-tl-gen"
-version = "0.5.1"
+version = "0.6.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
