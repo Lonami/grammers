@@ -209,7 +209,9 @@ impl Photo {
     }
 
     /// Returns TTL seconds if the photo is self-destructive, None otherwise
-    pub fn ttl_seconds(&self) -> Option<i32> { self.photo.ttl_seconds }
+    pub fn ttl_seconds(&self) -> Option<i32> {
+        self.photo.ttl_seconds
+    }
 }
 
 impl Document {
