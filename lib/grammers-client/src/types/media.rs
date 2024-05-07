@@ -207,6 +207,11 @@ impl Photo {
     pub fn is_spoiler(&self) -> bool {
         self.photo.spoiler
     }
+
+    /// Returns TTL seconds if the photo is self-destructive, None otherwise
+    pub fn ttl_seconds(&self) -> Option<i32> {
+        self.photo.ttl_seconds
+    }
 }
 
 impl Document {
