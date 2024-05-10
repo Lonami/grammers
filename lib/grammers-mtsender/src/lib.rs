@@ -698,7 +698,7 @@ pub async fn connect_via_proxy<'a, T: Transport>(
 
 async fn connect_stream(addr: &std::net::SocketAddr) -> Result<NetStream, std::io::Error> {
     info!("connecting...");
-    Ok(NetStream::Tcp(TcpStream::connect(addr.clone()).await?))
+    Ok(NetStream::Tcp(TcpStream::connect(addr).await?))
 }
 
 #[cfg(feature = "proxy")]

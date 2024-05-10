@@ -344,13 +344,10 @@ mod tests {
         assert_eq!(def.name, "a");
         assert_eq!(def.id, 1);
         assert_eq!(def.params.len(), 1);
-        assert!(match def.params[0].ty {
-            ParameterType::Normal {
-                ty: Type { generic_ref, .. },
-                ..
-            } if generic_ref => true,
-            _ => false,
-        });
+        assert!(matches!(def.params[0].ty, ParameterType::Normal {
+                        ty: Type { generic_ref, .. },
+                        ..
+                    } if generic_ref));
         assert_eq!(
             def.ty,
             Type {

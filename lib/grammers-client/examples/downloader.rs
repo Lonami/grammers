@@ -37,9 +37,9 @@ async fn async_main() -> Result<()> {
         .init()
         .unwrap();
 
-    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
-    let chat_name = env::args().skip(1).next().expect("chat name missing");
+    let api_id = std::env::var("TG_ID")?.parse().expect("TG_ID invalid");
+    let api_hash = std::env::var("TG_HASH")?.to_string();
+    let chat_name = env::args().nth(1).expect("chat name missing");
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
@@ -103,7 +103,7 @@ async fn async_main() -> Result<()> {
     let mut counter = 0;
 
     while let Some(msg) = messages.next().await? {
-        counter = counter + 1;
+        counter += 1;
         println!("Message {}:{}", msg.id(), msg.text());
         if let Some(media) = msg.media() {
             let dest = format!(
@@ -147,12 +147,12 @@ fn get_file_extension(media: &Media) -> String {
 }
 
 fn get_mime_extension(mime_type: Option<&str>) -> String {
-    return mime_type
+    mime_type
         .map(|m| {
             let mime: Mime = m.parse().unwrap();
-            format!(".{}", mime.subtype().to_string())
+            format!(".{}", mime.subtype())
         })
-        .unwrap_or(String::new());
+        .unwrap_or_default()
 }
 
 fn prompt(message: &str) -> Result<String> {

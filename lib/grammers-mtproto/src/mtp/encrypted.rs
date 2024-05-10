@@ -291,8 +291,7 @@ impl Encrypted {
             tl::types::MsgDetailedInfo::CONSTRUCTOR_ID
             | tl::types::MsgNewDetailedInfo::CONSTRUCTOR_ID => self.handle_detailed_info(message),
             // Explicit Request to Re-Send Messages & Explicit Request to Re-Send Answers
-            tl::types::MsgResendReq::CONSTRUCTOR_ID
-            | tl::types::MsgResendAnsReq::CONSTRUCTOR_ID => self.handle_msg_resend(message),
+            tl::types::MsgResendReq::CONSTRUCTOR_ID => self.handle_msg_resend(message),
 
             // Request for several future salts
             tl::types::FutureSalt::CONSTRUCTOR_ID => self.handle_future_salt(message),

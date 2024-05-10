@@ -12,11 +12,7 @@ repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = ["data-structures", "encoding"]
 edition = "2021"
-include = [
-    "build.rs",
-    "src/*.rs",
-    "tl/*.tl",
-]
+include = ["build.rs", "src/*.rs", "tl/*.tl"]
 
 [build-dependencies]
 grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.5.1" }
@@ -26,7 +22,13 @@ grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.1" }
 toml = "0.8.8"
 
 [features]
-default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]
+default = [
+    "impl-debug",
+    "impl-from-enum",
+    "impl-from-type",
+    "tl-api",
+    "tl-mtproto",
+]
 
 deserializable-functions = []
 impl-debug = []

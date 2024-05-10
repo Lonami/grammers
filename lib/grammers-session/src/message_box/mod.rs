@@ -211,7 +211,7 @@ impl MessageBox {
             return;
         }
         for entry in entries {
-            if let Some(state) = self.map.get_mut(&entry) {
+            if let Some(state) = self.map.get_mut(entry) {
                 state.deadline = deadline;
                 debug!("reset deadline {:?} for {:?}", deadline, entry);
             } else {

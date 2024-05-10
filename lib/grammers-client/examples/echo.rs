@@ -13,7 +13,6 @@
 use futures_util::future::{select, Either};
 use grammers_client::{Client, Config, InitParams, Update};
 use grammers_session::Session;
-use log;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::pin::pin;
@@ -42,9 +41,9 @@ async fn async_main() -> Result {
         .init()
         .unwrap();
 
-    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
-    let token = env::args().skip(1).next().expect("token missing");
+    let api_id = std::env::var("TG_ID")?.parse().expect("TG_ID invalid");
+    let api_hash = std::env::var("TG_HASH")?.to_string();
+    let token = env::args().nth(1).expect("token missing");
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {

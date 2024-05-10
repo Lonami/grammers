@@ -23,7 +23,7 @@ pub(crate) fn group_by_ns(
         .for_each(|d| {
             // We currently only handle zero or one namespace.
             assert!(d.namespace.len() <= 1);
-            let ns = d.namespace.get(0).map(|x| &x[..]).unwrap_or("");
+            let ns = d.namespace.first().map(|x| &x[..]).unwrap_or("");
             result.entry(ns.into()).or_insert_with(Vec::new).push(d);
         });
 
@@ -43,7 +43,7 @@ pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<St
             // We currently only handle zero or one namespace.
             assert!(d.namespace.len() <= 1);
             result
-                .entry(d.namespace.get(0).map(Clone::clone))
+                .entry(d.namespace.first().map(Clone::clone))
                 .or_insert_with(Vec::new)
                 .push(&d.ty);
         });
