@@ -1,3 +1,14 @@
+use std::io::{Cursor};
+use std::net::{Ipv4Addr, Ipv6Addr};
+
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE;
+use byteorder::{BigEndian, ReadBytesExt};
+use grammers_tl_types::{deserialize};
+
+use data_center::DataCenterExtractor;
+// Needed for auto-generated definitions.
+
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -7,7 +18,7 @@
 // except according to those terms.
 mod chat;
 mod generated;
-mod message_box;
+pub mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
 pub use generated::types::UpdateState;
@@ -25,10 +36,93 @@ use std::path::Path;
 use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
-use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
+use grammers_tl_types::{Deserializable, Identifiable, Serializable};
+use crate::generated::types::DataCenter;
 
+mod data_center;
+
+#[derive(Debug)]
 pub struct Session {
     session: Mutex<types::Session>,
+}
+
+
+/// Implementation of the `TryFrom` trait for `Session` from a `&str`.
+///
+/// This allows the conversion of a base64 encoded session string into a `Session` object.
+/// The function handles padding, decoding, and parsing of the session string, constructing
+/// a `Session` if successful.
+///
+/// # Errors
+///
+/// This function will return an `io::Error` if the base64 decoding fails, if there is an
+/// unexpected end of file during parsing, or if the parsed IP address is not valid.
+///
+/// # Examples
+///
+/// ```
+/// use std::io;
+/// use grammers_session::Session;
+///
+/// let session_string = "base64encodedstring";
+/// let session: io::Result<Session> = Session::try_from(session_string);
+/// match session {
+///     Ok(session) => {
+///         // Use the session here
+///     }
+///     Err(e) => {
+///         eprintln!("Failed to create a session: {}", e);
+///     }
+/// }
+/// ```
+impl TryFrom<&str> for Session {
+    type Error = io::Error;
+
+    fn try_from(session_string: &str) -> io::Result<Self> {
+        let padding = "=";
+        let pad_length = (4 - session_string.len() % 4) % 4;
+        let padded_session_string = format!("{}{}", session_string, padding.repeat(pad_length));
+        let decoded_bytes = URL_SAFE.decode(&padded_session_string)
+            .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
+
+        let mut cursor = Cursor::new(decoded_bytes);
+
+        let dc_id = cursor.read_u8()? as i32;
+        let _api_id = cursor.read_u32::<BigEndian>()?;
+        let _test_mode = cursor.read_u8()? != 0;
+
+        let mut auth_key = vec![0u8; 256];
+        cursor.read_exact(&mut auth_key)?;
+        let user_id = cursor.read_i64::<BigEndian>()?;
+        let is_bot = cursor.read_u8()? != 0;
+
+        let (ip, port) = DataCenterExtractor::new(dc_id, false, false, false);
+        let ipv4 = ip.parse::<Ipv4Addr>().ok();
+        let ipv6 = ip.parse::<Ipv6Addr>().ok();
+
+        let dc = DataCenter {
+            id: dc_id,
+            ipv4: ipv4.map(|addr| i32::from_le_bytes(addr.octets())),
+            ipv6: ipv6.map(|addr| addr.octets()),
+            port,
+            auth: Some(auth_key.clone()),
+        };
+
+        let user = User {
+            id: user_id,
+            dc: dc_id,
+            bot: is_bot,
+        };
+
+        let session = Self {
+            session: Mutex::new(types::Session {
+                dcs: vec![dc.into()],
+                user: Some(user.into()),
+                state: None,
+            }),
+        };
+        Ok(session)
+    }
 }
 
 #[allow(clippy::new_without_default)]
