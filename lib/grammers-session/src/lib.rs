@@ -40,6 +40,7 @@ use grammers_tl_types::{Deserializable, Identifiable, Serializable};
 use crate::generated::types::DataCenter;
 
 mod data_center;
+pub struct TelethonStringSession(String);
 
 #[derive(Debug)]
 pub struct Session {
@@ -47,7 +48,7 @@ pub struct Session {
 }
 
 
-/// Implementation of the `TryFrom` trait for `Session` from a `&str`.
+/// Implementation of the `TryFrom` trait for `Session` from a `TelethonStringSession`.
 ///
 /// This allows the conversion of a base64 encoded session string into a `Session` object.
 /// The function handles padding, decoding, and parsing of the session string, constructing
@@ -62,9 +63,9 @@ pub struct Session {
 ///
 /// ```
 /// use std::io;
-/// use grammers_session::Session;
+/// use grammers_session::{Session, TelethonStringSession};
 ///
-/// let session_string = "base64encodedstring";
+/// let session_string = TelethonStringSession("base64encodedstring".to_string());
 /// let session: io::Result<Session> = Session::try_from(session_string);
 /// match session {
 ///     Ok(session) => {
@@ -75,13 +76,13 @@ pub struct Session {
 ///     }
 /// }
 /// ```
-impl TryFrom<&str> for Session {
+impl TryFrom<TelethonStringSession> for Session {
     type Error = io::Error;
 
-    fn try_from(session_string: &str) -> io::Result<Self> {
+    fn try_from(session_string: TelethonStringSession) -> io::Result<Self> {
         let padding = "=";
-        let pad_length = (4 - session_string.len() % 4) % 4;
-        let padded_session_string = format!("{}{}", session_string, padding.repeat(pad_length));
+        let pad_length = (4 - session_string.0.len() % 4) % 4;
+        let padded_session_string = format!("{}{}", session_string.0, padding.repeat(pad_length));
         let decoded_bytes = URL_SAFE.decode(&padded_session_string)
             .map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))?;
 
