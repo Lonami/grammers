@@ -4,7 +4,6 @@ use std::net::{Ipv4Addr, Ipv6Addr};
 use base64::Engine;
 use base64::engine::general_purpose::URL_SAFE;
 use byteorder::{BigEndian, ReadBytesExt};
-use grammers_tl_types::{deserialize};
 
 use data_center::DataCenterExtractor;
 // Needed for auto-generated definitions.
@@ -36,7 +35,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
-use grammers_tl_types::{Deserializable, Identifiable, Serializable};
+use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
 use crate::generated::types::DataCenter;
 
 mod data_center;
