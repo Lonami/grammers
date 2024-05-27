@@ -1,13 +1,3 @@
-use std::io::{Cursor};
-use std::net::{Ipv4Addr, Ipv6Addr};
-
-use base64::Engine;
-use base64::engine::general_purpose::URL_SAFE;
-use byteorder::{BigEndian, ReadBytesExt};
-
-use data_center::DataCenterExtractor;
-// Needed for auto-generated definitions.
-
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -25,14 +15,21 @@ pub use generated::types::User;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
+use data_center::DataCenterExtractor;
 pub use message_box::{channel_id, PrematureEndReason};
 pub use message_box::{Gap, MessageBox};
+use base64::Engine;
+use base64::engine::general_purpose::URL_SAFE;
+use byteorder::{BigEndian, ReadBytesExt};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 use std::sync::Mutex;
+use std::io::{Cursor};
+use std::net::{Ipv4Addr, Ipv6Addr};
+
 
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
