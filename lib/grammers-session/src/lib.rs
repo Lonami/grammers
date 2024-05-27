@@ -7,6 +7,7 @@
 // except according to those terms.
 mod chat;
 mod generated;
+mod data_center;
 pub mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
@@ -14,8 +15,9 @@ pub use generated::types::UpdateState;
 pub use generated::types::User;
 pub use generated::LAYER as VERSION;
 use generated::{enums, types};
-use grammers_tl_types::deserialize::Error as DeserializeError;
+use generated::types::DataCenter;
 use data_center::DataCenterExtractor;
+use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::{channel_id, PrematureEndReason};
 pub use message_box::{Gap, MessageBox};
 use base64::Engine;
@@ -30,12 +32,9 @@ use std::sync::Mutex;
 use std::io::{Cursor};
 use std::net::{Ipv4Addr, Ipv6Addr};
 
-
 // Needed for auto-generated definitions.
 use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
-use crate::generated::types::DataCenter;
 
-mod data_center;
 pub struct TelethonStringSession(String);
 
 #[derive(Debug)]
