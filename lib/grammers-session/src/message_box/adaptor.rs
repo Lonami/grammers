@@ -440,17 +440,17 @@ impl PtsInfo {
             PeerHistoryTtl(_) => None,
             ChatParticipant(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             ChannelParticipant(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             BotStopped(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             GroupCallConnection(_) => None,
@@ -458,7 +458,7 @@ impl PtsInfo {
             PendingJoinRequests(_) => None,
             BotChatInviteRequester(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             MessageReactions(_) => None,
@@ -485,19 +485,19 @@ impl PtsInfo {
             SentStoryReaction(_) => None,
             BotChatBoost(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             ChannelViewForumAsMessages(_) => None,
             PeerWallpaper(_) => None,
             BotMessageReaction(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             BotMessageReactions(u) => Some(Self {
                 pts: u.qts,
-                pts_count: 0,
+                pts_count: 1,
                 entry: Entry::SecretChats,
             }),
             SavedDialogPinned(_) => None,
