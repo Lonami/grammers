@@ -12,9 +12,7 @@
 
 use grammers_client::{Client, Config, SignInError};
 use grammers_session::Session;
-use log;
 use simple_logger::SimpleLogger;
-use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::runtime;
 
@@ -42,8 +40,8 @@ async fn async_main() -> Result<()> {
         .init()
         .unwrap();
 
-    let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
+    let api_id = std::env::var("TG_ID")?.parse().expect("TG_ID invalid");
+    let api_hash = std::env::var("TG_HASH")?.to_string();
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {

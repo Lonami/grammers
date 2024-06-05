@@ -11,7 +11,7 @@ use std::fmt::Write;
 /// Represent a sequence of bytes as an hexadecimal string.
 pub fn to_hex(bytes: &[u8]) -> String {
     let mut result = String::with_capacity(bytes.len() * 2);
-    bytes.into_iter().for_each(|b| {
+    bytes.iter().for_each(|b| {
         write!(result, "{:02x}", b).unwrap();
     });
     result

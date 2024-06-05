@@ -39,7 +39,7 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.head = self.default_head;
     }
 
-    pub fn shift<'a>(&'a mut self, amount: usize) -> View<'a, T> {
+    pub fn shift(&mut self, amount: usize) -> View<'_, T> {
         if self.head >= amount {
             self.head -= amount
         } else {
@@ -165,7 +165,7 @@ mod tests {
 
     fn sanity_checks(ring: &RingBuffer<u8>) {
         assert_eq!(ring.as_ref().len(), ring.len());
-        assert_eq!(ring.is_empty(), ring.len() == 0);
+        assert_eq!(ring.is_empty(), ring.len().eq(&0));
     }
 
     #[test]
@@ -231,7 +231,7 @@ mod tests {
         assert_eq!(repr(&buffer), "[ 0 0 0 0|1 2 3 ? ? ? ]");
 
         let mut head = buffer.shift(3);
-        head.extend([4, 5, 6].into_iter());
+        head.extend([4, 5, 6]);
         sanity_checks(&buffer);
         assert_eq!(repr(&buffer), "[ 0|4 5 6 1 2 3 ? ? ? ]");
 

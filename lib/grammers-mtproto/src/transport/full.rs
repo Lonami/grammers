@@ -74,7 +74,7 @@ impl Transport for Full {
         // payload len
         let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
         if len < 12 {
-            return Err(Error::BadLen { got: len as i32 });
+            return Err(Error::BadLen { got: len });
         }
 
         if total_len < len {

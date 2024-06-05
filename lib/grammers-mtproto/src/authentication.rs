@@ -284,15 +284,17 @@ fn do_step2(
 
     check_nonce(&res_pq.nonce, &nonce)?;
 
-    if res_pq.pq.len() != 8 {
+    let check_pq = res_pq.pq.to_bytes();
+
+    if check_pq.len() != 8 {
         return Err(Error::InvalidPQSize {
-            size: res_pq.pq.len(),
+            size: check_pq.len(),
         });
     }
 
     let pq = {
         let mut buffer = [0; 8];
-        buffer.copy_from_slice(&res_pq.pq);
+        buffer.copy_from_slice(&check_pq);
         u64::from_be_bytes(buffer)
     };
 
@@ -312,27 +314,27 @@ fn do_step2(
 
     // Convert (p, q) to bytes using the least amount of space possible.
     // If we don't do this, Telegram will respond with -404 as the message.
-    let p_bytes = {
+    let p_string = {
         let mut buffer = p.to_be_bytes().to_vec();
         if let Some(pos) = buffer.iter().position(|&b| b != 0) {
             buffer = buffer[pos..].to_vec();
         }
-        buffer
+        String::from_bytes(&buffer).unwrap()
     };
-    let q_bytes = {
+    let q_string = {
         let mut buffer = q.to_be_bytes().to_vec();
         if let Some(pos) = buffer.iter().position(|&b| b != 0) {
             buffer = buffer[pos..].to_vec();
         }
-        buffer
+        String::from_bytes(&buffer).unwrap()
     };
 
     // "pq is a representation of a natural number (in binary big endian format)"
     // https://core.telegram.org/mtproto/auth_key#dh-exchange-initiation
     let pq_inner_data = tl::enums::PQInnerData::Data(tl::types::PQInnerData {
-        pq: pq.to_be_bytes().to_vec(),
-        p: p_bytes.clone(),
-        q: q_bytes.clone(),
+        pq: res_pq.pq,
+        p: p_string.clone(),
+        q: q_string.clone(),
         nonce,
         server_nonce: res_pq.server_nonce,
         new_nonce,
@@ -362,10 +364,10 @@ fn do_step2(
         tl::functions::ReqDhParams {
             nonce,
             server_nonce: res_pq.server_nonce,
-            p: p_bytes,
-            q: q_bytes,
+            p: p_string.clone(),
+            q: q_string.clone(),
             public_key_fingerprint: fingerprint,
-            encrypted_data: ciphertext,
+            encrypted_data: String::from_bytes(&ciphertext).unwrap(),
         }
         .to_bytes(),
         Step2 {
@@ -430,7 +432,7 @@ fn do_step3(
 
             let sha = {
                 let mut hasher = Sha1::new();
-                hasher.update(&new_nonce);
+                hasher.update(new_nonce);
                 hasher.finalize()
             };
             let new_nonce_hash = {
@@ -459,7 +461,7 @@ fn do_step3(
 
     // sha1 hash + plain text + padding
     let plain_text_answer =
-        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
+        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer.to_bytes(), &key, &iv);
 
     let got_answer_hash = {
         let mut buffer = [0; 20];
@@ -492,9 +494,9 @@ fn do_step3(
     check_server_nonce(&server_dh_inner.server_nonce, &server_nonce)?;
 
     // Safe to unwrap because the numbers are valid
-    let dh_prime = BigUint::from_bytes_be(&server_dh_inner.dh_prime);
+    let dh_prime = BigUint::from_bytes_be(&server_dh_inner.dh_prime.to_bytes());
     let g = server_dh_inner.g.to_biguint().unwrap();
-    let g_a = BigUint::from_bytes_be(&server_dh_inner.g_a);
+    let g_a = BigUint::from_bytes_be(&server_dh_inner.g_a.to_bytes());
 
     let time_offset = server_dh_inner.server_time - now;
 
@@ -529,7 +531,7 @@ fn do_step3(
         nonce,
         server_nonce,
         retry_id: 0, // TODO use an actual retry_id
-        g_b: g_b.to_bytes_be(),
+        g_b: g_b.to_string(),
     })
     .to_bytes();
 
@@ -560,7 +562,7 @@ fn do_step3(
         tl::functions::SetClientDhParams {
             nonce,
             server_nonce,
-            encrypted_data: client_dh_encrypted,
+            encrypted_data: String::from_bytes(&client_dh_encrypted).unwrap(),
         }
         .to_bytes(),
         Step3 {

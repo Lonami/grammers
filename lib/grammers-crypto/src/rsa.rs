@@ -76,7 +76,7 @@ pub fn encrypt_hashed(data: &[u8], key: &Key, random_bytes: &[u8; 224]) -> Vec<u
 
         // temp_key_xor := temp_key XOR SHA256(aes_encrypted); -- adjusted key, 32 bytes
         let temp_key_xor = {
-            let mut xored = temp_key.clone();
+            let mut xored = temp_key;
             xored
                 .iter_mut()
                 .zip(sha256!(&aes_encrypted))

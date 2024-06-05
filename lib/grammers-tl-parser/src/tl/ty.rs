@@ -162,72 +162,78 @@ mod tests {
 
     #[test]
     fn check_bare() {
-        assert!(match Type::from_str("foo") {
-            Ok(Type { bare: true, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("Foo") {
-            Ok(Type { bare: false, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("Foo.bar") {
-            Ok(Type { bare: true, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("Foo.Bar") {
-            Ok(Type { bare: false, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("foo.Bar") {
-            Ok(Type { bare: false, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("!bar") {
-            Ok(Type { bare: true, .. }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("!foo.Bar") {
-            Ok(Type { bare: false, .. }) => true,
-            _ => false,
-        });
+        assert!(matches!(Type::from_str("foo"), Ok(Type { bare: true, .. })));
+        assert!(matches!(
+            Type::from_str("foo"),
+            Ok(Type { bare: false, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("Foo.bar"),
+            Ok(Type { bare: true, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("Foo.Bar"),
+            Ok(Type { bare: false, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("Foo.Bar"),
+            Ok(Type { bare: false, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("foo.Bar"),
+            Ok(Type { bare: false, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("!bar"),
+            Ok(Type { bare: true, .. })
+        ));
+        assert!(matches!(
+            Type::from_str("!foo.Bar"),
+            Ok(Type { bare: false, .. })
+        ));
     }
 
     #[test]
     fn check_generic_ref() {
-        assert!(match Type::from_str("f") {
+        assert!(matches!(
+            Type::from_str("f"),
             Ok(Type {
-                generic_ref: false, ..
-            }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("!f") {
+                generic_ref: false,
+                ..
+            })
+        ));
+        assert!(matches!(
+            Type::from_str("!f"),
             Ok(Type {
-                generic_ref: true, ..
-            }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("!Foo") {
+                generic_ref: true,
+                ..
+            })
+        ));
+        assert!(matches!(
+            Type::from_str("!Foo"),
             Ok(Type {
-                generic_ref: true, ..
-            }) => true,
-            _ => false,
-        });
-        assert!(match Type::from_str("!X") {
+                generic_ref: true,
+                ..
+            })
+        ));
+        assert!(matches!(
+            Type::from_str("!X"),
             Ok(Type {
-                generic_ref: true, ..
-            }) => true,
-            _ => false,
-        });
+                generic_ref: true,
+                ..
+            })
+        ));
     }
 
     #[test]
     fn check_generic_arg() {
-        assert!(match Type::from_str("foo.bar") {
+        assert!(matches!(
+            Type::from_str("foo.bar"),
             Ok(Type {
-                generic_arg: None, ..
-            }) => true,
-            _ => false,
-        });
+                generic_arg: None,
+                ..
+            })
+        ));
         assert!(match Type::from_str("foo<bar>") {
             Ok(Type {
                 generic_arg: Some(x),
