@@ -203,6 +203,11 @@ impl MessageIter {
         )
     }
 
+    pub fn min_id(mut self, min_id: i32) -> Self {
+        self.request.min_id = min_id;
+        self
+    }
+
     pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
