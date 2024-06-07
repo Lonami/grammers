@@ -14,7 +14,6 @@ use crate::types::{
     BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
 };
 use grammers_mtproto::mtp::RpcError;
-use grammers_mtproto::MsgId;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
@@ -723,7 +722,6 @@ impl Client {
                 name: "USER_NOT_PARTICIPANT".to_string(),
                 value: None,
                 caused_by: None,
-                msg_id: MsgId(0),
             }));
         }
 
@@ -805,7 +803,6 @@ impl Client {
                 name: "INVITE_HASH_INVALID".to_string(),
                 value: None,
                 caused_by: None,
-                msg_id: MsgId(0),
             })),
         }
     }

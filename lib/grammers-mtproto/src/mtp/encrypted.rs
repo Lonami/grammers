@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp, RpcError};
-use crate::manual_tl::RpcResult;
+use super::{Deserialization, DeserializeError, Mtp, RpcResult, RpcResultError};
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, RingBuffer};
@@ -415,9 +414,9 @@ impl Encrypted {
         match inner_constructor {
             // RPC Error
             tl::types::RpcError::CONSTRUCTOR_ID => match tl::enums::RpcError::from_bytes(&result) {
-                Ok(tl::enums::RpcError::Error(e)) => self.deserialization.push(
-                    Deserialization::RpcError(RpcError::from(e).with_msg_id(msg_id)),
-                ),
+                Ok(tl::enums::RpcError::Error(error)) => self
+                    .deserialization
+                    .push(Deserialization::RpcError(RpcResultError { msg_id, error })),
                 Err(_) => todo!("not quite an rpc error deserialization"),
             },
 
@@ -452,16 +451,16 @@ impl Encrypted {
                 };
                 self.deserialization
                     .push(Deserialization::RpcResult(RpcResult {
-                        req_msg_id: msg_id.0,
-                        result: body,
+                        msg_id: msg_id,
+                        body,
                     }));
             }
             _ => {
                 self.store_own_updates(&result);
                 self.deserialization
                     .push(Deserialization::RpcResult(RpcResult {
-                        req_msg_id: msg_id.0,
-                        result,
+                        msg_id: msg_id,
+                        body: result,
                     }));
             }
         }
@@ -598,7 +597,9 @@ impl Encrypted {
 
         // TODO don't propagate if response to internal salt request
         self.deserialization
-            .push(Deserialization::BadMessage(bad_msg.clone()));
+            .push(Deserialization::BadMessage(super::BadMessage {
+                msg_id: MsgId(bad_msg.bad_msg_id()),
+            }));
 
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::Notification(x) => x,
@@ -825,8 +826,8 @@ impl Encrypted {
         // TODO don't propagate if response to internal salt request
         self.deserialization
             .push(Deserialization::RpcResult(RpcResult {
-                req_msg_id: salts.req_msg_id,
-                result: message.body,
+                msg_id: MsgId(salts.req_msg_id),
+                body: message.body,
             }));
 
         self.start_salt_time = Some((salts.now, Instant::now()));
@@ -877,8 +878,8 @@ impl Encrypted {
 
         self.deserialization
             .push(Deserialization::RpcResult(RpcResult {
-                req_msg_id: pong.msg_id,
-                result: message.body,
+                msg_id: MsgId(pong.msg_id),
+                body: message.body,
             }));
         Ok(())
     }

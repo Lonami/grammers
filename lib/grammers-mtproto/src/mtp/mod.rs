@@ -19,7 +19,6 @@
 mod encrypted;
 mod plain;
 
-pub use crate::manual_tl::RpcResult;
 use crate::MsgId;
 use crypto::RingBuffer;
 pub use encrypted::{
@@ -31,12 +30,26 @@ use grammers_tl_types as tl;
 pub use plain::Plain;
 use std::fmt;
 
+pub struct RpcResult {
+    pub msg_id: MsgId,
+    pub body: Vec<u8>,
+}
+
+pub struct RpcResultError {
+    pub msg_id: MsgId,
+    pub error: tl::types::RpcError,
+}
+
+pub struct BadMessage {
+    pub msg_id: MsgId,
+}
+
 /// Results from the deserialization of a response.
 pub enum Deserialization {
     Update(Vec<u8>),
     RpcResult(RpcResult),
-    RpcError(RpcError),
-    BadMessage(tl::enums::BadMsgNotification),
+    RpcError(RpcResultError),
+    BadMessage(BadMessage),
 }
 
 /// The error type for the deserialization of server messages.
@@ -150,9 +163,6 @@ pub struct RpcError {
     /// The constructor identifier of the request that triggered this error.
     /// Won't be present if the error was artificially constructed.
     pub caused_by: Option<u32>,
-
-    /// Identifier of the message sent with the request that triggered this error.
-    pub msg_id: MsgId,
 }
 
 impl std::error::Error for RpcError {}
@@ -187,7 +197,6 @@ impl From<tl::types::RpcError> for RpcError {
                 // Safe to unwrap, matched on digits
                 value: Some(value.parse().unwrap()),
                 caused_by: None,
-                msg_id: MsgId(0),
             }
         } else {
             Self {
@@ -195,7 +204,6 @@ impl From<tl::types::RpcError> for RpcError {
                 name: error.error_message.clone(),
                 value: None,
                 caused_by: None,
-                msg_id: MsgId(0),
             }
         }
     }
@@ -229,8 +237,8 @@ impl RpcError {
         }
     }
 
-    pub fn with_msg_id(mut self, msg_id: MsgId) -> Self {
-        self.msg_id = msg_id;
+    pub fn with_caused_by(mut self, constructor_id: u32) -> Self {
+        self.caused_by = Some(constructor_id);
         self
     }
 }
@@ -360,7 +368,6 @@ mod tests {
                 name: "CHAT_INVALID".into(),
                 value: None,
                 caused_by: None,
-                msg_id: MsgId(0)
             }
         );
 
@@ -374,7 +381,6 @@ mod tests {
                 name: "FLOOD_WAIT".into(),
                 value: Some(31),
                 caused_by: None,
-                msg_id: MsgId(0)
             }
         );
 
@@ -388,7 +394,6 @@ mod tests {
                 name: "INTERDC_CALL_ERROR".into(),
                 value: Some(2),
                 caused_by: None,
-                msg_id: MsgId(0)
             }
         );
     }

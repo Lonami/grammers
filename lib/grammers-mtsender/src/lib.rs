@@ -12,7 +12,9 @@ pub use crate::reconnection::*;
 pub use errors::{AuthorizationError, InvocationError, ReadError};
 use futures_util::future::{pending, select, Either};
 use grammers_crypto::RingBuffer;
-use grammers_mtproto::mtp::{self, Deserialization, Mtp, RpcError, RpcResult};
+use grammers_mtproto::mtp::{
+    self, BadMessage, Deserialization, Mtp, RpcError, RpcResult, RpcResultError,
+};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
@@ -632,31 +634,35 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     fn process_result(&mut self, result: RpcResult) {
-        if let Some(req) = self.pop_request(MsgId(result.req_msg_id)) {
-            let x = result.result;
+        if let Some(req) = self.pop_request(result.msg_id) {
+            let x = result.body;
             assert!(x.len() >= 4);
             let res_id = u32::from_le_bytes([x[0], x[1], x[2], x[3]]);
             debug!(
                 "got result {:x} ({}) for request {:?}",
                 res_id,
                 tl::name_for_id(res_id),
-                result.req_msg_id
+                result.msg_id
             );
             drop(req.result.send(Ok(x)));
         } else {
             info!(
                 "got rpc result {:?} but no such request is saved",
-                result.req_msg_id
+                result.msg_id
             );
         }
     }
 
-    fn process_error(&mut self, mut error: RpcError) {
+    fn process_error(&mut self, error: RpcResultError) {
         if let Some(req) = self.pop_request(error.msg_id) {
-            debug!("got rpc error {:?}", error);
+            debug!("got rpc error {:?}", error.error);
             let x = req.body.as_slice();
-            error.caused_by = Some(u32::from_le_bytes([x[0], x[1], x[2], x[3]]));
-            drop(req.result.send(Err(InvocationError::Rpc(error))));
+            drop(
+                req.result.send(Err(InvocationError::Rpc(
+                    RpcError::from(error.error)
+                        .with_caused_by(u32::from_le_bytes([x[0], x[1], x[2], x[3]])),
+                ))),
+            );
         } else {
             info!(
                 "got rpc error {:?} but no such request is saved",
@@ -667,21 +673,19 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     // TODO deserialize??????
 
-    fn process_bad_message(&mut self, bad_msg: tl::enums::BadMsgNotification) {
+    fn process_bad_message(&mut self, bad_msg: BadMessage) {
         for i in (0..self.requests.len()).rev() {
             match self.requests[i].state {
                 RequestState::Serialized(pair)
-                    if pair.msg_id == MsgId(bad_msg.bad_msg_id())
-                        || pair.container_msg_id == MsgId(bad_msg.bad_msg_id()) =>
+                    if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
                 {
                     panic!("got bad msg for unsent request");
                 }
                 RequestState::Sent(pair)
-                    if pair.msg_id == MsgId(bad_msg.bad_msg_id())
-                        || pair.container_msg_id == MsgId(bad_msg.bad_msg_id()) =>
+                    if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
                 {
                     // TODO add a test to make sure we resend the request
-                    info!("{:?}; re-sending request {:?}", bad_msg, pair.msg_id);
+                    info!("bad msg; re-sending request {:?}", pair.msg_id);
 
                     // TODO check if actually retryable first!
                     self.requests[i].state = RequestState::NotSerialized;

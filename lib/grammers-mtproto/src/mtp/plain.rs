@@ -5,8 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp};
-use crate::manual_tl::RpcResult;
+use super::{Deserialization, DeserializeError, Mtp, RpcResult};
 use crate::MsgId;
 use grammers_crypto::RingBuffer;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
@@ -108,8 +107,8 @@ impl Mtp for Plain {
         }
 
         Ok(vec![Deserialization::RpcResult(RpcResult {
-            req_msg_id: 0,
-            result: payload[20..20 + len as usize].into(),
+            msg_id: MsgId(0),
+            body: payload[20..20 + len as usize].into(),
         })])
     }
 

@@ -30,5 +30,4 @@ pub const DEFAULT_COMPRESSION_THRESHOLD: Option<usize> = Some(512);
 /// all the server responses, and if one matches your original identifier,
 /// you will know the response corresponds to it.
 #[derive(Copy, Clone, Debug, Hash, PartialEq, PartialOrd, Eq, Ord)]
-// TODO this is being leaked due to RpcResult reuse not having MsgId
-pub struct MsgId(pub i64);
+pub struct MsgId(i64);
