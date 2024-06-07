@@ -9,12 +9,10 @@ mod errors;
 mod reconnection;
 
 pub use crate::reconnection::*;
-pub use errors::{AuthorizationError, InvocationError, ReadError};
+pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use futures_util::future::{pending, select, Either};
 use grammers_crypto::RingBuffer;
-use grammers_mtproto::mtp::{
-    self, BadMessage, Deserialization, Mtp, RpcError, RpcResult, RpcResultError,
-};
+use grammers_mtproto::mtp::{self, BadMessage, Deserialization, Mtp, RpcResult, RpcResultError};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
