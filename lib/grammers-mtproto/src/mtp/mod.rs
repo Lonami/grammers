@@ -44,12 +44,18 @@ pub struct BadMessage {
     pub msg_id: MsgId,
 }
 
+pub struct DeserializationFailure {
+    pub msg_id: MsgId,
+    pub error: DeserializeError,
+}
+
 /// Results from the deserialization of a response.
 pub enum Deserialization {
     Update(Vec<u8>),
     RpcResult(RpcResult),
     RpcError(RpcResultError),
     BadMessage(BadMessage),
+    Failure(DeserializationFailure),
 }
 
 /// The error type for the deserialization of server messages.

@@ -12,7 +12,9 @@ pub use crate::reconnection::*;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use futures_util::future::{pending, select, Either};
 use grammers_crypto::RingBuffer;
-use grammers_mtproto::mtp::{self, BadMessage, Deserialization, Mtp, RpcResult, RpcResultError};
+use grammers_mtproto::mtp::{
+    self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
+};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
@@ -586,6 +588,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 Deserialization::RpcResult(result) => self.process_result(result),
                 Deserialization::RpcError(error) => self.process_error(error),
                 Deserialization::BadMessage(bad_msg) => self.process_bad_message(bad_msg),
+                Deserialization::Failure(failure) => self.process_deserialize_error(failure),
             }
         }
     }
@@ -669,8 +672,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
     }
 
-    // TODO deserialize??????
-
     fn process_bad_message(&mut self, bad_msg: BadMessage) {
         for i in (0..self.requests.len()).rev() {
             match self.requests[i].state {
@@ -690,6 +691,21 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
                 _ => {}
             }
+        }
+    }
+
+    fn process_deserialize_error(&mut self, failure: DeserializationFailure) {
+        if let Some(req) = self.pop_request(failure.msg_id) {
+            debug!("got deserialization failure {:?}", failure.error);
+            drop(
+                req.result
+                    .send(Err(InvocationError::Read(failure.error.into()))),
+            );
+        } else {
+            info!(
+                "got deserialization failure {:?} but no such request is saved",
+                failure.error
+            );
         }
     }
 

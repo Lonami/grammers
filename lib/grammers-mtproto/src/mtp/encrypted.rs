@@ -5,7 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp, RpcResult, RpcResultError};
+use super::{
+    Deserialization, DeserializationFailure, DeserializeError, Mtp, RpcResult, RpcResultError,
+};
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, RingBuffer};
@@ -406,8 +408,13 @@ impl Encrypted {
         // which means this method itself is doing its job `Ok`.
         let inner_constructor = match inner_constructor {
             Ok(x) => x,
-            Err(_) => {
-                todo!("not quite an rpc error deserialization");
+            Err(e) => {
+                self.deserialization
+                    .push(Deserialization::Failure(DeserializationFailure {
+                        msg_id,
+                        error: e.into(),
+                    }));
+                return Ok(());
             }
         };
 
@@ -417,7 +424,13 @@ impl Encrypted {
                 Ok(tl::enums::RpcError::Error(error)) => self
                     .deserialization
                     .push(Deserialization::RpcError(RpcResultError { msg_id, error })),
-                Err(_) => todo!("not quite an rpc error deserialization"),
+                Err(e) => {
+                    self.deserialization
+                        .push(Deserialization::Failure(DeserializationFailure {
+                            msg_id,
+                            error: e.into(),
+                        }))
+                }
             },
 
             // Cancellation of an RPC Query
@@ -443,17 +456,27 @@ impl Encrypted {
                     Ok(gzip) => match gzip.decompress() {
                         Ok(x) => {
                             self.store_own_updates(&x);
-                            x
+                            Ok(x)
                         }
-                        Err(_) => todo!("not quite an rpc error deserialization"),
+                        Err(e) => Err(DeserializeError::from(e)),
                     },
-                    Err(_) => todo!("not quite an rpc error deserialization"),
+                    Err(e) => Err(DeserializeError::from(e)),
                 };
-                self.deserialization
-                    .push(Deserialization::RpcResult(RpcResult {
-                        msg_id: msg_id,
-                        body,
-                    }));
+
+                match body {
+                    Ok(body) => self
+                        .deserialization
+                        .push(Deserialization::RpcResult(RpcResult {
+                            msg_id: msg_id,
+                            body,
+                        })),
+                    Err(e) => self.deserialization.push(Deserialization::Failure(
+                        DeserializationFailure {
+                            msg_id,
+                            error: e.into(),
+                        },
+                    )),
+                }
             }
             _ => {
                 self.store_own_updates(&result);
