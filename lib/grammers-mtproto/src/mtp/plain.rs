@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Deserialization, DeserializeError, Mtp};
+use crate::manual_tl::RpcResult;
 use crate::MsgId;
 use grammers_crypto::RingBuffer;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
@@ -69,7 +70,7 @@ impl Mtp for Plain {
     /// if it is, the method returns the inner contents of the message.
     ///
     /// [`serialize_plain_message`]: #method.serialize_plain_message
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError> {
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
         let mut buf = Cursor::from_slice(payload);
@@ -104,10 +105,10 @@ impl Mtp for Plain {
             });
         }
 
-        Ok(Deserialization {
-            rpc_results: vec![(MsgId(0), Ok(payload[20..20 + len as usize].into()))],
-            updates: Vec::new(),
-        })
+        Ok(vec![Deserialization::RpcResult(RpcResult {
+            req_msg_id: 0,
+            result: payload[20..20 + len as usize].into(),
+        })])
     }
 
     fn reset(&mut self) {}

@@ -7,7 +7,7 @@
 // except according to those terms.
 use crate::types::Role;
 use crate::Client;
-use grammers_mtproto::mtp::RpcError;
+use grammers_mtproto::{mtp::RpcError, MsgId};
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
@@ -71,6 +71,7 @@ impl AdminRightsBuilderInner {
                 name: "PEER_ID_INVALID".to_string(),
                 value: None,
                 caused_by: None,
+                msg_id: MsgId(0),
             }))
         }
     }
@@ -181,6 +182,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         name: "PEER_ID_INVALID".to_string(),
                         value: None,
                         caused_by: None,
+                        msg_id: MsgId(0),
                     }))
                 }
             };
@@ -337,6 +339,7 @@ impl BannedRightsBuilderInner {
                     name: "CHAT_INVALID".to_string(),
                     value: None,
                     caused_by: None,
+                    msg_id: MsgId(0),
                 }))
             }
         } else {
@@ -345,6 +348,7 @@ impl BannedRightsBuilderInner {
                 name: "PEER_ID_INVALID".to_string(),
                 value: None,
                 caused_by: None,
+                msg_id: MsgId(0),
             }))
         }
     }

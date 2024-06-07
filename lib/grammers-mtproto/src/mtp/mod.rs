@@ -19,6 +19,7 @@
 mod encrypted;
 mod plain;
 
+pub use crate::manual_tl::RpcResult;
 use crate::MsgId;
 use crypto::RingBuffer;
 pub use encrypted::{
@@ -31,11 +32,11 @@ pub use plain::Plain;
 use std::fmt;
 
 /// Results from the deserialization of a response.
-pub struct Deserialization {
-    /// Result bodies to Remote Procedure Calls.
-    pub rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
-    /// Updates that came in the response.
-    pub updates: Vec<Vec<u8>>,
+pub enum Deserialization {
+    Update(Vec<u8>),
+    RpcResult(RpcResult),
+    RpcError(RpcError),
+    BadMessage(tl::enums::BadMsgNotification),
 }
 
 /// The error type for the deserialization of server messages.
@@ -149,6 +150,9 @@ pub struct RpcError {
     /// The constructor identifier of the request that triggered this error.
     /// Won't be present if the error was artificially constructed.
     pub caused_by: Option<u32>,
+
+    /// Identifier of the message sent with the request that triggered this error.
+    pub msg_id: MsgId,
 }
 
 impl std::error::Error for RpcError {}
@@ -183,6 +187,7 @@ impl From<tl::types::RpcError> for RpcError {
                 // Safe to unwrap, matched on digits
                 value: Some(value.parse().unwrap()),
                 caused_by: None,
+                msg_id: MsgId(0),
             }
         } else {
             Self {
@@ -190,6 +195,7 @@ impl From<tl::types::RpcError> for RpcError {
                 name: error.error_message.clone(),
                 value: None,
                 caused_by: None,
+                msg_id: MsgId(0),
             }
         }
     }
@@ -221,6 +227,11 @@ impl RpcError {
         } else {
             self.name == rpc_error
         }
+    }
+
+    pub fn with_msg_id(mut self, msg_id: MsgId) -> Self {
+        self.msg_id = msg_id;
+        self
     }
 }
 
@@ -324,7 +335,7 @@ pub trait Mtp {
     fn finalize(&mut self, buffer: &mut RingBuffer<u8>);
 
     /// Deserializes a single incoming message payload into zero or more responses.
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);
@@ -346,6 +357,7 @@ mod tests {
                 name: "CHAT_INVALID".into(),
                 value: None,
                 caused_by: None,
+                msg_id: MsgId(0)
             }
         );
 
@@ -359,6 +371,7 @@ mod tests {
                 name: "FLOOD_WAIT".into(),
                 value: Some(31),
                 caused_by: None,
+                msg_id: MsgId(0)
             }
         );
 
@@ -372,6 +385,7 @@ mod tests {
                 name: "INTERDC_CALL_ERROR".into(),
                 value: Some(2),
                 caused_by: None,
+                msg_id: MsgId(0)
             }
         );
     }

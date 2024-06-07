@@ -5,7 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp, RequestError};
+use super::{Deserialization, DeserializeError, Mtp, RpcError};
+use crate::manual_tl::RpcResult;
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, RingBuffer};
@@ -91,11 +92,8 @@ pub struct Encrypted {
     /// outgoing messages will never be compressed.
     compression_threshold: Option<usize>,
 
-    /// Temporary result bodies to Remote Procedure Calls.
-    rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
-
-    /// Temporary updates that came in a response.
-    updates: Vec<Vec<u8>>,
+    /// Temporary deserialization results.
+    deserialization: Vec<Deserialization>,
 
     /// How many messages are there in the buffer.
     msg_count: usize,
@@ -140,8 +138,7 @@ impl Builder {
             last_msg_id: 0,
             pending_ack: vec![],
             compression_threshold: self.compression_threshold,
-            rpc_results: Vec::new(),
-            updates: Vec::new(),
+            deserialization: Vec::new(),
             msg_count: 0,
         }
     }
@@ -410,21 +407,19 @@ impl Encrypted {
         // which means this method itself is doing its job `Ok`.
         let inner_constructor = match inner_constructor {
             Ok(x) => x,
-            Err(e) => {
-                self.rpc_results.push((msg_id, Err(e.into())));
-                return Ok(());
+            Err(_) => {
+                todo!("not quite an rpc error deserialization");
             }
         };
 
         match inner_constructor {
             // RPC Error
-            tl::types::RpcError::CONSTRUCTOR_ID => self.rpc_results.push((
-                msg_id,
-                match tl::enums::RpcError::from_bytes(&result) {
-                    Ok(tl::enums::RpcError::Error(e)) => Err(RequestError::RpcError(e.into())),
-                    Err(e) => Err(e.into()),
-                },
-            )),
+            tl::types::RpcError::CONSTRUCTOR_ID => match tl::enums::RpcError::from_bytes(&result) {
+                Ok(tl::enums::RpcError::Error(e)) => self.deserialization.push(
+                    Deserialization::RpcError(RpcError::from(e).with_msg_id(msg_id)),
+                ),
+                Err(_) => todo!("not quite an rpc error deserialization"),
+            },
 
             // Cancellation of an RPC Query
             tl::types::RpcAnswerUnknown::CONSTRUCTOR_ID => {
@@ -449,17 +444,25 @@ impl Encrypted {
                     Ok(gzip) => match gzip.decompress() {
                         Ok(x) => {
                             self.store_own_updates(&x);
-                            Ok(x)
+                            x
                         }
-                        Err(e) => Err(e.into()),
+                        Err(_) => todo!("not quite an rpc error deserialization"),
                     },
-                    Err(e) => Err(e.into()),
+                    Err(_) => todo!("not quite an rpc error deserialization"),
                 };
-                self.rpc_results.push((msg_id, body));
+                self.deserialization
+                    .push(Deserialization::RpcResult(RpcResult {
+                        req_msg_id: msg_id.0,
+                        result: body,
+                    }));
             }
             _ => {
                 self.store_own_updates(&result);
-                self.rpc_results.push((msg_id, Ok(result)));
+                self.deserialization
+                    .push(Deserialization::RpcResult(RpcResult {
+                        req_msg_id: msg_id.0,
+                        result,
+                    }));
             }
         }
 
@@ -476,7 +479,8 @@ impl Encrypted {
             Ok(body_id) => {
                 if UPDATE_IDS.iter().any(|&id| body_id == id) {
                     // TODO somehow signal that this updates is our own, to avoid getting into nasty loops
-                    self.updates.push(body.to_vec());
+                    self.deserialization
+                        .push(Deserialization::Update(body.to_vec()));
                 }
             }
             Err(_err) => {
@@ -591,14 +595,14 @@ impl Encrypted {
         message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
+
+        // TODO don't propagate if response to internal salt request
+        self.deserialization
+            .push(Deserialization::BadMessage(bad_msg.clone()));
+
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::Notification(x) => x,
             tl::enums::BadMsgNotification::BadServerSalt(x) => {
-                self.rpc_results.push((
-                    MsgId(x.bad_msg_id),
-                    Err(RequestError::BadMessage { code: x.error_code }),
-                ));
-
                 self.salts.clear();
                 self.salts.push(tl::types::FutureSalt {
                     valid_since: 0,
@@ -611,12 +615,6 @@ impl Encrypted {
             }
         };
 
-        self.rpc_results.push((
-            MsgId(bad_msg.bad_msg_id),
-            Err(RequestError::BadMessage {
-                code: bad_msg.error_code,
-            }),
-        ));
         match bad_msg.error_code {
             16 => {
                 // Sent `msg_id` was too low (our `time_offset` is wrong).
@@ -824,8 +822,12 @@ impl Encrypted {
         let tl::enums::FutureSalts::Salts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
-        self.rpc_results
-            .push((MsgId(salts.req_msg_id), Ok(message.body)));
+        // TODO don't propagate if response to internal salt request
+        self.deserialization
+            .push(Deserialization::RpcResult(RpcResult {
+                req_msg_id: salts.req_msg_id,
+                result: message.body,
+            }));
 
         self.start_salt_time = Some((salts.now, Instant::now()));
         self.salts = salts.salts.0;
@@ -873,8 +875,11 @@ impl Encrypted {
     fn handle_pong(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
-        self.rpc_results
-            .push((MsgId(pong.msg_id), Ok(message.body)));
+        self.deserialization
+            .push(Deserialization::RpcResult(RpcResult {
+                req_msg_id: pong.msg_id,
+                result: message.body,
+            }));
         Ok(())
     }
 
@@ -1100,7 +1105,8 @@ impl Encrypted {
     /// safely treat whatever message body we received as `Updates`.
     fn handle_update(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO if this `Updates` cannot be deserialized, `getDifference` should be used
-        self.updates.push(message.body);
+        self.deserialization
+            .push(Deserialization::Update(message.body));
         Ok(())
     }
 }
@@ -1211,7 +1217,7 @@ impl Mtp for Encrypted {
     }
 
     /// Processes an encrypted response from the server.
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError> {
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
         let plaintext = decrypt_data_v2(payload, &self.auth_key)?;
@@ -1228,10 +1234,7 @@ impl Mtp for Encrypted {
         // For simplicity, and to avoid passing too much stuff around (RPC results, updates),
         // the processing result is stored in self. After processing is done, that temporary
         // state is cleaned and returned with `mem::take`.
-        Ok(Deserialization {
-            rpc_results: mem::take(&mut self.rpc_results),
-            updates: mem::take(&mut self.updates),
-        })
+        Ok(mem::take(&mut self.deserialization))
     }
 
     fn reset(&mut self) {
