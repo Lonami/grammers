@@ -64,7 +64,9 @@ impl Mtp for Plain {
         Some(MsgId(0))
     }
 
-    fn finalize(&mut self, _buffer: &mut RingBuffer<u8>) {}
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId> {
+        (!buffer.is_empty()).then_some(MsgId(0))
+    }
 
     /// Validates that the returned data is a correct plain message, and
     /// if it is, the method returns the inner contents of the message.

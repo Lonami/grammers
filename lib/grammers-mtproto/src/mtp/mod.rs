@@ -332,7 +332,10 @@ pub trait Mtp {
     /// produce data that has to be sent after deserializing incoming messages.
     ///
     /// The buffer may remain empty if there are no actions to take.
-    fn finalize(&mut self, buffer: &mut RingBuffer<u8>);
+    ///
+    /// When at least one message is serialized, the last generated `MsgId` is returned.
+    /// This will either belong to the container (if used) or the last serialized message.
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;

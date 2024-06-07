@@ -132,13 +132,28 @@ struct Request {
     result: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct MsgIdPair {
+    msg_id: MsgId,
+    container_msg_id: MsgId,
+}
+
 enum RequestState {
     NotSerialized,
-    Serialized(MsgId),
-    Sent(MsgId),
+    Serialized(MsgIdPair),
+    Sent(MsgIdPair),
 }
 
 pub struct Enqueuer(mpsc::UnboundedSender<Request>);
+
+impl MsgIdPair {
+    fn new(msg_id: MsgId) -> Self {
+        Self {
+            msg_id,
+            container_msg_id: msg_id, // by default, no container (so the last msg_id is itself)
+        }
+    }
+}
 
 impl Enqueuer {
     /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
@@ -456,14 +471,21 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 // Note how only NotSerialized become Serialized.
                 // Nasty bugs that take ~2h to find occur otherwise!
                 // (e.g. infinite loops leading to transport flood.)
-                request.state = RequestState::Serialized(msg_id);
+                request.state = RequestState::Serialized(MsgIdPair::new(msg_id));
             } else {
                 break;
             }
         }
 
-        self.mtp.finalize(&mut self.write_buffer);
-        if !self.write_buffer.is_empty() {
+        if let Some(container_msg_id) = self.mtp.finalize(&mut self.write_buffer) {
+            for request in self.requests.iter_mut() {
+                match request.state {
+                    RequestState::Serialized(mut pair) => {
+                        pair.container_msg_id = container_msg_id;
+                    }
+                    RequestState::NotSerialized | RequestState::Sent(..) => {}
+                }
+            }
             self.transport.pack(&mut self.write_buffer)
         }
     }
@@ -528,9 +550,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         for req in self.requests.iter_mut() {
             match req.state {
                 RequestState::NotSerialized | RequestState::Sent(_) => {}
-                RequestState::Serialized(msg_id) => {
-                    debug!("sent request with {:?}", msg_id);
-                    req.state = RequestState::Sent(msg_id);
+                RequestState::Serialized(pair) => {
+                    debug!("sent request with {:?}", pair);
+                    req.state = RequestState::Sent(pair);
                 }
             }
         }
@@ -648,12 +670,18 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn process_bad_message(&mut self, bad_msg: tl::enums::BadMsgNotification) {
         for i in (0..self.requests.len()).rev() {
             match self.requests[i].state {
-                RequestState::Serialized(sid) if sid == MsgId(bad_msg.bad_msg_id()) => {
+                RequestState::Serialized(pair)
+                    if pair.msg_id == MsgId(bad_msg.bad_msg_id())
+                        || pair.container_msg_id == MsgId(bad_msg.bad_msg_id()) =>
+                {
                     panic!("got bad msg for unsent request");
                 }
-                RequestState::Sent(sid) if sid == MsgId(bad_msg.bad_msg_id()) => {
+                RequestState::Sent(pair)
+                    if pair.msg_id == MsgId(bad_msg.bad_msg_id())
+                        || pair.container_msg_id == MsgId(bad_msg.bad_msg_id()) =>
+                {
                     // TODO add a test to make sure we resend the request
-                    info!("{:?}; re-sending request {:?}", bad_msg, sid);
+                    info!("{:?}; re-sending request {:?}", bad_msg, pair.msg_id);
 
                     // TODO check if actually retryable first!
                     self.requests[i].state = RequestState::NotSerialized;
@@ -666,10 +694,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn pop_request(&mut self, msg_id: MsgId) -> Option<Request> {
         for i in 0..self.requests.len() {
             match self.requests[i].state {
-                RequestState::Serialized(sid) if sid == msg_id => {
-                    panic!("got response {:?} for unsent request {:?}", msg_id, sid);
+                RequestState::Serialized(pair) if pair.msg_id == msg_id => {
+                    panic!("got response {:?} for unsent request {:?}", msg_id, pair);
                 }
-                RequestState::Sent(sid) if sid == msg_id => {
+                RequestState::Sent(pair) if pair.msg_id == msg_id => {
                     return Some(self.requests.swap_remove(i))
                 }
                 _ => {}

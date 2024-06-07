@@ -1209,10 +1209,13 @@ impl Mtp for Encrypted {
         Some(self.serialize_msg(buffer, body, true))
     }
 
-    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) {
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId> {
         self.finalize_plain(buffer);
-        if !buffer.is_empty() {
+        if buffer.is_empty() {
+            None
+        } else {
             encrypt_data_v2(buffer, &self.auth_key);
+            Some(MsgId(self.last_msg_id))
         }
     }
 
