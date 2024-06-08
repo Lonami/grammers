@@ -18,7 +18,7 @@ use grammers_mtproto::mtp::{
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::io;
 use std::io::Error;
 use std::ops::ControlFlow;
@@ -678,19 +678,39 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 RequestState::Serialized(pair)
                     if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
                 {
-                    panic!("got bad msg for unsent request");
+                    panic!(
+                        "bad msg for unsent request {:?}: {}",
+                        bad_msg.msg_id,
+                        bad_msg.description()
+                    );
                 }
                 RequestState::Sent(pair)
                     if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
                 {
                     // TODO add a test to make sure we resend the request
                     if bad_msg.retryable() {
-                        info!("bad msg; re-sending request {:?}", pair.msg_id);
+                        info!(
+                            "{}; re-sending request {:?}",
+                            bad_msg.description(),
+                            pair.msg_id
+                        );
 
                         // TODO check if actually retryable first!
                         self.requests[i].state = RequestState::NotSerialized;
                     } else {
-                        warn!("bad msg; canont retry request {:?}", pair.msg_id);
+                        if bad_msg.fatal() {
+                            error!(
+                                "{}; canont retry request {:?}",
+                                bad_msg.description(),
+                                pair.msg_id
+                            );
+                        } else {
+                            warn!(
+                                "{}; canont retry request {:?}",
+                                bad_msg.description(),
+                                pair.msg_id
+                            );
+                        }
                         let req = self.requests.swap_remove(i);
                         drop(req.result.send(Err(InvocationError::Dropped)));
                     }

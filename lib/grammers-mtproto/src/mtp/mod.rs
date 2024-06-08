@@ -60,8 +60,30 @@ pub enum Deserialization {
 }
 
 impl BadMessage {
+    pub fn description(&self) -> &'static str {
+        // https://core.telegram.org/mtproto/service_messages_about_messages
+        match self.code {
+            16 => "msg_id too low",
+            17 => "msg_id too high",
+            18 => "incorrect two lower order msg_id bits; this is a bug",
+            19 => "container msg_id is the same as msg_id of a previously received message; this is a bug",
+            20 => "message too old",
+            32 => "msg_seqno too low",
+            33 => "msg_seqno too high",
+            34 => "an even msg_seqno expected; this may be a bug",
+            35 => "odd msg_seqno expected; this may be a bug",
+            48 => "incorrect server salt",
+            64 => "invalid container; this is likely a bug",
+            _ => "unknown explanation; please report this issue",
+        }
+    }
+
     pub fn retryable(&self) -> bool {
         [16, 17, 48].contains(&self.code)
+    }
+
+    pub fn fatal(&self) -> bool {
+        !self.retryable() && ![32, 33].contains(&self.code)
     }
 }
 
