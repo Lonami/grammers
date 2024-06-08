@@ -20,7 +20,7 @@ pub struct Photo {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     pub document: tl::types::MessageMediaDocument,
-    client: Client,
+    pub client: Client,
 }
 
 #[derive(Clone, Debug, PartialEq)]
