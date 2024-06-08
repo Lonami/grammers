@@ -163,15 +163,15 @@ impl Client {
         path: P,
     ) -> Result<(), io::Error> {
         // Concurrent downloader
-        if let Downloadable::Media(media) = downloadable {
-            if let Media::Document(document) = media {
-                if document.size() as usize > BIG_FILE_SIZE {
-                    return self
-                        .download_media_concurrent(media, path, WORKER_COUNT)
-                        .await;
-                }
-            }
-        }
+        // if let Downloadable::Media(media) = downloadable {
+        //     if let Media::Document(document) = media {
+        //         if document.size() as usize > BIG_FILE_SIZE {
+        //             return self
+        //                 .download_media_concurrent(media, path, WORKER_COUNT)
+        //                 .await;
+        //         }
+        //     }
+        // }
         if downloadable.to_input_location().is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
