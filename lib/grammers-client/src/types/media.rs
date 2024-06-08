@@ -13,8 +13,8 @@ use std::fmt::Debug;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
-    photo: tl::types::MessageMediaPhoto,
-    client: Client,
+    pub photo: tl::types::MessageMediaPhoto,
+    pub client: Client,
 }
 
 #[derive(Clone, Debug, PartialEq)]
