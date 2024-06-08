@@ -684,10 +684,16 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
                 {
                     // TODO add a test to make sure we resend the request
-                    info!("bad msg; re-sending request {:?}", pair.msg_id);
+                    if bad_msg.retryable() {
+                        info!("bad msg; re-sending request {:?}", pair.msg_id);
 
-                    // TODO check if actually retryable first!
-                    self.requests[i].state = RequestState::NotSerialized;
+                        // TODO check if actually retryable first!
+                        self.requests[i].state = RequestState::NotSerialized;
+                    } else {
+                        warn!("bad msg; canont retry request {:?}", pair.msg_id);
+                        let req = self.requests.swap_remove(i);
+                        drop(req.result.send(Err(InvocationError::Dropped)));
+                    }
                 }
                 _ => {}
             }

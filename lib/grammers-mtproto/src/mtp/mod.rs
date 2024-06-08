@@ -42,6 +42,7 @@ pub struct RpcResultError {
 
 pub struct BadMessage {
     pub msg_id: MsgId,
+    pub code: i32,
 }
 
 pub struct DeserializationFailure {
@@ -56,6 +57,12 @@ pub enum Deserialization {
     RpcError(RpcResultError),
     BadMessage(BadMessage),
     Failure(DeserializationFailure),
+}
+
+impl BadMessage {
+    pub fn retryable(&self) -> bool {
+        [16, 17, 48].contains(&self.code)
+    }
 }
 
 /// The error type for the deserialization of server messages.

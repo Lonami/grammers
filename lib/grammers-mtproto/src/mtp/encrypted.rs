@@ -622,6 +622,7 @@ impl Encrypted {
         self.deserialization
             .push(Deserialization::BadMessage(super::BadMessage {
                 msg_id: MsgId(bad_msg.bad_msg_id()),
+                code: bad_msg.error_code(),
             }));
 
         let bad_msg = match bad_msg {
