@@ -9,14 +9,16 @@ mod errors;
 mod reconnection;
 
 pub use crate::reconnection::*;
-pub use errors::{AuthorizationError, InvocationError, ReadError};
+pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use futures_util::future::{pending, select, Either};
 use grammers_crypto::RingBuffer;
-use grammers_mtproto::mtp::{self, Deserialization, Mtp};
+use grammers_mtproto::mtp::{
+    self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
+};
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{authentication, MsgId};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
-use log::{debug, info, trace, warn};
+use log::{debug, error, info, trace, warn};
 use std::io;
 use std::io::Error;
 use std::ops::ControlFlow;
@@ -132,13 +134,28 @@ struct Request {
     result: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
 }
 
+#[derive(Clone, Copy, Debug)]
+struct MsgIdPair {
+    msg_id: MsgId,
+    container_msg_id: MsgId,
+}
+
 enum RequestState {
     NotSerialized,
-    Serialized(MsgId),
-    Sent(MsgId),
+    Serialized(MsgIdPair),
+    Sent(MsgIdPair),
 }
 
 pub struct Enqueuer(mpsc::UnboundedSender<Request>);
+
+impl MsgIdPair {
+    fn new(msg_id: MsgId) -> Self {
+        Self {
+            msg_id,
+            container_msg_id: msg_id, // by default, no container (so the last msg_id is itself)
+        }
+    }
+}
 
 impl Enqueuer {
     /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
@@ -456,14 +473,21 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 // Note how only NotSerialized become Serialized.
                 // Nasty bugs that take ~2h to find occur otherwise!
                 // (e.g. infinite loops leading to transport flood.)
-                request.state = RequestState::Serialized(msg_id);
+                request.state = RequestState::Serialized(MsgIdPair::new(msg_id));
             } else {
                 break;
             }
         }
 
-        self.mtp.finalize(&mut self.write_buffer);
-        if !self.write_buffer.is_empty() {
+        if let Some(container_msg_id) = self.mtp.finalize(&mut self.write_buffer) {
+            for request in self.requests.iter_mut() {
+                match request.state {
+                    RequestState::Serialized(mut pair) => {
+                        pair.container_msg_id = container_msg_id;
+                    }
+                    RequestState::NotSerialized | RequestState::Sent(..) => {}
+                }
+            }
             self.transport.pack(&mut self.write_buffer)
         }
     }
@@ -528,9 +552,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         for req in self.requests.iter_mut() {
             match req.state {
                 RequestState::NotSerialized | RequestState::Sent(_) => {}
-                RequestState::Serialized(msg_id) => {
-                    debug!("sent request with {:?}", msg_id);
-                    req.state = RequestState::Sent(msg_id);
+                RequestState::Serialized(pair) => {
+                    debug!("sent request with {:?}", pair);
+                    req.state = RequestState::Sent(pair);
                 }
             }
         }
@@ -555,106 +579,176 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Process the result of deserializing an MTP buffer.
     fn process_mtp_buffer(
         &mut self,
-        result: Deserialization,
+        results: Vec<Deserialization>,
         updates: &mut Vec<tl::enums::Updates>,
     ) {
-        updates.extend(result.updates.iter().filter_map(|update| {
-            match tl::enums::Updates::from_bytes(update) {
-                Ok(u) => Some(u),
-                Err(e) => {
-                    // Annoyingly enough, `messages.affectedMessages` also has `pts`.
-                    // Mostly received when deleting messages, so pretend that's the
-                    // update that actually occured.
-                    match tl::enums::messages::AffectedMessages::from_bytes(update) {
-                        Ok(tl::enums::messages::AffectedMessages::Messages(
-                            tl::types::messages::AffectedMessages { pts, pts_count },
-                        )) => Some(
-                            tl::types::UpdateShort {
-                                update: tl::types::UpdateDeleteMessages {
-                                    messages: Vec::new(),
-                                    pts,
-                                    pts_count,
-                                }
-                                .into(),
-                                date: 0,
-                            }
-                            .into(),
-                        ),
-                        Err(_) => match tl::types::messages::InvitedUsers::from_bytes(update) {
-                            Ok(u) => Some(u.updates),
-                            Err(_) => {
-                                warn!(
-                                    "telegram sent updates that failed to be deserialized: {}",
-                                    e
-                                );
-                                None
-                            }
-                        },
-                    }
-                }
-            }
-        }));
-
-        for (msg_id, ret) in result.rpc_results {
-            let mut found = false;
-            for i in (0..self.requests.len()).rev() {
-                let req = &mut self.requests[i];
-                match req.state {
-                    RequestState::Serialized(sid) if sid == msg_id => {
-                        panic!("got rpc result {:?} for unsent request {:?}", msg_id, sid);
-                    }
-                    RequestState::Sent(sid) if sid == msg_id => {
-                        found = true;
-                        let result = match ret {
-                            Ok(x) => {
-                                assert!(x.len() >= 4);
-                                let res_id = u32::from_le_bytes([x[0], x[1], x[2], x[3]]);
-                                debug!(
-                                    "got result {:x} ({}) for request {:?}",
-                                    res_id,
-                                    tl::name_for_id(res_id),
-                                    msg_id
-                                );
-                                Ok(x)
-                            }
-                            Err(mtp::RequestError::RpcError(mut error)) => {
-                                debug!("got rpc error {:?} for request {:?}", error, msg_id);
-                                let x = req.body.as_slice();
-                                error.caused_by =
-                                    Some(u32::from_le_bytes([x[0], x[1], x[2], x[3]]));
-                                Err(InvocationError::Rpc(error))
-                            }
-                            Err(mtp::RequestError::Dropped) => {
-                                debug!("response for request {:?} dropped", msg_id);
-                                Err(InvocationError::Dropped)
-                            }
-                            Err(mtp::RequestError::Deserialize(error)) => {
-                                debug!(
-                                    "got deserialize error {:?} for request {:?}",
-                                    error, msg_id
-                                );
-                                Err(InvocationError::Read(error.into()))
-                            }
-                            Err(err @ mtp::RequestError::BadMessage { .. }) => {
-                                // TODO add a test to make sure we resend the request
-                                info!("{}; re-sending request {:?}", err, msg_id);
-                                req.state = RequestState::NotSerialized;
-                                break;
-                            }
-                        };
-
-                        let req = self.requests.remove(i);
-                        drop(req.result.send(result));
-                        break;
-                    }
-                    _ => {}
-                }
-            }
-
-            if !found {
-                info!("got rpc result {:?} but no such request is saved", msg_id);
+        for result in results {
+            match result {
+                Deserialization::Update(update) => self.process_update(updates, update),
+                Deserialization::RpcResult(result) => self.process_result(result),
+                Deserialization::RpcError(error) => self.process_error(error),
+                Deserialization::BadMessage(bad_msg) => self.process_bad_message(bad_msg),
+                Deserialization::Failure(failure) => self.process_deserialize_error(failure),
             }
         }
+    }
+
+    fn process_update(&mut self, updates: &mut Vec<tl::enums::Updates>, update: Vec<u8>) {
+        let update = match tl::enums::Updates::from_bytes(&update) {
+            Ok(u) => Some(u),
+            Err(e) => {
+                // Annoyingly enough, `messages.affectedMessages` also has `pts`.
+                // Mostly received when deleting messages, so pretend that's the
+                // update that actually occured.
+                match tl::enums::messages::AffectedMessages::from_bytes(&update) {
+                    Ok(tl::enums::messages::AffectedMessages::Messages(
+                        tl::types::messages::AffectedMessages { pts, pts_count },
+                    )) => Some(
+                        tl::types::UpdateShort {
+                            update: tl::types::UpdateDeleteMessages {
+                                messages: Vec::new(),
+                                pts,
+                                pts_count,
+                            }
+                            .into(),
+                            date: 0,
+                        }
+                        .into(),
+                    ),
+                    Err(_) => match tl::types::messages::InvitedUsers::from_bytes(&update) {
+                        Ok(u) => Some(u.updates),
+                        Err(_) => {
+                            warn!(
+                                "telegram sent updates that failed to be deserialized: {}",
+                                e
+                            );
+                            None
+                        }
+                    },
+                }
+            }
+        };
+
+        if let Some(update) = update {
+            updates.push(update);
+        }
+    }
+
+    fn process_result(&mut self, result: RpcResult) {
+        if let Some(req) = self.pop_request(result.msg_id) {
+            let x = result.body;
+            assert!(x.len() >= 4);
+            let res_id = u32::from_le_bytes([x[0], x[1], x[2], x[3]]);
+            debug!(
+                "got result {:x} ({}) for request {:?}",
+                res_id,
+                tl::name_for_id(res_id),
+                result.msg_id
+            );
+            drop(req.result.send(Ok(x)));
+        } else {
+            info!(
+                "got rpc result {:?} but no such request is saved",
+                result.msg_id
+            );
+        }
+    }
+
+    fn process_error(&mut self, error: RpcResultError) {
+        if let Some(req) = self.pop_request(error.msg_id) {
+            debug!("got rpc error {:?}", error.error);
+            let x = req.body.as_slice();
+            drop(
+                req.result.send(Err(InvocationError::Rpc(
+                    RpcError::from(error.error)
+                        .with_caused_by(u32::from_le_bytes([x[0], x[1], x[2], x[3]])),
+                ))),
+            );
+        } else {
+            info!(
+                "got rpc error {:?} but no such request is saved",
+                error.msg_id
+            );
+        }
+    }
+
+    fn process_bad_message(&mut self, bad_msg: BadMessage) {
+        for i in (0..self.requests.len()).rev() {
+            match self.requests[i].state {
+                RequestState::Serialized(pair)
+                    if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
+                {
+                    panic!(
+                        "bad msg for unsent request {:?}: {}",
+                        bad_msg.msg_id,
+                        bad_msg.description()
+                    );
+                }
+                RequestState::Sent(pair)
+                    if pair.msg_id == bad_msg.msg_id || pair.container_msg_id == bad_msg.msg_id =>
+                {
+                    // TODO add a test to make sure we resend the request
+                    if bad_msg.retryable() {
+                        info!(
+                            "{}; re-sending request {:?}",
+                            bad_msg.description(),
+                            pair.msg_id
+                        );
+
+                        // TODO check if actually retryable first!
+                        self.requests[i].state = RequestState::NotSerialized;
+                    } else {
+                        if bad_msg.fatal() {
+                            error!(
+                                "{}; canont retry request {:?}",
+                                bad_msg.description(),
+                                pair.msg_id
+                            );
+                        } else {
+                            warn!(
+                                "{}; canont retry request {:?}",
+                                bad_msg.description(),
+                                pair.msg_id
+                            );
+                        }
+                        let req = self.requests.swap_remove(i);
+                        drop(req.result.send(Err(InvocationError::Dropped)));
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+
+    fn process_deserialize_error(&mut self, failure: DeserializationFailure) {
+        if let Some(req) = self.pop_request(failure.msg_id) {
+            debug!("got deserialization failure {:?}", failure.error);
+            drop(
+                req.result
+                    .send(Err(InvocationError::Read(failure.error.into()))),
+            );
+        } else {
+            info!(
+                "got deserialization failure {:?} but no such request is saved",
+                failure.error
+            );
+        }
+    }
+
+    fn pop_request(&mut self, msg_id: MsgId) -> Option<Request> {
+        for i in 0..self.requests.len() {
+            match self.requests[i].state {
+                RequestState::Serialized(pair) if pair.msg_id == msg_id => {
+                    panic!("got response {:?} for unsent request {:?}", msg_id, pair);
+                }
+                RequestState::Sent(pair) if pair.msg_id == msg_id => {
+                    return Some(self.requests.swap_remove(i))
+                }
+                _ => {}
+            }
+        }
+
+        None
     }
 
     fn reset_state(&mut self) {

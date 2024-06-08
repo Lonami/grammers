@@ -5,7 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp, RequestError};
+use super::{
+    Deserialization, DeserializationFailure, DeserializeError, Mtp, RpcResult, RpcResultError,
+};
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, RingBuffer};
@@ -68,6 +70,9 @@ pub struct Encrypted {
     /// Used to accurately determine when salts become valid.
     start_salt_time: Option<(i32, Instant)>,
 
+    /// Internal request for salts which should not be propagated.
+    salt_request_msg_id: Option<i64>,
+
     /// The secure, random identifier for this instance.
     client_id: i64,
 
@@ -91,11 +96,8 @@ pub struct Encrypted {
     /// outgoing messages will never be compressed.
     compression_threshold: Option<usize>,
 
-    /// Temporary result bodies to Remote Procedure Calls.
-    rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
-
-    /// Temporary updates that came in a response.
-    updates: Vec<Vec<u8>>,
+    /// Temporary deserialization results.
+    deserialization: Vec<Deserialization>,
 
     /// How many messages are there in the buffer.
     msg_count: usize,
@@ -131,6 +133,7 @@ impl Builder {
                 salt: self.first_salt,
             }],
             start_salt_time: None,
+            salt_request_msg_id: None,
             client_id: {
                 let mut buffer = [0u8; 8];
                 getrandom(&mut buffer).expect("failed to generate a secure client_id");
@@ -140,8 +143,7 @@ impl Builder {
             last_msg_id: 0,
             pending_ack: vec![],
             compression_threshold: self.compression_threshold,
-            rpc_results: Vec::new(),
-            updates: Vec::new(),
+            deserialization: Vec::new(),
             msg_count: 0,
         }
     }
@@ -220,6 +222,33 @@ impl Encrypted {
         MsgId(msg_id)
     }
 
+    fn get_current_salt(&self) -> i64 {
+        self.salts.last().map(|s| s.salt).unwrap_or(0)
+    }
+
+    fn try_request_salts(&mut self, buffer: &mut RingBuffer<u8>) {
+        if self.salts.len() == 1
+            && self.salt_request_msg_id.is_none()
+            && self.get_current_salt() != 0
+        {
+            // If salts are requested in a container leading to bad_msg,
+            // the bad_msg_id will refer to the container, not the salts request.
+            //
+            // We don't keep track of containers and content-related messages they contain for simplicity.
+            // This would break, because we couldn't identify the response.
+            //
+            // So salts are only requested once we have a valid salt to reduce the chances of this happening.
+            if self.salts.len() == 1 {
+                info!("only one future salt remaining; asking for more salts");
+            }
+            let body = tl::functions::GetFutureSalts {
+                num: NUM_FUTURE_SALTS,
+            }
+            .to_bytes();
+            self.serialize_msg(buffer, &body, true);
+        }
+    }
+
     /// `finalize`, but without encryption.
     ///
     /// The buffer is *not* cleared, but is instead returned.
@@ -247,11 +276,7 @@ impl Encrypted {
         {
             // Prepend the message header
             let mut header = buffer.shift(PLAIN_PACKET_HEADER_LEN);
-            self.salts
-                .last()
-                .map(|s| s.salt)
-                .unwrap_or(0)
-                .serialize(&mut header); // 8 bytes
+            self.get_current_salt().serialize(&mut header); // 8 bytes
 
             self.client_id.serialize(&mut header); // 8 bytes
         }
@@ -411,20 +436,29 @@ impl Encrypted {
         let inner_constructor = match inner_constructor {
             Ok(x) => x,
             Err(e) => {
-                self.rpc_results.push((msg_id, Err(e.into())));
+                self.deserialization
+                    .push(Deserialization::Failure(DeserializationFailure {
+                        msg_id,
+                        error: e.into(),
+                    }));
                 return Ok(());
             }
         };
 
         match inner_constructor {
             // RPC Error
-            tl::types::RpcError::CONSTRUCTOR_ID => self.rpc_results.push((
-                msg_id,
-                match tl::enums::RpcError::from_bytes(&result) {
-                    Ok(tl::enums::RpcError::Error(e)) => Err(RequestError::RpcError(e.into())),
-                    Err(e) => Err(e.into()),
-                },
-            )),
+            tl::types::RpcError::CONSTRUCTOR_ID => match tl::enums::RpcError::from_bytes(&result) {
+                Ok(tl::enums::RpcError::Error(error)) => self
+                    .deserialization
+                    .push(Deserialization::RpcError(RpcResultError { msg_id, error })),
+                Err(e) => {
+                    self.deserialization
+                        .push(Deserialization::Failure(DeserializationFailure {
+                            msg_id,
+                            error: e.into(),
+                        }))
+                }
+            },
 
             // Cancellation of an RPC Query
             tl::types::RpcAnswerUnknown::CONSTRUCTOR_ID => {
@@ -451,15 +485,33 @@ impl Encrypted {
                             self.store_own_updates(&x);
                             Ok(x)
                         }
-                        Err(e) => Err(e.into()),
+                        Err(e) => Err(DeserializeError::from(e)),
                     },
-                    Err(e) => Err(e.into()),
+                    Err(e) => Err(DeserializeError::from(e)),
                 };
-                self.rpc_results.push((msg_id, body));
+
+                match body {
+                    Ok(body) => self
+                        .deserialization
+                        .push(Deserialization::RpcResult(RpcResult {
+                            msg_id: msg_id,
+                            body,
+                        })),
+                    Err(e) => self.deserialization.push(Deserialization::Failure(
+                        DeserializationFailure {
+                            msg_id,
+                            error: e.into(),
+                        },
+                    )),
+                }
             }
             _ => {
                 self.store_own_updates(&result);
-                self.rpc_results.push((msg_id, Ok(result)));
+                self.deserialization
+                    .push(Deserialization::RpcResult(RpcResult {
+                        msg_id: msg_id,
+                        body: result,
+                    }));
             }
         }
 
@@ -476,7 +528,8 @@ impl Encrypted {
             Ok(body_id) => {
                 if UPDATE_IDS.iter().any(|&id| body_id == id) {
                     // TODO somehow signal that this updates is our own, to avoid getting into nasty loops
-                    self.updates.push(body.to_vec());
+                    self.deserialization
+                        .push(Deserialization::Update(body.to_vec()));
                 }
             }
             Err(_err) => {
@@ -591,32 +644,37 @@ impl Encrypted {
         message: manual_tl::Message,
     ) -> Result<(), DeserializeError> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
+
+        if self
+            .salt_request_msg_id
+            .is_some_and(|msg_id| msg_id == bad_msg.bad_msg_id())
+        {
+            // Response to internal request, do not propagate.
+            self.salt_request_msg_id = None;
+        } else {
+            self.deserialization
+                .push(Deserialization::BadMessage(super::BadMessage {
+                    msg_id: MsgId(bad_msg.bad_msg_id()),
+                    code: bad_msg.error_code(),
+                }));
+        }
+
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::Notification(x) => x,
             tl::enums::BadMsgNotification::BadServerSalt(x) => {
-                self.rpc_results.push((
-                    MsgId(x.bad_msg_id),
-                    Err(RequestError::BadMessage { code: x.error_code }),
-                ));
-
                 self.salts.clear();
                 self.salts.push(tl::types::FutureSalt {
                     valid_since: 0,
                     valid_until: i32::MAX,
                     salt: x.new_server_salt,
                 });
+                self.salt_request_msg_id = None;
 
                 info!("got bad salt; salts have been reset down to a single one");
                 return Ok(());
             }
         };
 
-        self.rpc_results.push((
-            MsgId(bad_msg.bad_msg_id),
-            Err(RequestError::BadMessage {
-                code: bad_msg.error_code,
-            }),
-        ));
         match bad_msg.error_code {
             16 => {
                 // Sent `msg_id` was too low (our `time_offset` is wrong).
@@ -824,8 +882,19 @@ impl Encrypted {
         let tl::enums::FutureSalts::Salts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
-        self.rpc_results
-            .push((MsgId(salts.req_msg_id), Ok(message.body)));
+        if self
+            .salt_request_msg_id
+            .is_some_and(|msg_id| msg_id == salts.req_msg_id)
+        {
+            // Response to internal request, do not propagate.
+            self.salt_request_msg_id = None;
+        } else {
+            self.deserialization
+                .push(Deserialization::RpcResult(RpcResult {
+                    msg_id: MsgId(salts.req_msg_id),
+                    body: message.body,
+                }));
+        }
 
         self.start_salt_time = Some((salts.now, Instant::now()));
         self.salts = salts.salts.0;
@@ -873,8 +942,11 @@ impl Encrypted {
     fn handle_pong(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         let tl::enums::Pong::Pong(pong) = tl::enums::Pong::from_bytes(&message.body)?;
 
-        self.rpc_results
-            .push((MsgId(pong.msg_id), Ok(message.body)));
+        self.deserialization
+            .push(Deserialization::RpcResult(RpcResult {
+                msg_id: MsgId(pong.msg_id),
+                body: message.body,
+            }));
         Ok(())
     }
 
@@ -1100,7 +1172,8 @@ impl Encrypted {
     /// safely treat whatever message body we received as `Updates`.
     fn handle_update(&mut self, message: manual_tl::Message) -> Result<(), DeserializeError> {
         // TODO if this `Updates` cannot be deserialized, `getDifference` should be used
-        self.updates.push(message.body);
+        self.deserialization
+            .push(Deserialization::Update(message.body));
         Ok(())
     }
 }
@@ -1126,6 +1199,23 @@ impl Mtp for Encrypted {
     fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId> {
         // TODO rather than taking in bytes, take requests, serialize them in place, and if too large drop the last part of the buffer
 
+        // Check to see if the next salt can be used already. If it can, drop the current one and,
+        // if the next salt is the last one, fetch more.
+        if let Some((start_secs, start_instant)) = self.start_salt_time {
+            if let Some(salt) = self.salts.get(self.salts.len() - 2) {
+                let now = start_secs + start_instant.elapsed().as_secs() as i32;
+                if now >= salt.valid_since + SALT_USE_DELAY {
+                    self.salts.pop();
+                }
+            }
+        }
+
+        self.try_request_salts(buffer);
+        if self.salt_request_msg_id.is_some() {
+            // Don't add anything else to the container while we still need new salts.
+            return None;
+        }
+
         // If we need to acknowledge messages, this notification goes in with the rest of requests
         // so that we can also include it. It has priority over user requests because these should
         // be sent out as soon as possible.
@@ -1136,33 +1226,6 @@ impl Mtp for Encrypted {
             })
             .to_bytes();
             self.serialize_msg(buffer, &body, false);
-        }
-
-        // Check to see if the next salt can be used already. If it can, drop the current one and,
-        // if the next salt is the last one, fetch more.
-        if let Some((start_secs, start_instant)) = self.start_salt_time {
-            let should_fetch_salts = self.salts.len() < 2
-                || 'value: {
-                    if let Some(salt) = self.salts.get(self.salts.len() - 2) {
-                        let now = start_secs + start_instant.elapsed().as_secs() as i32;
-                        if now >= salt.valid_since + SALT_USE_DELAY {
-                            self.salts.pop();
-                            if self.salts.len() == 1 {
-                                info!("only one future salt remaining; asking for more salts");
-                                break 'value true;
-                            }
-                        }
-                    }
-                    false
-                };
-
-            if should_fetch_salts {
-                let body = tl::functions::GetFutureSalts {
-                    num: NUM_FUTURE_SALTS,
-                }
-                .to_bytes();
-                self.serialize_msg(buffer, &body, true);
-            }
         }
 
         // Serialize `MAXIMUM_LENGTH` requests at most.
@@ -1203,15 +1266,18 @@ impl Mtp for Encrypted {
         Some(self.serialize_msg(buffer, body, true))
     }
 
-    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) {
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId> {
         self.finalize_plain(buffer);
-        if !buffer.is_empty() {
+        if buffer.is_empty() {
+            None
+        } else {
             encrypt_data_v2(buffer, &self.auth_key);
+            Some(MsgId(self.last_msg_id))
         }
     }
 
     /// Processes an encrypted response from the server.
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError> {
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
         let plaintext = decrypt_data_v2(payload, &self.auth_key)?;
@@ -1228,10 +1294,7 @@ impl Mtp for Encrypted {
         // For simplicity, and to avoid passing too much stuff around (RPC results, updates),
         // the processing result is stored in self. After processing is done, that temporary
         // state is cleaned and returned with `mem::take`.
-        Ok(Deserialization {
-            rpc_results: mem::take(&mut self.rpc_results),
-            updates: mem::take(&mut self.updates),
-        })
+        Ok(mem::take(&mut self.deserialization))
     }
 
     fn reset(&mut self) {

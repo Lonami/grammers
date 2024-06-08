@@ -13,7 +13,7 @@ use crate::types::{
     chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
     BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
 };
-use grammers_mtproto::mtp::RpcError;
+use grammers_mtsender::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;

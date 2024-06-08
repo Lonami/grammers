@@ -30,12 +30,61 @@ use grammers_tl_types as tl;
 pub use plain::Plain;
 use std::fmt;
 
+pub struct RpcResult {
+    pub msg_id: MsgId,
+    pub body: Vec<u8>,
+}
+
+pub struct RpcResultError {
+    pub msg_id: MsgId,
+    pub error: tl::types::RpcError,
+}
+
+pub struct BadMessage {
+    pub msg_id: MsgId,
+    pub code: i32,
+}
+
+pub struct DeserializationFailure {
+    pub msg_id: MsgId,
+    pub error: DeserializeError,
+}
+
 /// Results from the deserialization of a response.
-pub struct Deserialization {
-    /// Result bodies to Remote Procedure Calls.
-    pub rpc_results: Vec<(MsgId, Result<Vec<u8>, RequestError>)>,
-    /// Updates that came in the response.
-    pub updates: Vec<Vec<u8>>,
+pub enum Deserialization {
+    Update(Vec<u8>),
+    RpcResult(RpcResult),
+    RpcError(RpcResultError),
+    BadMessage(BadMessage),
+    Failure(DeserializationFailure),
+}
+
+impl BadMessage {
+    pub fn description(&self) -> &'static str {
+        // https://core.telegram.org/mtproto/service_messages_about_messages
+        match self.code {
+            16 => "msg_id too low",
+            17 => "msg_id too high",
+            18 => "incorrect two lower order msg_id bits; this is a bug",
+            19 => "container msg_id is the same as msg_id of a previously received message; this is a bug",
+            20 => "message too old",
+            32 => "msg_seqno too low",
+            33 => "msg_seqno too high",
+            34 => "an even msg_seqno expected; this may be a bug",
+            35 => "odd msg_seqno expected; this may be a bug",
+            48 => "incorrect server salt",
+            64 => "invalid container; this is likely a bug",
+            _ => "unknown explanation; please report this issue",
+        }
+    }
+
+    pub fn retryable(&self) -> bool {
+        [16, 17, 48].contains(&self.code)
+    }
+
+    pub fn fatal(&self) -> bool {
+        !self.retryable() && ![32, 33].contains(&self.code)
+    }
 }
 
 /// The error type for the deserialization of server messages.
@@ -134,160 +183,6 @@ impl From<crypto::Error> for DeserializeError {
     }
 }
 
-/// The error type reported by the server when a request is misused.
-#[derive(Clone, Debug, PartialEq)]
-pub struct RpcError {
-    /// A numerical value similar to HTTP status codes.
-    pub code: i32,
-
-    /// The ASCII error name, normally in screaming snake case.
-    pub name: String,
-
-    /// If the error contained an additional value, it will be present here.
-    pub value: Option<u32>,
-
-    /// The constructor identifier of the request that triggered this error.
-    /// Won't be present if the error was artificially constructed.
-    pub caused_by: Option<u32>,
-}
-
-impl std::error::Error for RpcError {}
-
-impl fmt::Display for RpcError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "rpc error {}: {}", self.code, self.name)?;
-        if let Some(caused_by) = self.caused_by {
-            write!(f, " caused by {}", tl::name_for_id(caused_by))?;
-        }
-        if let Some(value) = self.value {
-            write!(f, " (value: {})", value)?;
-        }
-        Ok(())
-    }
-}
-
-impl From<tl::types::RpcError> for RpcError {
-    fn from(error: tl::types::RpcError) -> Self {
-        // Extract the numeric value in the error, if any
-        if let Some(value) = error
-            .error_message
-            .split(|c: char| !c.is_ascii_digit())
-            .find(|s| !s.is_empty())
-        {
-            let mut to_remove = String::with_capacity(1 + value.len());
-            to_remove.push('_');
-            to_remove.push_str(value);
-            Self {
-                code: error.error_code,
-                name: error.error_message.replace(&to_remove, ""),
-                // Safe to unwrap, matched on digits
-                value: Some(value.parse().unwrap()),
-                caused_by: None,
-            }
-        } else {
-            Self {
-                code: error.error_code,
-                name: error.error_message.clone(),
-                value: None,
-                caused_by: None,
-            }
-        }
-    }
-}
-
-impl RpcError {
-    /// Matches on the name of the RPC error (case-sensitive).
-    ///
-    /// Useful in `match` arm guards. A single trailing or leading asterisk (`'*'`) is allowed,
-    /// and will instead check if the error name starts (or ends with) the input parameter.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # let request_result = Result::<(), _>::Err(grammers_mtproto::mtp::RpcError {
-    /// #     code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None, caused_by: None });
-    /// #
-    /// match request_result {
-    ///     Err(rpc_err) if rpc_err.is("SESSION_PASSWORD_NEEDED") => panic!(),
-    ///     Err(rpc_err) if rpc_err.is("PHONE_CODE_*") => {},
-    ///     _ => panic!()
-    /// }
-    /// ```
-    pub fn is(&self, rpc_error: &str) -> bool {
-        if let Some(rpc_error) = rpc_error.strip_suffix('*') {
-            self.name.starts_with(rpc_error)
-        } else if let Some(rpc_error) = rpc_error.strip_prefix('*') {
-            self.name.ends_with(rpc_error)
-        } else {
-            self.name == rpc_error
-        }
-    }
-}
-
-/// This error occurs when a Remote Procedure call was unsuccessful.
-///
-/// The request should be retransmited when this happens, unless the
-/// variant is `InvalidParameters`.
-#[derive(Clone, Debug, PartialEq)]
-pub enum RequestError {
-    /// The parameters used in the request were invalid and caused a
-    /// Remote Procedure Call error.
-    RpcError(RpcError),
-
-    /// The call was dropped (cancelled), so the server will not process it.
-    Dropped,
-
-    /// The message sent to the server was invalid, and the request
-    /// must be retransmitted.
-    BadMessage {
-        /// The code of the bad message error.
-        code: i32,
-    },
-
-    /// The deserialization of the response that was meant to confirm this
-    /// request failed, so while the server technically responded to the
-    /// request its answer is useless as it could not be understood properly.
-    Deserialize(DeserializeError),
-}
-
-impl std::error::Error for RequestError {}
-
-impl fmt::Display for RequestError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::RpcError(error) => write!(f, "request error: {}", error),
-            Self::Dropped => write!(f, "request error: request dropped"),
-            Self::BadMessage { code } => write!(f, "request error: bad message (code {}, {})", code, match code {
-                16 => "msg_id too low",
-                17 => "msg_id too high",
-                18 => "incorrect two lower order msg_id bits; this is a bug",
-                19 => "container msg_id is the same as msg_id of a previously received message; this is a bug",
-                20 => "message too old",
-                32 => "msg_seqno too low",
-                33 => "msg_seqno too high",
-                34 => "an even msg_seqno expected; this may be a bug",
-                35 => "odd msg_seqno expected; this may be a bug",
-                48 => "incorrect server salt",
-                64 => "invalid container; this is likely a bug",
-                _ => "unknown explanation; please report this issue",
-            }),
-            Self::Deserialize(error) => write!(f, "request error: {}", error),
-        }
-    }
-}
-
-impl From<DeserializeError> for RequestError {
-    fn from(error: DeserializeError) -> Self {
-        Self::Deserialize(error)
-    }
-}
-
-impl From<tl::deserialize::Error> for RequestError {
-    fn from(error: tl::deserialize::Error) -> Self {
-        RequestError::from(DeserializeError::from(error))
-    }
-}
-
 /// The trait used by the [Mobile Transport Protocol] to serialize outgoing
 /// messages and deserialize incoming ones into proper responses.
 ///
@@ -321,58 +216,14 @@ pub trait Mtp {
     /// produce data that has to be sent after deserializing incoming messages.
     ///
     /// The buffer may remain empty if there are no actions to take.
-    fn finalize(&mut self, buffer: &mut RingBuffer<u8>);
+    ///
+    /// When at least one message is serialized, the last generated `MsgId` is returned.
+    /// This will either belong to the container (if used) or the last serialized message.
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError>;
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn check_rpc_error_parsing() {
-        assert_eq!(
-            RpcError::from(tl::types::RpcError {
-                error_code: 400,
-                error_message: "CHAT_INVALID".into(),
-            }),
-            RpcError {
-                code: 400,
-                name: "CHAT_INVALID".into(),
-                value: None,
-                caused_by: None,
-            }
-        );
-
-        assert_eq!(
-            RpcError::from(tl::types::RpcError {
-                error_code: 420,
-                error_message: "FLOOD_WAIT_31".into(),
-            }),
-            RpcError {
-                code: 420,
-                name: "FLOOD_WAIT".into(),
-                value: Some(31),
-                caused_by: None,
-            }
-        );
-
-        assert_eq!(
-            RpcError::from(tl::types::RpcError {
-                error_code: 500,
-                error_message: "INTERDC_2_CALL_ERROR".into(),
-            }),
-            RpcError {
-                code: 500,
-                name: "INTERDC_CALL_ERROR".into(),
-                value: Some(2),
-                caused_by: None,
-            }
-        );
-    }
 }

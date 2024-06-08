@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Deserialization, DeserializeError, Mtp};
+use super::{Deserialization, DeserializeError, Mtp, RpcResult};
 use crate::MsgId;
 use grammers_crypto::RingBuffer;
 use grammers_tl_types::{Cursor, Deserializable, Serializable};
@@ -63,13 +63,15 @@ impl Mtp for Plain {
         Some(MsgId(0))
     }
 
-    fn finalize(&mut self, _buffer: &mut RingBuffer<u8>) {}
+    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId> {
+        (!buffer.is_empty()).then_some(MsgId(0))
+    }
 
     /// Validates that the returned data is a correct plain message, and
     /// if it is, the method returns the inner contents of the message.
     ///
     /// [`serialize_plain_message`]: #method.serialize_plain_message
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Deserialization, DeserializeError> {
+    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
         let mut buf = Cursor::from_slice(payload);
@@ -104,10 +106,10 @@ impl Mtp for Plain {
             });
         }
 
-        Ok(Deserialization {
-            rpc_results: vec![(MsgId(0), Ok(payload[20..20 + len as usize].into()))],
-            updates: Vec::new(),
-        })
+        Ok(vec![Deserialization::RpcResult(RpcResult {
+            msg_id: MsgId(0),
+            body: payload[20..20 + len as usize].into(),
+        })])
     }
 
     fn reset(&mut self) {}

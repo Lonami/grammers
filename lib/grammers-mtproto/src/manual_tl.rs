@@ -86,7 +86,7 @@ impl Deserializable for Message {
 /// ```tl
 /// rpc_result#f35c6d01 req_msg_id:long result:Object = RpcResult;
 /// ```
-pub(crate) struct RpcResult {
+pub struct RpcResult {
     pub req_msg_id: i64,
     pub result: Vec<u8>,
 }

@@ -7,8 +7,7 @@
 // except according to those terms.
 use crate::types::Role;
 use crate::Client;
-use grammers_mtproto::mtp::RpcError;
-use grammers_mtsender::InvocationError;
+use grammers_mtsender::{InvocationError, RpcError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use pin_project_lite::pin_project;
