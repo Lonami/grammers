@@ -70,6 +70,9 @@ pub struct Encrypted {
     /// Used to accurately determine when salts become valid.
     start_salt_time: Option<(i32, Instant)>,
 
+    /// Internal request for salts which should not be propagated.
+    salt_request_msg_id: Option<i64>,
+
     /// The secure, random identifier for this instance.
     client_id: i64,
 
@@ -130,6 +133,7 @@ impl Builder {
                 salt: self.first_salt,
             }],
             start_salt_time: None,
+            salt_request_msg_id: None,
             client_id: {
                 let mut buffer = [0u8; 8];
                 getrandom(&mut buffer).expect("failed to generate a secure client_id");
@@ -218,6 +222,33 @@ impl Encrypted {
         MsgId(msg_id)
     }
 
+    fn get_current_salt(&self) -> i64 {
+        self.salts.last().map(|s| s.salt).unwrap_or(0)
+    }
+
+    fn try_request_salts(&mut self, buffer: &mut RingBuffer<u8>) {
+        if self.salts.len() == 1
+            && self.salt_request_msg_id.is_none()
+            && self.get_current_salt() != 0
+        {
+            // If salts are requested in a container leading to bad_msg,
+            // the bad_msg_id will refer to the container, not the salts request.
+            //
+            // We don't keep track of containers and content-related messages they contain for simplicity.
+            // This would break, because we couldn't identify the response.
+            //
+            // So salts are only requested once we have a valid salt to reduce the chances of this happening.
+            if self.salts.len() == 1 {
+                info!("only one future salt remaining; asking for more salts");
+            }
+            let body = tl::functions::GetFutureSalts {
+                num: NUM_FUTURE_SALTS,
+            }
+            .to_bytes();
+            self.serialize_msg(buffer, &body, true);
+        }
+    }
+
     /// `finalize`, but without encryption.
     ///
     /// The buffer is *not* cleared, but is instead returned.
@@ -245,11 +276,7 @@ impl Encrypted {
         {
             // Prepend the message header
             let mut header = buffer.shift(PLAIN_PACKET_HEADER_LEN);
-            self.salts
-                .last()
-                .map(|s| s.salt)
-                .unwrap_or(0)
-                .serialize(&mut header); // 8 bytes
+            self.get_current_salt().serialize(&mut header); // 8 bytes
 
             self.client_id.serialize(&mut header); // 8 bytes
         }
@@ -618,12 +645,19 @@ impl Encrypted {
     ) -> Result<(), DeserializeError> {
         let bad_msg = tl::enums::BadMsgNotification::from_bytes(&message.body)?;
 
-        // TODO don't propagate if response to internal salt request
-        self.deserialization
-            .push(Deserialization::BadMessage(super::BadMessage {
-                msg_id: MsgId(bad_msg.bad_msg_id()),
-                code: bad_msg.error_code(),
-            }));
+        if self
+            .salt_request_msg_id
+            .is_some_and(|msg_id| msg_id == bad_msg.bad_msg_id())
+        {
+            // Response to internal request, do not propagate.
+            self.salt_request_msg_id = None;
+        } else {
+            self.deserialization
+                .push(Deserialization::BadMessage(super::BadMessage {
+                    msg_id: MsgId(bad_msg.bad_msg_id()),
+                    code: bad_msg.error_code(),
+                }));
+        }
 
         let bad_msg = match bad_msg {
             tl::enums::BadMsgNotification::Notification(x) => x,
@@ -634,6 +668,7 @@ impl Encrypted {
                     valid_until: i32::MAX,
                     salt: x.new_server_salt,
                 });
+                self.salt_request_msg_id = None;
 
                 info!("got bad salt; salts have been reset down to a single one");
                 return Ok(());
@@ -847,12 +882,19 @@ impl Encrypted {
         let tl::enums::FutureSalts::Salts(salts) =
             tl::enums::FutureSalts::from_bytes(&message.body)?;
 
-        // TODO don't propagate if response to internal salt request
-        self.deserialization
-            .push(Deserialization::RpcResult(RpcResult {
-                msg_id: MsgId(salts.req_msg_id),
-                body: message.body,
-            }));
+        if self
+            .salt_request_msg_id
+            .is_some_and(|msg_id| msg_id == salts.req_msg_id)
+        {
+            // Response to internal request, do not propagate.
+            self.salt_request_msg_id = None;
+        } else {
+            self.deserialization
+                .push(Deserialization::RpcResult(RpcResult {
+                    msg_id: MsgId(salts.req_msg_id),
+                    body: message.body,
+                }));
+        }
 
         self.start_salt_time = Some((salts.now, Instant::now()));
         self.salts = salts.salts.0;
@@ -1157,6 +1199,23 @@ impl Mtp for Encrypted {
     fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId> {
         // TODO rather than taking in bytes, take requests, serialize them in place, and if too large drop the last part of the buffer
 
+        // Check to see if the next salt can be used already. If it can, drop the current one and,
+        // if the next salt is the last one, fetch more.
+        if let Some((start_secs, start_instant)) = self.start_salt_time {
+            if let Some(salt) = self.salts.get(self.salts.len() - 2) {
+                let now = start_secs + start_instant.elapsed().as_secs() as i32;
+                if now >= salt.valid_since + SALT_USE_DELAY {
+                    self.salts.pop();
+                }
+            }
+        }
+
+        self.try_request_salts(buffer);
+        if self.salt_request_msg_id.is_some() {
+            // Don't add anything else to the container while we still need new salts.
+            return None;
+        }
+
         // If we need to acknowledge messages, this notification goes in with the rest of requests
         // so that we can also include it. It has priority over user requests because these should
         // be sent out as soon as possible.
@@ -1167,33 +1226,6 @@ impl Mtp for Encrypted {
             })
             .to_bytes();
             self.serialize_msg(buffer, &body, false);
-        }
-
-        // Check to see if the next salt can be used already. If it can, drop the current one and,
-        // if the next salt is the last one, fetch more.
-        if let Some((start_secs, start_instant)) = self.start_salt_time {
-            let should_fetch_salts = self.salts.len() < 2
-                || 'value: {
-                    if let Some(salt) = self.salts.get(self.salts.len() - 2) {
-                        let now = start_secs + start_instant.elapsed().as_secs() as i32;
-                        if now >= salt.valid_since + SALT_USE_DELAY {
-                            self.salts.pop();
-                            if self.salts.len() == 1 {
-                                info!("only one future salt remaining; asking for more salts");
-                                break 'value true;
-                            }
-                        }
-                    }
-                    false
-                };
-
-            if should_fetch_salts {
-                let body = tl::functions::GetFutureSalts {
-                    num: NUM_FUTURE_SALTS,
-                }
-                .to_bytes();
-                self.serialize_msg(buffer, &body, true);
-            }
         }
 
         // Serialize `MAXIMUM_LENGTH` requests at most.
