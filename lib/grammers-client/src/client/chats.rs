@@ -342,6 +342,24 @@ impl ProfilePhotoIter {
 
 /// Method implementations related to dealing with chats or other users.
 impl Client {
+    pub async fn get_chat_by_id(&self, chat_id: i64) -> Result<Chat, InvocationError> {
+        let mut res = match self
+            .invoke(&tl::functions::messages::GetChats {
+                id: vec![chat_id],
+            })
+            .await?
+        {
+            tl::enums::messages::Chats::Chats(chats) => chats.chats,
+            tl::enums::messages::Chats::Slice(chat_slice) => chat_slice.chats,
+        };
+
+        if res.len() != 1 {
+            panic!("fetching only one chat should exactly return one chat");
+        }
+        
+        Chat::from_raw(res.pop().unwrap())
+    }
+    
     /// Resolves a username into the chat that owns it, if any.
     ///
     /// Note that this method is expensive to call, and can quickly cause long flood waits.
