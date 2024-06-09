@@ -89,6 +89,15 @@ impl Transport for Abridged {
             return Err(Error::MissingBytes);
         }
 
+        if header_len == 1 && len >= 4 {
+            let data = i32::from_le_bytes(buffer[1..5].try_into().unwrap());
+            if data < 0 {
+                return Err(Error::BadStatus {
+                    status: (-data) as u32,
+                });
+            }
+        }
+
         let header_len = header_len as usize;
         let len = len as usize;
 
@@ -196,5 +205,18 @@ mod tests {
         buffer.skip(1); // init byte
         let offset = transport.unpack(&buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+    }
+
+    #[test]
+    fn unpack_bad_status() {
+        let mut transport = Abridged::new();
+        let mut buffer = RingBuffer::with_capacity(5, 0);
+        buffer.push(1u8);
+        buffer.extend(&(-404_i32).to_le_bytes());
+
+        assert_eq!(
+            transport.unpack(&buffer[..]),
+            Err(Error::BadStatus { status: 404 })
+        );
     }
 }

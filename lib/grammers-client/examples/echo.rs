@@ -11,8 +11,8 @@
 //! ```
 
 use futures_util::future::{select, Either};
+use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, Update};
-use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;

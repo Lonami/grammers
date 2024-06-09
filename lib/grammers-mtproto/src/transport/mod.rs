@@ -39,6 +39,20 @@ pub enum Error {
 
     /// The checksum of the packet does not match its expected value.
     BadCrc { expected: u32, got: u32 },
+
+    /// A negative length was received, indicating a [transport-level error].
+    /// The absolute value of this length behaves like an [HTTP status code]:
+    ///
+    /// * 404, if the authorization key used was not found, meaning that the
+    ///   server is not aware of the key used by the client, so it cannot be
+    ///   used to securely communicate with it.
+    ///
+    /// * 429, if too many transport connections are established to the same
+    ///   IP address in a too-short lapse of time.
+    ///
+    /// [transport-level error]: https://core.telegram.org/mtproto/mtproto-transports#transport-errors
+    /// [HTTP status code]: https://developer.mozilla.org/en-US/docs/Web/HTTP/Status
+    BadStatus { status: u32 },
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -61,6 +75,9 @@ impl fmt::Display for Error {
             }
             Error::BadCrc { expected, got } => {
                 write!(f, "bad crc (expected {}, got {})", expected, got)
+            }
+            Error::BadStatus { status } => {
+                write!(f, "bad status (negative length -{})", status)
             }
         }
     }

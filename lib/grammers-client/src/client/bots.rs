@@ -105,7 +105,7 @@ impl InlineResultIter {
             next_offset,
             results,
             ..
-        }) = dbg!(self.client.invoke(&self.request).await?);
+        }) = self.client.invoke(&self.request).await?;
 
         if let Some(offset) = next_offset {
             self.request.offset = offset;

@@ -22,8 +22,8 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
+use grammers_client::session::Session;
 use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
-use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;

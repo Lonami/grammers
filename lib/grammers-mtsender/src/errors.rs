@@ -123,7 +123,7 @@ impl RpcError {
     /// # Examples
     ///
     /// ```
-    /// # let request_result = Result::<(), _>::Err(grammers_mtproto::mtp::RpcError {
+    /// # let request_result = Result::<(), _>::Err(grammers_mtsender::RpcError {
     /// #     code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None, caused_by: None });
     /// #
     /// match request_result {
@@ -207,7 +207,7 @@ impl InvocationError {
     ///
     /// ```
     /// # let request_result = Result::<(), _>::Err(grammers_mtsender::InvocationError::Rpc(
-    /// #     grammers_mtproto::mtp::RpcError { code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None, caused_by: None }));
+    /// #     grammers_mtsender::RpcError { code: 400, name: "PHONE_CODE_INVALID".to_string(), value: None, caused_by: None }));
     /// #
     /// match request_result {
     ///     Err(err) if err.is("SESSION_PASSWORD_NEEDED") => panic!(),

@@ -59,6 +59,16 @@ impl Transport for Intermediate {
             return Err(Error::MissingBytes);
         }
 
+        if len <= 4 {
+            if len >= 4 {
+                let data = i32::from_le_bytes(buffer[4..8].try_into().unwrap());
+                return Err(Error::BadStatus {
+                    status: (-data) as u32,
+                });
+            }
+            return Err(Error::BadLen { got: len });
+        }
+
         let len = len as usize;
 
         Ok(UnpackedOffset {
@@ -146,5 +156,18 @@ mod tests {
         two_buffer.skip(offset.next_offset);
         let offset = transport.unpack(&two_buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+    }
+
+    #[test]
+    fn unpack_bad_status() {
+        let mut transport = Intermediate::new();
+        let mut buffer = RingBuffer::with_capacity(8, 0);
+        buffer.extend(&(4_i32).to_le_bytes());
+        buffer.extend(&(-404_i32).to_le_bytes());
+
+        assert_eq!(
+            transport.unpack(&buffer[..]),
+            Err(Error::BadStatus { status: 404 })
+        );
     }
 }

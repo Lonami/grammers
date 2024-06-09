@@ -74,7 +74,12 @@ impl Transport for Full {
         // payload len
         let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
         if len < 12 {
-            return Err(Error::BadLen { got: len as i32 });
+            if len < 0 {
+                return Err(Error::BadStatus {
+                    status: (-len) as u32,
+                });
+            }
+            return Err(Error::BadLen { got: len });
         }
 
         if total_len < len {
@@ -246,6 +251,18 @@ mod tests {
                 expected: 932541318,
                 got: 3365237638,
             })
+        );
+    }
+
+    #[test]
+    fn unpack_bad_status() {
+        let mut transport = Full::new();
+        let mut buffer = RingBuffer::with_capacity(4, 0);
+        buffer.extend(&(-404_i32).to_le_bytes());
+
+        assert_eq!(
+            transport.unpack(&buffer[..]),
+            Err(Error::BadStatus { status: 404 })
         );
     }
 }

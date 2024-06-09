@@ -46,3 +46,9 @@ pub(crate) mod utils;
 
 pub use client::{Client, Config, InitParams, SignInError};
 pub use types::{button, reply_markup, ChatMap, InputMessage, Update};
+
+pub use grammers_mtproto::transport;
+pub use grammers_mtsender::{FixedReconnect, InvocationError, NoReconnect, ReconnectionPolicy};
+pub use grammers_session as session;
+#[cfg(feature = "unstable_raw")]
+pub use grammers_tl_types;
