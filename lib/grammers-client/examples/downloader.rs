@@ -23,9 +23,9 @@ use mime_guess::mime;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
 
+use grammers_client::session::Session;
 use grammers_client::types::Media::{Contact, Document, Photo, Sticker};
 use grammers_client::types::*;
-use grammers_session::Session;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

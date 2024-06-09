@@ -1,8 +1,7 @@
 //! this example demonstrate how to implement custom Reconnection Polies
 
-use grammers_client::{Client, Config, InitParams};
-use grammers_mtsender::ReconnectionPolicy;
-use grammers_session::Session;
+use grammers_client::session::Session;
+use grammers_client::{Client, Config, InitParams, ReconnectionPolicy};
 use std::ops::ControlFlow;
 use std::time::Duration;
 use tokio::runtime;

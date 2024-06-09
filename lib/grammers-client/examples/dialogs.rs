@@ -10,8 +10,8 @@
 //! cargo run --example dialogs
 //! ```
 
+use grammers_client::session::Session;
 use grammers_client::{Client, Config, SignInError};
-use grammers_session::Session;
 use log;
 use simple_logger::SimpleLogger;
 use std::env;

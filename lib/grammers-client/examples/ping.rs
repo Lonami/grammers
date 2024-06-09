@@ -4,8 +4,8 @@
 //! cargo run --example ping
 //! ```
 
+use grammers_client::session::Session;
 use grammers_client::{Client, Config};
-use grammers_session::Session;
 use grammers_tl_types as tl;
 use tokio::runtime;
 
