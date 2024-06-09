@@ -1202,7 +1202,8 @@ impl Mtp for Encrypted {
         // Check to see if the next salt can be used already. If it can, drop the current one and,
         // if the next salt is the last one, fetch more.
         if let Some((start_secs, start_instant)) = self.start_salt_time {
-            if let Some(salt) = self.salts.get(self.salts.len() - 2) {
+            if self.salts.len() > 1 {
+                let salt = &self.salts[self.salts.len() - 2];
                 let now = start_secs + start_instant.elapsed().as_secs() as i32;
                 if now >= salt.valid_since + SALT_USE_DELAY {
                     self.salts.pop();
