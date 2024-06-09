@@ -102,20 +102,6 @@ pub enum DeserializeError {
     /// The server's message length was past the buffer.
     TooLongMessageLength { got: usize, max_length: usize },
 
-    /// The error occured at the [transport level], making it impossible to
-    /// deserialize any data. The absolute value indicates the HTTP error
-    /// code. Some known, possible codes are:
-    ///
-    /// * 404, if the authorization key used was not found, meaning that the
-    ///   server is not aware of the key used by the client, so it cannot be
-    ///   used to securely communicate with it.
-    ///
-    /// * 429, if too many transport connections are established to the same
-    ///   IP address in a too-short lapse of time.
-    ///
-    /// [transport level]: https://core.telegram.org/mtproto/mtproto-transports#transport-errors
-    TransportError { code: i32 },
-
     /// The received buffer is too small to contain a valid response message,
     /// or the response seemed valid at first but trying to deserialize it
     /// proved the buffer to be too small.
@@ -152,9 +138,6 @@ impl fmt::Display for DeserializeError {
                 "bad server message length (got {}, when at most it should be {})",
                 got, max_length
             ),
-            Self::TransportError { code } => {
-                write!(f, "transpot-level error, http status code: {}", code.abs())
-            }
             Self::MessageBufferTooSmall => write!(
                 f,
                 "server responded with a payload that's too small to fit a valid message"
