@@ -46,7 +46,7 @@ impl ChatMap {
             map: users
                 .into_iter()
                 .map(Chat::from_user)
-                .chain(chats.into_iter().map(Chat::from_chat))
+                .chain(chats.into_iter().map(Chat::from_raw))
                 .map(|chat| ((&chat.pack().to_peer()).into(), chat))
                 .collect(),
         })

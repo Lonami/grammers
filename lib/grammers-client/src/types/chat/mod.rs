@@ -41,7 +41,7 @@ impl Chat {
         Self::User(User::from_raw(user))
     }
 
-    pub(crate) fn from_chat(chat: tl::enums::Chat) -> Self {
+    fn _from_raw(chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
@@ -204,6 +204,16 @@ impl Chat {
                 })
             }),
         }
+    }
+
+    #[cfg(feature = "unstable_raw")]
+    pub fn from_raw(chat: tl::enums::Chat) -> Self {
+        Self::_from_raw(chat)
+    }
+
+    #[cfg(not(feature = "unstable_raw"))]
+    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
+        Self::_from_raw(chat)
     }
 }
 
