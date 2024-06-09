@@ -357,7 +357,7 @@ impl Client {
             panic!("fetching only one chat should exactly return one chat");
         }
         
-        Chat::from_raw(res.pop().unwrap())
+        Ok(Chat::from_raw(res.pop().unwrap()))
     }
     
     /// Resolves a username into the chat that owns it, if any.
