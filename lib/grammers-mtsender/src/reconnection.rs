@@ -49,11 +49,3 @@ impl ReconnectionPolicy for NoReconnect {
         ControlFlow::Break(())
     }
 }
-
-unsafe impl Send for NoReconnect {}
-
-unsafe impl Sync for NoReconnect {}
-
-unsafe impl Send for FixedReconnect {}
-
-unsafe impl Sync for FixedReconnect {}
