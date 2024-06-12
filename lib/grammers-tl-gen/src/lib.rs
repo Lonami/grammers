@@ -8,6 +8,9 @@
 
 //! This module gathers all the code generation submodules and coordinates
 //! them, feeding them the right data.
+
+#![deny(unsafe_code)]
+
 mod enums;
 mod grouper;
 mod metadata;

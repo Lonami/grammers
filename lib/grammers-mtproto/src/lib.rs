@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![deny(unsafe_code)]
+
 //! This library is an implementation of the [Mobile Transport Protocol].
 //!
 //! It is capable of efficiently packing enqueued requests into message

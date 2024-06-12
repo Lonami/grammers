@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![deny(unsafe_code)]
+
 //! This library is a high-level implementation to access [Telegram's API], which essentially
 //! lets you automate everything you can do with official Telegram clients and more from Rust,
 //! or even control bot accounts, making it a viable alternative to using the [Telegram Bot API].

@@ -17,6 +17,9 @@
 //! [Type Language]: https://core.telegram.org/mtproto/TL
 //! [`parse_tl_file`]: fn.parse_tl_file.html
 //! [`Definition`]: tl/struct.Definition.html
+
+#![deny(unsafe_code)]
+
 pub mod errors;
 pub mod tl;
 mod tl_iterator;

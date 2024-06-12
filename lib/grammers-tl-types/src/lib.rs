@@ -73,6 +73,9 @@
 //! [`Serializable`]: trait.Serializable.html
 //! [`Deserializable`]: trait.Deserializable.html
 //! [`LAYER`]: constant.LAYER.html
+
+#![deny(unsafe_code)]
+
 pub mod deserialize;
 mod generated;
 pub mod serialize;
