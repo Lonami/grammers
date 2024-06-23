@@ -368,7 +368,12 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 self.reset_state();
 
                 match err {
-                    ReadError::Io(_) => {
+                    ReadError::Io(_)
+                        if matches!(
+                            self.reconnection_policy.should_retry(0),
+                            ControlFlow::Continue(_)
+                        ) =>
+                    {
                         self.try_connect().await?;
                         Ok(Vec::new())
                     }
