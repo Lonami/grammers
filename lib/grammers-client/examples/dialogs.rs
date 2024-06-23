@@ -12,7 +12,6 @@
 
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, SignInError};
-use log;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};

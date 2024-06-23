@@ -292,15 +292,12 @@ impl Serializable for &[u8] {
             buf.extend([self.len() as u8]);
             self.len() + 1
         } else {
-            buf.extend(
-                [
-                    254,
-                    (self.len() & 0xff) as u8,
-                    ((self.len() >> 8) & 0xff) as u8,
-                    ((self.len() >> 16) & 0xff) as u8,
-                ]
-                .into_iter(),
-            );
+            buf.extend([
+                254,
+                (self.len() & 0xff) as u8,
+                ((self.len() >> 8) & 0xff) as u8,
+                ((self.len() >> 16) & 0xff) as u8,
+            ]);
             self.len()
         };
         let padding = (4 - (len % 4)) % 4;

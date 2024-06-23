@@ -44,11 +44,8 @@ fn check_deps_documented() {
         markdown
             .lines()
             .filter_map(|line| {
-                if line.starts_with("## ") {
-                    Some(line[3..].to_string())
-                } else {
-                    None
-                }
+                line.strip_prefix("## ")
+                    .map(|stripped| stripped.to_string())
             })
             .collect::<Vec<_>>()
     };

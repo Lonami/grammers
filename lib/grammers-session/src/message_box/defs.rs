@@ -126,3 +126,10 @@ pub(super) struct PossibleGap {
 
 #[derive(Debug)]
 pub struct Gap;
+
+/// Alias for the commonly-referenced three-tuple of update and related peers.
+pub(super) type UpdateAndPeers = (
+    Vec<tl::enums::Update>,
+    Vec<tl::enums::User>,
+    Vec<tl::enums::Chat>,
+);

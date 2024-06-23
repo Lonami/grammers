@@ -38,7 +38,7 @@ impl<'a> Metadata<'a> {
                         metadata
                             .unused_flags
                             .entry((&d.namespace, &d.name))
-                            .or_insert_with(Vec::new)
+                            .or_default()
                             .push(pf)
                     }
                 })
@@ -53,7 +53,7 @@ impl<'a> Metadata<'a> {
             metadata
                 .defs_with_type
                 .entry((&d.ty.namespace, &d.ty.name))
-                .or_insert_with(Vec::new)
+                .or_default()
                 .push(d);
         });
 

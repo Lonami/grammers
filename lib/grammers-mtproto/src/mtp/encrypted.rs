@@ -485,7 +485,7 @@ impl Encrypted {
                             self.store_own_updates(&x);
                             Ok(x)
                         }
-                        Err(e) => Err(DeserializeError::from(e)),
+                        Err(e) => Err(e),
                     },
                     Err(e) => Err(DeserializeError::from(e)),
                 };
@@ -493,15 +493,9 @@ impl Encrypted {
                 match body {
                     Ok(body) => self
                         .deserialization
-                        .push(Deserialization::RpcResult(RpcResult {
-                            msg_id: msg_id,
-                            body,
-                        })),
+                        .push(Deserialization::RpcResult(RpcResult { msg_id, body })),
                     Err(e) => self.deserialization.push(Deserialization::Failure(
-                        DeserializationFailure {
-                            msg_id,
-                            error: e.into(),
-                        },
+                        DeserializationFailure { msg_id, error: e },
                     )),
                 }
             }
@@ -509,7 +503,7 @@ impl Encrypted {
                 self.store_own_updates(&result);
                 self.deserialization
                     .push(Deserialization::RpcResult(RpcResult {
-                        msg_id: msg_id,
+                        msg_id,
                         body: result,
                     }));
             }

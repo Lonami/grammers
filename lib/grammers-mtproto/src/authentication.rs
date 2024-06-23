@@ -430,7 +430,7 @@ fn do_step3(
 
             let sha = {
                 let mut hasher = Sha1::new();
-                hasher.update(&new_nonce);
+                hasher.update(new_nonce);
                 hasher.finalize()
             };
             let new_nonce_hash = {

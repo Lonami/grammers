@@ -16,15 +16,15 @@ pub(crate) fn group_by_ns(
     definitions: &[Definition],
     category: Category,
 ) -> HashMap<String, Vec<&Definition>> {
-    let mut result = HashMap::new();
+    let mut result = HashMap::<String, Vec<&Definition>>::new();
     definitions
         .iter()
         .filter(|d| d.category == category)
         .for_each(|d| {
             // We currently only handle zero or one namespace.
             assert!(d.namespace.len() <= 1);
-            let ns = d.namespace.get(0).map(|x| &x[..]).unwrap_or("");
-            result.entry(ns.into()).or_insert_with(Vec::new).push(d);
+            let ns = d.namespace.first().map(|x| &x[..]).unwrap_or("");
+            result.entry(ns.into()).or_default().push(d);
         });
 
     for (_, vec) in result.iter_mut() {
@@ -35,7 +35,7 @@ pub(crate) fn group_by_ns(
 
 /// Similar to `group_by_ns`, but for the definition types.
 pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<String>, Vec<&Type>> {
-    let mut result = HashMap::new();
+    let mut result = HashMap::<Option<String>, Vec<&Type>>::new();
     definitions
         .iter()
         .filter(|d| d.category == Category::Types && !d.ty.generic_ref)
@@ -43,8 +43,8 @@ pub(crate) fn group_types_by_ns(definitions: &[Definition]) -> HashMap<Option<St
             // We currently only handle zero or one namespace.
             assert!(d.namespace.len() <= 1);
             result
-                .entry(d.namespace.get(0).map(Clone::clone))
-                .or_insert_with(Vec::new)
+                .entry(d.namespace.first().cloned())
+                .or_default()
                 .push(&d.ty);
         });
 
