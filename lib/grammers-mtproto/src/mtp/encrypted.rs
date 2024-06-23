@@ -1299,6 +1299,7 @@ impl Mtp for Encrypted {
     }
 
     fn reset(&mut self) {
+        log::info!("resetting mtp client id and related state");
         self.client_id = {
             let mut buffer = [0u8; 8];
             getrandom(&mut buffer).expect("failed to generate a secure client_id");

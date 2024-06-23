@@ -79,6 +79,7 @@ impl Transport for Intermediate {
     }
 
     fn reset(&mut self) {
+        log::info!("resetting sending of header in intermediate transport");
         self.init = false;
     }
 }

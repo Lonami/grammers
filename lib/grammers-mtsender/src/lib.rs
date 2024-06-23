@@ -398,9 +398,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 }
             }
 
-            log::info!("retrying the call");
-
             attempts += 1;
+            log::info!("retrying the call after {} failed attempt(s)", attempts);
         }
     }
 
@@ -420,14 +419,17 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
             match res {
                 Ok(result) => {
+                    log::info!(
+                        "auto-reconnect success after {} failed attempt(s)",
+                        attempts
+                    );
                     self.stream = result;
                     return Ok(());
                 }
                 Err(e) => {
-                    log::warn!("err: {}", e);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
-
                     attempts += 1;
+                    log::warn!("auto-reconnect failed {} time(s): {}", attempts, e);
+                    tokio::time::sleep(Duration::from_secs(1)).await;
 
                     match self.reconnection_policy.should_retry(attempts) {
                         ControlFlow::Break(_) => {
@@ -757,6 +759,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn reset_state(&mut self) {
         self.transport.reset();
         self.mtp.reset();
+        log::info!(
+            "resetting sender state from read_buffer {}/{}, write_buffer {}/{}",
+            self.read_index,
+            self.read_buffer.len(),
+            self.write_index,
+            self.write_buffer.len(),
+        );
         self.read_buffer.clear();
         self.read_index = 0;
         self.write_index = 0;

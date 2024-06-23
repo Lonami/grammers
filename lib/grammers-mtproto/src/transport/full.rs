@@ -121,6 +121,7 @@ impl Transport for Full {
     }
 
     fn reset(&mut self) {
+        log::info!("resetting recv and send seqs in full transport");
         self.recv_seq = 0;
         self.send_seq = 0;
     }

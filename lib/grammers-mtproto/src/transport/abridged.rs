@@ -109,6 +109,7 @@ impl Transport for Abridged {
     }
 
     fn reset(&mut self) {
+        log::info!("resetting sending of header in abridged transport");
         self.init = false;
     }
 }
