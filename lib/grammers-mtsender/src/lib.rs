@@ -313,93 +313,77 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             Write(io::Result<usize>),
         }
 
-        let mut attempts = 0u8;
-        loop {
-            if attempts > 5 {
-                log::error!(
-                    "attempted more than {} times for reconnection and failed",
-                    attempts
-                );
-                return Err(ReadError::Io(io::Error::new(
-                    io::ErrorKind::ConnectionReset,
-                    "read 0 bytes",
-                )));
+        self.try_fill_write();
+
+        // TODO probably want to properly set the request state on disconnect (read fail)
+
+        let write_len = self.write_buffer.len() - self.write_index;
+
+        let (mut reader, mut writer) = self.stream.split();
+        // TODO this always has to read the header of the packet and then the rest (2 or more calls)
+        // it would be better to always perform calls in a circular buffer to have as much data from
+        // the network as possible at all times, not just reading what's needed
+        // (perhaps something similar could be done with the write buffer to write packet after packet)
+        //
+        // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
+        trace!(
+            "reading bytes and sending up to {} bytes via network",
+            write_len
+        );
+
+        let sel = {
+            let sleep = pin!(async { sleep_until(self.next_ping).await });
+            let recv_req = pin!(async { self.request_rx.recv().await });
+            let recv_data =
+                pin!(async { reader.read(&mut self.read_buffer[self.read_index..]).await });
+            let send_data = pin!(async {
+                if self.write_buffer.is_empty() {
+                    pending().await
+                } else {
+                    writer.write(&self.write_buffer[self.write_index..]).await
+                }
+            });
+
+            match select(select(sleep, recv_req), select(recv_data, send_data)).await {
+                Either::Left((Either::Left(_), _)) => Sel::Sleep,
+                Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
+                Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
+                Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
             }
+        };
 
-            self.try_fill_write();
+        let res = match sel {
+            Sel::Request(request) => {
+                self.requests.push(request.unwrap());
+                Ok(Vec::new())
+            }
+            Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
+            Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
+                self.on_net_write(n);
+                Vec::new()
+            }),
+            Sel::Sleep => {
+                self.on_ping_timeout();
+                Ok(Vec::new())
+            }
+        };
 
-            // TODO probably want to properly set the request state on disconnect (read fail)
+        match res {
+            Ok(ok) => Ok(ok),
+            Err(err) => {
+                self.reset_state();
 
-            let write_len = self.write_buffer.len() - self.write_index;
-
-            let (mut reader, mut writer) = self.stream.split();
-            // TODO this always has to read the header of the packet and then the rest (2 or more calls)
-            // it would be better to always perform calls in a circular buffer to have as much data from
-            // the network as possible at all times, not just reading what's needed
-            // (perhaps something similar could be done with the write buffer to write packet after packet)
-            //
-            // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
-            trace!(
-                "reading bytes and sending up to {} bytes via network",
-                write_len
-            );
-
-            let sel = {
-                let sleep = pin!(async { sleep_until(self.next_ping).await });
-                let recv_req = pin!(async { self.request_rx.recv().await });
-                let recv_data =
-                    pin!(async { reader.read(&mut self.read_buffer[self.read_index..]).await });
-                let send_data = pin!(async {
-                    if self.write_buffer.is_empty() {
-                        pending().await
-                    } else {
-                        writer.write(&self.write_buffer[self.write_index..]).await
+                match err {
+                    ReadError::Io(_) => {
+                        self.try_connect().await?;
+                        Ok(Vec::new())
                     }
-                });
-
-                match select(select(sleep, recv_req), select(recv_data, send_data)).await {
-                    Either::Left((Either::Left(_), _)) => Sel::Sleep,
-                    Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
-                    Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
-                    Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
-                }
-            };
-
-            let res = match sel {
-                Sel::Request(request) => {
-                    self.requests.push(request.unwrap());
-                    Ok(Vec::new())
-                }
-                Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
-                Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
-                    self.on_net_write(n);
-                    Vec::new()
-                }),
-                Sel::Sleep => {
-                    self.on_ping_timeout();
-                    Ok(Vec::new())
-                }
-            };
-
-            match res {
-                Ok(ok) => break Ok(ok),
-                Err(err) => {
-                    self.reset_state();
-
-                    match err {
-                        ReadError::Io(_) => {
-                            self.try_connect().await?;
-                        }
-                        _ => {
-                            log::warn!("unhandled error: {}", &err);
-                            break Err(err);
-                        }
+                    _ => {
+                        log::warn!("unhandled error: {}", &err);
+                        Err(err)
                     }
                 }
             }
-
-            attempts += 1;
-            log::info!("retrying the call after {} failed attempt(s)", attempts);
         }
     }
 
