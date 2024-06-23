@@ -384,17 +384,17 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             match res {
                 Ok(ok) => break Ok(ok),
                 Err(err) => {
+                    self.reset_state();
+
                     match err {
-                        ReadError::Io(_) => {}
+                        ReadError::Io(_) => {
+                            self.try_connect().await?;
+                        }
                         _ => {
                             log::warn!("unhandled error: {}", &err);
                             break Err(err);
                         }
                     }
-
-                    self.reset_state();
-
-                    self.try_connect().await?;
                 }
             }
 
