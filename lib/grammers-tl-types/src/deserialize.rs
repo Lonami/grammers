@@ -38,7 +38,7 @@ impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
             Self::UnexpectedEof => write!(f, "unexpected eof"),
-            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {:08x}", id),
+            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {id:08x}"),
         }
     }
 }

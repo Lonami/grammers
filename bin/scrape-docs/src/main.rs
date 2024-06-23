@@ -149,7 +149,7 @@ async fn real_main() -> Result<()> {
     if !retry.is_empty() {
         let mut i = 0usize;
         let total = retry.len();
-        eprintln!("Retrying {} failed URLs...", total);
+        eprintln!("Retrying {total} failed URLs...");
         for tuple in retry {
             i += 1;
             match process_item(tuple).await {

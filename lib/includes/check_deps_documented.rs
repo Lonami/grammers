@@ -62,12 +62,10 @@ fn check_deps_documented() {
 
     assert!(
         undocumented_deps.is_empty(),
-        "some Cargo.toml dependencies are not in DEPS.md: {:?}",
-        undocumented_deps
+        "some Cargo.toml dependencies are not in DEPS.md: {undocumented_deps:?}"
     );
     assert!(
         documented_deps.is_empty(),
-        "DEPS.md lists dependencies no longer present in Cargo.toml: {:?}",
-        documented_deps
+        "DEPS.md lists dependencies no longer present in Cargo.toml: {documented_deps:?}"
     );
 }

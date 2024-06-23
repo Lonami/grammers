@@ -294,7 +294,7 @@ impl Client {
             }
             Err(AuthorizationError::Invoke(e)) => Err(e),
             Err(AuthorizationError::Gen(e)) => {
-                panic!("authorization key generation failed: {}", e)
+                panic!("authorization key generation failed: {e}")
             }
         }
     }

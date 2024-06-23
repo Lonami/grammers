@@ -82,10 +82,7 @@ async fn async_main() -> Result<()> {
         match client.session().save_to_file(SESSION_FILE) {
             Ok(_) => {}
             Err(e) => {
-                println!(
-                    "NOTE: failed to save the session, will sign out when done: {}",
-                    e
-                );
+                println!("NOTE: failed to save the session, will sign out when done: {e}");
                 sign_out = true;
             }
         }

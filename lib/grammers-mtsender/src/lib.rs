@@ -744,7 +744,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         for i in 0..self.requests.len() {
             match self.requests[i].state {
                 RequestState::Serialized(pair) if pair.msg_id == msg_id => {
-                    panic!("got response {:?} for unsent request {:?}", msg_id, pair);
+                    panic!("got response {msg_id:?} for unsent request {pair:?}");
                 }
                 RequestState::Sent(pair) if pair.msg_id == msg_id => {
                     return Some(self.requests.swap_remove(i))

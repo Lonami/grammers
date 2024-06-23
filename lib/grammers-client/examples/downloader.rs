@@ -79,10 +79,7 @@ async fn async_main() -> Result<()> {
         match client.session().save_to_file(SESSION_FILE) {
             Ok(_) => {}
             Err(e) => {
-                println!(
-                    "NOTE: failed to save the session, will sign out when done: {}",
-                    e
-                );
+                println!("NOTE: failed to save the session, will sign out when done: {e}");
                 sign_out = true;
             }
         }
@@ -90,7 +87,7 @@ async fn async_main() -> Result<()> {
 
     let maybe_chat = client.resolve_username(chat_name.as_str()).await?;
 
-    let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {} could not be found", chat_name));
+    let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {chat_name} could not be found"));
 
     let mut messages = client.iter_messages(&chat);
 
@@ -118,7 +115,7 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    println!("Downloaded {} messages", counter);
+    println!("Downloaded {counter} messages");
 
     if sign_out {
         // TODO revisit examples and get rid of "handle references" (also, this panics)

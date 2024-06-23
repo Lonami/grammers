@@ -66,9 +66,8 @@ pub fn generate_rust_code(
 // except according to those terms.
 
 /// The schema layer from which the definitions were generated.
-pub const LAYER: i32 = {};
-"#,
-        layer
+pub const LAYER: i32 = {layer};
+"#
     )?;
 
     if config.gen_name_for_id {

@@ -24,7 +24,7 @@ fn load_tl(file: &str) -> io::Result<Vec<Definition>> {
         .filter_map(|d| match d {
             Ok(d) => Some(d),
             Err(e) => {
-                eprintln!("TL: parse error: {:?}", e);
+                eprintln!("TL: parse error: {e:?}");
                 None
             }
         })

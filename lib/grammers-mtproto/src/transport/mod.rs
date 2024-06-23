@@ -69,15 +69,15 @@ impl fmt::Display for Error {
         write!(f, "transport error: ")?;
         match self {
             Error::MissingBytes => write!(f, "need more bytes"),
-            Error::BadLen { got } => write!(f, "bad len (got {})", got),
+            Error::BadLen { got } => write!(f, "bad len (got {got})"),
             Error::BadSeq { expected, got } => {
-                write!(f, "bad seq (expected {}, got {})", expected, got)
+                write!(f, "bad seq (expected {expected}, got {got})")
             }
             Error::BadCrc { expected, got } => {
-                write!(f, "bad crc (expected {}, got {})", expected, got)
+                write!(f, "bad crc (expected {expected}, got {got})")
             }
             Error::BadStatus { status } => {
-                write!(f, "bad status (negative length -{})", status)
+                write!(f, "bad status (negative length -{status})")
             }
         }
     }

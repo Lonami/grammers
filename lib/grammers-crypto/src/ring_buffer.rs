@@ -148,7 +148,7 @@ mod tests {
         repr.push('[');
         ring.buffer.iter().enumerate().for_each(|(i, c)| {
             repr.push(if ring.head == i { '|' } else { ' ' });
-            write!(repr, "{}", c).unwrap();
+            write!(repr, "{c}").unwrap();
         });
         repr.push(if ring.head == ring.buffer.len() {
             '|'

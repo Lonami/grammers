@@ -60,10 +60,10 @@ fn write_struct<W: Write>(
 ) -> io::Result<()> {
     // Define struct
     if config.impl_debug {
-        writeln!(file, "{}#[derive(Debug)]", indent)?;
+        writeln!(file, "{indent}#[derive(Debug)]")?;
     }
 
-    writeln!(file, "{}#[derive(Clone, PartialEq)]", indent)?;
+    writeln!(file, "{indent}#[derive(Clone, PartialEq)]")?;
     write!(
         file,
         "{}pub struct {}{} {{",
@@ -89,7 +89,7 @@ fn write_struct<W: Write>(
             }
         }
     }
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -119,7 +119,7 @@ fn write_identifiable<W: Write>(
         "{}    const CONSTRUCTOR_ID: u32 = {};",
         indent, def.id
     )?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -163,17 +163,13 @@ fn write_serializable<W: Write>(
         }
         Category::Functions => {
             // Functions should always write their `CONSTRUCTOR_ID`.
-            writeln!(file, "{}        use crate::Identifiable;", indent)?;
-            writeln!(
-                file,
-                "{}        Self::CONSTRUCTOR_ID.serialize(buf);",
-                indent
-            )?;
+            writeln!(file, "{indent}        use crate::Identifiable;")?;
+            writeln!(file, "{indent}        Self::CONSTRUCTOR_ID.serialize(buf);")?;
         }
     }
 
     for param in def.params.iter() {
-        write!(file, "{}        ", indent)?;
+        write!(file, "{indent}        ")?;
         match &param.ty {
             ParameterType::Flags => {
                 write!(file, "(0u32")?;
@@ -215,8 +211,8 @@ fn write_serializable<W: Write>(
                             "if let Some(ref x) = self.{} {{ ",
                             rustifier::parameters::attr_name(param)
                         )?;
-                        writeln!(file, "{}            x.serialize(buf);", indent)?;
-                        writeln!(file, "{}        }}", indent)?;
+                        writeln!(file, "{indent}            x.serialize(buf);")?;
+                        writeln!(file, "{indent}        }}")?;
                     } else {
                         writeln!(
                             file,
@@ -229,8 +225,8 @@ fn write_serializable<W: Write>(
         }
     }
 
-    writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}    }}")?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -266,7 +262,7 @@ fn write_deserializable<W: Write>(
     )?;
 
     for param in def.params.iter() {
-        write!(file, "{}        ", indent)?;
+        write!(file, "{indent}        ")?;
         match &param.ty {
             ParameterType::Flags => {
                 writeln!(
@@ -296,7 +292,7 @@ fn write_deserializable<W: Write>(
                     write!(file, "let {} = ", rustifier::parameters::attr_name(param))?;
                     if let Some(ref flag) = flag {
                         writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
-                        write!(file, "{}            Some(", indent)?;
+                        write!(file, "{indent}            Some(")?;
                     }
                     if ty.generic_ref {
                         write!(file, "{}::deserialize(buf)?", ty.name)?;
@@ -309,9 +305,9 @@ fn write_deserializable<W: Write>(
                     }
                     if flag.is_some() {
                         writeln!(file, ")")?;
-                        writeln!(file, "{}        }} else {{", indent)?;
-                        writeln!(file, "{}            None", indent)?;
-                        write!(file, "{}        }}", indent)?;
+                        writeln!(file, "{indent}        }} else {{")?;
+                        writeln!(file, "{indent}            None")?;
+                        write!(file, "{indent}        }}")?;
                     }
                     writeln!(file, ";")?;
                 }
@@ -327,7 +323,7 @@ fn write_deserializable<W: Write>(
     )?;
 
     for param in def.params.iter() {
-        write!(file, "{}            ", indent)?;
+        write!(file, "{indent}            ")?;
         match &param.ty {
             ParameterType::Flags => {}
             ParameterType::Normal { .. } => {
@@ -335,9 +331,9 @@ fn write_deserializable<W: Write>(
             }
         }
     }
-    writeln!(file, "{}        }})", indent)?;
-    writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}        }})")?;
+    writeln!(file, "{indent}    }}")?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -369,7 +365,7 @@ fn write_rpc<W: Write>(
         rustifier::types::qual_name(&def.ty),
         if def.ty.generic_ref { "::Return" } else { "" },
     )?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -401,7 +397,7 @@ fn write_impl_from<W: Write>(
         type_name,
     )?;
     if !infallible {
-        writeln!(file, "{}    type Error = ();", indent)?;
+        writeln!(file, "{indent}    type Error = ();")?;
     }
     writeln!(
         file,
@@ -412,7 +408,7 @@ fn write_impl_from<W: Write>(
         result = if infallible { "" } else { "Result<" },
         error = if infallible { "" } else { ", Self::Error>" },
     )?;
-    writeln!(file, "{}        match x {{", indent)?;
+    writeln!(file, "{indent}        match x {{")?;
     writeln!(
         file,
         "{}            {cls}::{name}{data} => {ok}{deref}{value}{body}{paren},",
@@ -435,11 +431,11 @@ fn write_impl_from<W: Write>(
         paren = if infallible { "" } else { ")" },
     )?;
     if !infallible {
-        writeln!(file, "{}            _ => Err(())", indent)?;
+        writeln!(file, "{indent}            _ => Err(())")?;
     }
-    writeln!(file, "{}        }}", indent)?;
-    writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}        }}")?;
+    writeln!(file, "{indent}    }}")?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -523,15 +519,15 @@ pub(crate) fn write_category_mod<W: Write>(
             "    "
         } else {
             writeln!(file, "    #[allow(clippy::unreadable_literal)]")?;
-            writeln!(file, "    pub mod {} {{", key)?;
+            writeln!(file, "    pub mod {key} {{")?;
             "        "
         };
 
         if category == Category::Types && config.impl_from_enum {
             // If all of the conversions are infallible this will be unused.
             // Don't bother checking this beforehand, just allow warnings.
-            writeln!(file, "{}#[allow(unused_imports)]", indent)?;
-            writeln!(file, "{}use std::convert::TryFrom;", indent)?;
+            writeln!(file, "{indent}#[allow(unused_imports)]")?;
+            writeln!(file, "{indent}use std::convert::TryFrom;")?;
         }
 
         for definition in grouped[key]

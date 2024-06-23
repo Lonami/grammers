@@ -95,7 +95,7 @@ async fn async_main() -> Result {
         task::spawn(async move {
             match handle_update(handle, update).await {
                 Ok(_) => {}
-                Err(e) => eprintln!("Error handling updates!: {}", e),
+                Err(e) => eprintln!("Error handling updates!: {e}"),
             }
         });
     }

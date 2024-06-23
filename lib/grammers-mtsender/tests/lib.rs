@@ -66,7 +66,7 @@ fn test_invoke_encrypted_method() {
                         assert!(matches!(response, Ok(enums::NearestDc::Dc(_))));
                         break;
                     }
-                    x => panic!("did not get nearest dc, got: {:?}", x),
+                    x => panic!("did not get nearest dc, got: {x:?}"),
                 }
             }
         }

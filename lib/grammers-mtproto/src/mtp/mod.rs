@@ -124,27 +124,24 @@ impl std::error::Error for DeserializeError {}
 impl fmt::Display for DeserializeError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match *self {
-            Self::BadAuthKey { got, expected } => write!(
-                f,
-                "bad server auth key (got {}, expected {})",
-                got, expected
-            ),
-            Self::BadMessageId { got } => write!(f, "bad server message id (got {})", got),
+            Self::BadAuthKey { got, expected } => {
+                write!(f, "bad server auth key (got {got}, expected {expected})")
+            }
+            Self::BadMessageId { got } => write!(f, "bad server message id (got {got})"),
             Self::NegativeMessageLength { got } => {
-                write!(f, "bad server message length (got {})", got)
+                write!(f, "bad server message length (got {got})")
             }
             Self::TooLongMessageLength { got, max_length } => write!(
                 f,
-                "bad server message length (got {}, when at most it should be {})",
-                got, max_length
+                "bad server message length (got {got}, when at most it should be {max_length})"
             ),
             Self::MessageBufferTooSmall => write!(
                 f,
                 "server responded with a payload that's too small to fit a valid message"
             ),
             Self::DecompressionFailed => write!(f, "failed to decompress server's data"),
-            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {:08x}", id),
-            Self::DecryptionError(ref error) => write!(f, "failed to decrypt message: {}", error),
+            Self::UnexpectedConstructor { id } => write!(f, "unexpected constructor: {id:08x}"),
+            Self::DecryptionError(ref error) => write!(f, "failed to decrypt message: {error}"),
         }
     }
 }

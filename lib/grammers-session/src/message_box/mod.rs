@@ -215,7 +215,7 @@ impl MessageBox {
                 state.deadline = deadline;
                 debug!("reset deadline {:?} for {:?}", deadline, entry);
             } else {
-                panic!("did not reset deadline for {:?} as it had no entry", entry);
+                panic!("did not reset deadline for {entry:?} as it had no entry");
             }
         }
 
@@ -311,8 +311,7 @@ impl MessageBox {
             // Won't actually be able to get difference for this entry if we don't have a pts to start off from.
             if self.possible_gaps.contains_key(&entry) {
                 panic!(
-                    "Should not have a possible_gap for an entry {:?} not in the state map",
-                    entry
+                    "Should not have a possible_gap for an entry {entry:?} not in the state map"
                 );
             }
             return;
@@ -618,8 +617,7 @@ impl MessageBox {
             if self.getting_diff_for.contains(&entry) {
                 if !self.map.contains_key(&entry) {
                     panic!(
-                        "Should not try to get difference for an entry {:?} without known state",
-                        entry
+                        "Should not try to get difference for an entry {entry:?} without known state"
                     );
                 }
 
@@ -824,8 +822,7 @@ impl MessageBox {
                 Some(gd)
             } else {
                 panic!(
-                    "Should not try to get difference for an entry {:?} without known state",
-                    entry
+                    "Should not try to get difference for an entry {entry:?} without known state"
                 );
             }
         } else {

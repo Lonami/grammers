@@ -34,9 +34,9 @@ impl fmt::Display for ParameterType {
             Self::Flags => write!(f, "#"),
             Self::Normal { ty, flag } => {
                 if let Some(flag) = flag {
-                    write!(f, "{}?", flag)?;
+                    write!(f, "{flag}?")?;
                 }
-                write!(f, "{}", ty)
+                write!(f, "{ty}")
             }
         }
     }

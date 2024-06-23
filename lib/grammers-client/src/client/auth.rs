@@ -35,13 +35,12 @@ impl fmt::Display for SignInError {
                 terms_of_service: tos,
             } => write!(
                 f,
-                "sign in error: sign up with official client required: {:?}",
-                tos
+                "sign in error: sign up with official client required: {tos:?}"
             ),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
-            Other(e) => write!(f, "sign in error: {}", e),
+            Other(e) => write!(f, "sign in error: {e}"),
         }
     }
 }

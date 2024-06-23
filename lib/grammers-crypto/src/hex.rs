@@ -12,7 +12,7 @@ use std::fmt::Write;
 pub fn to_hex(bytes: &[u8]) -> String {
     let mut result = String::with_capacity(bytes.len() * 2);
     bytes.iter().for_each(|b| {
-        write!(result, "{:02x}", b).unwrap();
+        write!(result, "{b:02x}").unwrap();
     });
     result
 }

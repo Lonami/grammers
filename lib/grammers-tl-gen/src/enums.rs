@@ -34,10 +34,10 @@ fn write_enum<W: Write>(
     config: &Config,
 ) -> io::Result<()> {
     if config.impl_debug {
-        writeln!(file, "{}#[derive(Debug)]", indent)?;
+        writeln!(file, "{indent}#[derive(Debug)]")?;
     }
 
-    writeln!(file, "{}#[derive(Clone, PartialEq)]", indent)?;
+    writeln!(file, "{indent}#[derive(Clone, PartialEq)]")?;
     writeln!(
         file,
         "{}pub enum {} {{",
@@ -70,7 +70,7 @@ fn write_enum<W: Write>(
 
         writeln!(file, "),")?;
     }
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -161,9 +161,9 @@ fn write_common_field_impl<W: Write>(
                 }
             )?;
         }
-        writeln!(file, "{}        }}\n{}    }}", indent, indent)?;
+        writeln!(file, "{indent}        }}\n{indent}    }}")?;
     }
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -196,12 +196,11 @@ fn write_serializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn serialize(&self, buf: &mut impl Extend<u8>) {{",
-        indent
+        "{indent}    fn serialize(&self, buf: &mut impl Extend<u8>) {{"
     )?;
 
-    writeln!(file, "{}        use crate::Identifiable;", indent)?;
-    writeln!(file, "{}        match self {{", indent)?;
+    writeln!(file, "{indent}        use crate::Identifiable;")?;
+    writeln!(file, "{indent}        match self {{")?;
     for d in metadata.defs_with_type(ty) {
         writeln!(
             file,
@@ -217,13 +216,13 @@ fn write_serializable<W: Write>(
             rustifier::definitions::qual_name(d)
         )?;
         if !d.params.is_empty() {
-            writeln!(file, "{}                x.serialize(buf)", indent)?;
+            writeln!(file, "{indent}                x.serialize(buf)")?;
         }
-        writeln!(file, "{}            }},", indent)?;
+        writeln!(file, "{indent}            }},")?;
     }
-    writeln!(file, "{}        }}", indent)?;
-    writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}        }}")?;
+    writeln!(file, "{indent}    }}")?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -254,12 +253,11 @@ fn write_deserializable<W: Write>(
     )?;
     writeln!(
         file,
-        "{}    fn deserialize(buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {{",
-        indent
+        "{indent}    fn deserialize(buf: crate::deserialize::Buffer) -> crate::deserialize::Result<Self> {{"
     )?;
-    writeln!(file, "{}        use crate::Identifiable;", indent)?;
-    writeln!(file, "{}        let id = u32::deserialize(buf)?;", indent)?;
-    writeln!(file, "{}        Ok(match id {{", indent)?;
+    writeln!(file, "{indent}        use crate::Identifiable;")?;
+    writeln!(file, "{indent}        let id = u32::deserialize(buf)?;")?;
+    writeln!(file, "{indent}        Ok(match id {{")?;
     for d in metadata.defs_with_type(ty) {
         write!(
             file,
@@ -291,13 +289,12 @@ fn write_deserializable<W: Write>(
     }
     writeln!(
         file,
-        "{}            _ => return Err(\
-         crate::deserialize::Error::UnexpectedConstructor {{ id }}),",
-        indent
+        "{indent}            _ => return Err(\
+         crate::deserialize::Error::UnexpectedConstructor {{ id }}),"
     )?;
-    writeln!(file, "{}        }})", indent)?;
-    writeln!(file, "{}    }}", indent)?;
-    writeln!(file, "{}}}", indent)?;
+    writeln!(file, "{indent}        }})")?;
+    writeln!(file, "{indent}    }}")?;
+    writeln!(file, "{indent}}}")?;
     Ok(())
 }
 
@@ -344,8 +341,8 @@ fn write_impl_from<W: Write>(
             writeln!(file, "(x)")?;
         }
 
-        writeln!(file, "{}    }}", indent)?;
-        writeln!(file, "{}}}", indent)?;
+        writeln!(file, "{indent}    }}")?;
+        writeln!(file, "{indent}}}")?;
     }
     Ok(())
 }
@@ -397,7 +394,7 @@ pub(crate) fn write_enums_mod<W: Write>(
         // Begin possibly inner mod
         let indent = if let Some(ns) = key {
             writeln!(file, "    #[allow(clippy::large_enum_variant)]")?;
-            writeln!(file, "    pub mod {} {{", ns)?;
+            writeln!(file, "    pub mod {ns} {{")?;
             "        "
         } else {
             "    "

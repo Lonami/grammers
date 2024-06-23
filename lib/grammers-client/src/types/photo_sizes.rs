@@ -211,9 +211,8 @@ impl PhotoSize {
                     r###"<?xml version="1.0" encoding="utf-8"?>
   <svg version="1.1" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink"
      viewBox="0 0 512 512" xml:space="preserve">
-  <path d="{}"/>
-</svg>"###,
-                    path
+  <path d="{path}"/>
+</svg>"###
                 );
                 let mut file = fs::File::create(path).await.unwrap();
                 file.write_all(res.as_bytes()).await.unwrap();

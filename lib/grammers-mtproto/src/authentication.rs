@@ -137,44 +137,38 @@ impl std::error::Error for Error {}
 impl fmt::Display for Error {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidResponse { error } => write!(f, "invalid server response: {}", error),
+            Self::InvalidResponse { error } => write!(f, "invalid server response: {error}"),
             Self::InvalidNonce { got, expected } => {
-                write!(f, "invalid nonce: got {:?}, expected {:?}", got, expected)
+                write!(f, "invalid nonce: got {got:?}, expected {expected:?}")
             }
-            Self::InvalidPQSize { size } => write!(f, "invalid pq size {}", size),
+            Self::InvalidPQSize { size } => write!(f, "invalid pq size {size}"),
             Self::UnknownFingerprints { fingerprints } => {
-                write!(f, "all server fingerprints are unknown: {:?}", fingerprints)
+                write!(f, "all server fingerprints are unknown: {fingerprints:?}")
             }
             Self::DHParamsFail => write!(f, "the generation of DH parameters by the server failed"),
             Self::InvalidServerNonce { got, expected } => write!(
                 f,
-                "invalid server nonce: got {:?}, expected {:?}",
-                got, expected
+                "invalid server nonce: got {got:?}, expected {expected:?}"
             ),
             Self::EncryptedResponseNotPadded { len } => write!(
                 f,
-                "the encrypted server response was {} bytes long, which is not correctly padded",
-                len
+                "the encrypted server response was {len} bytes long, which is not correctly padded"
             ),
             Self::InvalidDhInnerData { error } => {
-                write!(f, "could not deserialize DH inner data: {}", error)
+                write!(f, "could not deserialize DH inner data: {error}")
             }
             Self::GParameterOutOfRange { low, high, value } => write!(
                 f,
-                "the parameter g = {} was not in the range {}..{}",
-                value, low, high
+                "the parameter g = {value} was not in the range {low}..{high}"
             ),
             Self::DHGenRetry => write!(f, "the generation of DH parameters should be retried"),
             Self::DHGenFail => write!(f, "the generation of DH parameters failed"),
-            Self::InvalidAnswerHash { got, expected } => write!(
-                f,
-                "invalid answer hash: got {:?}, expected {:?}",
-                got, expected
-            ),
+            Self::InvalidAnswerHash { got, expected } => {
+                write!(f, "invalid answer hash: got {got:?}, expected {expected:?}")
+            }
             Self::InvalidNewNonceHash { got, expected } => write!(
                 f,
-                "invalid new nonce hash: got {:?}, expected {:?}",
-                got, expected
+                "invalid new nonce hash: got {got:?}, expected {expected:?}"
             ),
         }
     }
@@ -652,8 +646,8 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
 
     if TRACE_AUTH_GEN {
         println!("a {}", hex::to_hex(&auth_key.to_bytes()));
-        println!("o {}", time_offset);
-        println!("s {}", first_salt);
+        println!("o {time_offset}");
+        println!("s {first_salt}");
     }
 
     // 1 for DhGenOk

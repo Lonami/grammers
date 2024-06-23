@@ -42,7 +42,7 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
     ",
     );
     let result = gen_rust_code(&definitions)?;
-    eprintln!("{}", result);
+    eprintln!("{result}");
     assert!(result.contains("pub struct InvokeWithLayer<X>"));
     assert!(result.contains("pub query: X,"));
     assert!(result.contains("impl<X> crate::Identifiable for InvokeWithLayer<X>"));
@@ -64,7 +64,7 @@ fn recursive_types_direct_boxed() -> io::Result<()> {
     ",
     );
     let result = gen_rust_code(&definitions)?;
-    eprintln!("{}", result);
+    eprintln!("{result}");
     assert!(result.contains("TextBold(Box<crate::types::TextBold>)"));
     assert!(result.contains("RichText::TextBold(Box::new("));
     assert!(result.contains("Self::TextBold(Box::new("));
@@ -80,7 +80,7 @@ fn recursive_types_indirect_boxed() -> io::Result<()> {
     ",
     );
     let result = gen_rust_code(&definitions)?;
-    eprintln!("{}", result);
+    eprintln!("{result}");
     assert!(result.contains("Media(Box<crate::types::MessageExtendedMedia>),"));
     assert!(result.contains("Box::new(crate::types::MessageExtendedMedia::deserialize("));
     assert!(result.contains("MessageExtendedMedia::Media(Box::new("));
@@ -113,7 +113,7 @@ fn recursive_types_vec_indirect_not_boxed() -> io::Result<()> {
     ",
     );
     let result = gen_rust_code(&definitions)?;
-    eprintln!("{}", result);
+    eprintln!("{result}");
     assert!(result.contains("JsonObjectValue(crate::types::JsonObjectValue)"));
     assert!(result.contains("JsonArray(crate::types::JsonArray)"));
     assert!(result.contains("JsonObject(crate::types::JsonObject)"));

@@ -22,9 +22,9 @@ impl std::error::Error for ReadError {}
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Io(err) => write!(f, "read error, IO failed: {}", err),
-            Self::Transport(err) => write!(f, "read error, transport-level: {}", err),
-            Self::Deserialize(err) => write!(f, "read error, bad response: {}", err),
+            Self::Io(err) => write!(f, "read error, IO failed: {err}"),
+            Self::Transport(err) => write!(f, "read error, transport-level: {err}"),
+            Self::Deserialize(err) => write!(f, "read error, bad response: {err}"),
         }
     }
 }
@@ -79,7 +79,7 @@ impl fmt::Display for RpcError {
             write!(f, " caused by {}", tl::name_for_id(caused_by))?;
         }
         if let Some(value) = self.value {
-            write!(f, " (value: {})", value)?;
+            write!(f, " (value: {value})")?;
         }
         Ok(())
     }
@@ -170,9 +170,9 @@ impl std::error::Error for InvocationError {}
 impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Rpc(err) => write!(f, "request error: {}", err),
+            Self::Rpc(err) => write!(f, "request error: {err}"),
             Self::Dropped => write!(f, "request error: dropped (cancelled)"),
-            Self::Read(err) => write!(f, "request error: {}", err),
+            Self::Read(err) => write!(f, "request error: {err}"),
         }
     }
 }
@@ -239,8 +239,8 @@ impl std::error::Error for AuthorizationError {}
 impl fmt::Display for AuthorizationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::Gen(err) => write!(f, "authorization error: {}", err),
-            Self::Invoke(err) => write!(f, "authorization error: {}", err),
+            Self::Gen(err) => write!(f, "authorization error: {err}"),
+            Self::Invoke(err) => write!(f, "authorization error: {err}"),
         }
     }
 }
