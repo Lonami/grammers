@@ -314,17 +314,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         self.try_fill_write();
-
-        // TODO probably want to properly set the request state on disconnect (read fail)
-
         let write_len = self.write_buffer.len() - self.write_index;
-
-        let (mut reader, mut writer) = self.stream.split();
         trace!(
             "reading bytes and sending up to {} bytes via network",
             write_len
         );
 
+        let (mut reader, mut writer) = self.stream.split();
         let sel = {
             let sleep = pin!(async { sleep_until(self.next_ping).await });
             let recv_req = pin!(async { self.request_rx.recv().await });
@@ -364,25 +360,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         match res {
             Ok(ok) => Ok(ok),
-            Err(err) => {
-                self.reset_state();
-
-                match err {
-                    ReadError::Io(_)
-                        if matches!(
-                            self.reconnection_policy.should_retry(0),
-                            ControlFlow::Continue(_)
-                        ) =>
-                    {
-                        self.try_connect().await?;
-                        Ok(Vec::new())
-                    }
-                    _ => {
-                        log::warn!("unhandled error: {}", &err);
-                        Err(err)
-                    }
-                }
-            }
+            Err(err) => self.on_error(err).await,
         }
     }
 
@@ -564,6 +542,59 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.next_ping = Instant::now() + PING_DELAY;
     }
 
+    /// Handle errors that occured while performing I/O.
+    async fn on_error(&mut self, error: ReadError) -> Result<Vec<tl::enums::Updates>, ReadError> {
+        log::info!("handling error: {error}");
+        self.transport.reset();
+        self.mtp.reset();
+        log::info!(
+            "resetting sender state from read_buffer {}/{}, write_buffer {}/{}",
+            self.read_index,
+            self.read_buffer.len(),
+            self.write_index,
+            self.write_buffer.len(),
+        );
+        self.read_index = 0;
+        self.read_buffer.clear();
+        self.read_buffer.fill_remaining();
+        self.write_index = 0;
+        self.write_buffer.clear();
+
+        let error = match error {
+            ReadError::Io(_)
+                if matches!(
+                    self.reconnection_policy.should_retry(0),
+                    ControlFlow::Continue(_)
+                ) =>
+            {
+                match self.try_connect().await {
+                    Ok(_) => {
+                        // Reconnect success means everything can be retried.
+                        self.requests
+                            .iter_mut()
+                            .for_each(|r| r.state = RequestState::NotSerialized);
+
+                        return Ok(Vec::new());
+                    }
+                    Err(e) => ReadError::from(e),
+                }
+            }
+            e => e,
+        };
+
+        log::warn!(
+            "marking all {} request(s) as failed: {}",
+            self.requests.len(),
+            &error
+        );
+
+        self.requests
+            .drain(..)
+            .for_each(|r| drop(r.result.send(Err(InvocationError::from(error.clone())))));
+
+        Err(error)
+    }
+
     /// Process the result of deserializing an MTP buffer.
     fn process_mtp_buffer(
         &mut self,
@@ -737,26 +768,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
 
         None
-    }
-
-    fn reset_state(&mut self) {
-        self.transport.reset();
-        self.mtp.reset();
-        log::info!(
-            "resetting sender state from read_buffer {}/{}, write_buffer {}/{}",
-            self.read_index,
-            self.read_buffer.len(),
-            self.write_index,
-            self.write_buffer.len(),
-        );
-        self.read_index = 0;
-        self.read_buffer.clear();
-        self.read_buffer.fill_remaining();
-        self.write_index = 0;
-        self.write_buffer.clear();
-        self.requests
-            .iter_mut()
-            .for_each(|r| r.state = RequestState::NotSerialized);
     }
 }
 

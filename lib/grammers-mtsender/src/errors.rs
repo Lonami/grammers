@@ -19,6 +19,20 @@ pub enum ReadError {
 
 impl std::error::Error for ReadError {}
 
+impl Clone for ReadError {
+    fn clone(&self) -> Self {
+        match self {
+            Self::Io(e) => Self::Io(
+                e.raw_os_error()
+                    .map(|raw| io::Error::from_raw_os_error(raw))
+                    .unwrap_or_else(|| io::Error::new(e.kind(), e.to_string())),
+            ),
+            Self::Transport(e) => Self::Transport(e.clone()),
+            Self::Deserialize(e) => Self::Deserialize(e.clone()),
+        }
+    }
+}
+
 impl fmt::Display for ReadError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
