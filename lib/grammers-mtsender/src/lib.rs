@@ -320,12 +320,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let write_len = self.write_buffer.len() - self.write_index;
 
         let (mut reader, mut writer) = self.stream.split();
-        // TODO this always has to read the header of the packet and then the rest (2 or more calls)
-        // it would be better to always perform calls in a circular buffer to have as much data from
-        // the network as possible at all times, not just reading what's needed
-        // (perhaps something similar could be done with the write buffer to write packet after packet)
-        //
-        // The `request_rx.recv()` can't return `None` because we're holding a `tx`.
         trace!(
             "reading bytes and sending up to {} bytes via network",
             write_len
