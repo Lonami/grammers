@@ -34,6 +34,17 @@ pub struct PackedChat {
     pub access_hash: Option<i64>,
 }
 
+#[derive(Debug, PartialEq, Eq)]
+pub struct Error;
+
+impl fmt::Display for Error {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        f.write_str("failed to parse serialized packed chat")
+    }
+}
+
+impl std::error::Error for Error {}
+
 impl PackedChat {
     /// Serialize the [`PackedChat`] into a fixed-size byte array.
     pub fn to_bytes(&self) -> [u8; 17] {
@@ -57,9 +68,9 @@ impl PackedChat {
     /// The slice length must match that of [`to_bytes`](Self::to_bytes) output or an `Err` will be returned.
     /// A reference to a fixed-size array isn't used as the input parameter type for convenience.
     #[allow(clippy::result_unit_err)]
-    pub fn from_bytes(buf: &[u8]) -> Result<Self, ()> {
+    pub fn from_bytes(buf: &[u8]) -> Result<Self, Error> {
         if buf.len() != 17 {
-            return Err(());
+            return Err(Error);
         }
         let has_hash = (buf[0] & 0b0100_0000) != 0;
         let ty = match buf[0] & 0b0011_1111 {
@@ -69,7 +80,7 @@ impl PackedChat {
             0b0010_1000 => PackedType::Megagroup,
             0b0011_0000 => PackedType::Broadcast,
             0b0011_1000 => PackedType::Gigagroup,
-            _ => return Err(()),
+            _ => return Err(Error),
         };
         let id = i64::from_le_bytes([
             buf[1], buf[2], buf[3], buf[4], buf[5], buf[6], buf[7], buf[8],
@@ -89,11 +100,11 @@ impl PackedChat {
     }
 
     /// Deserialize the hexadecimal string into a packed chat.
-    pub fn from_hex(hex: &str) -> Result<Self, ()> {
+    pub fn from_hex(hex: &str) -> Result<Self, Error> {
         if let Some(bytes) = hex::opt_from_hex(hex) {
             Self::from_bytes(&bytes)
         } else {
-            Err(())
+            Err(Error)
         }
     }
 
