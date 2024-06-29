@@ -46,11 +46,6 @@ impl<T: Copy + Default> RingBuffer<T> {
         self.buffer[self.head..self.head + slice.len()].copy_from_slice(slice);
     }
 
-    pub fn skip(&mut self, amount: usize) {
-        self.head += amount;
-        assert!(self.head <= self.buffer.len());
-    }
-
     pub fn push(&mut self, value: T) {
         self.buffer.push(value)
     }

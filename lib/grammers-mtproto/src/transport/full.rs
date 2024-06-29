@@ -218,8 +218,8 @@ mod tests {
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
-        two_buffer.skip(offset.next_offset);
-        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        let n = offset.next_offset;
+        let offset = transport.unpack(&two_buffer[n..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 

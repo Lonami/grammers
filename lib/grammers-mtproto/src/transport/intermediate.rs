@@ -131,9 +131,9 @@ mod tests {
         let (mut transport, mut buffer) = setup_pack(128);
         let orig = buffer.clone();
         transport.pack(&mut buffer);
-        buffer.skip(4); // init bytes
-        let offset = transport.unpack(&buffer[..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        let n = 4; // init bytes
+        let offset = transport.unpack(&buffer[n..]).unwrap();
+        assert_eq!(&buffer[n..][offset.data_start..offset.data_end], &orig[..]);
     }
 
     #[test]
@@ -154,8 +154,8 @@ mod tests {
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
-        two_buffer.skip(offset.next_offset);
-        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        let n = offset.next_offset;
+        let offset = transport.unpack(&two_buffer[n..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
