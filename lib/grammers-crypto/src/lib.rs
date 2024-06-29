@@ -10,16 +10,16 @@
 
 pub mod aes;
 mod auth_key;
+pub mod deque_buffer;
 pub mod factorize;
 pub mod hex;
-pub mod ring_buffer;
 pub mod rsa;
 pub mod sha;
 pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
+pub use deque_buffer::DequeBuffer;
 use getrandom::getrandom;
-pub use ring_buffer::DequeBuffer;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
