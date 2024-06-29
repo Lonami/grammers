@@ -8,6 +8,7 @@
 use super::{
     Deserialization, DeserializationFailure, DeserializeError, Mtp, RpcResult, RpcResultError,
 };
+use crate::utils::StackBuffer;
 use crate::{manual_tl, MsgId};
 use getrandom::getrandom;
 use grammers_crypto::{decrypt_data_v2, encrypt_data_v2, AuthKey, DequeBuffer};
@@ -261,7 +262,7 @@ impl Encrypted {
             // Prepend a container, setting its message ID and sequence number.
             // + 8 because it has to include the constructor ID and length (4 bytes each).
             let len = (buffer.len() + 8) as i32;
-            let mut header = Vec::with_capacity(MESSAGE_CONTAINER_HEADER_LEN);
+            let mut header = StackBuffer::<MESSAGE_CONTAINER_HEADER_LEN>::new();
 
             // Manually `serialize_msg` because the container body was already written.
             self.get_new_msg_id().serialize(&mut header);
@@ -271,16 +272,16 @@ impl Encrypted {
 
             manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut header);
             (self.msg_count as i32).serialize(&mut header);
-            buffer.extend_front(&header);
+            buffer.extend_front(&header.into_inner());
         }
 
         {
             // Prepend the message header
-            let mut header = Vec::with_capacity(PLAIN_PACKET_HEADER_LEN);
+            let mut header = StackBuffer::<PLAIN_PACKET_HEADER_LEN>::new();
             self.get_current_salt().serialize(&mut header); // 8 bytes
 
             self.client_id.serialize(&mut header); // 8 bytes
-            buffer.extend_front(&header);
+            buffer.extend_front(&header.into_inner());
         }
 
         self.msg_count = 0;
