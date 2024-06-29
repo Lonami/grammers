@@ -52,15 +52,13 @@ impl Transport for Abridged {
 
         let len = len / 4;
         if len < 127 {
-            buffer.shift(1).extend([len as u8]);
+            buffer.shift(&[len as u8]);
         } else {
-            buffer
-                .shift(4)
-                .extend((0x7f | ((len as u32) << 8)).to_le_bytes());
+            buffer.shift(&(0x7f | ((len as u32) << 8)).to_le_bytes());
         }
 
         if !self.init {
-            buffer.shift(1).extend([0xef]);
+            buffer.shift(&[0xef]);
             self.init = true;
         }
     }

@@ -261,7 +261,7 @@ impl Encrypted {
             // Prepend a container, setting its message ID and sequence number.
             // + 8 because it has to include the constructor ID and length (4 bytes each).
             let len = (buffer.len() + 8) as i32;
-            let mut header = buffer.shift(MESSAGE_CONTAINER_HEADER_LEN);
+            let mut header = Vec::with_capacity(MESSAGE_CONTAINER_HEADER_LEN);
 
             // Manually `serialize_msg` because the container body was already written.
             self.get_new_msg_id().serialize(&mut header);
@@ -271,14 +271,16 @@ impl Encrypted {
 
             manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut header);
             (self.msg_count as i32).serialize(&mut header);
+            buffer.shift(&header);
         }
 
         {
             // Prepend the message header
-            let mut header = buffer.shift(PLAIN_PACKET_HEADER_LEN);
+            let mut header = Vec::with_capacity(PLAIN_PACKET_HEADER_LEN);
             self.get_current_salt().serialize(&mut header); // 8 bytes
 
             self.client_id.serialize(&mut header); // 8 bytes
+            buffer.shift(&header);
         }
 
         self.msg_count = 0;

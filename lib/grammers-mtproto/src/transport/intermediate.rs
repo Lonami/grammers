@@ -41,10 +41,10 @@ impl Transport for Intermediate {
         let len = buffer.len();
         assert_eq!(len % 4, 0);
 
-        buffer.shift(4).extend((len as i32).to_le_bytes());
+        buffer.shift(&(len as i32).to_le_bytes());
 
         if !self.init {
-            buffer.shift(4).extend(0xee_ee_ee_ee_u32.to_le_bytes());
+            buffer.shift(&0xee_ee_ee_ee_u32.to_le_bytes());
             self.init = true;
         }
     }

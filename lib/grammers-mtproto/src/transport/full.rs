@@ -49,9 +49,8 @@ impl Transport for Full {
         // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
         let len = (len as i32) + 4 + 4 + 4;
 
-        let mut header = buffer.shift(4 + 4);
-        header.extend(len.to_le_bytes());
-        header.extend(self.send_seq.to_le_bytes());
+        buffer.shift(&self.send_seq.to_le_bytes());
+        buffer.shift(&len.to_le_bytes());
 
         let crc = {
             let mut hasher = Hasher::new();

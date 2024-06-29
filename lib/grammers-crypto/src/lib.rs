@@ -130,9 +130,8 @@ fn do_encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey, random_pa
 
     aes::ige_encrypt(&mut buffer[..], &key, &iv);
 
-    let mut head = buffer.shift(auth_key.key_id.len() + msg_key.len());
-    head.extend(auth_key.key_id.iter().copied());
-    head.extend(msg_key.iter().copied());
+    buffer.shift(&msg_key);
+    buffer.shift(&auth_key.key_id);
 }
 
 /// This function implements the [MTProto 2.0 algorithm] for computing
