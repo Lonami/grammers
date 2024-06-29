@@ -20,7 +20,7 @@ mod encrypted;
 mod plain;
 
 use crate::MsgId;
-use crypto::RingBuffer;
+use crypto::DequeBuffer;
 pub use encrypted::{
     Encrypted, ENCRYPTED_PACKET_HEADER_LEN, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
     PLAIN_PACKET_HEADER_LEN,
@@ -188,7 +188,7 @@ pub trait Mtp {
     ///
     /// The definition of "too large" is roughly 1MB, so as long as the
     /// payload is below that mark, it's safe to call.
-    fn push(&mut self, buffer: &mut RingBuffer<u8>, request: &[u8]) -> Option<MsgId>;
+    fn push(&mut self, buffer: &mut DequeBuffer<u8>, request: &[u8]) -> Option<MsgId>;
 
     /// Finalizes the buffer of requests.
     ///
@@ -199,7 +199,7 @@ pub trait Mtp {
     ///
     /// When at least one message is serialized, the last generated `MsgId` is returned.
     /// This will either belong to the container (if used) or the last serialized message.
-    fn finalize(&mut self, buffer: &mut RingBuffer<u8>) -> Option<MsgId>;
+    fn finalize(&mut self, buffer: &mut DequeBuffer<u8>) -> Option<MsgId>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;

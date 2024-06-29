@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Error, Transport, UnpackedOffset};
-use grammers_crypto::RingBuffer;
+use grammers_crypto::DequeBuffer;
 
 /// A light MTProto transport protocol available that guarantees data padded
 /// to 4 bytes. This is an implementation of the [intermediate transport].
@@ -37,14 +37,14 @@ impl Intermediate {
 }
 
 impl Transport for Intermediate {
-    fn pack(&mut self, buffer: &mut RingBuffer<u8>) {
+    fn pack(&mut self, buffer: &mut DequeBuffer<u8>) {
         let len = buffer.len();
         assert_eq!(len % 4, 0);
 
-        buffer.shift(&(len as i32).to_le_bytes());
+        buffer.extend_front(&(len as i32).to_le_bytes());
 
         if !self.init {
-            buffer.shift(&0xee_ee_ee_ee_u32.to_le_bytes());
+            buffer.extend_front(&0xee_ee_ee_ee_u32.to_le_bytes());
             self.init = true;
         }
     }
@@ -89,8 +89,8 @@ mod tests {
     use super::*;
 
     /// Returns a full intermediate transport, and `n` bytes of input data for it.
-    fn setup_pack(n: usize) -> (Intermediate, RingBuffer<u8>) {
-        let mut buffer = RingBuffer::with_capacity(n, 0);
+    fn setup_pack(n: usize) -> (Intermediate, DequeBuffer<u8>) {
+        let mut buffer = DequeBuffer::with_capacity(n, 0);
         buffer.extend((0..n).map(|x| (x & 0xff) as u8));
         (Intermediate::new(), buffer)
     }
@@ -121,7 +121,7 @@ mod tests {
     #[test]
     fn unpack_small() {
         let mut transport = Intermediate::new();
-        let mut buffer = RingBuffer::with_capacity(1, 0);
+        let mut buffer = DequeBuffer::with_capacity(1, 0);
         buffer.extend([1]);
         assert_eq!(transport.unpack(&buffer[..],), Err(Error::MissingBytes));
     }
@@ -141,7 +141,7 @@ mod tests {
         let (mut transport, mut buffer) = setup_pack(128);
         let orig = buffer.clone();
 
-        let mut two_buffer = RingBuffer::with_capacity(0, 0);
+        let mut two_buffer = DequeBuffer::with_capacity(0, 0);
         transport.pack(&mut buffer);
         two_buffer.extend(&buffer[4..]); // init bytes
         let single_size = two_buffer.len();
@@ -162,7 +162,7 @@ mod tests {
     #[test]
     fn unpack_bad_status() {
         let mut transport = Intermediate::new();
-        let mut buffer = RingBuffer::with_capacity(8, 0);
+        let mut buffer = DequeBuffer::with_capacity(8, 0);
         buffer.extend(&(4_i32).to_le_bytes());
         buffer.extend(&(-404_i32).to_le_bytes());
 

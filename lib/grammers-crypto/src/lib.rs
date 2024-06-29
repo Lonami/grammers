@@ -19,7 +19,7 @@ pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 use getrandom::getrandom;
-pub use ring_buffer::RingBuffer;
+pub use ring_buffer::DequeBuffer;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -105,7 +105,7 @@ fn determine_padding_v2_length(len: usize) -> usize {
 }
 
 // Inner body of `encrypt_data_v2`, separated for testing purposes.
-fn do_encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey, random_padding: &[u8; 32]) {
+fn do_encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey, random_padding: &[u8; 32]) {
     // "Note that MTProto 2.0 requires from 12 to 1024 bytes of padding"
     // "[...] the resulting message length be divisible by 16 bytes"
     let padding_len = determine_padding_v2_length(buffer.len());
@@ -130,15 +130,15 @@ fn do_encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey, random_pa
 
     aes::ige_encrypt(&mut buffer[..], &key, &iv);
 
-    buffer.shift(&msg_key);
-    buffer.shift(&auth_key.key_id);
+    buffer.extend_front(&msg_key);
+    buffer.extend_front(&auth_key.key_id);
 }
 
 /// This function implements the [MTProto 2.0 algorithm] for computing
 /// `aes_key` and `aes_iv` from `auth_key` and `msg_key` as specified
 ///
 /// [MTProto 2.0 algorithm]: https://core.telegram.org/mtproto/description#defining-aes-key-and-initialization-vector
-pub fn encrypt_data_v2(buffer: &mut RingBuffer<u8>, auth_key: &AuthKey) {
+pub fn encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey) {
     let random_padding = {
         let mut rnd = [0; 32];
         getrandom(&mut rnd).expect("failed to generate a secure padding");
@@ -308,7 +308,7 @@ mod tests {
 
     #[test]
     fn encrypt_client_data_v2() {
-        let mut buffer = RingBuffer::with_capacity(0, 0);
+        let mut buffer = DequeBuffer::with_capacity(0, 0);
         buffer.extend(b"Hello, world! This data should remain secure!");
         let auth_key = get_test_auth_key();
         let random_padding = [0; 32];

@@ -14,7 +14,7 @@ mod reconnection;
 pub use crate::reconnection::*;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use futures_util::future::{pending, select, Either};
-use grammers_crypto::RingBuffer;
+use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
 };
@@ -127,7 +127,7 @@ pub struct Sender<T: Transport, M: Mtp> {
     // Transport-level buffers and positions
     read_buffer: Vec<u8>,
     read_index: usize,
-    write_buffer: RingBuffer<u8>,
+    write_buffer: DequeBuffer<u8>,
     write_index: usize,
 }
 
@@ -211,7 +211,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
                 read_buffer: vec![0; MAXIMUM_DATA],
                 read_index: 0,
-                write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
+                write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
             Enqueuer(tx),
@@ -244,7 +244,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
                 read_buffer: vec![0; MAXIMUM_DATA],
                 read_index: 0,
-                write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
+                write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
             },
             Enqueuer(tx),

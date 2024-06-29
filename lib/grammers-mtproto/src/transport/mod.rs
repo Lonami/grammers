@@ -17,7 +17,7 @@ mod intermediate;
 
 pub use abridged::Abridged;
 pub use full::Full;
-use grammers_crypto::RingBuffer;
+use grammers_crypto::DequeBuffer;
 pub use intermediate::Intermediate;
 use std::fmt;
 
@@ -88,7 +88,7 @@ pub trait Transport {
     /// Packs the input buffer in-place.
     ///
     /// Panics if `input.len()` is not divisible by 4.
-    fn pack(&mut self, buffer: &mut RingBuffer<u8>);
+    fn pack(&mut self, buffer: &mut DequeBuffer<u8>);
 
     /// Unpacks the input buffer in-place.
     fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error>;
