@@ -125,7 +125,7 @@ pub struct Sender<T: Transport, M: Mtp> {
     reconnection_policy: &'static dyn ReconnectionPolicy,
 
     // Transport-level buffers and positions
-    read_buffer: RingBuffer<u8>,
+    read_buffer: Vec<u8>,
     read_index: usize,
     write_buffer: RingBuffer<u8>,
     write_index: usize,
@@ -196,8 +196,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ) -> Result<(Self, Enqueuer), io::Error> {
         let stream = connect_stream(&addr).await?;
         let (tx, rx) = mpsc::unbounded_channel();
-        let mut read_buffer = RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE);
-        read_buffer.fill_remaining();
         Ok((
             Self {
                 stream,
@@ -211,7 +209,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 next_ping: Instant::now() + PING_DELAY,
                 reconnection_policy,
 
-                read_buffer,
+                read_buffer: vec![0; MAXIMUM_DATA],
                 read_index: 0,
                 write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
@@ -232,8 +230,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         let stream = connect_proxy_stream(&addr, proxy_url).await?;
         let (tx, rx) = mpsc::unbounded_channel();
-        let mut read_buffer = RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE);
-        read_buffer.fill_remaining();
         Ok((
             Self {
                 stream,
@@ -246,7 +242,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 next_ping: Instant::now() + PING_DELAY,
                 reconnection_policy,
 
-                read_buffer,
+                read_buffer: vec![0; MAXIMUM_DATA],
                 read_index: 0,
                 write_buffer: RingBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
                 write_index: 0,
@@ -476,25 +472,29 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         // TODO the buffer might have multiple transport packets, what should happen with the
         // updates successfully read if subsequent packets fail to be deserialized properly?
         let mut updates = Vec::new();
-        while self.read_index != 0 {
-            match self.transport.unpack(&self.read_buffer[..self.read_index]) {
+        let mut next_offset = 0;
+        while next_offset != self.read_index {
+            match self
+                .transport
+                .unpack(&self.read_buffer[next_offset..][..self.read_index])
+            {
                 Ok(offset) => {
                     debug!("deserializing valid transport packet...");
-                    let result = self
-                        .mtp
-                        .deserialize(&self.read_buffer[offset.data_start..offset.data_end])?;
+                    let result = self.mtp.deserialize(
+                        &self.read_buffer[next_offset..][offset.data_start..offset.data_end],
+                    )?;
 
                     self.process_mtp_buffer(result, &mut updates);
-                    self.read_buffer.skip(offset.next_offset);
-                    self.read_index -= offset.next_offset;
+                    next_offset += offset.next_offset;
                 }
                 Err(transport::Error::MissingBytes) => break,
                 Err(err) => return Err(err.into()),
             }
         }
 
-        self.read_buffer.reclaim_leading();
-        self.read_buffer.fill_remaining();
+        self.read_buffer
+            .copy_within(next_offset..self.read_index, 0);
+        self.read_index -= next_offset;
 
         Ok(updates)
     }
@@ -555,8 +555,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             self.write_buffer.len(),
         );
         self.read_index = 0;
-        self.read_buffer.clear();
-        self.read_buffer.fill_remaining();
+        self.read_buffer.fill(0);
         self.write_index = 0;
         self.write_buffer.clear();
 
