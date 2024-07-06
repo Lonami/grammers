@@ -27,7 +27,7 @@ impl fmt::Debug for Channel {
 }
 
 impl Channel {
-    fn _from_raw(chat: tl::enums::Chat) -> Self {
+    pub fn from_raw(chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
@@ -89,16 +89,6 @@ impl Channel {
                 }
             }
         }
-    }
-
-    #[cfg(feature = "unstable_raw")]
-    pub fn from_raw(chat: tl::enums::Chat) -> Self {
-        Self::_from_raw(chat)
-    }
-
-    #[cfg(not(feature = "unstable_raw"))]
-    pub(crate) fn from_raw(chat: tl::enums::Chat) -> Self {
-        Self::_from_raw(chat)
     }
 
     /// Return the unique identifier for this channel.
@@ -177,12 +167,5 @@ impl From<Channel> for PackedChat {
 impl From<&Channel> for PackedChat {
     fn from(chat: &Channel) -> Self {
         chat.pack()
-    }
-}
-
-#[cfg(feature = "unstable_raw")]
-impl From<Channel> for tl::types::Channel {
-    fn from(channel: Channel) -> Self {
-        channel.0
     }
 }

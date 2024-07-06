@@ -18,7 +18,6 @@ markdown = ["pulldown-cmark"]
 html = ["html5ever"]
 proxy = ["grammers-mtsender/proxy"]
 parse_invite_link = ["url"]
-unstable_raw = []
 
 [dependencies]
 chrono = "0.4.31"

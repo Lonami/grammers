@@ -61,7 +61,7 @@ impl RestrictionReason {
 ///
 /// [@BotFather]: https://t.me/BotFather
 #[derive(Clone)]
-pub struct User(pub(crate) tl::types::User);
+pub struct User(pub tl::types::User);
 
 impl fmt::Debug for User {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -71,7 +71,7 @@ impl fmt::Debug for User {
 
 // TODO: photo
 impl User {
-    fn _from_raw(user: tl::enums::User) -> Self {
+    pub fn from_raw(user: tl::enums::User) -> Self {
         Self(match user {
             tl::enums::User::Empty(empty) => tl::types::User {
                 is_self: false,
@@ -118,16 +118,6 @@ impl User {
             },
             tl::enums::User::User(user) => user,
         })
-    }
-
-    #[cfg(feature = "unstable_raw")]
-    pub fn from_raw(user: tl::enums::User) -> Self {
-        Self::_from_raw(user)
-    }
-
-    #[cfg(not(feature = "unstable_raw"))]
-    pub(crate) fn from_raw(user: tl::enums::User) -> Self {
-        Self::_from_raw(user)
     }
 
     /// Return the user presence status (also known as "last seen").
@@ -324,12 +314,5 @@ impl From<User> for PackedChat {
 impl From<&User> for PackedChat {
     fn from(chat: &User) -> Self {
         chat.pack()
-    }
-}
-
-#[cfg(feature = "unstable_raw")]
-impl From<User> for tl::types::User {
-    fn from(user: User) -> Self {
-        user.0
     }
 }

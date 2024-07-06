@@ -7,6 +7,9 @@
 // except according to those terms.
 
 //! Custom types extending those provided by Telegram.
+//!
+//! A lot of fields in the types exported from this module are currently public even though
+//! they directly uses `grammers-tl-types`. This will probably change before the 1.0 release.
 pub mod attributes;
 pub mod button;
 pub mod callback_query;

@@ -35,13 +35,13 @@
 //! limitation is applied account-wide, and its duration is undefined. This often means that the
 //! account spammed, or a young account tried to contact too many peers.
 //!
+//! While the `grammers-tl-types` crate is re-exported and a lot of fields using it are public,
+//! this will likely change before 1.0.
+//!
 //! [Telegram's API]: https://core.telegram.org/#telegram-api
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
 pub mod client;
-#[cfg(not(feature = "unstable_raw"))]
-mod parsers;
-#[cfg(feature = "unstable_raw")]
 pub mod parsers;
 pub mod types;
 pub(crate) mod utils;
@@ -52,5 +52,4 @@ pub use types::{button, reply_markup, ChatMap, InputMessage, Update};
 pub use grammers_mtproto::transport;
 pub use grammers_mtsender::{FixedReconnect, InvocationError, NoReconnect, ReconnectionPolicy};
 pub use grammers_session as session;
-#[cfg(feature = "unstable_raw")]
 pub use grammers_tl_types;
