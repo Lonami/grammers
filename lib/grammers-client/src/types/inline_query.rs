@@ -16,7 +16,7 @@ use std::sync::Arc;
 /// inline query such as `@bot query`.
 #[derive(Clone)]
 pub struct InlineQuery {
-    query: tl::types::UpdateBotInlineQuery,
+    raw: tl::types::UpdateBotInlineQuery,
     client: Client,
     chats: Arc<ChatMap>,
 }
@@ -40,13 +40,13 @@ impl From<InlineResult> for tl::enums::InputBotInlineResult {
 }
 
 impl InlineQuery {
-    pub(crate) fn new(
+    pub fn from_raw(
         client: &Client,
         query: tl::types::UpdateBotInlineQuery,
         chats: &Arc<ChatMap>,
     ) -> Self {
         Self {
-            query,
+            raw: query,
             client: client.clone(),
             chats: chats.clone(),
         }
@@ -58,7 +58,7 @@ impl InlineQuery {
             .chats
             .get(
                 &tl::types::PeerUser {
-                    user_id: self.query.user_id,
+                    user_id: self.raw.user_id,
                 }
                 .into(),
             )
@@ -71,12 +71,12 @@ impl InlineQuery {
 
     // The text of the inline query.
     pub fn text(&self) -> &str {
-        self.query.query.as_str()
+        self.raw.query.as_str()
     }
 
     // The offset of the inline query.
     pub fn offset(&self) -> &str {
-        self.query.offset.as_str()
+        self.raw.offset.as_str()
     }
 
     /// Answer the inline query.
@@ -86,7 +86,7 @@ impl InlineQuery {
             request: tl::functions::messages::SetInlineBotResults {
                 gallery: false,
                 private: false,
-                query_id: self.query.query_id,
+                query_id: self.raw.query_id,
                 results: results.into_iter().map(Into::into).collect(),
                 cache_time: 0,
                 next_offset: None,

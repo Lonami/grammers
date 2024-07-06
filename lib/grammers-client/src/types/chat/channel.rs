@@ -18,11 +18,13 @@ use std::fmt;
 /// this variant will always represent a broadcast channel. The only difference between a
 /// broadcast channel and a megagroup are the permissions (default, and available).
 #[derive(Clone)]
-pub struct Channel(pub(crate) tl::types::Channel);
+pub struct Channel {
+    pub raw: tl::types::Channel,
+}
 
 impl fmt::Debug for Channel {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        self.0.fmt(f)
+        self.raw.fmt(f)
     }
 }
 
@@ -34,7 +36,7 @@ impl Channel {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => panic!("cannot create from group chat"),
             C::Channel(channel) => {
                 if channel.broadcast {
-                    Self(channel)
+                    Self { raw: channel }
                 } else {
                     panic!("tried to create broadcast channel from megagroup");
                 }
@@ -42,48 +44,50 @@ impl Channel {
             C::ChannelForbidden(channel) => {
                 if channel.broadcast {
                     // TODO store until_date
-                    Self(tl::types::Channel {
-                        creator: false,
-                        left: false,
-                        broadcast: channel.broadcast,
-                        verified: false,
-                        megagroup: channel.megagroup,
-                        restricted: false,
-                        signatures: false,
-                        min: false,
-                        scam: false,
-                        has_link: false,
-                        has_geo: false,
-                        slowmode_enabled: false,
-                        call_active: false,
-                        call_not_empty: false,
-                        fake: false,
-                        gigagroup: false,
-                        noforwards: false,
-                        join_request: false,
-                        forum: false,
-                        stories_hidden: false,
-                        stories_hidden_min: false,
-                        stories_unavailable: true,
-                        join_to_send: false,
-                        id: channel.id,
-                        access_hash: Some(channel.access_hash),
-                        title: channel.title,
-                        username: None,
-                        photo: tl::enums::ChatPhoto::Empty,
-                        date: 0,
-                        restriction_reason: None,
-                        admin_rights: None,
-                        banned_rights: None,
-                        default_banned_rights: None,
-                        participants_count: None,
-                        usernames: None,
-                        stories_max_id: None,
-                        color: None,
-                        profile_color: None,
-                        emoji_status: None,
-                        level: None,
-                    })
+                    Self {
+                        raw: tl::types::Channel {
+                            creator: false,
+                            left: false,
+                            broadcast: channel.broadcast,
+                            verified: false,
+                            megagroup: channel.megagroup,
+                            restricted: false,
+                            signatures: false,
+                            min: false,
+                            scam: false,
+                            has_link: false,
+                            has_geo: false,
+                            slowmode_enabled: false,
+                            call_active: false,
+                            call_not_empty: false,
+                            fake: false,
+                            gigagroup: false,
+                            noforwards: false,
+                            join_request: false,
+                            forum: false,
+                            stories_hidden: false,
+                            stories_hidden_min: false,
+                            stories_unavailable: true,
+                            join_to_send: false,
+                            id: channel.id,
+                            access_hash: Some(channel.access_hash),
+                            title: channel.title,
+                            username: None,
+                            photo: tl::enums::ChatPhoto::Empty,
+                            date: 0,
+                            restriction_reason: None,
+                            admin_rights: None,
+                            banned_rights: None,
+                            default_banned_rights: None,
+                            participants_count: None,
+                            usernames: None,
+                            stories_max_id: None,
+                            color: None,
+                            profile_color: None,
+                            emoji_status: None,
+                            level: None,
+                        },
+                    }
                 } else {
                     panic!("tried to create broadcast channel from megagroup");
                 }
@@ -93,25 +97,25 @@ impl Channel {
 
     /// Return the unique identifier for this channel.
     pub fn id(&self) -> i64 {
-        self.0.id
+        self.raw.id
     }
 
     /// Pack this channel into a smaller representation that can be loaded later.
     pub fn pack(&self) -> PackedChat {
         PackedChat {
-            ty: if self.0.gigagroup {
+            ty: if self.raw.gigagroup {
                 PackedType::Gigagroup
             } else {
                 PackedType::Broadcast
             },
             id: self.id(),
-            access_hash: self.0.access_hash,
+            access_hash: self.raw.access_hash,
         }
     }
 
     /// Return the title of this channel.
     pub fn title(&self) -> &str {
-        self.0.title.as_str()
+        self.raw.title.as_str()
     }
 
     /// Return the public @username of this channel, if any.
@@ -121,12 +125,12 @@ impl Channel {
     /// Outside of the application, people may link to this user with one of Telegram's URLs, such
     /// as https://t.me/username.
     pub fn username(&self) -> Option<&str> {
-        self.0.username.as_deref()
+        self.raw.username.as_deref()
     }
 
     /// Return the photo of this channel, if any.
     pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
-        match &self.0.photo {
+        match &self.raw.photo {
             tl::enums::ChatPhoto::Empty => None,
             tl::enums::ChatPhoto::Photo(photo) => Some(photo),
         }
@@ -134,9 +138,9 @@ impl Channel {
 
     /// Return the permissions of the logged-in user in this channel.
     pub fn admin_rights(&self) -> Option<&tl::types::ChatAdminRights> {
-        match &self.0.admin_rights {
+        match &self.raw.admin_rights {
             Some(tl::enums::ChatAdminRights::Rights(rights)) => Some(rights),
-            None if self.0.creator => Some(&tl::types::ChatAdminRights {
+            None if self.raw.creator => Some(&tl::types::ChatAdminRights {
                 add_admins: true,
                 other: true,
                 change_info: true,

@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Dialog {
-    pub dialog: tl::enums::Dialog,
+    pub raw: tl::enums::Dialog,
     pub chat: Chat,
     pub last_message: Option<Message>,
 }
@@ -35,7 +35,7 @@ impl Dialog {
                 .expect("dialogs use an unknown peer")
                 .clone(),
             last_message: messages.remove(&peer.into()),
-            dialog,
+            raw: dialog,
         }
     }
 

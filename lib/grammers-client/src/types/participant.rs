@@ -56,7 +56,7 @@ pub enum Role {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Participant {
-    pub user: crate::types::User,
+    pub raw_user: crate::types::User,
     pub role: Role,
 }
 
@@ -133,28 +133,28 @@ impl Participant {
 
         match participant {
             P::Participant(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: None,
                 }),
             },
             P::ParticipantSelf(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: Some(p.inviter_id),
                 }),
             },
             P::Creator(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::Creator(Creator {
                     permissions: Permissions::from_raw(p.admin_rights.into()),
                     rank: p.rank,
                 }),
             },
             P::Admin(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::Admin(Admin {
                     can_edit: p.can_edit,
                     inviter_id: p.inviter_id,
@@ -165,7 +165,7 @@ impl Participant {
                 }),
             },
             P::Banned(p) => Self {
-                user: match chats.remove(&p.peer).unwrap() {
+                raw_user: match chats.remove(&p.peer).unwrap() {
                     Chat::User(user) => user,
                     _ => todo!("figure out how to deal with non-user being banned"),
                 },
@@ -177,7 +177,7 @@ impl Participant {
                 }),
             },
             P::Left(p) => Self {
-                user: match chats.remove(&p.peer).unwrap() {
+                raw_user: match chats.remove(&p.peer).unwrap() {
                     Chat::User(user) => user,
                     _ => todo!("figure out how to deal with non-user leaving"),
                 },
@@ -194,21 +194,21 @@ impl Participant {
 
         match participant {
             P::Participant(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: Some(p.inviter_id),
                 }),
             },
             P::Creator(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::Creator(Creator {
                     permissions: Permissions::new_full(),
                     rank: None,
                 }),
             },
             P::Admin(p) => Self {
-                user: chats.remove_user(p.user_id).unwrap(),
+                raw_user: chats.remove_user(p.user_id).unwrap(),
                 role: Role::Admin(Admin {
                     can_edit: true,
                     inviter_id: Some(p.inviter_id),

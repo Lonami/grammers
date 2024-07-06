@@ -34,7 +34,7 @@ pub struct DownloadIter {
 
 impl DownloadIter {
     fn new(client: &Client, downloadable: &Downloadable) -> Self {
-        DownloadIter::new_from_file_location(client, downloadable.to_input_location().unwrap())
+        DownloadIter::new_from_file_location(client, downloadable.to_raw_input_location().unwrap())
     }
 
     fn new_from_location(client: &Client, location: tl::enums::InputFileLocation) -> Self {
@@ -172,7 +172,7 @@ impl Client {
                 }
             }
         }
-        if downloadable.to_input_location().is_none() {
+        if downloadable.to_raw_input_location().is_none() {
             return Err(io::Error::new(
                 io::ErrorKind::Other,
                 "media not downloadable",
@@ -218,7 +218,7 @@ impl Client {
             _ => panic!("Only Document type is supported!"),
         };
         let size = document.size();
-        let location = media.to_input_location().unwrap();
+        let location = media.to_raw_input_location().unwrap();
         // Allocate
         let mut file = fs::File::create(path).await?;
         file.set_len(size as u64).await?;

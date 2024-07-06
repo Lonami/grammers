@@ -12,29 +12,31 @@ use grammers_tl_types as tl;
 /// When signing up a new account, you agree to these comply with these terms for as long as you
 /// use the service.
 #[derive(Debug)]
-pub struct TermsOfService(tl::types::help::TermsOfService);
+pub struct TermsOfService {
+    pub raw: tl::types::help::TermsOfService,
+}
 
 impl TermsOfService {
     pub(crate) fn from_raw(
         tl::enums::help::TermsOfService::Service(tos): tl::enums::help::TermsOfService,
     ) -> Self {
-        Self(tos)
+        Self { raw: tos }
     }
 
     /// Whether the terms should be shown as a popup dialog to the user.
     pub fn show_popup(&self) -> bool {
-        self.0.popup
+        self.raw.popup
     }
 
     /// The terms and conditions that must be agreed upon in order to use the service.
     pub fn text(&self) -> &str {
-        self.0.text.as_ref()
+        self.raw.text.as_ref()
     }
 
     // TODO allow access to markdown/html text too, if the features are enabled
 
     /// The minimum age restriction to use the service, if applicable.
     pub fn minimum_age(&self) -> Option<i32> {
-        self.0.min_age_confirm
+        self.raw.min_age_confirm
     }
 }

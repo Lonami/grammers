@@ -10,131 +10,137 @@ use chrono::{DateTime, Utc};
 use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Permissions(tl::types::ChatAdminRights);
+pub struct Permissions {
+    pub raw: tl::types::ChatAdminRights,
+}
 
 #[derive(Clone, Debug, PartialEq)]
-pub struct Restrictions(tl::types::ChatBannedRights);
+pub struct Restrictions {
+    pub raw: tl::types::ChatBannedRights,
+}
 
 impl Permissions {
     pub(crate) fn new_full() -> Self {
-        Self(tl::types::ChatAdminRights {
-            change_info: true,
-            post_messages: true,
-            edit_messages: true,
-            delete_messages: true,
-            ban_users: true,
-            invite_users: true,
-            pin_messages: true,
-            add_admins: true,
-            anonymous: true,
-            manage_call: true,
-            other: true,
-            manage_topics: true,
-            post_stories: true,
-            edit_stories: true,
-            delete_stories: true,
-        })
+        Self {
+            raw: tl::types::ChatAdminRights {
+                change_info: true,
+                post_messages: true,
+                edit_messages: true,
+                delete_messages: true,
+                ban_users: true,
+                invite_users: true,
+                pin_messages: true,
+                add_admins: true,
+                anonymous: true,
+                manage_call: true,
+                other: true,
+                manage_topics: true,
+                post_stories: true,
+                edit_stories: true,
+                delete_stories: true,
+            },
+        }
     }
 
     pub(crate) fn from_raw(rights: tl::types::ChatAdminRights) -> Self {
-        Self(rights)
+        Self { raw: rights }
     }
 
     pub fn change_info(&self) -> bool {
-        self.0.change_info
+        self.raw.change_info
     }
 
     pub fn post_messages(&self) -> bool {
-        self.0.post_messages
+        self.raw.post_messages
     }
 
     pub fn edit_messages(&self) -> bool {
-        self.0.edit_messages
+        self.raw.edit_messages
     }
 
     pub fn delete_messages(&self) -> bool {
-        self.0.delete_messages
+        self.raw.delete_messages
     }
 
     pub fn ban_users(&self) -> bool {
-        self.0.ban_users
+        self.raw.ban_users
     }
 
     pub fn invite_users(&self) -> bool {
-        self.0.invite_users
+        self.raw.invite_users
     }
 
     pub fn pin_messages(&self) -> bool {
-        self.0.pin_messages
+        self.raw.pin_messages
     }
 
     pub fn add_admins(&self) -> bool {
-        self.0.add_admins
+        self.raw.add_admins
     }
 
     pub fn anonymous(&self) -> bool {
-        self.0.anonymous
+        self.raw.anonymous
     }
 
     pub fn manage_call(&self) -> bool {
-        self.0.manage_call
+        self.raw.manage_call
     }
 }
 
 impl Restrictions {
     pub(crate) fn from_raw(rights: tl::types::ChatBannedRights) -> Self {
-        Self(rights)
+        Self { raw: rights }
     }
 
     pub fn view_messages(&self) -> bool {
-        self.0.view_messages
+        self.raw.view_messages
     }
 
     pub fn send_messages(&self) -> bool {
-        self.0.send_messages
+        self.raw.send_messages
     }
 
     pub fn send_media(&self) -> bool {
-        self.0.send_media
+        self.raw.send_media
     }
 
     pub fn send_stickers(&self) -> bool {
-        self.0.send_stickers
+        self.raw.send_stickers
     }
 
     pub fn send_gifs(&self) -> bool {
-        self.0.send_gifs
+        self.raw.send_gifs
     }
 
     pub fn send_games(&self) -> bool {
-        self.0.send_games
+        self.raw.send_games
     }
 
     pub fn send_inline(&self) -> bool {
-        self.0.send_inline
+        self.raw.send_inline
     }
 
     pub fn embed_links(&self) -> bool {
-        self.0.embed_links
+        self.raw.embed_links
     }
 
     pub fn send_polls(&self) -> bool {
-        self.0.send_polls
+        self.raw.send_polls
     }
 
     pub fn change_info(&self) -> bool {
-        self.0.change_info
+        self.raw.change_info
     }
 
     pub fn invite_users(&self) -> bool {
-        self.0.invite_users
+        self.raw.invite_users
     }
 
     pub fn pin_messages(&self) -> bool {
-        self.0.pin_messages
+        self.raw.pin_messages
     }
 
     pub fn due(&self) -> DateTime<Utc> {
-        utils::date(self.0.until_date)
+        utils::date(self.raw.until_date)
     }
 }

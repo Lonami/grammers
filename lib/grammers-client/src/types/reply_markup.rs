@@ -17,7 +17,9 @@ use super::button;
 use grammers_tl_types as tl;
 
 #[doc(hidden)]
-pub struct Markup(pub(crate) tl::enums::ReplyMarkup);
+pub struct Markup {
+    pub raw: tl::enums::ReplyMarkup,
+}
 
 /// Trait used by types that can be interpreted as a raw reply markup.
 pub trait ReplyMarkup {
@@ -27,44 +29,60 @@ pub trait ReplyMarkup {
 /// Structure holding the state for inline reply markups.
 ///
 /// See [`inline`] for usage examples.
-pub struct Inline(tl::types::ReplyInlineMarkup);
+pub struct Inline {
+    raw: tl::types::ReplyInlineMarkup,
+}
 
 /// Structure holding the state for keyboard reply markups.
 ///
 /// See [`keyboard`] for usage examples.
-pub struct Keyboard(tl::types::ReplyKeyboardMarkup);
+pub struct Keyboard {
+    raw: tl::types::ReplyKeyboardMarkup,
+}
 
 /// Structure holding the state for reply markups that hide previous keyboards.
 ///
 /// See [`hide`] for usage examples.
-pub struct Hide(tl::types::ReplyKeyboardHide);
+pub struct Hide {
+    raw: tl::types::ReplyKeyboardHide,
+}
 
 /// Structure holding the state for reply markups that force a reply.
 ///
 /// See [`force_reply`] for usage examples.
-pub struct ForceReply(tl::types::ReplyKeyboardForceReply);
+pub struct ForceReply {
+    raw: tl::types::ReplyKeyboardForceReply,
+}
 
 impl ReplyMarkup for Inline {
     fn to_reply_markup(&self) -> Markup {
-        Markup(self.0.clone().into())
+        Markup {
+            raw: self.raw.clone().into(),
+        }
     }
 }
 
 impl ReplyMarkup for Keyboard {
     fn to_reply_markup(&self) -> Markup {
-        Markup(self.0.clone().into())
+        Markup {
+            raw: self.raw.clone().into(),
+        }
     }
 }
 
 impl ReplyMarkup for Hide {
     fn to_reply_markup(&self) -> Markup {
-        Markup(self.0.clone().into())
+        Markup {
+            raw: self.raw.clone().into(),
+        }
     }
 }
 
 impl ReplyMarkup for ForceReply {
     fn to_reply_markup(&self) -> Markup {
-        Markup(self.0.clone().into())
+        Markup {
+            raw: self.raw.clone().into(),
+        }
     }
 }
 
@@ -94,18 +112,20 @@ impl ReplyMarkup for ForceReply {
 /// # }
 /// ```
 pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
-    Inline(tl::types::ReplyInlineMarkup {
-        rows: buttons
-            .into()
-            .into_iter()
-            .map(|row| {
-                tl::types::KeyboardButtonRow {
-                    buttons: row.into_iter().map(|button| button.0).collect(),
-                }
+    Inline {
+        raw: tl::types::ReplyInlineMarkup {
+            rows: buttons
                 .into()
-            })
-            .collect(),
-    })
+                .into_iter()
+                .map(|row| {
+                    tl::types::KeyboardButtonRow {
+                        buttons: row.into_iter().map(|button| button.raw).collect(),
+                    }
+                    .into()
+                })
+                .collect(),
+        },
+    }
 }
 
 /// Define a custom keyboard, replacing the user's own virtual keyboard.
@@ -136,23 +156,25 @@ pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
 /// # }
 /// ```
 pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
-    Keyboard(tl::types::ReplyKeyboardMarkup {
-        resize: false,
-        single_use: false,
-        selective: false,
-        persistent: false,
-        rows: buttons
-            .into()
-            .into_iter()
-            .map(|row| {
-                tl::types::KeyboardButtonRow {
-                    buttons: row.into_iter().map(|button| button.0).collect(),
-                }
+    Keyboard {
+        raw: tl::types::ReplyKeyboardMarkup {
+            resize: false,
+            single_use: false,
+            selective: false,
+            persistent: false,
+            rows: buttons
                 .into()
-            })
-            .collect(),
-        placeholder: None,
-    })
+                .into_iter()
+                .map(|row| {
+                    tl::types::KeyboardButtonRow {
+                        buttons: row.into_iter().map(|button| button.raw).collect(),
+                    }
+                    .into()
+                })
+                .collect(),
+            placeholder: None,
+        },
+    }
 }
 
 /// Hide a previously-sent keyboard.
@@ -170,7 +192,9 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
 /// # }
 /// ```
 pub fn hide() -> Hide {
-    Hide(tl::types::ReplyKeyboardHide { selective: false })
+    Hide {
+        raw: tl::types::ReplyKeyboardHide { selective: false },
+    }
 }
 
 /// "Forces" the user to send a reply.
@@ -192,11 +216,13 @@ pub fn hide() -> Hide {
 /// # }
 /// ```
 pub fn force_reply() -> ForceReply {
-    ForceReply(tl::types::ReplyKeyboardForceReply {
-        single_use: false,
-        selective: false,
-        placeholder: None,
-    })
+    ForceReply {
+        raw: tl::types::ReplyKeyboardForceReply {
+            single_use: false,
+            selective: false,
+            placeholder: None,
+        },
+    }
 }
 
 impl Keyboard {
@@ -204,7 +230,7 @@ impl Keyboard {
     /// keyboard smaller if there are just two rows of buttons). Otherwise, the custom keyboard
     /// is always of the same height as the virtual keyboard.
     pub fn fit_size(mut self) -> Self {
-        self.0.resize = true;
+        self.raw.resize = true;
         self
     }
 
@@ -214,7 +240,7 @@ impl Keyboard {
     /// letter-keyboard in the chat – the user can press a special button in the input field to
     /// see the custom keyboard again.
     pub fn single_use(mut self) -> Self {
-        self.0.single_use = true;
+        self.raw.single_use = true;
         self
     }
 
@@ -223,7 +249,7 @@ impl Keyboard {
     /// The selected user will be either the people @_mentioned in the text of the `Message`
     /// object, or if the bot's message is a reply, the sender of the original message.
     pub fn selective(mut self) -> Self {
-        self.0.selective = true;
+        self.raw.selective = true;
         self
     }
 }
@@ -234,7 +260,7 @@ impl Hide {
     /// The selected user will be either the people @_mentioned in the text of the `Message`
     /// object, or if the bot's message is a reply, the sender of the original message.
     pub fn selective(mut self) -> Self {
-        self.0.selective = true;
+        self.raw.selective = true;
         self
     }
 }
@@ -246,7 +272,7 @@ impl ForceReply {
     /// letter-keyboard in the chat – the user can press a special button in the input field to
     /// see the custom keyboard again.
     pub fn single_use(mut self) -> Self {
-        self.0.single_use = true;
+        self.raw.single_use = true;
         self
     }
 
@@ -255,7 +281,7 @@ impl ForceReply {
     /// The selected user will be either the people @_mentioned in the text of the `Message`
     /// object, or if the bot's message is a reply, the sender of the original message.
     pub fn selective(mut self) -> Self {
-        self.0.selective = true;
+        self.raw.selective = true;
         self
     }
 }

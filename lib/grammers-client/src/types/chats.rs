@@ -187,7 +187,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
             let mut participants = s.client.iter_participants(s.chat);
             while let Some(participant) = participants.next().await? {
                 if matches!(participant.role, Role::Creator(_) | Role::Admin(_))
-                    && participant.user.id() == uid
+                    && participant.raw_user.id() == uid
                 {
                     s.rights = tl::types::ChatAdminRights {
                         change_info: true,

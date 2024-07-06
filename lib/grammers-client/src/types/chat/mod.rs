@@ -106,13 +106,13 @@ impl Chat {
         match packed.ty {
             PackedType::User => {
                 let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
-                user.0.access_hash = packed.access_hash;
+                user.raw.access_hash = packed.access_hash;
                 Chat::User(user)
             }
             PackedType::Bot => {
                 let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
-                user.0.access_hash = packed.access_hash;
-                user.0.bot = true;
+                user.raw.access_hash = packed.access_hash;
+                user.raw.bot = true;
                 Chat::User(user)
             }
             PackedType::Chat => Chat::Group(Group::from_raw(
@@ -165,16 +165,18 @@ impl Chat {
     // is missing).
     pub(crate) fn get_min_hash_ref(&mut self) -> Option<(&mut bool, &mut i64)> {
         match self {
-            Self::User(user) => match (&mut user.0.min, user.0.access_hash.as_mut()) {
+            Self::User(user) => match (&mut user.raw.min, user.raw.access_hash.as_mut()) {
                 (m @ true, Some(ah)) => Some((m, ah)),
                 _ => None,
             },
             // Small group chats don't have an `access_hash` to begin with.
             Self::Group(_group) => None,
-            Self::Channel(channel) => match (&mut channel.0.min, channel.0.access_hash.as_mut()) {
-                (m @ true, Some(ah)) => Some((m, ah)),
-                _ => None,
-            },
+            Self::Channel(channel) => {
+                match (&mut channel.raw.min, channel.raw.access_hash.as_mut()) {
+                    (m @ true, Some(ah)) => Some((m, ah)),
+                    _ => None,
+                }
+            }
         }
     }
 
@@ -186,21 +188,21 @@ impl Chat {
                 crate::types::Downloadable::UserProfilePhoto(crate::types::UserProfilePhoto {
                     big,
                     peer,
-                    photo: x.clone(),
+                    raw: x.clone(),
                 })
             }),
             Self::Group(group) => group.photo().map(|x| {
                 crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
                     big,
                     peer,
-                    photo: x.clone(),
+                    raw: x.clone(),
                 })
             }),
             Self::Channel(channel) => channel.photo().map(|x| {
                 crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
                     big,
                     peer,
-                    photo: x.clone(),
+                    raw: x.clone(),
                 })
             }),
         }

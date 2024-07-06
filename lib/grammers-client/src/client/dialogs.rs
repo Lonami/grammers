@@ -91,8 +91,8 @@ impl DialogIter {
         let chats = ChatMap::new(users, chats);
         let mut messages = messages
             .into_iter()
-            .flat_map(|m| Message::new(&self.client, m, &chats))
-            .map(|m| ((&m.msg.peer_id).into(), m))
+            .flat_map(|m| Message::from_raw(&self.client, m, &chats))
+            .map(|m| ((&m.raw.peer_id).into(), m))
             .collect::<HashMap<_, _>>();
 
         {
@@ -121,8 +121,8 @@ impl DialogIter {
                 .rev()
                 .find_map(|dialog| dialog.last_message.as_ref())
             {
-                self.request.offset_date = last_message.msg.date;
-                self.request.offset_id = last_message.msg.id;
+                self.request.offset_date = last_message.raw.date;
+                self.request.offset_id = last_message.raw.id;
             }
             self.request.offset_peer = self.buffer[self.buffer.len() - 1]
                 .chat()

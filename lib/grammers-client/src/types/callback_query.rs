@@ -21,7 +21,7 @@ use std::time::Duration;
 /// will timeout).
 #[derive(Clone)]
 pub struct CallbackQuery {
-    pub(crate) query: tl::types::UpdateBotCallbackQuery,
+    pub raw: tl::types::UpdateBotCallbackQuery,
     pub(crate) client: Client,
     pub(crate) chats: Arc<types::ChatMap>,
 }
@@ -35,13 +35,13 @@ pub struct Answer<'a> {
 }
 
 impl CallbackQuery {
-    pub(crate) fn new(
+    pub fn from_raw(
         client: &Client,
         query: tl::types::UpdateBotCallbackQuery,
         chats: &Arc<types::ChatMap>,
     ) -> Self {
         Self {
-            query,
+            raw: query,
             client: client.clone(),
             chats: chats.clone(),
         }
@@ -52,7 +52,7 @@ impl CallbackQuery {
         self.chats
             .get(
                 &tl::types::PeerUser {
-                    user_id: self.query.user_id,
+                    user_id: self.raw.user_id,
                 }
                 .into(),
             )
@@ -61,7 +61,7 @@ impl CallbackQuery {
 
     /// The chat where the callback query occured.
     pub fn chat(&self) -> &types::Chat {
-        self.chats.get(&self.query.peer).unwrap()
+        self.chats.get(&self.raw.peer).unwrap()
     }
 
     /// They binary payload data contained by the inline button which was pressed.
@@ -73,14 +73,14 @@ impl CallbackQuery {
     /// > Trivia: it used to be possible to fake the callback data, but a server-side check was
     /// > added circa 2018 to prevent malicious clients from doing so.
     pub fn data(&self) -> &[u8] {
-        self.query.data.as_deref().unwrap()
+        self.raw.data.as_deref().unwrap()
     }
 
     /// Load the `Message` that contains the pressed inline button.
     pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
         Ok(self
             .client
-            .get_messages_by_id(self.chat(), &[self.query.msg_id])
+            .get_messages_by_id(self.chat(), &[self.raw.msg_id])
             .await?
             .pop()
             .unwrap()
@@ -92,7 +92,7 @@ impl CallbackQuery {
         Answer {
             request: tl::functions::messages::SetBotCallbackAnswer {
                 alert: false,
-                query_id: self.query.query_id,
+                query_id: self.raw.query_id,
                 message: None,
                 url: None,
                 cache_time: 0,
@@ -142,7 +142,7 @@ impl<'a> Answer<'a> {
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let chat = self.query.chat();
-        let msg_id = self.query.query.msg_id;
+        let msg_id = self.query.raw.msg_id;
         self.query
             .client
             .edit_message(chat, msg_id, new_message)
@@ -169,7 +169,7 @@ impl<'a> Answer<'a> {
         let message = message.into();
         self.query
             .client
-            .send_message(chat, message.reply_to(Some(self.query.query.msg_id)))
+            .send_message(chat, message.reply_to(Some(self.query.raw.msg_id)))
             .await
     }
 }
