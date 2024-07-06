@@ -92,6 +92,8 @@ pub(super) fn update_short_message(
                 quick_reply_shortcut_id: None,
                 offline: false,
                 via_business_bot_id: None,
+                effect: None,
+                factcheck: None,
             }
             .into(),
             pts: short.pts,
@@ -152,6 +154,8 @@ pub(super) fn update_short_chat_message(
                 quick_reply_shortcut_id: None,
                 offline: false,
                 via_business_bot_id: None,
+                effect: None,
+                factcheck: None,
             }
             .into(),
             pts: short.pts,
@@ -525,6 +529,10 @@ impl PtsInfo {
                 pts_count: u.messages.len() as i32,
                 entry: Entry::SecretChats,
             }),
+            BroadcastRevenueTransactions(_) => None,
+            StarsBalance(_) => None,
+            BusinessBotCallbackQuery(_) => None,
+            StarsRevenueStatus(_) => None,
         }
         .filter(|info| info.pts != NO_PTS)
     }

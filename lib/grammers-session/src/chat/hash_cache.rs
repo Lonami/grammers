@@ -387,6 +387,12 @@ impl ChatHashCache {
                 U::BotBusinessConnect(u) => match &u.connection {
                     tl::enums::BotBusinessConnection::Connection(con) => self.has(con.user_id),
                 },
+                U::BroadcastRevenueTransactions(u) => self.has_peer(&u.peer),
+                U::StarsBalance(_) => true,
+                U::BusinessBotCallbackQuery(u) => {
+                    self.has(u.user_id) && self.extend_from_message(&u.message)
+                }
+                U::StarsRevenueStatus(u) => self.has_peer(&u.peer),
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).

@@ -69,8 +69,14 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             .push(tl::types::MessageEntityUnderline { offset, length }.into());
                     }
                     TAG_BLOCKQUOTE => {
-                        self.entities
-                            .push(tl::types::MessageEntityBlockquote { offset, length }.into());
+                        self.entities.push(
+                            tl::types::MessageEntityBlockquote {
+                                offset,
+                                length,
+                                collapsed: false,
+                            }
+                            .into(),
+                        );
                     }
                     TAG_DETAILS => {
                         self.entities

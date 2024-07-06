@@ -852,6 +852,7 @@ impl Media {
             M::Story(_) => None,
             M::Giveaway(_) => None,
             M::GiveawayResults(_) => None,
+            M::PaidMedia(_) => None,
         }
     }
 
