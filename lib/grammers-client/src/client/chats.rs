@@ -763,7 +763,7 @@ impl Client {
         if !hosts.contains(&host) {
             return None;
         }
-        let paths = path.split("/").collect::<Vec<&str>>();
+        let paths = path.split("/").skip(1).collect::<Vec<&str>>();
 
         if paths.len() == 1 {
             if paths[0].starts_with("+") {
