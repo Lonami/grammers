@@ -476,7 +476,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         while next_offset != self.read_tail {
             match self
                 .transport
-                .unpack(&self.read_buffer[next_offset..][..self.read_tail])
+                .unpack(&self.read_buffer[next_offset..self.read_tail])
             {
                 Ok(offset) => {
                     debug!("deserializing valid transport packet...");
