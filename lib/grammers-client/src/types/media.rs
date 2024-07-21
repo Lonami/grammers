@@ -155,6 +155,15 @@ impl Photo {
         }
     }
 
+    /// The size of the photo.
+    /// returns 0 if unable to get the size.
+    pub fn size(&self) -> i64 {
+        match self.thumbs().largest() {
+            Some(thumb) => thumb.size() as i64,
+            None => 0,
+        }
+    }
+
     /// Get photo thumbs.
     ///
     /// Since Telegram doesn't store the original photo, it can be presented in different sizes
