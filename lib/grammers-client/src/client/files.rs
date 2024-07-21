@@ -193,6 +193,15 @@ impl Client {
         Client::load(path, &mut download).await
     }
 
+    pub(crate) async fn download_media_at_location_to_memory(
+        &self,
+        location: tl::enums::InputFileLocation,
+    ) -> Result<Vec<u8>, io::Error> {
+        let mut download = DownloadIter::new_from_location(self, location);
+
+        Client::load_to_memory(&mut download).await
+    }
+
     async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadIter) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
         while let Some(chunk) = download
@@ -204,6 +213,19 @@ impl Client {
         }
 
         Ok(())
+    }
+
+    async fn load_to_memory(download: &mut DownloadIter) -> Result<Vec<u8>, io::Error> {
+        let mut buffer = Vec::new();
+        while let Some(chunk) = download
+            .next()
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        {
+            buffer.extend_from_slice(&chunk);
+        }
+
+        Ok(buffer)
     }
 
     /// Downloads a `Document` to specified path using multiple connections

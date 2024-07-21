@@ -147,21 +147,7 @@ impl PhotoSize {
                 fs::File::create(path).await.unwrap();
             }
             PhotoSize::Size(size) => {
-                let input_location = if !size.from_document {
-                    tl::enums::InputFileLocation::from(tl::types::InputPhotoFileLocation {
-                        id: size.id,
-                        access_hash: size.access_hash,
-                        file_reference: size.file_reference.clone(),
-                        thumb_size: size.photo_type.clone(),
-                    })
-                } else {
-                    tl::enums::InputFileLocation::from(tl::types::InputDocumentFileLocation {
-                        id: size.id,
-                        access_hash: size.access_hash,
-                        file_reference: size.file_reference.clone(),
-                        thumb_size: size.photo_type.clone(),
-                    })
-                };
+                let input_location = size.to_input_location();
 
                 size.client
                     .clone()
@@ -178,6 +164,45 @@ impl PhotoSize {
                 let bytes = &size.bytes;
                 if bytes.len() < 3 || bytes[0] != 0x01 {
                     return;
+                }
+
+                let real = self.download_to_memory().await;
+
+                let mut file = fs::File::create(path).await.unwrap();
+                file.write_all(&real).await.unwrap();
+            }
+            PhotoSize::Progressive(_) => {
+                // Nothing
+            }
+            PhotoSize::Path(_) => {
+                // Based on https://core.tlgr.org/api/files#vector-thumbnails
+                let data = self.download_to_memory().await;
+                let mut file = fs::File::create(path).await.unwrap();
+                file.write_all(&data).await.unwrap();
+            }
+        };
+    }
+
+    pub async fn download_to_memory(&self) -> Vec<u8> {
+        match self {
+            PhotoSize::Empty(_) => {
+                vec![]
+            }
+            PhotoSize::Size(size) => {
+                let input_location = size.to_input_location();
+
+                size.client
+                    .clone()
+                    .download_media_at_location_to_memory(input_location)
+                    .await
+                    .unwrap()
+            }
+            PhotoSize::Cached(size) => size.bytes.clone(),
+            PhotoSize::Stripped(size) => {
+                // Based on https://core.tlgr.org/api/files#stripped-thumbnails
+                let bytes = &size.bytes;
+                if bytes.len() < 3 || bytes[0] != 0x01 {
+                    return vec![];
                 }
 
                 let header = vec![
@@ -239,11 +264,11 @@ impl PhotoSize {
                 real.append(&mut bytes_clone);
                 real.append(&mut footer);
 
-                let mut file = fs::File::create(path).await.unwrap();
-                file.write_all(&real).await.unwrap();
+                real
             }
             PhotoSize::Progressive(_) => {
                 // Nothing
+                vec![]
             }
             PhotoSize::Path(size) => {
                 // Based on https://core.tlgr.org/api/files#vector-thumbnails
@@ -270,10 +295,10 @@ impl PhotoSize {
   <path d="{path}"/>
 </svg>"###
                 );
-                let mut file = fs::File::create(path).await.unwrap();
-                file.write_all(res.as_bytes()).await.unwrap();
+
+                res.as_bytes().to_vec()
             }
-        };
+        }
     }
 
     pub fn photo_type(&self) -> String {
@@ -307,6 +332,26 @@ pub struct Size {
     from_document: bool,
 
     client: Client,
+}
+
+impl Size {
+    fn to_input_location(&self) -> tl::enums::InputFileLocation {
+        if !self.from_document {
+            tl::enums::InputFileLocation::from(tl::types::InputPhotoFileLocation {
+                id: self.id,
+                access_hash: self.access_hash,
+                file_reference: self.file_reference.clone(),
+                thumb_size: self.photo_type.clone(),
+            })
+        } else {
+            tl::enums::InputFileLocation::from(tl::types::InputDocumentFileLocation {
+                id: self.id,
+                access_hash: self.access_hash,
+                file_reference: self.file_reference.clone(),
+                thumb_size: self.photo_type.clone(),
+            })
+        }
+    }
 }
 
 /// Description of an image and its content.
