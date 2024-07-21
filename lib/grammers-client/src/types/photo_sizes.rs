@@ -79,7 +79,9 @@ impl PhotoSize {
                 }
                 size.bytes.len() + 622
             }
-            PhotoSize::Progressive(size) => size.sizes.iter().sum::<i32>() as usize,
+            PhotoSize::Progressive(size) => {
+                size.sizes.iter().max().unwrap_or(&0).to_owned() as usize
+            }
             PhotoSize::Path(size) => size.bytes.len(),
         }
     }
