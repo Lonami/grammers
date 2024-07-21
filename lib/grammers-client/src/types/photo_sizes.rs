@@ -390,10 +390,19 @@ pub struct PathSize {
 pub trait VecExt {
     /// Helper method to get the largest photo thumb
     fn largest(&self) -> Option<&PhotoSize>;
+
+    /// Helper method to get the specific type of photo thumb
+    ///
+    /// <https://core.telegram.org/api/files#image-thumbnail-types>
+    fn get_type(&self, photo_type: &str) -> Option<&PhotoSize>;
 }
 
 impl VecExt for Vec<PhotoSize> {
     fn largest(&self) -> Option<&PhotoSize> {
         self.iter().max_by_key(|x| x.size())
+    }
+
+    fn get_type(&self, photo_type: &str) -> Option<&PhotoSize> {
+        self.iter().find(|x| x.photo_type() == photo_type)
     }
 }
