@@ -41,6 +41,50 @@ impl PhotoSize {
                 id: photo.id,
                 access_hash: photo.access_hash,
                 file_reference: photo.file_reference.clone(),
+                from_document: false,
+                client,
+            }),
+            tl::enums::PhotoSize::PhotoCachedSize(size) => PhotoSize::Cached(CachedSize {
+                photo_type: size.r#type.clone(),
+                width: size.w,
+                height: size.h,
+                bytes: size.bytes.clone(),
+            }),
+            tl::enums::PhotoSize::PhotoStrippedSize(size) => PhotoSize::Stripped(StrippedSize {
+                photo_type: size.r#type.clone(),
+                bytes: size.bytes.clone(),
+            }),
+            tl::enums::PhotoSize::Progressive(size) => PhotoSize::Progressive(ProgressiveSize {
+                photo_type: size.r#type.clone(),
+                width: size.w,
+                height: size.h,
+                sizes: size.sizes.clone(),
+            }),
+            tl::enums::PhotoSize::PhotoPathSize(size) => PhotoSize::Path(PathSize {
+                photo_type: size.r#type.clone(),
+                bytes: size.bytes.clone(),
+            }),
+        }
+    }
+
+    pub(crate) fn make_from_document(
+        size: &tl::enums::PhotoSize,
+        document: &tl::types::Document,
+        client: Client,
+    ) -> Self {
+        match size {
+            tl::enums::PhotoSize::Empty(size) => PhotoSize::Empty(SizeEmpty {
+                photo_type: size.r#type.clone(),
+            }),
+            tl::enums::PhotoSize::Size(size) => PhotoSize::Size(Size {
+                photo_type: size.r#type.clone(),
+                width: size.w,
+                height: size.h,
+                size: size.size,
+                id: document.id,
+                access_hash: document.access_hash,
+                file_reference: document.file_reference.clone(),
+                from_document: true,
                 client,
             }),
             tl::enums::PhotoSize::PhotoCachedSize(size) => PhotoSize::Cached(CachedSize {
@@ -103,15 +147,25 @@ impl PhotoSize {
                 fs::File::create(path).await.unwrap();
             }
             PhotoSize::Size(size) => {
-                let input_location = tl::types::InputPhotoFileLocation {
-                    id: size.id,
-                    access_hash: size.access_hash,
-                    file_reference: size.file_reference.clone(),
-                    thumb_size: size.photo_type.clone(),
+                let input_location = if !size.from_document {
+                    tl::enums::InputFileLocation::from(tl::types::InputPhotoFileLocation {
+                        id: size.id,
+                        access_hash: size.access_hash,
+                        file_reference: size.file_reference.clone(),
+                        thumb_size: size.photo_type.clone(),
+                    })
+                } else {
+                    tl::enums::InputFileLocation::from(tl::types::InputDocumentFileLocation {
+                        id: size.id,
+                        access_hash: size.access_hash,
+                        file_reference: size.file_reference.clone(),
+                        thumb_size: size.photo_type.clone(),
+                    })
                 };
+
                 size.client
                     .clone()
-                    .download_media_at_location(input_location.into(), path)
+                    .download_media_at_location(input_location, path)
                     .await
                     .unwrap();
             }
@@ -249,6 +303,8 @@ pub struct Size {
     id: i64,
     access_hash: i64,
     file_reference: Vec<u8>,
+
+    from_document: bool,
 
     client: Client,
 }

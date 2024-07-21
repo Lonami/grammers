@@ -305,6 +305,28 @@ impl Document {
         }
     }
 
+    /// Get document thumbs.
+    /// <https://core.telegram.org/api/files#image-thumbnail-types>
+    pub fn thumbs(&self) -> Vec<PhotoSize> {
+        use tl::enums::Document as D;
+
+        let document = match self.raw.document.as_ref() {
+            Some(document) => document,
+            None => return vec![],
+        };
+
+        match document {
+            D::Empty(_) => vec![],
+            D::Document(document) => match &document.thumbs {
+                Some(thumbs) => thumbs
+                    .iter()
+                    .map(|x| PhotoSize::make_from_document(x, document, self.client.clone()))
+                    .collect(),
+                None => vec![],
+            },
+        }
+    }
+
     /// Duration of video/audio, in seconds
     pub fn duration(&self) -> Option<f64> {
         match self.raw.document.as_ref() {
