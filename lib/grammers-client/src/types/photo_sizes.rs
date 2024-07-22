@@ -166,45 +166,6 @@ impl PhotoSize {
                     return;
                 }
 
-                let real = self.download_to_memory().await;
-
-                let mut file = fs::File::create(path).await.unwrap();
-                file.write_all(&real).await.unwrap();
-            }
-            PhotoSize::Progressive(_) => {
-                // Nothing
-            }
-            PhotoSize::Path(_) => {
-                // Based on https://core.tlgr.org/api/files#vector-thumbnails
-                let data = self.download_to_memory().await;
-                let mut file = fs::File::create(path).await.unwrap();
-                file.write_all(&data).await.unwrap();
-            }
-        };
-    }
-
-    pub async fn download_to_memory(&self) -> Vec<u8> {
-        match self {
-            PhotoSize::Empty(_) => {
-                vec![]
-            }
-            PhotoSize::Size(size) => {
-                let input_location = size.to_input_location();
-
-                size.client
-                    .clone()
-                    .download_media_at_location_to_memory(input_location)
-                    .await
-                    .unwrap()
-            }
-            PhotoSize::Cached(size) => size.bytes.clone(),
-            PhotoSize::Stripped(size) => {
-                // Based on https://core.tlgr.org/api/files#stripped-thumbnails
-                let bytes = &size.bytes;
-                if bytes.len() < 3 || bytes[0] != 0x01 {
-                    return vec![];
-                }
-
                 let header = vec![
                     0xff, 0xd8, 0xff, 0xe0, 0x00, 0x10, 0x4a, 0x46, 0x49, 0x46, 0x00, 0x01, 0x01,
                     0x00, 0x00, 0x01, 0x00, 0x01, 0x00, 0x00, 0xff, 0xdb, 0x00, 0x43, 0x00, 0x28,
@@ -264,11 +225,11 @@ impl PhotoSize {
                 real.append(&mut bytes_clone);
                 real.append(&mut footer);
 
-                real
+                let mut file = fs::File::create(path).await.unwrap();
+                file.write_all(&real).await.unwrap();
             }
             PhotoSize::Progressive(_) => {
                 // Nothing
-                vec![]
             }
             PhotoSize::Path(size) => {
                 // Based on https://core.tlgr.org/api/files#vector-thumbnails
@@ -295,10 +256,10 @@ impl PhotoSize {
   <path d="{path}"/>
 </svg>"###
                 );
-
-                res.as_bytes().to_vec()
+                let mut file = fs::File::create(path).await.unwrap();
+                file.write_all(res.as_bytes()).await.unwrap();
             }
-        }
+        };
     }
 
     pub fn photo_type(&self) -> String {
