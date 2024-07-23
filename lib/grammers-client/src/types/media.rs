@@ -155,6 +155,15 @@ impl Photo {
         }
     }
 
+    /// The size of the photo.
+    /// returns 0 if unable to get the size.
+    pub fn size(&self) -> i64 {
+        match self.thumbs().largest() {
+            Some(thumb) => thumb.size() as i64,
+            None => 0,
+        }
+    }
+
     /// Get photo thumbs.
     ///
     /// Since Telegram doesn't store the original photo, it can be presented in different sizes
@@ -178,7 +187,7 @@ impl Photo {
             P::Photo(photo) => photo
                 .sizes
                 .iter()
-                .map(|x| PhotoSize::make_from(x, photo, self.client.clone()))
+                .map(|x| PhotoSize::make_from(x, photo))
                 .collect(),
         }
     }
@@ -293,6 +302,28 @@ impl Document {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => d.size,
             _ => 0,
+        }
+    }
+
+    /// Get document thumbs.
+    /// <https://core.telegram.org/api/files#image-thumbnail-types>
+    pub fn thumbs(&self) -> Vec<PhotoSize> {
+        use tl::enums::Document as D;
+
+        let document = match self.raw.document.as_ref() {
+            Some(document) => document,
+            None => return vec![],
+        };
+
+        match document {
+            D::Empty(_) => vec![],
+            D::Document(document) => match &document.thumbs {
+                Some(thumbs) => thumbs
+                    .iter()
+                    .map(|x| PhotoSize::make_from_document(x, document))
+                    .collect(),
+                None => vec![],
+            },
         }
     }
 
