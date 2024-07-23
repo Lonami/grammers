@@ -51,6 +51,7 @@ pub enum Downloadable {
     Media(crate::types::Media),
     UserProfilePhoto(UserProfilePhoto),
     ChatPhoto(ChatPhoto),
+    PhotoSize(super::photo_sizes::PhotoSize),
 }
 
 impl Downloadable {
@@ -61,6 +62,7 @@ impl Downloadable {
                 user_profile_photo.to_raw_input_location()
             }
             Self::ChatPhoto(chat_photo) => chat_photo.to_raw_input_location(),
+            Self::PhotoSize(photo_size) => photo_size.to_raw_input_location(),
         }
     }
 }
