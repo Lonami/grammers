@@ -7,8 +7,6 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
-use crate::Client;
-
 #[derive(Clone, Debug, PartialEq)]
 pub enum PhotoSize {
     Empty(SizeEmpty),
@@ -20,11 +18,7 @@ pub enum PhotoSize {
 }
 
 impl PhotoSize {
-    pub(crate) fn make_from(
-        size: &tl::enums::PhotoSize,
-        photo: &tl::types::Photo,
-        client: Client,
-    ) -> Self {
+    pub(crate) fn make_from(size: &tl::enums::PhotoSize, photo: &tl::types::Photo) -> Self {
         match size {
             tl::enums::PhotoSize::Empty(size) => PhotoSize::Empty(SizeEmpty {
                 photo_type: size.r#type.clone(),
@@ -38,7 +32,6 @@ impl PhotoSize {
                 access_hash: photo.access_hash,
                 file_reference: photo.file_reference.clone(),
                 from_document: false,
-                client,
             }),
             tl::enums::PhotoSize::PhotoCachedSize(size) => PhotoSize::Cached(CachedSize {
                 photo_type: size.r#type.clone(),
@@ -66,7 +59,6 @@ impl PhotoSize {
     pub(crate) fn make_from_document(
         size: &tl::enums::PhotoSize,
         document: &tl::types::Document,
-        client: Client,
     ) -> Self {
         match size {
             tl::enums::PhotoSize::Empty(size) => PhotoSize::Empty(SizeEmpty {
@@ -81,7 +73,6 @@ impl PhotoSize {
                 access_hash: document.access_hash,
                 file_reference: document.file_reference.clone(),
                 from_document: true,
-                client,
             }),
             tl::enums::PhotoSize::PhotoCachedSize(size) => PhotoSize::Cached(CachedSize {
                 photo_type: size.r#type.clone(),
@@ -179,8 +170,6 @@ pub struct Size {
     file_reference: Vec<u8>,
 
     from_document: bool,
-
-    client: Client,
 }
 
 impl Size {

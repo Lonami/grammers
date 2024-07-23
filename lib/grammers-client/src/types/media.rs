@@ -187,7 +187,7 @@ impl Photo {
             P::Photo(photo) => photo
                 .sizes
                 .iter()
-                .map(|x| PhotoSize::make_from(x, photo, self.client.clone()))
+                .map(|x| PhotoSize::make_from(x, photo))
                 .collect(),
         }
     }
@@ -320,7 +320,7 @@ impl Document {
             D::Document(document) => match &document.thumbs {
                 Some(thumbs) => thumbs
                     .iter()
-                    .map(|x| PhotoSize::make_from_document(x, document, self.client.clone()))
+                    .map(|x| PhotoSize::make_from_document(x, document))
                     .collect(),
                 None => vec![],
             },
