@@ -342,7 +342,7 @@ pub struct PathSize {
 }
 
 impl PathSize {
-    pub(crate) fn data(&self) -> Vec<u8> {
+    fn data(&self) -> Vec<u8> {
         // Based on https://core.tlgr.org/api/files#vector-thumbnails
         let lookup = "AACAAAAHAAALMAAAQASTAVAAAZaacaaaahaaalmaaaqastava.az0123456789-,";
         let mut path = String::from("M");
