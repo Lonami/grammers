@@ -39,7 +39,7 @@ impl DownloadIter {
             Downloadable::PhotoSize(photo_size)
                 if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
             {
-                Self::new_from_photo_size(client, photo_size.download())
+                Self::new_from_photo_size(client, photo_size.data())
             }
             _ => {
                 Self::new_from_file_location(client, downloadable.to_raw_input_location().unwrap())
@@ -213,7 +213,7 @@ impl Client {
                 Downloadable::PhotoSize(photo_size)
                     if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
                 {
-                    photo_size.download()
+                    photo_size.data()
                 }
                 _ => {
                     return Err(io::Error::new(

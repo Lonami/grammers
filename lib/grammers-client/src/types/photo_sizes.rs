@@ -136,14 +136,14 @@ impl PhotoSize {
         }
     }
 
-    pub(crate) fn download(&self) -> Vec<u8> {
+    pub(crate) fn data(&self) -> Vec<u8> {
         match self {
             PhotoSize::Empty(_) => vec![],
             PhotoSize::Size(_) => vec![],
-            PhotoSize::Cached(size) => size.download(),
-            PhotoSize::Stripped(size) => size.download(),
+            PhotoSize::Cached(size) => size.data(),
+            PhotoSize::Stripped(size) => size.data(),
             PhotoSize::Progressive(_) => vec![],
-            PhotoSize::Path(size) => size.download(),
+            PhotoSize::Path(size) => size.data(),
         }
     }
 
@@ -213,7 +213,7 @@ pub struct CachedSize {
 }
 
 impl CachedSize {
-    fn download(&self) -> Vec<u8> {
+    fn data(&self) -> Vec<u8> {
         self.bytes.clone()
     }
 }
@@ -227,7 +227,7 @@ pub struct StrippedSize {
 }
 
 impl StrippedSize {
-    fn download(&self) -> Vec<u8> {
+    fn data(&self) -> Vec<u8> {
         // Based on https://core.tlgr.org/api/files#stripped-thumbnails
         let bytes = &self.bytes;
         if bytes.len() < 3 || bytes[0] != 0x01 {
@@ -294,7 +294,7 @@ impl StrippedSize {
     }
 }
 
-/// Progressively encoded photosize
+/// Progressively encoded photosize. An additional request to Telegram should be perfomed to download the image
 #[derive(Clone, Debug, PartialEq)]
 pub struct ProgressiveSize {
     photo_type: String,
@@ -342,7 +342,7 @@ pub struct PathSize {
 }
 
 impl PathSize {
-    pub(crate) fn download(&self) -> Vec<u8> {
+    pub(crate) fn data(&self) -> Vec<u8> {
         // Based on https://core.tlgr.org/api/files#vector-thumbnails
         let lookup = "AACAAAAHAAALMAAAQASTAVAAAZaacaaaahaaalmaaaqastava.az0123456789-,";
         let mut path = String::from("M");
