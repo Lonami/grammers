@@ -48,6 +48,10 @@ impl PhotoSize {
                 width: size.w,
                 height: size.h,
                 sizes: size.sizes.clone(),
+                id: photo.id,
+                access_hash: photo.access_hash,
+                file_reference: photo.file_reference.clone(),
+                from_document: false,
             }),
             tl::enums::PhotoSize::PhotoPathSize(size) => PhotoSize::Path(PathSize {
                 photo_type: size.r#type.clone(),
@@ -89,6 +93,10 @@ impl PhotoSize {
                 width: size.w,
                 height: size.h,
                 sizes: size.sizes.clone(),
+                id: document.id,
+                access_hash: document.access_hash,
+                file_reference: document.file_reference.clone(),
+                from_document: true,
             }),
             tl::enums::PhotoSize::PhotoPathSize(size) => PhotoSize::Path(PathSize {
                 photo_type: size.r#type.clone(),
@@ -123,7 +131,7 @@ impl PhotoSize {
             PhotoSize::Empty(_) => None,
             PhotoSize::Cached(_) => None,
             PhotoSize::Stripped(_) => None,
-            PhotoSize::Progressive(_) => None,
+            PhotoSize::Progressive(size) => size.to_raw_input_location(),
             PhotoSize::Path(_) => None,
         }
     }
@@ -294,6 +302,34 @@ pub struct ProgressiveSize {
     pub width: i32,
     pub height: i32,
     pub sizes: Vec<i32>,
+
+    id: i64,
+    access_hash: i64,
+    file_reference: Vec<u8>,
+
+    from_document: bool,
+}
+
+impl ProgressiveSize {
+    pub fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+        let input_location = if !self.from_document {
+            tl::enums::InputFileLocation::from(tl::types::InputPhotoFileLocation {
+                id: self.id,
+                access_hash: self.access_hash,
+                file_reference: self.file_reference.clone(),
+                thumb_size: self.photo_type.clone(),
+            })
+        } else {
+            tl::enums::InputFileLocation::from(tl::types::InputDocumentFileLocation {
+                id: self.id,
+                access_hash: self.access_hash,
+                file_reference: self.file_reference.clone(),
+                thumb_size: self.photo_type.clone(),
+            })
+        };
+
+        Some(input_location)
+    }
 }
 
 /// Messages with animated stickers can have a compressed svg (< 300 bytes) to show the outline

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Downloadable, Media, Uploaded};
+use crate::types::{photo_sizes::PhotoSize, Downloadable, Media, Uploaded};
 use crate::utils::generate_random_id;
 use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
@@ -37,11 +37,9 @@ impl DownloadIter {
     fn new(client: &Client, downloadable: &Downloadable) -> Self {
         match downloadable {
             Downloadable::PhotoSize(photo_size)
-                if !matches!(photo_size, crate::types::photo_sizes::PhotoSize::Size(_)) =>
+                if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
             {
-                match photo_size {
-                    _ => Self::new_from_photo_size(client, photo_size.download()),
-                }
+                Self::new_from_photo_size(client, photo_size.download())
             }
             _ => {
                 Self::new_from_file_location(client, downloadable.to_raw_input_location().unwrap())
@@ -213,11 +211,9 @@ impl Client {
         if downloadable.to_raw_input_location().is_none() {
             let data = match downloadable {
                 Downloadable::PhotoSize(photo_size)
-                    if !matches!(photo_size, crate::types::photo_sizes::PhotoSize::Size(_)) =>
+                    if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
                 {
-                    match photo_size {
-                        _ => photo_size.download(),
-                    }
+                    photo_size.download()
                 }
                 _ => {
                     return Err(io::Error::new(
