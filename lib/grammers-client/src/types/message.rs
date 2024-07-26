@@ -337,10 +337,7 @@ impl Message {
     /// This not only includes photos or videos, but also contacts, polls, documents, locations
     /// and many other types.
     pub fn media(&self) -> Option<types::Media> {
-        self.raw
-            .media
-            .clone()
-            .and_then(|x| Media::from_raw(x, self.client.clone()))
+        self.raw.media.clone().and_then(|x| Media::from_raw(x))
     }
 
     /// If the message has a reply markup (which can happen for messages produced by bots),
