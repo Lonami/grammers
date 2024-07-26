@@ -293,12 +293,8 @@ impl ProfilePhotoIter {
                     iter.request.offset += photos.len() as i32;
                 }
 
-                let client = &iter.client;
-                iter.buffer.extend(
-                    photos
-                        .into_iter()
-                        .map(|x| Photo::from_raw(x, client.clone())),
-                );
+                iter.buffer
+                    .extend(photos.into_iter().map(|x| Photo::from_raw(x)));
 
                 Ok(total)
             }
@@ -325,7 +321,7 @@ impl ProfilePhotoIter {
                         tl::types::MessageActionChatEditPhoto { photo },
                     )) = message.raw_action
                     {
-                        return Ok(Some(Photo::from_raw(photo, message.client.clone())));
+                        return Ok(Some(Photo::from_raw(photo)));
                     } else {
                         continue;
                     }
