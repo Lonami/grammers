@@ -87,7 +87,7 @@ async fn async_main() -> Result {
         };
 
         let update = match update {
-            None | Some(Ok(None)) => break,
+            None => break,
             Some(u) => u?,
         };
 
