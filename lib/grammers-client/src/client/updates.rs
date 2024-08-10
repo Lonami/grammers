@@ -48,12 +48,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next_update(&self) -> Result<Option<Update>, InvocationError> {
+    pub async fn next_update(&self) -> Result<Update, InvocationError> {
         loop {
             let (deadline, get_diff, get_channel_diff) = {
                 let state = &mut *self.0.state.write().unwrap();
                 if let Some(updates) = state.updates.pop_front() {
-                    return Ok(Some(updates));
+                    return Ok(updates);
                 }
                 (
                     state.message_box.check_deadlines(), // first, as it might trigger differences
