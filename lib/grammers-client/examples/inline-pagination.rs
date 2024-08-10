@@ -131,7 +131,9 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    while let Some(update) = client.next_update().await? {
+    loop {
+        let update = client.next_update().await?;
+
         let handle = client.clone();
         task::spawn(async move {
             match handle_update(handle, update).await {

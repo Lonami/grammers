@@ -36,7 +36,8 @@ impl Client {
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::Update;
     ///
-    /// while let Some(update) = client.next_update().await? {
+    /// loop {
+    ///     let update = client.next_update().await?;
     ///     // Echo incoming messages and ignore everything else
     ///     match update {
     ///         Update::NewMessage(mut message) if !message.outgoing() => {
