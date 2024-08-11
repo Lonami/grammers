@@ -15,7 +15,6 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
-use log::warn;
 use std::pin::pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
@@ -27,10 +26,7 @@ const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
 impl Client {
     /// Returns the next update from the buffer where they are queued until used.
     ///
-    /// Similar using an iterator manually, this method will return `Some` until no more updates
-    /// are available (e.g. a graceful disconnection occurred).
-    ///
-    /// # Examples
+    /// # Example
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
@@ -51,10 +47,41 @@ impl Client {
     /// ```
     pub async fn next_update(&self) -> Result<Update, InvocationError> {
         loop {
+            let (update, chats) = self.next_raw_update().await?;
+
+            if let Some(update) = Update::new(&self, update, &chats) {
+                return Ok(update);
+            }
+        }
+    }
+
+    /// Returns the next raw update and associated chat map from the buffer where they are queued until used.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// loop {
+    ///     let (update, chats) = client.next_raw_update().await?;
+    ///
+    ///     // Print all incoming updates in their raw form
+    ///     dbg!(update);
+    /// }
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    ///
+    /// P.S. To receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
+    ///
+    pub async fn next_raw_update(
+        &self,
+    ) -> Result<(tl::enums::Update, Arc<ChatMap>), InvocationError> {
+        loop {
             let (deadline, get_diff, get_channel_diff) = {
                 let state = &mut *self.0.state.write().unwrap();
-                if let Some(updates) = state.updates.pop_front() {
-                    return Ok(updates);
+                if let Some(update) = state.updates.pop_front() {
+                    return Ok(update);
                 }
                 (
                     state.message_box.check_deadlines(), // first, as it might trigger differences
@@ -224,7 +251,7 @@ impl Client {
 
                 updates.truncate(updates.len() - exceeds);
                 if notify {
-                    warn!(
+                    log::warn!(
                         "{} updates were dropped because the update_queue_limit was exceeded",
                         exceeds
                     );
@@ -234,11 +261,9 @@ impl Client {
             }
         }
 
-        state.updates.extend(
-            updates
-                .into_iter()
-                .flat_map(|u| Update::new(self, u, &chat_map)),
-        );
+        state
+            .updates
+            .extend(updates.into_iter().map(|u| (u, chat_map.clone())));
     }
 
     /// Synchronize the updates state to the session.
