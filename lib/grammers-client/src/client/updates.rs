@@ -36,7 +36,8 @@ impl Client {
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::Update;
     ///
-    /// while let Some(update) = client.next_update().await? {
+    /// loop {
+    ///     let update = client.next_update().await?;
     ///     // Echo incoming messages and ignore everything else
     ///     match update {
     ///         Update::NewMessage(mut message) if !message.outgoing() => {
@@ -48,12 +49,12 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next_update(&self) -> Result<Option<Update>, InvocationError> {
+    pub async fn next_update(&self) -> Result<Update, InvocationError> {
         loop {
             let (deadline, get_diff, get_channel_diff) = {
                 let state = &mut *self.0.state.write().unwrap();
                 if let Some(updates) = state.updates.pop_front() {
-                    return Ok(Some(updates));
+                    return Ok(updates);
                 }
                 (
                     state.message_box.check_deadlines(), // first, as it might trigger differences
