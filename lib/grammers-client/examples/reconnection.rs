@@ -52,7 +52,6 @@ async fn async_main() -> Result {
             _ => {}
         }
     }
-    Ok(())
 }
 
 fn main() -> Result {

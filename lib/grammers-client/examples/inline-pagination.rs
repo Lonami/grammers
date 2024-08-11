@@ -131,19 +131,28 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    loop {
-        let update = client.next_update().await?;
+    loop { tokio::select! {
 
-        let handle = client.clone();
-        task::spawn(async move {
-            match handle_update(handle, update).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Error handling updates!: {e}"),
-            }
-        });
-    }
+        // A way to exit the loop
+        _ = tokio::signal::ctrl_c() => {
+            println!("Exiting...");
+            break
+        },
 
-    println!("Saving session file and exiting...");
+        res = client.next_update() => {
+            let update = res?;
+
+            let handle = client.clone();
+            task::spawn(async move {
+                match handle_update(handle, update).await {
+                    Ok(_) => {}
+                    Err(e) => eprintln!("Error handling updates!: {e}"),
+                }
+            });
+        }
+    } }
+
+    println!("Saving session file...");
     client.session().save_to_file(SESSION_FILE)?;
     Ok(())
 }
