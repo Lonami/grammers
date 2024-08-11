@@ -8,6 +8,7 @@
 use grammers_mtproto::{mtp, transport};
 use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender};
 use grammers_session::{ChatHashCache, MessageBox, Session};
+use grammers_tl_types as tl;
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
@@ -136,7 +137,7 @@ pub(crate) struct ClientState {
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     pub(crate) last_update_limit_warn: Option<Instant>,
-    pub(crate) updates: VecDeque<crate::types::Update>,
+    pub(crate) updates: VecDeque<(tl::enums::Update, Arc<crate::types::ChatMap>)>,
 }
 
 pub(crate) struct Connection {
