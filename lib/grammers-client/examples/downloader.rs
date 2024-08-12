@@ -21,6 +21,7 @@ use grammers_client::{Client, Config, SignInError};
 use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
+use tokio::runtime;
 
 use grammers_client::session::Session;
 use grammers_client::types::Media::{Contact, Document, Photo, Sticker};
@@ -30,8 +31,7 @@ type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
 const SESSION_FILE: &str = "downloader.session";
 
-#[tokio::main]
-async fn main() -> Result<()> {
+async fn async_main() -> Result<()> {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Info)
         .init()
@@ -123,6 +123,14 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }
 
 fn get_file_extension(media: &Media) -> String {

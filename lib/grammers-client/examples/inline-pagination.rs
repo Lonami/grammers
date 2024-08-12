@@ -22,11 +22,13 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
+use futures_util::future::{select, Either};
 use grammers_client::session::Session;
 use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
 use simple_logger::SimpleLogger;
 use std::env;
-use tokio::task;
+use std::pin::pin;
+use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -103,8 +105,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
     Ok(())
 }
 
-#[tokio::main]
-async fn main() -> Result {
+async fn async_main() -> Result {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
@@ -133,28 +134,34 @@ async fn main() -> Result {
 
     println!("Waiting for messages...");
     loop {
-        tokio::select! {
+        let exit = pin!(async { tokio::signal::ctrl_c().await });
+        let upd = pin!(async { client.next_update().await });
 
-            // A way to exit the loop
-            _ = tokio::signal::ctrl_c() => {
+        let update = match select(exit, upd).await {
+            Either::Left(_) => {
                 println!("Exiting...");
-                break
-            },
-
-            res = client.next_update() => {
-                let update = res?;
-
-                let handle = client.clone();
-                task::spawn(async move {
-                    handle_update(handle, update).await.unwrap_or_else(|e| {
-                        eprintln!("Error handling updates!: {e}")
-                    });
-                });
+                break;
             }
-        }
+            Either::Right((u, _)) => u?,
+        };
+
+        let handle = client.clone();
+        task::spawn(async move {
+            if let Err(e) = handle_update(handle, update).await {
+                eprintln!("Error handling updates!: {e}")
+            }
+        });
     }
 
     println!("Saving session file...");
     client.session().save_to_file(SESSION_FILE)?;
     Ok(())
+}
+
+fn main() -> Result {
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }

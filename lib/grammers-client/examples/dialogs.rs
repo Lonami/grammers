@@ -15,6 +15,7 @@ use grammers_client::{Client, Config, SignInError};
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
+use tokio::runtime;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -34,8 +35,7 @@ fn prompt(message: &str) -> Result<String> {
     Ok(line)
 }
 
-#[tokio::main]
-async fn main() -> Result<()> {
+async fn async_main() -> Result<()> {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
@@ -102,4 +102,12 @@ async fn main() -> Result<()> {
     }
 
     Ok(())
+}
+
+fn main() -> Result<()> {
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }

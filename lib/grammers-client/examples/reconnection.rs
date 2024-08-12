@@ -4,6 +4,7 @@ use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, ReconnectionPolicy};
 use std::ops::ControlFlow;
 use std::time::Duration;
+use tokio::runtime;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -25,8 +26,7 @@ impl ReconnectionPolicy for MyPolicy {
     }
 }
 
-#[tokio::main]
-async fn main() -> Result {
+async fn async_main() -> Result {
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
         session: Session::load_file_or_create("ping.session")?,
@@ -52,4 +52,12 @@ async fn main() -> Result {
             _ => {}
         }
     }
+}
+
+fn main() -> Result {
+    runtime::Builder::new_current_thread()
+        .enable_all()
+        .build()
+        .unwrap()
+        .block_on(async_main())
 }
