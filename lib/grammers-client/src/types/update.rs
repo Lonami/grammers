@@ -88,7 +88,7 @@ impl Update {
 
             // InlineSend
             tl::enums::Update::BotInlineSend(query) => {
-                Some(Self::InlineSend(InlineSend::from_raw(query, chats)))
+                Some(Self::InlineSend(InlineSend::from_raw(query, client, chats)))
             }
 
             // Raw

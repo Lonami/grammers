@@ -168,7 +168,7 @@ impl Client {
                 entities,
                 no_webpage: !message.link_preview,
                 reply_markup: message.reply_markup,
-                invert_media: false,
+                invert_media: message.invert_media,
             })
             .await?;
         Ok(result)

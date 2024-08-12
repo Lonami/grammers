@@ -7,22 +7,28 @@
 // except according to those terms.
 
 use crate::types::{Chat, User};
-use crate::ChatMap;
+use crate::{ChatMap, Client, InputMessage};
+use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use grammers_tl_types::enums::InputBotInlineMessageId;
 use std::fmt;
 use std::sync::Arc;
 
 #[derive(Clone)]
 pub struct InlineSend {
     raw: tl::types::UpdateBotInlineSend,
+    client: Client,
     chats: Arc<ChatMap>,
 }
 
 impl InlineSend {
-    pub fn from_raw(query: tl::types::UpdateBotInlineSend, chats: &Arc<ChatMap>) -> Self {
+    pub fn from_raw(
+        query: tl::types::UpdateBotInlineSend,
+        client: &Client,
+        chats: &Arc<ChatMap>,
+    ) -> Self {
         Self {
             raw: query,
+            client: client.clone(),
             chats: chats.clone(),
         }
     }
@@ -54,13 +60,30 @@ impl InlineSend {
         self.raw.id.as_str()
     }
 
-    // TODO: maybe custom InputBotInlineMessage and edit method
-
     /// Identifier of sent inline message.
     /// Available only if there is an inline keyboard attached.
     /// Will be also received in callback queries and can be used to edit the message.
-    pub fn msg_id(&self) -> Option<InputBotInlineMessageId> {
+    pub fn msg_id(&self) -> Option<tl::enums::InputBotInlineMessageId> {
         self.raw.msg_id.clone()
+    }
+
+    /// Edits this inline message.
+    ///
+    /// **This method will return Ok(None) if message id is None (e.g. if an inline keyboard is not attached)**
+    pub async fn edit_msg(
+        &self,
+        input_message: impl Into<InputMessage>,
+    ) -> Result<Some<bool>, InvocationError> {
+        let msg_id = match self.raw.msg_id.clone() {
+            None => return Ok(None),
+            Some(msg_id) => msg_id,
+        };
+
+        Ok(Some(
+            self.client
+                .edit_inline_message(msg_id, input_message)
+                .await?,
+        ))
     }
 }
 
