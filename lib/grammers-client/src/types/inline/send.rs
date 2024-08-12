@@ -73,7 +73,7 @@ impl InlineSend {
     pub async fn edit_msg(
         &self,
         input_message: impl Into<InputMessage>,
-    ) -> Result<Some<bool>, InvocationError> {
+    ) -> Result<Option<bool>, InvocationError> {
         let msg_id = match self.raw.msg_id.clone() {
             None => return Ok(None),
             Some(msg_id) => msg_id,

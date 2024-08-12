@@ -161,15 +161,15 @@ impl Client {
         let message: InputMessage = input_message.into();
         let entities = parse_mention_entities(self, message.entities);
         let result = self
-            .invoke(&tl::functions::messages::EditInlineBotMessage {
-                id: message_id,
+            .invoke_in_dc(&tl::functions::messages::EditInlineBotMessage {
+                id: message_id.clone(),
                 message: Some(message.text),
                 media: message.media,
                 entities,
                 no_webpage: !message.link_preview,
                 reply_markup: message.reply_markup,
                 invert_media: message.invert_media,
-            })
+            }, message_id.dc_id())
             .await?;
         Ok(result)
     }
