@@ -5,7 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Chat, ChatMap, User};
+
+use super::super::{Chat, ChatMap, User};
 use crate::{client::Client, utils::generate_random_id, InputMessage};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -52,7 +53,7 @@ impl InlineQuery {
         }
     }
 
-    // User that sent the query.
+    ///	User that sent the query
     pub fn sender(&self) -> &User {
         match self
             .chats
@@ -69,12 +70,12 @@ impl InlineQuery {
         }
     }
 
-    // The text of the inline query.
+    /// The text of the inline query.
     pub fn text(&self) -> &str {
         self.raw.query.as_str()
     }
 
-    // The offset of the inline query.
+    /// The offset of the inline query.
     pub fn offset(&self) -> &str {
         self.raw.offset.as_str()
     }
@@ -95,6 +96,16 @@ impl InlineQuery {
             },
             client: self.client.clone(),
         }
+    }
+
+    /// Type of the chat from which the inline query was sent.
+    pub fn peer_type(&self) -> Option<tl::enums::InlineQueryPeerType> {
+        self.raw.peer_type.clone()
+    }
+
+    /// Query ID
+    pub fn query_id(&self) -> i64 {
+        self.raw.query_id
     }
 }
 
@@ -232,7 +243,9 @@ impl fmt::Debug for InlineQuery {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         f.debug_struct("InlineQuery")
             .field("text", &self.text())
+            .field("peer_type", &self.peer_type())
             .field("sender", &self.sender())
+            .field("query_id", &self.query_id())
             .finish()
     }
 }

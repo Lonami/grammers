@@ -59,7 +59,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
                     tl::types::MessageEntityMentionName {
                         offset,
                         length,
-                        user_id: user_id,
+                        user_id,
                     }
                     .into(),
                 );

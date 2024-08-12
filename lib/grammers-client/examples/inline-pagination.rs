@@ -26,7 +26,7 @@ use grammers_client::session::Session;
 use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
 use simple_logger::SimpleLogger;
 use std::env;
-use tokio::{runtime, task};
+use tokio::task;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -103,7 +103,8 @@ async fn handle_update(_client: Client, update: Update) -> Result {
     Ok(())
 }
 
-async fn async_main() -> Result {
+#[tokio::main]
+async fn main() -> Result {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
@@ -145,10 +146,9 @@ async fn async_main() -> Result {
 
                 let handle = client.clone();
                 task::spawn(async move {
-                    match handle_update(handle, update).await {
-                        Ok(_) => {}
-                        Err(e) => eprintln!("Error handling updates!: {e}"),
-                    }
+                    handle_update(handle, update).await.unwrap_or_else(|e| {
+                        eprintln!("Error handling updates!: {e}")
+                    });
                 });
             }
         }
@@ -157,12 +157,4 @@ async fn async_main() -> Result {
     println!("Saving session file...");
     client.session().save_to_file(SESSION_FILE)?;
     Ok(())
-}
-
-fn main() -> Result {
-    runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async_main())
 }

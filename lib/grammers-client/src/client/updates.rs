@@ -10,12 +10,10 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
-use futures_util::future::{select, Either};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
-use std::pin::pin;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
 use tokio::time::sleep_until;
@@ -72,7 +70,7 @@ impl Client {
     ///
     /// ```
     ///
-    /// P.S. To receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
+    /// P.S. If you don't receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
     ///
     pub async fn next_raw_update(
         &self,
@@ -181,18 +179,9 @@ impl Client {
                 continue;
             }
 
-            let step = {
-                let sleep = pin!(async { sleep_until(deadline.into()).await });
-                let step = pin!(async { self.step().await });
-
-                match select(sleep, step).await {
-                    Either::Left(_) => None,
-                    Either::Right((step, _)) => Some(step),
-                }
-            };
-
-            if let Some(step) = step {
-                step?;
+            tokio::select! {
+                _ = sleep_until(deadline.into()) => (),
+                step = self.step() => step?
             }
         }
     }

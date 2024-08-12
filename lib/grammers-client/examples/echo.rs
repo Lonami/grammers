@@ -10,13 +10,11 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use futures_util::future::{select, Either};
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, Update};
 use simple_logger::SimpleLogger;
 use std::env;
-use std::pin::pin;
-use tokio::{runtime, task};
+use tokio::task;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -35,7 +33,8 @@ async fn handle_update(client: Client, update: Update) -> Result {
     Ok(())
 }
 
-async fn async_main() -> Result {
+#[tokio::main]
+async fn main() -> Result {
     SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init()
@@ -68,30 +67,18 @@ async fn async_main() -> Result {
 
     println!("Waiting for messages...");
 
-    // This code uses `select` on Ctrl+C to gracefully stop the client and have a chance to
+    // This code uses `tokio::select!` on Ctrl+C to gracefully stop the client and have a chance to
     // save the session. You could have fancier logic to save the session if you wanted to
     // (or even save it on every update). Or you could also ignore Ctrl+C and just use
     // `let update = client.next_update().await?`.
-    //
-    // Using `tokio::select!` would be a lot cleaner but add a heavy dependency,
-    // so a manual `select` is used instead by pinning async blocks by hand.
     loop {
-        let update = {
-            let exit = pin!(async { tokio::signal::ctrl_c().await });
-            let upd = pin!(async { client.next_update().await });
-
-            match select(exit, upd).await {
-                Either::Left(_) => None,
-                Either::Right((u, _)) => Some(u),
-            }
-        };
-
-        let update = match update {
-            None => break,
-            Some(u) => u?,
+        let update = tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            upd = client.next_update() => upd?
         };
 
         let handle = client.clone();
+
         task::spawn(async move {
             match handle_update(handle, update).await {
                 Ok(_) => {}
@@ -103,12 +90,4 @@ async fn async_main() -> Result {
     println!("Saving session file and exiting...");
     client.session().save_to_file(SESSION_FILE)?;
     Ok(())
-}
-
-fn main() -> Result {
-    runtime::Builder::new_current_thread()
-        .enable_all()
-        .build()
-        .unwrap()
-        .block_on(async_main())
 }

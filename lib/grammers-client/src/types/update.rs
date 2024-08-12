@@ -5,12 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
 use std::sync::Arc;
 
-use grammers_tl_types as tl;
-
-use super::{CallbackQuery, ChatMap, InlineQuery, Message};
+use super::{inline::send::InlineSend, CallbackQuery, ChatMap, InlineQuery, Message};
 use crate::{types::MessageDeletion, Client};
+use grammers_tl_types as tl;
 
 #[non_exhaustive]
 #[derive(Debug, Clone)]
@@ -27,6 +27,8 @@ pub enum Update {
     /// Occurs whenever you sign in as a bot and a user sends an inline query
     /// such as `@bot query`.
     InlineQuery(InlineQuery),
+    /// Occurs whenever you sign in as a bot and a user chooses result from an inline query answer.
+    InlineSend(InlineSend),
     /// Raw events are not actual events.
     /// Instead, they are the raw Update object that Telegram sends. You
     /// normally shouldn’t need these.
@@ -83,6 +85,11 @@ impl Update {
             tl::enums::Update::BotInlineQuery(query) => Some(Self::InlineQuery(
                 InlineQuery::from_raw(client, query, chats),
             )),
+
+            // InlineSend
+            tl::enums::Update::BotInlineSend(query) => {
+                Some(Self::InlineSend(InlineSend::from_raw(query, chats)))
+            }
 
             // Raw
             update => Some(Self::Raw(update)),

@@ -39,14 +39,14 @@ pub struct Message {
     // server response contains a lot of chats, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
     // and moves, and saves us from worrying about picking out all the chats we care about.
-    pub(crate) chats: Arc<types::ChatMap>,
+    pub(crate) chats: Arc<ChatMap>,
 }
 
 impl Message {
     pub fn from_raw(
         client: &Client,
         message: tl::enums::Message,
-        chats: &Arc<types::ChatMap>,
+        chats: &Arc<ChatMap>,
     ) -> Option<Self> {
         match message {
             // Don't even bother to expose empty messages to the user, even if they have an ID.
