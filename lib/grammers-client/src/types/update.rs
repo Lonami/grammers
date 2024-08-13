@@ -8,7 +8,7 @@
 
 use std::sync::Arc;
 
-use super::{inline::send::InlineSend, CallbackQuery, ChatMap, InlineQuery, Message};
+use super::{CallbackQuery, ChatMap, InlineQuery, InlineSend, Message};
 use crate::{types::MessageDeletion, Client};
 use grammers_tl_types as tl;
 
@@ -27,7 +27,7 @@ pub enum Update {
     /// Occurs whenever you sign in as a bot and a user sends an inline query
     /// such as `@bot query`.
     InlineQuery(InlineQuery),
-    /// Occurs whenever you sign in as a bot and a user chooses result from an inline query answer.
+    /// Represents an update of user choosing the result of inline query and sending it to their chat partner.
     InlineSend(InlineSend),
     /// Raw events are not actual events.
     /// Instead, they are the raw Update object that Telegram sends. You
@@ -40,11 +40,8 @@ pub enum Update {
 }
 
 impl Update {
-    pub(crate) fn new(
-        client: &Client,
-        update: tl::enums::Update,
-        chats: &Arc<ChatMap>,
-    ) -> Option<Self> {
+    /// Create new friendly to use Update from its raw version and chat map
+    pub fn new(client: &Client, update: tl::enums::Update, chats: &Arc<ChatMap>) -> Option<Self> {
         match update {
             // NewMessage
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {

@@ -13,6 +13,7 @@ use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
 
+/// Represents an update of user choosing the result of inline query and sending it to their chat partner.
 #[derive(Clone)]
 pub struct InlineSend {
     raw: tl::types::UpdateBotInlineSend,
@@ -63,14 +64,14 @@ impl InlineSend {
     /// Identifier of sent inline message.
     /// Available only if there is an inline keyboard attached.
     /// Will be also received in callback queries and can be used to edit the message.
-    pub fn msg_id(&self) -> Option<tl::enums::InputBotInlineMessageId> {
+    pub fn message_id(&self) -> Option<tl::enums::InputBotInlineMessageId> {
         self.raw.msg_id.clone()
     }
 
     /// Edits this inline message.
     ///
     /// **This method will return Ok(None) if message id is None (e.g. if an inline keyboard is not attached)**
-    pub async fn edit_msg(
+    pub async fn edit_message(
         &self,
         input_message: impl Into<InputMessage>,
     ) -> Result<Option<bool>, InvocationError> {
@@ -93,7 +94,7 @@ impl fmt::Debug for InlineSend {
             .field("text", &self.text())
             .field("sender", &self.sender())
             .field("result_id", &self.result_id())
-            .field("msg_id", &self.msg_id())
+            .field("message_id", &self.message_id())
             .finish()
     }
 }

@@ -7,6 +7,7 @@
 // except according to those terms.
 #[cfg(any(feature = "markdown", feature = "html"))]
 use crate::parsers;
+use crate::types::reactions::InputReactions;
 use crate::types::{Downloadable, InputMessage, Media, Photo};
 use crate::utils;
 use crate::ChatMap;
@@ -123,7 +124,7 @@ impl Message {
                 edit_hide: false,
                 pinned: false,
                 noforwards: false, // TODO true if channel has noforwads?
-                invert_media: false,
+                invert_media: input.invert_media,
                 id: updates.id,
                 from_id: None, // TODO self
                 from_boosts_applied: None,
@@ -375,6 +376,39 @@ impl Message {
                 Some(replies.replies)
             }
         }
+    }
+
+    /// React to this message.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// message.react("👍").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Make animation big & Add to recent
+    ///
+    /// ```
+    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::types::InputReactions;
+    ///
+    /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
+    ///
+    /// message.react(reactions).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn react<R: Into<InputReactions>>(
+        &self,
+        reactions: R,
+    ) -> Result<(), InvocationError> {
+        self.client
+            .send_reaction(self.chat(), self.id(), reactions)
+            .await?;
+        Ok(())
     }
 
     /// How many reactions does this message have, when applicable.
