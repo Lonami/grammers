@@ -7,15 +7,16 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
-use crate::types::{IterBuffer, Message};
+use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ChatMap, Client};
 use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
-use grammers_tl_types::enums::InputPeer;
 use std::collections::HashMap;
+use tl::enums::InputPeer;
+use tl::functions::messages::SendReaction;
 
 fn get_message_id(message: &tl::enums::Message) -> i32 {
     match message {
@@ -1022,6 +1023,54 @@ impl Client {
             top_msg_id: None,
         })
         .await?;
+        Ok(())
+    }
+
+    /// Send reaction.
+    ///
+    /// # Examples
+    ///
+    /// Via emoticon
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let message_id = 123;
+    ///
+    /// client.send_reaction(&chat, message_id, "👍").await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// Make animation big & Add to recent
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::types::InputReactions;
+    ///
+    /// let message_id = 123;
+    /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
+    ///
+    /// client.send_reaction(&chat, message_id, reactions).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn send_reaction<C: Into<PackedChat>, R: Into<InputReactions>>(
+        &self,
+        chat: C,
+        message_id: i32,
+        reactions: R,
+    ) -> Result<(), InvocationError> {
+        let reactions = reactions.into();
+
+        self.invoke(&SendReaction {
+            big: reactions.big,
+            add_to_recent: reactions.add_to_recent,
+            peer: chat.into().to_input_peer(),
+            msg_id: message_id,
+            reaction: Some(reactions.reactions),
+        })
+        .await?;
+
         Ok(())
     }
 }
