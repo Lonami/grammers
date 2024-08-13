@@ -125,7 +125,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                                 tl::types::MessageEntityMentionName {
                                     offset,
                                     length,
-                                    user_id: user_id,
+                                    user_id,
                                 }
                                 .into(),
                             );
@@ -134,7 +134,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                                 tl::types::MessageEntityTextUrl {
                                     offset,
                                     length,
-                                    url: url,
+                                    url,
                                 }
                                 .into(),
                             );

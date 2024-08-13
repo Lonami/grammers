@@ -72,7 +72,7 @@ impl Client {
     ///
     /// ```
     ///
-    /// P.S. To receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
+    /// P.S. If you don't receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
     ///
     pub async fn next_raw_update(
         &self,
@@ -181,18 +181,12 @@ impl Client {
                 continue;
             }
 
-            let step = {
-                let sleep = pin!(async { sleep_until(deadline.into()).await });
-                let step = pin!(async { self.step().await });
+            let sleep = pin!(async { sleep_until(deadline.into()).await });
+            let step = pin!(async { self.step().await });
 
-                match select(sleep, step).await {
-                    Either::Left(_) => None,
-                    Either::Right((step, _)) => Some(step),
-                }
-            };
-
-            if let Some(step) = step {
-                step?;
+            match select(sleep, step).await {
+                Either::Left(_) => {}
+                Either::Right((step, _)) => step?,
             }
         }
     }

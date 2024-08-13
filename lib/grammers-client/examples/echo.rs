@@ -71,24 +71,17 @@ async fn async_main() -> Result {
     // This code uses `select` on Ctrl+C to gracefully stop the client and have a chance to
     // save the session. You could have fancier logic to save the session if you wanted to
     // (or even save it on every update). Or you could also ignore Ctrl+C and just use
-    // `let update = client.next_update().await?`.
+    // `while let Some(updates) =  client.next_updates().await?`.
     //
     // Using `tokio::select!` would be a lot cleaner but add a heavy dependency,
     // so a manual `select` is used instead by pinning async blocks by hand.
     loop {
-        let update = {
-            let exit = pin!(async { tokio::signal::ctrl_c().await });
-            let upd = pin!(async { client.next_update().await });
+        let exit = pin!(async { tokio::signal::ctrl_c().await });
+        let upd = pin!(async { client.next_update().await });
 
-            match select(exit, upd).await {
-                Either::Left(_) => None,
-                Either::Right((u, _)) => Some(u),
-            }
-        };
-
-        let update = match update {
-            None => break,
-            Some(u) => u?,
+        let update = match select(exit, upd).await {
+            Either::Left(_) => break,
+            Either::Right((u, _)) => u?,
         };
 
         let handle = client.clone();

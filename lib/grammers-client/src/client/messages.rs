@@ -505,7 +505,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
-                invert_media: false,
+                invert_media: message.invert_media,
                 quick_reply_shortcut: None,
                 effect: None,
             })
@@ -536,7 +536,7 @@ impl Client {
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
-                invert_media: false,
+                invert_media: message.invert_media,
                 quick_reply_shortcut: None,
                 effect: None,
             })
@@ -583,7 +583,7 @@ impl Client {
         let entities = parse_mention_entities(self, new_message.entities);
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
-            invert_media: false,
+            invert_media: new_message.invert_media,
             peer: chat.into().to_input_peer(),
             id: message_id,
             message: Some(new_message.text),

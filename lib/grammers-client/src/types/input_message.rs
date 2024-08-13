@@ -19,6 +19,7 @@ pub struct InputMessage {
     pub(crate) background: bool,
     pub(crate) clear_draft: bool,
     pub(crate) entities: Vec<tl::enums::MessageEntity>,
+    pub(crate) invert_media: bool,
     pub(crate) link_preview: bool,
     pub(crate) reply_markup: Option<tl::enums::ReplyMarkup>,
     pub(crate) reply_to: Option<i32>,
@@ -48,6 +49,14 @@ impl InputMessage {
     /// The formatting entities within the message (such as bold, italics, etc.).
     pub fn fmt_entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
         self.entities = entities;
+        self
+    }
+
+    /// Whether the media will be inverted.
+    ///
+    /// If inverted, photos, videos, and documents will appear at the bottom and link previews at the top of the message.
+    pub fn invert_media(mut self, invert_media: bool) -> Self {
+        self.invert_media = invert_media;
         self
     }
 

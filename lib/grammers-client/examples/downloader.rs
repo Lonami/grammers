@@ -25,7 +25,7 @@ use tokio::runtime;
 
 use grammers_client::session::Session;
 use grammers_client::types::Media::{Contact, Document, Photo, Sticker};
-use grammers_client::types::*;
+use grammers_client::types::{Downloadable, Media};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
