@@ -739,7 +739,14 @@ impl MessageBox {
         chat_hashes: &mut ChatHashCache,
     ) -> defs::UpdateAndPeers {
         self.map.get_mut(&Entry::AccountWide).unwrap().pts = state.pts;
-        self.map.get_mut(&Entry::SecretChats).unwrap().pts = state.qts;
+        self.map
+            .entry(Entry::SecretChats)
+            // AccountWide affects SecretChats, but this may not have been initialized yet (#258)
+            .or_insert_with(|| State {
+                pts: NO_PTS,
+                deadline: next_updates_deadline(),
+            })
+            .pts = state.qts;
         self.date = state.date;
         self.seq = state.seq;
 
