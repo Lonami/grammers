@@ -68,6 +68,7 @@ impl Channel {
                             stories_hidden: false,
                             stories_hidden_min: false,
                             stories_unavailable: true,
+                            signature_profiles: false,
                             join_to_send: false,
                             id: channel.id,
                             access_hash: Some(channel.access_hash),
@@ -86,6 +87,7 @@ impl Channel {
                             profile_color: None,
                             emoji_status: None,
                             level: None,
+                            subscription_until_date: None,
                         },
                     }
                 } else {

@@ -726,6 +726,7 @@ impl Uploaded {
         match &self.raw {
             tl::enums::InputFile::File(f) => f.name.as_ref(),
             tl::enums::InputFile::Big(f) => f.name.as_ref(),
+            tl::enums::InputFile::StoryDocument(_) => "",
         }
     }
 }

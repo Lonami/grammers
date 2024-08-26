@@ -579,6 +579,8 @@ impl ChatHashCache {
                         MA::GiveawayLaunch => true,
                         MA::GiveawayResults(_) => true,
                         MA::BoostApply(_) => true,
+                        MA::PaymentRefunded(c) => self.has_peer(&c.peer),
+                        MA::GiftStars(_) => true,
                     }
             }
         }
