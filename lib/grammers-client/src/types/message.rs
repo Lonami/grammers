@@ -401,12 +401,23 @@ impl Message {
     /// # Ok(())
     /// # }
     /// ```
+    ///
+    /// Remove reactions
+    ///
+    /// ```
+    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::types::InputReactions;
+    ///
+    /// message.react(InputReactions::remove()).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn react<R: Into<InputReactions>>(
         &self,
         reactions: R,
     ) -> Result<(), InvocationError> {
         self.client
-            .send_reaction(self.chat(), self.id(), reactions)
+            .send_reactions(self.chat(), self.id(), reactions)
             .await?;
         Ok(())
     }
