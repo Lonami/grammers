@@ -16,15 +16,6 @@ use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 use tl::enums::InputPeer;
-use tl::functions::messages::SendReaction;
-
-fn get_message_id(message: &tl::enums::Message) -> i32 {
-    match message {
-        tl::enums::Message::Empty(m) => m.id,
-        tl::enums::Message::Message(m) => m.id,
-        tl::enums::Message::Service(m) => m.id,
-    }
-}
 
 fn map_random_ids_to_messages(
     client: &Client,
@@ -151,12 +142,12 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
                 // If the highest fetched message ID is lower than or equal to the limit,
                 // there can't be more messages after (highest ID - limit), because the
                 // absolute lowest message ID is 1.
-                self.last_chunk = m.messages.is_empty() || get_message_id(&m.messages[0]) <= limit;
+                self.last_chunk = m.messages.is_empty() || m.messages[0].id() <= limit;
                 self.total = Some(m.count as usize);
                 (m.messages, m.users, m.chats, m.next_rate)
             }
             Messages::ChannelMessages(m) => {
-                self.last_chunk = m.messages.is_empty() || get_message_id(&m.messages[0]) <= limit;
+                self.last_chunk = m.messages.is_empty() || m.messages[0].id() <= limit;
                 self.total = Some(m.count as usize);
                 (m.messages, m.users, m.chats, None)
             }
@@ -1036,7 +1027,7 @@ impl Client {
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     ///
-    /// client.send_reaction(&chat, message_id, "👍").await?;
+    /// client.send_reactions(&chat, message_id, "👍").await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -1050,11 +1041,24 @@ impl Client {
     /// let message_id = 123;
     /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
     ///
-    /// client.send_reaction(&chat, message_id, reactions).await?;
+    /// client.send_reactions(&chat, message_id, reactions).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn send_reaction<C: Into<PackedChat>, R: Into<InputReactions>>(
+    ///
+    /// Remove reactions
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::types::InputReactions;
+    ///
+    /// let message_id = 123;
+    ///
+    /// client.send_reactions(&chat, message_id, InputReactions::remove()).await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub async fn send_reactions<C: Into<PackedChat>, R: Into<InputReactions>>(
         &self,
         chat: C,
         message_id: i32,
@@ -1062,7 +1066,7 @@ impl Client {
     ) -> Result<(), InvocationError> {
         let reactions = reactions.into();
 
-        self.invoke(&SendReaction {
+        self.invoke(&tl::functions::messages::SendReaction {
             big: reactions.big,
             add_to_recent: reactions.add_to_recent,
             peer: chat.into().to_input_peer(),

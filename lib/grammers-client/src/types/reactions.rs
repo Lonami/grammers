@@ -51,6 +51,11 @@ impl InputReactions {
             ..Self::default()
         }
     }
+
+    /// Create an empty InputReactions which will remove reactions
+    pub fn remove() -> Self {
+        Self::default()
+    }
 }
 
 impl Default for InputReactions {
@@ -86,6 +91,6 @@ impl From<Vec<Reaction>> for InputReactions {
 
 impl Into<Vec<Reaction>> for InputReactions {
     fn into(self) -> Vec<Reaction> {
-        return self.reactions;
+        self.reactions
     }
 }

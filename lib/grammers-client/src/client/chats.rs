@@ -848,6 +848,65 @@ impl Client {
             Some(_) => Ok(None),
         }
     }
+
+    /// Send a message action (such as typing, uploading photo, or viewing an emoji interaction)
+    ///
+    /// # Examples
+    ///
+    /// **Do a one-shot pulse and let it fade away**
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_tl_types::enums::SendMessageAction;
+    ///
+    /// client
+    ///     .action(&chat)
+    ///     .oneshot(SendMessageAction::SendMessageTypingAction)
+    ///     .await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// **Repeat request until the future is done**
+    /// ```
+    /// # use std::time::Duration;
+    ///
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_tl_types as tl;
+    ///
+    /// let heavy_task = async {
+    ///     tokio::time::sleep(Duration::from_secs(10)).await;
+    ///
+    ///     42
+    /// };
+    ///
+    /// tokio::pin!(heavy_task);
+    ///
+    /// let (task_result, _) = client
+    ///     .action(&chat)
+    ///     .repeat(
+    ///         // most clients doesn't actually show progress of an action
+    ///         || tl::types::SendMessageUploadDocumentAction { progress: 0 },
+    ///         heavy_task
+    ///     )
+    ///     .await;
+    ///
+    /// // Note: repeat function does not cancel actions automatically, they will just fade away
+    ///
+    /// assert_eq!(task_result, 42);
+    /// # Ok(())
+    /// # }
+    /// ```
+    ///
+    /// **Cancel any actions**
+    /// ```
+    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.action(&chat).cancel().await?;
+    /// # Ok(())
+    /// # }
+    /// ```
+    pub fn action<C: Into<PackedChat>>(&self, chat: C) -> crate::types::ActionSender {
+        crate::types::ActionSender::new(self, chat)
+    }
 }
 
 #[derive(Debug, Clone)]
