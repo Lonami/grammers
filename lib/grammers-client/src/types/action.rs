@@ -3,17 +3,36 @@ use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::future::Future;
+use std::time::Duration;
 use tl::enums::SendMessageAction;
 
 use crate::Client;
 
+const DEFAULT_REPEAT_DELAY: Duration = Duration::from_secs(4);
+
 pub struct ActionSender {
-    pub(crate) client: Client,
-    pub(crate) chat: PackedChat,
-    pub(crate) topic_id: Option<i32>,
+    client: Client,
+    chat: PackedChat,
+    topic_id: Option<i32>,
+    repeat_delay: Duration,
 }
 
 impl ActionSender {
+    pub fn new<C: Into<PackedChat>>(client: &Client, chat: C) -> Self {
+        Self {
+            client: client.clone(),
+            chat: chat.into(),
+            topic_id: None,
+            repeat_delay: DEFAULT_REPEAT_DELAY,
+        }
+    }
+
+    /// Set custom repeat delay
+    pub fn repeat_delay(mut self, repeat_delay: Duration) -> Self {
+        self.repeat_delay = repeat_delay;
+        self
+    }
+
     /// Set a topic id
     pub fn topic_id(mut self, topic_id: i32) -> Self {
         self.topic_id = Some(topic_id);
@@ -67,7 +86,6 @@ impl ActionSender {
     ///     .repeat(
     ///         // most clients doesn't actually show progress of an action
     ///         || tl::types::SendMessageUploadDocumentAction { progress: 0 },
-    ///         Duration::from_secs(4), // repeat request every 4 seconds,
     ///         heavy_task
     ///     )
     ///     .await;
@@ -78,16 +96,10 @@ impl ActionSender {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn repeat<
-        Action: Into<SendMessageAction>,
-        Func: Fn() -> Action,
-        T,
-        Fut: Future<Output = T> + Unpin,
-    >(
+    pub async fn repeat<A: Into<SendMessageAction>, T>(
         &self,
-        action: Func,
-        repeat_delay: std::time::Duration,
-        mut future: Fut,
+        action: impl Fn() -> A,
+        mut future: impl Future<Output = T> + Unpin,
     ) -> (T, Result<(), InvocationError>) {
         let mut request_result = Ok(());
 
@@ -99,7 +111,7 @@ impl ActionSender {
 
             let action = async {
                 request_result = self.oneshot(action().into()).await;
-                tokio::time::sleep(repeat_delay).await;
+                tokio::time::sleep(self.repeat_delay).await;
             };
 
             tokio::pin!(action);

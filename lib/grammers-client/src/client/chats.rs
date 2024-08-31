@@ -886,7 +886,6 @@ impl Client {
     ///     .repeat(
     ///         // most clients doesn't actually show progress of an action
     ///         || tl::types::SendMessageUploadDocumentAction { progress: 0 },
-    ///         Duration::from_secs(4), // repeat request every 4 seconds,
     ///         heavy_task
     ///     )
     ///     .await;
@@ -906,11 +905,7 @@ impl Client {
     /// # }
     /// ```
     pub fn action<C: Into<PackedChat>>(&self, chat: C) -> crate::types::ActionSender {
-        crate::types::ActionSender {
-            client: self.clone(),
-            chat: chat.into(),
-            topic_id: None,
-        }
+        crate::types::ActionSender::new(self, chat)
     }
 }
 
