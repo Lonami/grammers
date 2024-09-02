@@ -121,6 +121,37 @@ impl Group {
         }
     }
 
+    /// Return collectible usernames of this chat, if any.
+    ///
+    /// The returned usernames do not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of its username, such
+    /// as https://t.me/username.
+    pub fn usernames(&self) -> Vec<&str> {
+        use tl::enums::Chat;
+
+        match &self.raw {
+            Chat::Empty(_) | Chat::Chat(_) | Chat::Forbidden(_) | Chat::ChannelForbidden(_) => {
+                Vec::new()
+            }
+            Chat::Channel(channel) => {
+                channel
+                    .usernames
+                    .as_deref()
+                    .map_or(Vec::new(), |usernames| {
+                        usernames
+                            .iter()
+                            .map(|username| match username {
+                                tl::enums::Username::Username(username) => {
+                                    username.username.as_ref()
+                                }
+                            })
+                            .collect()
+                    })
+            }
+        }
+    }
+
     // Return photo of this group, if any.
     pub fn photo(&self) -> Option<&tl::types::ChatPhoto> {
         match &self.raw {
