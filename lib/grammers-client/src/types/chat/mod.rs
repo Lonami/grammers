@@ -157,6 +157,20 @@ impl Chat {
         }
     }
 
+    /// Return collectible usernames of this chat, if any.
+    ///
+    /// The returned usernames do not contain the "@" prefix.
+    ///
+    /// Outside of the application, people may link to this user with one of its username, such
+    /// as https://t.me/username.
+    pub fn usernames(&self) -> Vec<&str> {
+        match self {
+            Self::User(user) => user.usernames(),
+            Self::Group(group) => group.usernames(),
+            Self::Channel(channel) => channel.usernames(),
+        }
+    }
+
     // If `Self` has `min` `access_hash`, returns a mutable reference to both `min` and `access_hash`.
     //
     // This serves as a way of checking "is it min?" and "update the access hash" both in one.
