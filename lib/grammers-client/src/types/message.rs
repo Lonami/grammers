@@ -9,9 +9,9 @@
 use crate::parsers;
 use crate::types::reactions::InputReactions;
 use crate::types::{Downloadable, InputMessage, Media, Photo};
-use crate::utils;
 use crate::ChatMap;
 use crate::{types, Client};
+use crate::{utils, InputMedia};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
@@ -504,6 +504,17 @@ impl Message {
         self.client.send_message(&self.chat(), message).await
     }
 
+    /// Respond to this message by sending a album in the same chat, but without directly
+    /// replying to it.
+    ///
+    /// Shorthand for `Client::send_album`.
+    pub async fn respond_album(
+        &self,
+        medias: Vec<InputMedia>,
+    ) -> Result<Vec<Self>, InvocationError> {
+        self.client.send_album(&self.chat(), medias).await
+    }
+
     /// Directly reply to this message by sending a new message in the same chat that replies to
     /// it. This methods overrides the `reply_to` on the `InputMessage` to point to `self`.
     ///
@@ -513,6 +524,18 @@ impl Message {
         self.client
             .send_message(&self.chat(), message.reply_to(Some(self.raw.id)))
             .await
+    }
+
+    /// Directly reply to this message by sending a album in the same chat that replies to
+    /// it. This methods overrides the `reply_to` on the first `InputMedia` to point to `self`.
+    ///
+    /// Shorthand for `Client::send_album`.
+    pub async fn reply_album(
+        &self,
+        mut medias: Vec<InputMedia>,
+    ) -> Result<Vec<Self>, InvocationError> {
+        medias.first_mut().unwrap().reply_to = Some(self.raw.id);
+        self.client.send_album(&self.chat(), medias).await
     }
 
     /// Forward this message to another (or the same) chat.
