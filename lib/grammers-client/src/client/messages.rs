@@ -646,11 +646,7 @@ impl Client {
             })
             .await?;
 
-        Ok(map_random_ids_to_messages(
-            self,
-            &random_ids,
-            updates.clone(),
-        ))
+        Ok(map_random_ids_to_messages(self, &random_ids, updates))
     }
 
     /// Edits an existing message.
