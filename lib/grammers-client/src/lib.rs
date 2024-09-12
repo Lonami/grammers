@@ -47,7 +47,7 @@ pub mod types;
 pub(crate) mod utils;
 
 pub use client::{Client, Config, InitParams, SignInError};
-pub use types::{button, reply_markup, ChatMap, InputMessage, Update};
+pub use types::{button, reply_markup, ChatMap, InputMedia, InputMessage, Update};
 
 pub use grammers_mtproto::transport;
 pub use grammers_mtsender::{FixedReconnect, InvocationError, NoReconnect, ReconnectionPolicy};
