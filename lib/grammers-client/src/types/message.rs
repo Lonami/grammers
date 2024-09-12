@@ -511,7 +511,7 @@ impl Message {
     pub async fn respond_album(
         &self,
         medias: Vec<InputMedia>,
-    ) -> Result<Vec<Self>, InvocationError> {
+    ) -> Result<Vec<Option<Self>>, InvocationError> {
         self.client.send_album(&self.chat(), medias).await
     }
 
@@ -533,7 +533,7 @@ impl Message {
     pub async fn reply_album(
         &self,
         mut medias: Vec<InputMedia>,
-    ) -> Result<Vec<Self>, InvocationError> {
+    ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.raw.id);
         self.client.send_album(&self.chat(), medias).await
     }

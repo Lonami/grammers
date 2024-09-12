@@ -573,7 +573,7 @@ impl Client {
         &self,
         chat: C,
         mut medias: Vec<InputMedia>,
-    ) -> Result<Vec<Message>, InvocationError> {
+    ) -> Result<Vec<Option<Message>>, InvocationError> {
         let chat = chat.into();
         let random_ids = generate_random_ids(medias.len());
 
@@ -623,16 +623,16 @@ impl Client {
                 }),
                 schedule_date: None,
                 multi_media: medias
-                    .iter()
+                    .into_iter()
                     .zip(random_ids.iter())
                     .map(|(input_media, random_id)| {
-                        let entities = parse_mention_entities(self, input_media.entities.clone());
-                        let raw_media = input_media.media.clone().unwrap();
+                        let entities = parse_mention_entities(self, input_media.entities);
+                        let raw_media = input_media.media.unwrap();
 
                         tl::enums::InputSingleMedia::Media(tl::types::InputSingleMedia {
                             media: raw_media,
                             random_id: *random_id,
-                            message: input_media.caption.clone(),
+                            message: input_media.caption,
                             entities,
                         })
                     })
@@ -646,17 +646,11 @@ impl Client {
             })
             .await?;
 
-        let mut messages = Vec::with_capacity(medias.len());
-        for random_id in random_ids {
-            messages.push(
-                map_random_ids_to_messages(self, &[random_id], updates.clone())
-                    .pop()
-                    .unwrap()
-                    .unwrap(),
-            )
-        }
-
-        Ok(messages)
+        Ok(map_random_ids_to_messages(
+            self,
+            &random_ids,
+            updates.clone(),
+        ))
     }
 
     /// Edits an existing message.
