@@ -563,7 +563,7 @@ impl Client {
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMedia;
     ///
-    /// client.send_album(&chat, vec![InputMedia::caption("A album").photo_url("https://www.pixelstalk.net/wp-content/uploads/2016/03/Free-cute-animal-wallpaper-HD.jpg")]).await?;
+    /// client.send_album(&chat, vec![InputMedia::caption("A album").photo_url("https://example.com/cat.jpg")]).await?;
     /// # Ok(())
     /// # }
     /// ```
