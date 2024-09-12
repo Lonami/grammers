@@ -30,6 +30,8 @@ impl InputMedia {
     /// The album identifier to which this album should reply to, if any.
     ///
     /// Otherwise, this album will not be a reply to any other.
+    ///
+    /// Only the reply_to from the first media is used.
     pub fn reply_to(mut self, reply_to: Option<i32>) -> Self {
         self.reply_to = reply_to;
         self
