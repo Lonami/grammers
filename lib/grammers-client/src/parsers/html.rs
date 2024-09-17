@@ -14,22 +14,10 @@ use super::common::{
 };
 use crate::update_entity_len;
 use grammers_tl_types as tl;
+use html5ever::local_name as tag;
 use html5ever::tendril::StrTendril;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer,
-};
-
-// We could also convert the atoms we receive into lowercase strings and
-// match against those, but that would defeat the purpose. We do however
-// give the atoms we use better names.
-use html5ever::{
-    ATOM_LOCALNAME__61 as TAG_A, ATOM_LOCALNAME__62 as TAG_B,
-    ATOM_LOCALNAME__62_6C_6F_63_6B_71_75_6F_74_65 as TAG_BLOCKQUOTE,
-    ATOM_LOCALNAME__63_6C_61_73_73 as ATTR_CLASS, ATOM_LOCALNAME__63_6F_64_65 as TAG_CODE,
-    ATOM_LOCALNAME__64_65_6C as TAG_DEL, ATOM_LOCALNAME__64_65_74_61_69_6C_73 as TAG_DETAILS,
-    ATOM_LOCALNAME__65_6D as TAG_EM, ATOM_LOCALNAME__68_72_65_66 as ATTR_HREF,
-    ATOM_LOCALNAME__69 as TAG_I, ATOM_LOCALNAME__70_72_65 as TAG_PRE, ATOM_LOCALNAME__73 as TAG_S,
-    ATOM_LOCALNAME__73_74_72_6F_6E_67 as TAG_STRONG, ATOM_LOCALNAME__75 as TAG_U,
 };
 
 const CODE_LANG_PREFIX: &str = "language-";
@@ -58,19 +46,19 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     self_closing: _,
                     attrs,
                 }) => match name {
-                    n if n == TAG_B || n == TAG_STRONG => {
+                    n if n == tag!("b") || n == tag!("strong") => {
                         entities.push(tl::types::MessageEntityBold { offset, length }.into());
                     }
-                    n if n == TAG_I || n == TAG_EM => {
+                    n if n == tag!("i") || n == tag!("em") => {
                         entities.push(tl::types::MessageEntityItalic { offset, length }.into());
                     }
-                    n if n == TAG_S || n == TAG_DEL => {
+                    n if n == tag!("s") || n == tag!("del") => {
                         entities.push(tl::types::MessageEntityStrike { offset, length }.into());
                     }
-                    TAG_U => {
+                    tag!("u") => {
                         entities.push(tl::types::MessageEntityUnderline { offset, length }.into());
                     }
-                    TAG_BLOCKQUOTE => {
+                    tag!("blockquote") => {
                         entities.push(
                             tl::types::MessageEntityBlockquote {
                                 offset,
@@ -80,10 +68,10 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             .into(),
                         );
                     }
-                    TAG_DETAILS => {
+                    tag!("details") => {
                         entities.push(tl::types::MessageEntitySpoiler { offset, length }.into());
                     }
-                    TAG_CODE => {
+                    tag!("code") => {
                         match entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't add `<code>`;
                             // we most likely want to indicate `class="language-foo"`.
@@ -91,7 +79,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                                 e.language = attrs
                                     .into_iter()
                                     .find(|a| {
-                                        a.name.local == ATTR_CLASS
+                                        a.name.local == tag!("class")
                                             && a.value.starts_with(CODE_LANG_PREFIX)
                                     })
                                     .map(|a| a.value[CODE_LANG_PREFIX.len()..].to_string())
@@ -103,7 +91,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             }
                         }
                     }
-                    TAG_PRE => {
+                    tag!("pre") => {
                         entities.push(
                             tl::types::MessageEntityPre {
                                 offset,
@@ -113,10 +101,10 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             .into(),
                         );
                     }
-                    TAG_A => {
+                    tag!("a") => {
                         let url = attrs
                             .into_iter()
-                            .find(|a| a.name.local == ATTR_HREF)
+                            .find(|a| a.name.local == tag!("href"))
                             .map(|a| a.value.to_string())
                             .unwrap_or_else(|| "".to_string());
 
@@ -149,25 +137,25 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     self_closing: _,
                     attrs: _,
                 }) => match name {
-                    n if n == TAG_B || n == TAG_STRONG => {
+                    n if n == tag!("b") || n == tag!("strong") => {
                         update_entity_len!(Bold(offset) in entities);
                     }
-                    n if n == TAG_I || n == TAG_EM => {
+                    n if n == tag!("i") || n == tag!("em") => {
                         update_entity_len!(Italic(offset) in entities);
                     }
-                    n if n == TAG_S || n == TAG_DEL => {
+                    n if n == tag!("s") || n == tag!("del") => {
                         update_entity_len!(Strike(offset) in entities);
                     }
-                    TAG_U => {
+                    tag!("u") => {
                         update_entity_len!(Underline(offset) in entities);
                     }
-                    TAG_BLOCKQUOTE => {
+                    tag!("blockquote") => {
                         update_entity_len!(Blockquote(offset) in entities);
                     }
-                    TAG_DETAILS => {
+                    tag!("details") => {
                         update_entity_len!(Spoiler(offset) in entities);
                     }
-                    TAG_CODE => {
+                    tag!("code") => {
                         match entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't update `<code>` len;
                             // we most likely want to indicate `class="language-foo"`.
@@ -177,10 +165,10 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                             }
                         }
                     }
-                    TAG_PRE => {
+                    tag!("pre") => {
                         update_entity_len!(Pre(offset) in entities);
                     }
-                    TAG_A => {
+                    tag!("a") => {
                         match entities.iter_mut().rev().next() {
                             // If the previous url is a mention, don't close with `</a>`;
                             Some(tl::enums::MessageEntity::MentionName(_)) => {
