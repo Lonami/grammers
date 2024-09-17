@@ -16,11 +16,11 @@ edition = "2021"
 [dependencies]
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0" }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
-log = "0.4.20"
+log = "0.4.22"
 
 [build-dependencies]
 grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.7.0" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.2" }
 
 [dev-dependencies]
-toml = "0.8.8"
+toml = "0.8.19"
