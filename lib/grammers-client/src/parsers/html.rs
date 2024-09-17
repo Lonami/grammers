@@ -7,6 +7,8 @@
 // except according to those terms.
 #![cfg(feature = "html")]
 
+use std::cell::Cell;
+
 use super::common::{
     after, before, inject_into_message, telegram_string_len, Segment, MENTION_URL_PREFIX,
 };
@@ -34,17 +36,21 @@ const CODE_LANG_PREFIX: &str = "language-";
 
 pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntity>) {
     struct Sink {
-        text: String,
-        entities: Vec<tl::enums::MessageEntity>,
-        offset: i32,
+        text: Cell<String>,
+        entities: Cell<Vec<tl::enums::MessageEntity>>,
+        offset: Cell<i32>,
     }
 
     impl TokenSink for Sink {
         type Handle = ();
 
-        fn process_token(&mut self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
-            let offset = self.offset;
+        fn process_token(&self, token: Token, _line_number: u64) -> TokenSinkResult<()> {
+            let mut text = self.text.take();
+            let mut entities = self.entities.take();
+            let mut offset = self.offset.get();
+
             let length = 0;
+
             match token {
                 Token::TagToken(Tag {
                     kind: TagKind::StartTag,
@@ -53,23 +59,19 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     attrs,
                 }) => match name {
                     n if n == TAG_B || n == TAG_STRONG => {
-                        self.entities
-                            .push(tl::types::MessageEntityBold { offset, length }.into());
+                        entities.push(tl::types::MessageEntityBold { offset, length }.into());
                     }
                     n if n == TAG_I || n == TAG_EM => {
-                        self.entities
-                            .push(tl::types::MessageEntityItalic { offset, length }.into());
+                        entities.push(tl::types::MessageEntityItalic { offset, length }.into());
                     }
                     n if n == TAG_S || n == TAG_DEL => {
-                        self.entities
-                            .push(tl::types::MessageEntityStrike { offset, length }.into());
+                        entities.push(tl::types::MessageEntityStrike { offset, length }.into());
                     }
                     TAG_U => {
-                        self.entities
-                            .push(tl::types::MessageEntityUnderline { offset, length }.into());
+                        entities.push(tl::types::MessageEntityUnderline { offset, length }.into());
                     }
                     TAG_BLOCKQUOTE => {
-                        self.entities.push(
+                        entities.push(
                             tl::types::MessageEntityBlockquote {
                                 offset,
                                 length,
@@ -79,11 +81,10 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         );
                     }
                     TAG_DETAILS => {
-                        self.entities
-                            .push(tl::types::MessageEntitySpoiler { offset, length }.into());
+                        entities.push(tl::types::MessageEntitySpoiler { offset, length }.into());
                     }
                     TAG_CODE => {
-                        match self.entities.iter_mut().rev().next() {
+                        match entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't add `<code>`;
                             // we most likely want to indicate `class="language-foo"`.
                             Some(tl::enums::MessageEntity::Pre(e)) if e.length == 0 => {
@@ -97,13 +98,13 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                                     .unwrap_or_else(|| "".to_string());
                             }
                             _ => {
-                                self.entities
+                                entities
                                     .push(tl::types::MessageEntityCode { offset, length }.into());
                             }
                         }
                     }
                     TAG_PRE => {
-                        self.entities.push(
+                        entities.push(
                             tl::types::MessageEntityPre {
                                 offset,
                                 length,
@@ -121,7 +122,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
 
                         if url.starts_with(MENTION_URL_PREFIX) {
                             let user_id = url[MENTION_URL_PREFIX.len()..].parse::<i64>().unwrap();
-                            self.entities.push(
+                            entities.push(
                                 tl::types::MessageEntityMentionName {
                                     offset,
                                     length,
@@ -130,7 +131,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                                 .into(),
                             );
                         } else {
-                            self.entities.push(
+                            entities.push(
                                 tl::types::MessageEntityTextUrl {
                                     offset,
                                     length,
@@ -149,67 +150,72 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                     attrs: _,
                 }) => match name {
                     n if n == TAG_B || n == TAG_STRONG => {
-                        update_entity_len!(Bold(self.offset) in self.entities);
+                        update_entity_len!(Bold(offset) in entities);
                     }
                     n if n == TAG_I || n == TAG_EM => {
-                        update_entity_len!(Italic(self.offset) in self.entities);
+                        update_entity_len!(Italic(offset) in entities);
                     }
                     n if n == TAG_S || n == TAG_DEL => {
-                        update_entity_len!(Strike(self.offset) in self.entities);
+                        update_entity_len!(Strike(offset) in entities);
                     }
                     TAG_U => {
-                        update_entity_len!(Underline(self.offset) in self.entities);
+                        update_entity_len!(Underline(offset) in entities);
                     }
                     TAG_BLOCKQUOTE => {
-                        update_entity_len!(Blockquote(self.offset) in self.entities);
+                        update_entity_len!(Blockquote(offset) in entities);
                     }
                     TAG_DETAILS => {
-                        update_entity_len!(Spoiler(self.offset) in self.entities);
+                        update_entity_len!(Spoiler(offset) in entities);
                     }
                     TAG_CODE => {
-                        match self.entities.iter_mut().rev().next() {
+                        match entities.iter_mut().rev().next() {
                             // If the previous tag is an open `<pre>`, don't update `<code>` len;
                             // we most likely want to indicate `class="language-foo"`.
                             Some(tl::enums::MessageEntity::Pre(e)) if e.length == 0 => {}
                             _ => {
-                                update_entity_len!(Code(self.offset) in self.entities);
+                                update_entity_len!(Code(offset) in entities);
                             }
                         }
                     }
                     TAG_PRE => {
-                        update_entity_len!(Pre(self.offset) in self.entities);
+                        update_entity_len!(Pre(offset) in entities);
                     }
                     TAG_A => {
-                        match self.entities.iter_mut().rev().next() {
+                        match entities.iter_mut().rev().next() {
                             // If the previous url is a mention, don't close with `</a>`;
                             Some(tl::enums::MessageEntity::MentionName(_)) => {
-                                update_entity_len!(MentionName(self.offset) in self.entities);
+                                update_entity_len!(MentionName(offset) in entities);
                             }
                             _ => {
-                                update_entity_len!(TextUrl(self.offset) in self.entities);
+                                update_entity_len!(TextUrl(offset) in entities);
                             }
                         }
                     }
                     _ => {}
                 },
                 Token::CharacterTokens(string) => {
-                    self.text.push_str(&string);
-                    self.offset += telegram_string_len(&string);
+                    text.push_str(&string);
+                    offset += telegram_string_len(&string);
                 }
                 _ => {}
             }
+
+            self.text.replace(text);
+            self.entities.replace(entities);
+            self.offset.replace(offset);
+
             TokenSinkResult::Continue
         }
     }
 
-    let mut input = BufferQueue::new();
+    let mut input = BufferQueue::default();
     input.push_back(StrTendril::from_slice(message).try_reinterpret().unwrap());
 
-    let mut tok = Tokenizer::new(
+    let tok = Tokenizer::new(
         Sink {
-            text: String::with_capacity(message.len()),
-            entities: Vec::new(),
-            offset: 0,
+            text: Cell::new(String::with_capacity(message.len())),
+            entities: Cell::new(Vec::new()),
+            offset: Cell::new(0),
         },
         Default::default(),
     );
@@ -218,7 +224,7 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
 
     let Sink { text, entities, .. } = tok.sink;
 
-    (text, entities)
+    (text.take(), entities.take())
 }
 
 pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity]) -> String {
