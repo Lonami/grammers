@@ -17,7 +17,8 @@
 //! that to users (anyone can login, including yourself and bots, with the developer API ID;
 //! they do *not* need to provide their own API ID).
 //!
-//! Once that's ready, connect a new [`Client`] and start making API calls.
+//! Once that's ready, create a new [`Client`] instance with its [`Client::connect`]
+//! method and start making API calls.
 //!
 //! When a method is said to be "expensive", this often means that calling it too much in a
 //! certain period of time will result in the API returning "flood wait" errors, meaning that
@@ -35,8 +36,10 @@
 //! limitation is applied account-wide, and its duration is undefined. This often means that the
 //! account spammed, or a young account tried to contact too many peers.
 //!
-//! While the `grammers-tl-types` crate is re-exported and a lot of fields using it are public,
-//! this will likely change before 1.0.
+//! The `grammers-tl-types` crate is re-exported and a lot of fields using it are public.
+//! You can use this re-export to [`Client::invoke`] any function supported by Telegram's API.
+//! This is only recommended when there isn't any convenience method on the [`Client`] that
+//! does what you need it to do, as the API is far less friendly and not covered by SemVer.
 //!
 //! [Telegram's API]: https://core.telegram.org/#telegram-api
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
