@@ -583,7 +583,9 @@ impl Client {
 
             if matches!(
                 raw_media,
-                tl::enums::InputMedia::PhotoExternal(_)
+                tl::enums::InputMedia::UploadedPhoto(_)
+                    | tl::enums::InputMedia::PhotoExternal(_)
+                    | tl::enums::InputMedia::UploadedDocument(_)
                     | tl::enums::InputMedia::DocumentExternal(_)
             ) {
                 let uploaded = self
