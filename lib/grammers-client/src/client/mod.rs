@@ -7,6 +7,7 @@
 // except according to those terms.
 pub mod auth;
 pub mod bots;
+pub mod chat_hashes;
 pub mod chats;
 #[allow(clippy::module_inception)]
 pub mod client;
