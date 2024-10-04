@@ -11,8 +11,8 @@ use std::collections::HashMap;
 use std::sync::Arc;
 
 /// Hashable `Peer`.
-#[derive(Hash, PartialEq, Eq)]
-pub(crate) enum Peer {
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
+pub enum Peer {
     User(i64),
     Chat(i64),
     Channel(i64),
@@ -82,5 +82,15 @@ impl ChatMap {
                 Chat::User(user) => user,
                 _ => unreachable!(),
             })
+    }
+
+    /// Iterate over the peers and chats in the map.
+    pub fn iter(&self) -> impl Iterator<Item = (Peer, &Chat)> {
+        self.map.iter().map(|(k, v)| (*k, v))
+    }
+
+    /// Iterate over the chats in the map.
+    pub fn iter_chats(&self) -> impl Iterator<Item = &Chat> {
+        self.map.values()
     }
 }
