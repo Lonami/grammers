@@ -8,6 +8,7 @@
 use grammers_tl_types as tl;
 use std::{convert::TryInto, time::Duration};
 
+#[derive(Clone)]
 pub enum Attribute {
     Audio {
         duration: Duration,

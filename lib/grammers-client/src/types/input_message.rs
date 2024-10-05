@@ -14,7 +14,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7ffffffe;
 
 /// Construct and send rich text messages with various options.
-#[derive(Default)]
+#[derive(Clone, Default)]
 pub struct InputMessage {
     pub(crate) background: bool,
     pub(crate) clear_draft: bool,
