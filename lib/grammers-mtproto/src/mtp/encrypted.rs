@@ -72,7 +72,7 @@ pub struct Encrypted {
     start_salt_time: Option<(i32, Instant)>,
 
     /// Internal request for salts which should not be propagated.
-    salt_request_msg_id: Option<i64>,
+    salt_request_msg_id: Option<MsgId>,
 
     /// The secure, random identifier for this instance.
     client_id: i64,
@@ -239,14 +239,12 @@ impl Encrypted {
             // This would break, because we couldn't identify the response.
             //
             // So salts are only requested once we have a valid salt to reduce the chances of this happening.
-            if self.salts.len() == 1 {
-                info!("only one future salt remaining; asking for more salts");
-            }
+            info!("only one future salt remaining; asking for more salts");
             let body = tl::functions::GetFutureSalts {
                 num: NUM_FUTURE_SALTS,
             }
             .to_bytes();
-            self.serialize_msg(buffer, &body, true);
+            self.salt_request_msg_id = Some(self.serialize_msg(buffer, &body, true));
         }
     }
 
@@ -644,7 +642,7 @@ impl Encrypted {
 
         if self
             .salt_request_msg_id
-            .is_some_and(|msg_id| msg_id == bad_msg.bad_msg_id())
+            .is_some_and(|msg_id| msg_id == MsgId(bad_msg.bad_msg_id()))
         {
             // Response to internal request, do not propagate.
             self.salt_request_msg_id = None;
@@ -881,7 +879,7 @@ impl Encrypted {
 
         if self
             .salt_request_msg_id
-            .is_some_and(|msg_id| msg_id == salts.req_msg_id)
+            .is_some_and(|msg_id| msg_id == MsgId(salts.req_msg_id))
         {
             // Response to internal request, do not propagate.
             self.salt_request_msg_id = None;
@@ -1306,6 +1304,7 @@ impl Mtp for Encrypted {
         self.last_msg_id = 0;
         self.pending_ack.clear();
         self.msg_count = 0;
+        self.salt_request_msg_id = None;
     }
 }
 
