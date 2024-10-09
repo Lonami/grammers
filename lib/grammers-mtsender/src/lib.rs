@@ -572,7 +572,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             .iter_mut()
                             .for_each(|r| r.state = RequestState::NotSerialized);
 
-                        return Ok(Vec::new());
+                        // We'll return a TooLong update to signal to the client
+                        // that it needs to call getDifference and query the server
+                        // for new updates again.
+                        return Ok(vec![tl::enums::Updates::TooLong]);
                     }
                     Err(e) => ReadError::from(e),
                 }
