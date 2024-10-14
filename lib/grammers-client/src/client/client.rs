@@ -55,8 +55,6 @@ pub struct InitParams {
     /// Should the client catch-up on updates sent to it while it was offline?
     ///
     /// By default, updates sent while the client was offline are ignored.
-    // TODO catch up doesn't occur until we get an update that tells us if there was a gap, but
-    // maybe we should forcibly try to get difference even if we didn't miss anything?
     pub catch_up: bool,
     /// Server address to connect to. By default, the library will connect to the address stored
     /// in the session file (or a default production address if no such address exists). This

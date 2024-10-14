@@ -69,6 +69,8 @@ impl MessageBox {
         trace!("created new message box with state: {:?}", state);
         let deadline = next_updates_deadline();
         let mut map = HashMap::with_capacity(2 + state.channels.len());
+        let mut getting_diff_for = HashSet::with_capacity(2 + state.channels.len());
+
         map.insert(
             Entry::AccountWide,
             State {
@@ -76,6 +78,10 @@ impl MessageBox {
                 deadline,
             },
         );
+        if state.pts != NO_PTS {
+            getting_diff_for.insert(Entry::AccountWide);
+        }
+
         map.insert(
             Entry::SecretChats,
             State {
@@ -83,6 +89,10 @@ impl MessageBox {
                 deadline,
             },
         );
+        if state.qts != NO_PTS {
+            getting_diff_for.insert(Entry::SecretChats);
+        }
+
         map.extend(state.channels.iter().map(|ChannelStateEnum::State(c)| {
             (
                 Entry::Channel(c.channel_id),
@@ -92,13 +102,19 @@ impl MessageBox {
                 },
             )
         }));
+        getting_diff_for.extend(
+            state
+                .channels
+                .iter()
+                .map(|ChannelStateEnum::State(c)| (Entry::Channel(c.channel_id))),
+        );
 
         Self {
             map,
             date: state.date,
             seq: state.seq,
             possible_gaps: HashMap::new(),
-            getting_diff_for: HashSet::new(),
+            getting_diff_for,
             next_deadline: Some(Entry::AccountWide),
             tmp_entries: HashSet::new(),
         }
