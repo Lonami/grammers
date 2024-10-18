@@ -28,6 +28,7 @@ fn gen_rust_code(definitions: &[Definition]) -> io::Result<String> {
             impl_debug: true,
             impl_from_enum: true,
             impl_from_type: true,
+            impl_serde: true,
         },
     )?;
     Ok(String::from_utf8(file).unwrap())
