@@ -34,3 +34,7 @@ impl-from-enum = []
 impl-from-type = []
 tl-api = []
 tl-mtproto = []
+
+[dependencies]
+serde = "1.0.210"
+serde_derive = "1.0.210"

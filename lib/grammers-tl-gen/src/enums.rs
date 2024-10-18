@@ -37,6 +37,8 @@ fn write_enum<W: Write>(
         writeln!(file, "{indent}#[derive(Debug)]")?;
     }
 
+    writeln!(file, "{indent}#[derive(serde_derive::Serialize, serde_derive::Deserialize)]")?;
+
     writeln!(file, "{indent}#[derive(Clone, PartialEq)]")?;
     writeln!(
         file,
