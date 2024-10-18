@@ -67,6 +67,8 @@
 //! * `tl-mtproto`: generates code for the `mtproto.tl`.
 //!   Only useful for low-level libraries.
 //!
+//! * `impl-serde`: generates code for serde support
+//! 
 //! [`types`]: types/index.html
 //! [`functions`]: functions/index.html
 //! [`RemoteCall`]: trait.RemoteCall.html
