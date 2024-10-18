@@ -68,7 +68,7 @@
 //!   Only useful for low-level libraries.
 //!
 //! * `impl-serde`: generates code for serde support
-//! 
+//!
 //! [`types`]: types/index.html
 //! [`functions`]: functions/index.html
 //! [`RemoteCall`]: trait.RemoteCall.html
@@ -103,7 +103,7 @@ pub struct RawVec<T>(pub Vec<T>);
 /// the underlying result without any modification or interpretation.
 #[cfg_attr(feature = "impl-serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
-pub struct Blob(pub Vec<u8>);
+pub struct Blob(#[cfg_attr(feature = "impl-serde", serde(with = "serde_bytes"))] pub Vec<u8>);
 
 impl From<Vec<u8>> for Blob {
     fn from(value: Vec<u8>) -> Self {

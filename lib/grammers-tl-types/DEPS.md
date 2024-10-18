@@ -19,3 +19,7 @@ Support serde ecosystem.
 ## serde_derive
 
 Macros that auto generate serde code.
+
+## serde_bytes
+
+Use better bytes encode/decode pattern in serde.
