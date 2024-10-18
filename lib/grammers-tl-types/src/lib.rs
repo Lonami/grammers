@@ -84,17 +84,22 @@ pub use deserialize::{Cursor, Deserializable};
 pub use generated::{enums, functions, name_for_id, types, LAYER};
 pub use serialize::Serializable;
 
+#[cfg(feature = "impl-serde")]
+use serde_derive::{Deserialize, Serialize};
+
 /// This struct represents the concrete type of a vector, that is,
 /// `vector` as opposed to the type `Vector`. This bare type is less
 /// common, so instead of creating a enum for `Vector` wrapping `vector`
 /// as Rust's `Vec` (as we would do with auto-generated code),
 /// a new-type for `vector` is used instead.
+#[cfg_attr(feature = "impl-serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawVec<T>(pub Vec<T>);
 
 /// This struct represents an unparsed blob, which should not be deserialized
 /// as a bytes string. Used by functions returning generic objects which pass
 /// the underlying result without any modification or interpretation.
+#[cfg_attr(feature = "impl-serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct Blob(pub Vec<u8>);
 

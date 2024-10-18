@@ -32,9 +32,10 @@ deserializable-functions = []
 impl-debug = []
 impl-from-enum = []
 impl-from-type = []
+impl-serde = ["dep:serde", "dep:serde_derive"]
 tl-api = []
 tl-mtproto = []
 
 [dependencies]
-serde = "1.0.210"
-serde_derive = "1.0.210"
+serde = { version = "1.0.210", optional = true }
+serde_derive = { version = "1.0.210", optional = true }

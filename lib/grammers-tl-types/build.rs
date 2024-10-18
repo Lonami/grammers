@@ -76,6 +76,7 @@ fn main() -> std::io::Result<()> {
         impl_debug: cfg!(feature = "impl-debug"),
         impl_from_enum: cfg!(feature = "impl-from-enum"),
         impl_from_type: cfg!(feature = "impl-from-type"),
+        impl_serde: cfg!(feature = "impl-serde"),
     };
 
     generate_rust_code(&mut file, &definitions, layer, &config)?;
