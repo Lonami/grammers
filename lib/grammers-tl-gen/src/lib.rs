@@ -26,6 +26,7 @@ pub struct Config {
     pub impl_debug: bool,
     pub impl_from_type: bool,
     pub impl_from_enum: bool,
+    pub impl_serde: bool,
 }
 
 impl Default for Config {
@@ -36,6 +37,7 @@ impl Default for Config {
             impl_debug: true,
             impl_from_type: true,
             impl_from_enum: true,
+            impl_serde: false,
         }
     }
 }

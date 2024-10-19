@@ -28,6 +28,7 @@ fn gen_rust_code(definitions: &[Definition]) -> io::Result<String> {
             impl_debug: true,
             impl_from_enum: true,
             impl_from_type: true,
+            impl_serde: true,
         },
     )?;
     Ok(String::from_utf8(file).unwrap())
@@ -117,5 +118,21 @@ fn recursive_types_vec_indirect_not_boxed() -> io::Result<()> {
     assert!(result.contains("JsonObjectValue(crate::types::JsonObjectValue)"));
     assert!(result.contains("JsonArray(crate::types::JsonArray)"));
     assert!(result.contains("JsonObject(crate::types::JsonObject)"));
+    Ok(())
+}
+
+#[test]
+fn generic_bytes_with_serde_bytes() -> io::Result<()> {
+    let definitions = get_definitions(
+        r#"
+        chatPhotoEmpty#37c1011c = ChatPhoto;
+        chatPhoto#1c6e1c11 flags:# has_video:flags.0?true photo_id:long stripped_thumb:flags.1?bytes dc_id:int = ChatPhoto;
+        "#,
+    );
+
+    let result = gen_rust_code(&definitions)?;
+    eprintln!("{result}");
+    assert!(result.contains(r#"#[serde(with = "serde_bytes")]"#));
+    assert!(result.contains("pub stripped_thumb: Option<Vec<u8>>,"));
     Ok(())
 }

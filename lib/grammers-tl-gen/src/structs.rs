@@ -63,6 +63,13 @@ fn write_struct<W: Write>(
         writeln!(file, "{indent}#[derive(Debug)]")?;
     }
 
+    if config.impl_serde {
+        writeln!(
+            file,
+            "{indent}#[derive(serde_derive::Serialize, serde_derive::Deserialize)]"
+        )?;
+    }
+
     writeln!(file, "{indent}#[derive(Clone, PartialEq)]")?;
     write!(
         file,
@@ -74,11 +81,14 @@ fn write_struct<W: Write>(
 
     writeln!(file)?;
     for param in def.params.iter() {
-        match param.ty {
+        match &param.ty {
             ParameterType::Flags => {
                 // Flags are computed on-the-fly, not stored
             }
-            ParameterType::Normal { .. } => {
+            ParameterType::Normal { ty, .. } => {
+                if config.impl_serde && ty.name.as_str() == "bytes" {
+                    writeln!(file, "{}    #[serde(with = \"serde_bytes\")]", indent)?;
+                }
                 writeln!(
                     file,
                     "{}    pub {}: {},",
