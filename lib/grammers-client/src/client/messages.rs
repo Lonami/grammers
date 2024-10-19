@@ -63,7 +63,20 @@ fn map_random_ids_to_messages(
 
             random_ids
                 .iter()
-                .map(|rnd| rnd_to_id.get(rnd).and_then(|id| id_to_msg.remove(id)))
+                .map(|rnd| {
+                    rnd_to_id
+                        .get(rnd)
+                        .and_then(|id| id_to_msg.remove(id))
+                        .or_else(|| {
+                            if id_to_msg.len() == 1 {
+                                // If there's no random_id to map from, in the common case a single message
+                                // should've been produced regardless, so try to recover by returning that.
+                                id_to_msg.drain().next().map(|(_, m)| m)
+                            } else {
+                                None
+                            }
+                        })
+                })
                 .collect()
         }
         _ => panic!("API returned something other than Updates so messages can't be mapped"),
