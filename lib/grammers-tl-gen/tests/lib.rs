@@ -132,7 +132,7 @@ fn generic_bytes_with_serde_bytes() -> io::Result<()> {
 
     let result = gen_rust_code(&definitions)?;
     eprintln!("{result}");
-    assert!(result.contains(r#"#[serde(with="serde_bytes")]"#));
+    assert!(result.contains(r#"#[serde(with = "serde_bytes")]"#));
     assert!(result.contains("pub stripped_thumb: Option<Vec<u8>>,"));
     Ok(())
 }
