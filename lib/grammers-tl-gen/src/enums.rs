@@ -37,8 +37,11 @@ fn write_enum<W: Write>(
         writeln!(file, "{indent}#[derive(Debug)]")?;
     }
 
-    if config.impl_serde{
-        writeln!(file, "{indent}#[derive(serde_derive::Serialize, serde_derive::Deserialize)]")?;
+    if config.impl_serde {
+        writeln!(
+            file,
+            "{indent}#[derive(serde_derive::Serialize, serde_derive::Deserialize)]"
+        )?;
     }
 
     writeln!(file, "{indent}#[derive(Clone, PartialEq)]")?;
