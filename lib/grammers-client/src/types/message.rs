@@ -22,6 +22,47 @@ use std::path::Path;
 use std::sync::Arc;
 use types::Chat;
 
+pub(crate) const EMPTY_MESSAGE: tl::types::Message = tl::types::Message {
+    out: false,
+    mentioned: false,
+    media_unread: false,
+    silent: false,
+    post: false,
+    from_scheduled: false,
+    legacy: false,
+    edit_hide: false,
+    pinned: false,
+    noforwards: false,
+    invert_media: false,
+    offline: false,
+    id: 0,
+    from_id: None,
+    from_boosts_applied: None,
+    peer_id: tl::enums::Peer::User(tl::types::PeerUser { user_id: 0 }),
+    saved_peer_id: None,
+    fwd_from: None,
+    via_bot_id: None,
+    via_business_bot_id: None,
+    reply_to: None,
+    date: 0,
+    message: String::new(),
+    media: None,
+    reply_markup: None,
+    entities: None,
+    views: None,
+    forwards: None,
+    replies: None,
+    edit_date: None,
+    post_author: None,
+    grouped_id: None,
+    reactions: None,
+    restriction_reason: None,
+    ttl_period: None,
+    quick_reply_shortcut_id: None,
+    effect: None,
+    factcheck: None,
+};
+
 /// Represents a Telegram message, which includes text messages, messages with media, and service
 /// messages.
 ///

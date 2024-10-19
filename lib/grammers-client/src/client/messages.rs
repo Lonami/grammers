@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
+use crate::types::message::EMPTY_MESSAGE;
 use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{types, ChatMap, Client, InputMedia};
@@ -14,6 +15,7 @@ use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
+use log::{log_enabled, warn, Level};
 use std::collections::HashMap;
 use tl::enums::InputPeer;
 
@@ -552,10 +554,27 @@ impl Client {
             tl::enums::Updates::UpdateShortSentMessage(updates) => {
                 Message::from_raw_short_updates(self, updates, message, chat)
             }
-            updates => map_random_ids_to_messages(self, &[random_id], updates)
-                .pop()
-                .unwrap()
-                .unwrap(),
+            updates => {
+                let updates_debug = if log_enabled!(Level::Warn) {
+                    Some(updates.clone())
+                } else {
+                    None
+                };
+
+                match map_random_ids_to_messages(self, &[random_id], updates)
+                    .pop()
+                    .flatten()
+                {
+                    Some(message) => message,
+                    None => {
+                        if let Some(updates) = updates_debug {
+                            warn!("failed to find just-sent message in response updates; please report this:");
+                            warn!("{:#?}", updates);
+                        }
+                        Message::from_raw(self, EMPTY_MESSAGE.into(), &ChatMap::empty()).unwrap()
+                    }
+                }
+            }
         })
     }
 
