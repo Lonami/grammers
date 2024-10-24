@@ -336,6 +336,25 @@ impl ProfilePhotoIter {
     }
 }
 
+fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Chat> {
+    use tl::enums::Updates;
+
+    let chats = match updates {
+        Updates::Combined(updates) => Some(updates.chats),
+        Updates::Updates(updates) => Some(updates.chats),
+        _ => None,
+    };
+
+    match chats {
+        Some(chats) => match id {
+            Some(id) => chats.into_iter().find(|chat| chat.id() == id),
+            None => chats.into_iter().next(),
+        },
+        None => None,
+    }
+    .map(Chat::from_raw)
+}
+
 /// Method implementations related to dealing with chats or other users.
 impl Client {
     /// Resolves a username into the chat that owns it, if any.
@@ -788,12 +807,13 @@ impl Client {
     pub async fn accept_invite_link(
         &self,
         invite_link: &str,
-    ) -> Result<tl::enums::Updates, InvocationError> {
+    ) -> Result<Option<Chat>, InvocationError> {
         match Self::parse_invite_link(invite_link) {
-            Some(hash) => {
+            Some(hash) => Ok(updates_to_chat(
+                None,
                 self.invoke(&tl::functions::messages::ImportChatInvite { hash })
-                    .await
-            }
+                    .await?,
+            )),
             None => Err(InvocationError::Rpc(RpcError {
                 code: 400,
                 name: "INVITE_HASH_INVALID".to_string(),
@@ -815,38 +835,14 @@ impl Client {
         &self,
         chat: C,
     ) -> Result<Option<Chat>, InvocationError> {
-        use tl::enums::Updates;
-
         let chat = chat.into();
-        let update_chat = match self
-            .invoke(&tl::functions::channels::JoinChannel {
+        Ok(updates_to_chat(
+            Some(chat.id),
+            self.invoke(&tl::functions::channels::JoinChannel {
                 channel: chat.try_to_input_channel().unwrap(),
             })
-            .await?
-        {
-            Updates::Combined(updates) => Some(
-                updates
-                    .chats
-                    .into_iter()
-                    .filter(|x| x.id() == chat.id)
-                    .collect::<Vec<tl::enums::Chat>>(),
-            ),
-            Updates::Updates(updates) => Some(
-                updates
-                    .chats
-                    .into_iter()
-                    .filter(|x| x.id() == chat.id)
-                    .collect::<Vec<tl::enums::Chat>>(),
-            ),
-            _ => None,
-        };
-
-        match update_chat {
-            Some(chats) if !chats.is_empty() => Ok(Some(Chat::from_raw(chats[0].clone()))),
-            Some(chats) if chats.is_empty() => Ok(None),
-            None => Ok(None),
-            Some(_) => Ok(None),
-        }
+            .await?,
+        ))
     }
 
     /// Send a message action (such as typing, uploading photo, or viewing an emoji interaction)
