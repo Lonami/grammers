@@ -388,6 +388,50 @@ impl Message {
         self.raw.reply_markup.clone()
     }
 
+    /// Collect all inline callback buttons. Those buttons often appeare in bot chat.
+    /// Buttons could be clicked by [`click_callback_button`]
+    pub fn callback_buttons(&self) -> Option<Vec<tl::types::KeyboardButtonCallback>> {
+        let reply_markup = &self.raw.reply_markup?;
+
+        let mut rtn = Vec::new();
+        if let tl::enums::ReplyMarkup::ReplyInlineMarkup(markup) = reply_markup {
+            for row in markup.rows.iter() {
+                let tl::enums::KeyboardButtonRow::Row(row) = row;
+                for b in row.buttons.iter() {
+                    match b {
+                        tl::enums::KeyboardButton::Callback(callback_b) => {
+                            rtn.push(callback_b.clone());
+                        }
+                        _ => (),
+                    }
+                }
+            }
+        }
+
+        Some(rtn)
+    }
+
+    pub async fn click_callback_button(
+        &self,
+        button: &tl::types::KeyboardButtonCallback,
+    ) -> Result<()> {
+        if button.requires_password {
+            unimplemented!()
+        } else {
+            let rtn = self
+                .client
+                .invoke(&tl::functions::GetBotCallbackAnswer {
+                    game: false,
+                    peer: self.chat().pack().to_input_peer(),
+                    msg_id: self.id(),
+                    data: Some(button.data.clone()),
+                    password: None,
+                })
+                .await?;
+        }
+        Ok(())
+    }
+
     /// The formatting entities used to format this message, such as bold, italic, with their
     /// offsets and lengths.
     pub fn fmt_entities(&self) -> Option<&Vec<tl::enums::MessageEntity>> {
