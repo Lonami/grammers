@@ -401,3 +401,14 @@ impl From<String> for InputMessage {
         }
     }
 }
+
+impl From<&super::Message> for InputMessage {
+    fn from(message: &super::Message) -> Self {
+        Self {
+            text: message.text().to_owned(),
+            entities: message.fmt_entities().cloned().unwrap_or(Vec::new()),
+            media: message.media().and_then(|m| m.to_raw_input_media()),
+            ..Default::default()
+        }
+    }
+}
