@@ -24,6 +24,7 @@ pub struct CallbackQuery {
     pub raw: tl::types::UpdateBotCallbackQuery,
     pub(crate) client: Client,
     pub(crate) chats: Arc<types::ChatMap>,
+    pub(crate) inline_msg_id: Option<tl::enums::InputBotInlineMessageId>,
 }
 
 /// A callback query answer builder.
@@ -44,6 +45,30 @@ impl CallbackQuery {
             raw: query,
             client: client.clone(),
             chats: chats.clone(),
+            inline_msg_id: None,
+        }
+    }
+
+    pub fn from_inline_raw(
+        client: &Client,
+        query: tl::types::UpdateInlineBotCallbackQuery,
+        chats: &Arc<types::ChatMap>,
+    ) -> Self {
+        Self {
+            raw: tl::types::UpdateBotCallbackQuery {
+                query_id: query.query_id,
+                user_id: query.user_id,
+                peer: tl::enums::Peer::User(tl::types::PeerUser {
+                    user_id: query.user_id,
+                }),
+                msg_id: 0,
+                chat_instance: query.chat_instance,
+                data: query.data,
+                game_short_name: query.game_short_name,
+            },
+            client: client.clone(),
+            chats: chats.clone(),
+            inline_msg_id: Some(query.msg_id),
         }
     }
 
@@ -142,11 +167,19 @@ impl<'a> Answer<'a> {
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let chat = self.query.chat();
-        let msg_id = self.query.raw.msg_id;
-        self.query
-            .client
-            .edit_message(chat, msg_id, new_message)
-            .await
+        if let Some(ref msg_id) = self.query.inline_msg_id {
+            self.query
+                .client
+                .edit_inline_message(msg_id.clone(), new_message)
+                .await
+                .map(|_| ())
+        } else {
+            let msg_id = self.query.raw.msg_id;
+            self.query
+                .client
+                .edit_message(chat, msg_id, new_message)
+                .await
+        }
     }
 
     /// [`Self::send`] the answer, and also respond in the chat where the button was clicked.
