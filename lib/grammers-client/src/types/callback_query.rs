@@ -101,6 +101,11 @@ impl CallbackQuery {
         self.raw.data.as_deref().unwrap()
     }
 
+    /// Whether the callback query was generated from an inline message.
+    pub fn is_from_inline(&self) -> bool {
+        self.inline_msg_id.is_some()
+    }
+
     /// Load the `Message` that contains the pressed inline button.
     pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
         Ok(self
