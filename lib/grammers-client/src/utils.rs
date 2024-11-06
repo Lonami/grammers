@@ -11,6 +11,7 @@ use chrono::{DateTime, Utc};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
+use std::thread;
 use std::time::SystemTime;
 
 // This atomic isn't for anything critical, just to generate unique IDs without locks.
@@ -20,15 +21,18 @@ static LAST_ID: AtomicI64 = AtomicI64::new(0);
 
 /// Generate a "random" ID suitable for sending messages or media.
 pub(crate) fn generate_random_id() -> i64 {
-    if LAST_ID.load(Ordering::SeqCst) == 0 {
+    while LAST_ID.load(Ordering::SeqCst) == 0 {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("system time is before epoch")
             .as_nanos() as i64;
 
-        LAST_ID
+        if LAST_ID
             .compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst)
-            .unwrap();
+            .is_err()
+        {
+            thread::yield_now();
+        }
     }
 
     LAST_ID.fetch_add(1, Ordering::SeqCst)
