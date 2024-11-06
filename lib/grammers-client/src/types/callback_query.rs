@@ -177,7 +177,7 @@ impl<'a> Answer<'a> {
                 .client
                 .edit_inline_message(msg_id.clone(), new_message)
                 .await
-                .map(|_| ())
+                .map(drop)
         } else {
             let msg_id = self.query.raw.msg_id;
             self.query
