@@ -38,7 +38,7 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 
 Used to parse the optional proxy URL.
 
-## trust-dns-resolver
+## hickory-resolver
 
 Used to look up the IP address of the proxy host if a domain is provided.
 
