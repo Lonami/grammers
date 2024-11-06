@@ -835,13 +835,19 @@ impl Client {
         &self,
         chat: C,
     ) -> Result<Option<Chat>, InvocationError> {
-        let chat = chat.into();
+        let chat: PackedChat = chat.into();
+        let channel = chat.try_to_input_channel().ok_or_else(|| {
+            InvocationError::Rpc(RpcError {
+                code: 400,
+                name: "CHANNEL_INVALID".to_owned(),
+                value: None,
+                caused_by: None,
+            })
+        })?;
         Ok(updates_to_chat(
             Some(chat.id),
-            self.invoke(&tl::functions::channels::JoinChannel {
-                channel: chat.try_to_input_channel().unwrap(),
-            })
-            .await?,
+            self.invoke(&tl::functions::channels::JoinChannel { channel })
+                .await?,
         ))
     }
 
