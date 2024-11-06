@@ -14,7 +14,7 @@ categories = ["api-bindings", "network-programming"]
 edition = "2021"
 
 [features]
-proxy = ["tokio-socks", "trust-dns-resolver", "url"]
+proxy = ["tokio-socks", "hickory-resolver", "url"]
 
 [dependencies]
 bytes = "1.7.1"
@@ -27,7 +27,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
 log = "0.4.22"
 tokio = { version = "1.40.0", default-features = false, features = ["net", "io-util", "sync", "time"] }
 tokio-socks = { version = "0.5.2", optional = true }
-trust-dns-resolver = { version = "0.23.2", optional = true }
+hickory-resolver = { version = "0.24.1", optional = true }
 url = { version = "2.5.2", optional = true }
 
 [dev-dependencies]

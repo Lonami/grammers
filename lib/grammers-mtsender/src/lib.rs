@@ -39,11 +39,11 @@ use tokio::time::{sleep_until, Duration, Instant};
 
 #[cfg(feature = "proxy")]
 use {
+    hickory_resolver::config::{ResolverConfig, ResolverOpts},
+    hickory_resolver::AsyncResolver,
     std::io::ErrorKind,
     std::net::{IpAddr, SocketAddr},
     tokio_socks::tcp::Socks5Stream,
-    trust_dns_resolver::config::{ResolverConfig, ResolverOpts},
-    trust_dns_resolver::AsyncResolver,
     url::Host,
 };
 
