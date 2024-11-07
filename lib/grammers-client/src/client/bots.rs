@@ -153,6 +153,12 @@ impl Client {
         InlineResultIter::new(self, bot.into(), query)
     }
 
+    /// Edits an inline message sent by a bot.
+    ///
+    /// Similar to [`Client::send_message`], advanced formatting can be achieved with the
+    /// options offered by [`InputMessage`].
+    ///
+    /// [`InputMessage`]: crate::InputMessage
     pub async fn edit_inline_message<M: Into<InputMessage>>(
         &self,
         message_id: tl::enums::InputBotInlineMessageId,
@@ -160,9 +166,9 @@ impl Client {
     ) -> Result<bool, InvocationError> {
         let message: InputMessage = input_message.into();
         let entities = parse_mention_entities(self, message.entities);
-        let dc_id = message_id.dc_id();
-        let result = self
-            .invoke_in_dc(
+        let result = if message.media.is_some() {
+            let dc_id = message_id.dc_id();
+            self.invoke_in_dc(
                 &tl::functions::messages::EditInlineBotMessage {
                     id: message_id,
                     message: Some(message.text),
@@ -174,7 +180,19 @@ impl Client {
                 },
                 dc_id,
             )
-            .await?;
+            .await?
+        } else {
+            self.invoke(&tl::functions::messages::EditInlineBotMessage {
+                id: message_id,
+                message: Some(message.text),
+                media: None,
+                entities,
+                no_webpage: !message.link_preview,
+                reply_markup: message.reply_markup,
+                invert_media: message.invert_media,
+            })
+            .await?
+        };
         Ok(result)
     }
 }

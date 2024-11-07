@@ -78,6 +78,11 @@ impl Update {
                 CallbackQuery::from_raw(client, query, chats),
             )),
 
+            // InlineCallbackQuery
+            tl::enums::Update::InlineBotCallbackQuery(query) => Some(Self::CallbackQuery(
+                CallbackQuery::from_inline_raw(client, query, chats),
+            )),
+
             // InlineQuery
             tl::enums::Update::BotInlineQuery(query) => Some(Self::InlineQuery(
                 InlineQuery::from_raw(client, query, chats),
