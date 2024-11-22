@@ -159,8 +159,8 @@ impl User {
     /// Return the first name of this user.
     ///
     /// If the account was deleted, the returned string will be empty.
-    pub fn first_name(&self) -> &str {
-        self.raw.first_name.as_deref().unwrap_or("")
+    pub fn first_name(&self) -> Option<&str> {
+        self.raw.first_name.as_deref()
     }
 
     /// Return the last name of this user, if any.
@@ -176,7 +176,7 @@ impl User {
     /// This is equal to the user's first name concatenated with the user's last name, if this
     /// is not empty. Otherwise, it equals the user's first name.
     pub fn full_name(&self) -> String {
-        let first_name = self.first_name();
+        let first_name = self.first_name().unwrap_or_default();
         if let Some(last_name) = self.last_name() {
             let mut name = String::with_capacity(first_name.len() + 1 + last_name.len());
             name.push_str(first_name);

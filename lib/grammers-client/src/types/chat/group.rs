@@ -94,15 +94,15 @@ impl Group {
     /// Return the title of this group.
     ///
     /// The title may be the empty string if the group is not accessible.
-    pub fn title(&self) -> &str {
+    pub fn title(&self) -> Option<&str> {
         use tl::enums::Chat;
 
         match &self.raw {
-            Chat::Empty(_) => "",
-            Chat::Chat(chat) => chat.title.as_str(),
-            Chat::Forbidden(chat) => chat.title.as_str(),
-            Chat::Channel(chat) => chat.title.as_str(),
-            Chat::ChannelForbidden(chat) => chat.title.as_str(),
+            Chat::Empty(_) => None,
+            Chat::Chat(chat) => Some(chat.title.as_str()),
+            Chat::Forbidden(chat) => Some(chat.title.as_str()),
+            Chat::Channel(chat) => Some(chat.title.as_str()),
+            Chat::ChannelForbidden(chat) => Some(chat.title.as_str()),
         }
     }
 

@@ -93,7 +93,7 @@ async fn async_main() -> Result<()> {
     println!("Showing up to {} dialogs:", dialogs.total().await?);
     while let Some(dialog) = dialogs.next().await? {
         let chat = dialog.chat();
-        println!("- {: >10} {}", chat.id(), chat.name());
+        println!("- {: >10} {}", chat.id(), chat.name().unwrap_or_default());
     }
 
     if sign_out {
