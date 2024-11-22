@@ -158,7 +158,8 @@ impl User {
 
     /// Return the first name of this user.
     ///
-    /// If the account was deleted, the returned string will be empty.
+    /// The name will be `None` if the account was deleted. It may also be `None` if you received
+    /// it previously.
     pub fn first_name(&self) -> Option<&str> {
         self.raw.first_name.as_deref()
     }
