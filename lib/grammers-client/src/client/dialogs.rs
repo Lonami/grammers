@@ -150,7 +150,7 @@ impl Client {
     ///
     /// while let Some(dialog) = dialogs.next().await? {
     ///     let chat = dialog.chat();
-    ///     println!("{} ({})", chat.name(), chat.id());
+    ///     println!("{} ({})", chat.name().unwrap_or_default(), chat.id());
     /// }
     /// # Ok(())
     /// # }

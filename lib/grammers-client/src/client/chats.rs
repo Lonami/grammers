@@ -444,7 +444,11 @@ impl Client {
     /// let mut participants = client.iter_participants(&chat);
     ///
     /// while let Some(participant) = participants.next().await? {
-    ///     println!("{} has role {:?}", participant.user.first_name(), participant.role);
+    ///     println!(
+    ///         "{} has role {:?}",
+    ///         participant.user.first_name().unwrap_or(&participant.user.id().to_string()),
+    ///         participant.role
+    ///     );
     /// }
     /// # Ok(())
     /// # }
@@ -633,7 +637,7 @@ impl Client {
     /// # async fn f(packed_chat: grammers_client::types::chat::PackedChat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let chat = client.unpack_chat(packed_chat).await?;
     ///
-    /// println!("Found chat: {}", chat.name());
+    /// println!("Found chat: {}", chat.name().unwrap_or(&chat.id().to_string()));
     /// # Ok(())
     /// # }
     /// ```
