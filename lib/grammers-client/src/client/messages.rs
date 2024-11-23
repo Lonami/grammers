@@ -941,7 +941,8 @@ impl Client {
     /// let mut messages = client.search_messages(&chat).query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
-    ///     println!("{}", message.sender().unwrap().name());
+    ///     let sender = message.sender().unwrap();
+    ///     println!("{}", sender.name().unwrap_or(&sender.id().to_string()));
     /// }
     /// # Ok(())
     /// # }
@@ -963,7 +964,7 @@ impl Client {
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
-    ///     println!("{}", message.chat().name());
+    ///     println!("{}", message.chat().name().unwrap_or(&message.chat().id().to_string()));
     /// }
     /// # Ok(())
     /// # }
@@ -1036,10 +1037,12 @@ impl Client {
     ///
     /// ```
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let name = chat.name().map_or(chat.id().to_string(), |name| name.to_owned());
+    ///
     /// if let Some(message) = client.get_pinned_message(&chat).await? {
-    ///     println!("There is a message pinned in {}: {}", chat.name(), message.text());
+    ///     println!("There is a message pinned in {}: {}", name.to_owned(), message.text());
     /// } else {
-    ///     println!("There are no messages pinned in {}", chat.name());
+    ///     println!("There are no messages pinned in {}", name.to_owned());
     /// }
     /// # Ok(())
     /// # }

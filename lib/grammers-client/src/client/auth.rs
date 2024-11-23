@@ -136,7 +136,12 @@ impl Client {
     ///     }
     /// };
     ///
-    /// println!("Signed in as {}!", user.first_name());
+    /// if let Some(first_name) = user.first_name() {
+    ///     println!("Signed in as {}!", first_name);
+    /// } else {
+    ///     println!("Signed in!");
+    /// }
+    ///
     /// # Ok(())
     /// # }
     /// ```
@@ -286,7 +291,11 @@ impl Client {
     ///     }
     /// };
     ///
-    /// println!("Signed in as {}!", user.first_name());
+    /// if let Some(first_name) = user.first_name() {
+    ///     println!("Signed in as {}!", first_name);
+    /// } else {
+    ///   println!("Signed in!");
+    /// }
     /// # Ok(())
     /// # }
     /// ```
