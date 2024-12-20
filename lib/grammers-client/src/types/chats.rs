@@ -5,12 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::Role;
-use crate::Client;
-use grammers_mtsender::{InvocationError, RpcError};
-use grammers_session::PackedChat;
-use grammers_tl_types as tl;
-use pin_project_lite::pin_project;
+
 use std::{
     future::Future,
     marker::PhantomPinned,
@@ -19,6 +14,16 @@ use std::{
     task::{Context, Poll},
     time::{Duration, SystemTime, UNIX_EPOCH},
 };
+
+use futures::TryStreamExt;
+use pin_project_lite::pin_project;
+
+use grammers_mtsender::{InvocationError, RpcError};
+use grammers_session::PackedChat;
+use grammers_tl_types as tl;
+
+use crate::types::Role;
+use crate::Client;
 
 type BuilderRes = Result<(), InvocationError>;
 type AdminFutGen<F> = fn(AdminRightsBuilderInner) -> F;
@@ -184,8 +189,8 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                 }
             };
 
-            let mut participants = s.client.iter_participants(s.chat);
-            while let Some(participant) = participants.next().await? {
+            let mut participants = s.client.stream_participants(s.chat);
+            while let Some(participant) = participants.try_next().await? {
                 if matches!(participant.role, Role::Creator(_) | Role::Admin(_))
                     && participant.user.id() == uid
                 {

@@ -70,9 +70,8 @@ impl Stream for DialogStream {
     ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
             match result {
-                Ok(Some(d)) => return Poll::Ready(Some(Ok(d))),
+                Ok(m) => return Poll::Ready(m.map(Ok)),
                 Err(e) => return Poll::Ready(Some(Err(e))),
-                _ => (),
             }
         }
 
@@ -159,23 +158,34 @@ impl Stream for DialogStream {
 
         Poll::Ready(self.pop_item().map(Ok))
     }
+
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        match self.total {
+            Some(total) => {
+                let rem = total - self.fetched;
+                (rem, Some(rem))
+            },
+            None => (0, None),
+        }
+    }
 }
 
 /// Method implementations related to open conversations.
 impl Client {
-    /// Returns a new iterator over the dialogs.
+    /// Returns a new stream over the dialogs.
     ///
-    /// While iterating, the update state for any broadcast channel or megagroup will be set if it was unknown before.
+    /// While streaming, the update state for any broadcast channel or megagroup will be set if it was unknown before.
     /// When the update state is set for these chats, the library can actively check to make sure it's not missing any
     /// updates from them (as long as the queue limit for updates is larger than zero).
     ///
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut dialogs = client.iter_dialogs();
+    /// let mut dialogs = client.stream_dialogs();
     ///
-    /// while let Some(dialog) = dialogs.next().await? {
+    /// while let Some(dialog) = dialogs.try_next().await? {
     ///     let chat = dialog.chat();
     ///     println!("{} ({})", chat.name().unwrap_or_default(), chat.id());
     /// }

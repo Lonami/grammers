@@ -128,8 +128,7 @@ impl Stream for DownloadStream {
             return Poll::Ready(None);
         }
 
-        if let Some(data) = &self.photo_size_data {
-            let data = data.clone();
+        if let Some(data) = self.photo_size_data.take() {
             self.done = true;
             return Poll::Ready(Some(Ok(data)));
         }
@@ -178,16 +177,17 @@ impl Stream for DownloadStream {
 
 /// Method implementations related to uploading or downloading files.
 impl Client {
-    /// Returns a new iterator over the contents of a media document that will be downloaded.
+    /// Returns a new stream over the contents of a media document that will be downloaded.
     ///
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
-    /// let mut download = client.iter_download(&downloadable);
+    /// let mut download = client.stream_download(&downloadable);
     ///
-    /// while let Some(chunk) = download.next().await? {
+    /// while let Some(chunk) = download.try_next().await? {
     ///     file_bytes.extend(chunk);
     /// }
     ///
@@ -203,7 +203,7 @@ impl Client {
     ///
     /// If the file already exists, it will be overwritten.
     ///
-    /// This is a small wrapper around [`Client::iter_download`] for the common case of
+    /// This is a small wrapper around [`Client::stream_download`] for the common case of
     /// wanting to save the file locally.
     ///
     /// # Examples
