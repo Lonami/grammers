@@ -10,6 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
+use futures::StreamExt;
 use futures_util::future::{select, Either};
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, Update};
@@ -69,6 +70,8 @@ async fn async_main() -> Result {
         println!("Signed in!");
     }
 
+    let mut update_stream = client.update_stream();
+
     println!("Waiting for messages...");
 
     // This code uses `select` on Ctrl+C to gracefully stop the client and have a chance to
@@ -80,7 +83,7 @@ async fn async_main() -> Result {
     // so a manual `select` is used instead by pinning async blocks by hand.
     loop {
         let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { client.next_update().await });
+        let upd = pin!(async { update_stream.select_next_some().await });
 
         let update = match select(exit, upd).await {
             Either::Left(_) => break,

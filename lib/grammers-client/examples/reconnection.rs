@@ -1,5 +1,6 @@
 //! this example demonstrate how to implement custom Reconnection Polies
 
+use futures::TryStreamExt;
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, ReconnectionPolicy};
 use std::ops::ControlFlow;
@@ -42,16 +43,19 @@ async fn async_main() -> Result {
     /// happy listening to updates forever!!
     use grammers_client::Update;
 
-    loop {
-        let update = client.next_update().await?;
-
-        match update {
-            Update::NewMessage(message) if !message.outgoing() => {
-                message.respond(message.text()).await?;
+    client
+        .update_stream()
+        .try_for_each_concurrent(None, |update| async {
+            match update {
+                Update::NewMessage(message) if !message.outgoing() => {
+                    message.respond(message.text()).await.map(|_| ())
+                }
+                _ => Ok(()),
             }
-            _ => {}
-        }
-    }
+        })
+        .await?;
+
+    Ok(())
 }
 
 fn main() -> Result {

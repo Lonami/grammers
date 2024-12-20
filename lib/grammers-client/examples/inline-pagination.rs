@@ -22,6 +22,7 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
+use futures::StreamExt;
 use futures_util::future::{select, Either};
 use grammers_client::session::Session;
 use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
@@ -132,10 +133,12 @@ async fn async_main() -> Result {
         println!("Signed in!");
     }
 
+    let mut update_stream = client.update_stream();
+
     println!("Waiting for messages...");
     loop {
         let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { client.next_update().await });
+        let upd = pin!(async { update_stream.select_next_some().await });
 
         let update = match select(exit, upd).await {
             Either::Left(_) => {
