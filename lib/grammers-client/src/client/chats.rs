@@ -293,8 +293,7 @@ impl ProfilePhotoIter {
                     iter.request.offset += photos.len() as i32;
                 }
 
-                iter.buffer
-                    .extend(photos.into_iter().map(|x| Photo::from_raw(x)));
+                iter.buffer.extend(photos.into_iter().map(Photo::from_raw));
 
                 Ok(total)
             }

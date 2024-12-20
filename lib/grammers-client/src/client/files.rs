@@ -5,14 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-
-use crate::types::{photo_sizes::PhotoSize, Downloadable, Media, Uploaded};
-use crate::utils::generate_random_id;
-use crate::Client;
-use futures_util::stream::{FuturesUnordered, StreamExt as _};
-use grammers_mtsender::InvocationError;
-use grammers_tl_types as tl;
+use std::future::Future;
+use std::task::Poll;
 use std::{io::SeekFrom, path::Path, sync::Arc};
+
+use futures::Stream;
+use futures_util::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
     fs,
@@ -20,20 +18,28 @@ use tokio::{
     sync::Mutex as AsyncMutex,
 };
 
+use grammers_mtsender::InvocationError;
+use grammers_tl_types as tl;
+
+use crate::types::{photo_sizes::PhotoSize, Downloadable, Media, Uploaded};
+use crate::utils::generate_random_id;
+use crate::Client;
+
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
 const FILE_MIGRATE_ERROR: i32 = 303;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
 
-pub struct DownloadIter {
+pub struct DownloadStream {
     client: Client,
     done: bool,
     request: tl::functions::upload::GetFile,
     photo_size_data: Option<Vec<u8>>,
+    dc: Option<u32>,
 }
 
-impl DownloadIter {
+impl DownloadStream {
     fn new(client: &Client, downloadable: &Downloadable) -> Self {
         match downloadable {
             Downloadable::PhotoSize(photo_size)
@@ -61,6 +67,7 @@ impl DownloadIter {
                 limit: MAX_CHUNK_SIZE,
             },
             photo_size_data: None,
+            dc: None,
         }
     }
 
@@ -84,6 +91,7 @@ impl DownloadIter {
                 limit: MAX_CHUNK_SIZE,
             },
             photo_size_data: Some(data),
+            dc: None,
         }
     }
 
@@ -107,26 +115,40 @@ impl DownloadIter {
         self.request.offset += (self.request.limit * n) as i64;
         self
     }
+}
 
-    /// Fetch and return the next chunk.
-    pub async fn next(&mut self) -> Result<Option<Vec<u8>>, InvocationError> {
+impl Stream for DownloadStream {
+    type Item = Result<Vec<u8>, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if self.done {
-            return Ok(None);
+            return Poll::Ready(None);
         }
 
         if let Some(data) = &self.photo_size_data {
+            let data = data.clone();
             self.done = true;
-            return Ok(Some(data.clone()));
+            return Poll::Ready(Some(Ok(data)));
         }
 
         use tl::enums::upload::File;
 
         // TODO handle maybe FILEREF_UPGRADE_NEEDED
-        let mut dc: Option<u32> = None;
         loop {
-            let result = match dc.take() {
-                None => self.client.invoke(&self.request).await,
-                Some(dc) => self.client.invoke_in_dc(&self.request, dc as i32).await,
+            let result = match self.dc.take() {
+                Some(dc) => {
+                    let this = self.client.invoke_in_dc(&self.request, dc as i32);
+                    futures::pin_mut!(this);
+                    futures::ready!(this.poll(cx))
+                }
+                None => {
+                    let this = self.client.invoke(&self.request);
+                    futures::pin_mut!(this);
+                    futures::ready!(this.poll(cx))
+                }
             };
 
             break match result {
@@ -134,21 +156,21 @@ impl DownloadIter {
                     if f.bytes.len() < self.request.limit as usize {
                         self.done = true;
                         if f.bytes.is_empty() {
-                            return Ok(None);
+                            return Poll::Ready(None);
                         }
                     }
 
                     self.request.offset += self.request.limit as i64;
-                    Ok(Some(f.bytes))
+                    Poll::Ready(Some(Ok(f.bytes)))
                 }
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
                 }
                 Err(InvocationError::Rpc(err)) if err.code == FILE_MIGRATE_ERROR => {
-                    dc = err.value;
+                    self.dc = err.value;
                     continue;
                 }
-                Err(e) => Err(e),
+                Err(e) => Poll::Ready(Some(Err(e))),
             };
         }
     }
@@ -173,8 +195,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_download(&self, downloadable: &Downloadable) -> DownloadIter {
-        DownloadIter::new(self, downloadable)
+    pub fn stream_download(&self, downloadable: &Downloadable) -> DownloadStream {
+        DownloadStream::new(self, downloadable)
     }
 
     /// Downloads a media file into the specified path.
@@ -231,17 +253,14 @@ impl Client {
             return Ok(());
         }
 
-        let mut download = self.iter_download(downloadable);
+        let mut download = self.stream_download(downloadable);
         Client::load(path, &mut download).await
     }
 
-    async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadIter) -> Result<(), io::Error> {
+    async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadStream) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
-        while let Some(chunk) = download
-            .next()
-            .await
-            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
-        {
+        while let Some(res) = download.next().await {
+            let chunk = res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
             file.write_all(&chunk).await?;
         }
 

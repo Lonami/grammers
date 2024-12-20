@@ -10,6 +10,7 @@
 //! cargo run --example dialogs
 //! ```
 
+use futures::TryStreamExt;
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, SignInError};
 use simple_logger::SimpleLogger;
@@ -88,10 +89,10 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    let mut dialogs = client.iter_dialogs();
+    let mut dialogs = client.stream_dialogs();
 
     println!("Showing up to {} dialogs:", dialogs.total().await?);
-    while let Some(dialog) = dialogs.next().await? {
+    while let Some(dialog) = dialogs.try_next().await? {
         let chat = dialog.chat();
         println!("- {: >10} {}", chat.id(), chat.name().unwrap_or_default());
     }

@@ -49,7 +49,7 @@ impl Client {
         loop {
             let (update, chats) = self.next_raw_update().await?;
 
-            if let Some(update) = Update::new(&self, update, &chats) {
+            if let Some(update) = Update::new(self, update, &chats) {
                 return Ok(update);
             }
         }

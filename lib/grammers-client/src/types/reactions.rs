@@ -9,7 +9,7 @@
 use grammers_tl_types as tl;
 use tl::enums::Reaction;
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Default)]
 pub struct InputReactions {
     pub(crate) reactions: Vec<Reaction>,
     pub(crate) add_to_recent: bool,
@@ -58,25 +58,15 @@ impl InputReactions {
     }
 }
 
-impl Default for InputReactions {
-    fn default() -> Self {
-        Self {
-            reactions: vec![],
-            add_to_recent: false,
-            big: false,
-        }
+impl From<String> for InputReactions {
+    fn from(val: String) -> Self {
+        InputReactions::emoticon(val)
     }
 }
 
-impl Into<InputReactions> for String {
-    fn into(self) -> InputReactions {
-        InputReactions::emoticon(self)
-    }
-}
-
-impl Into<InputReactions> for &str {
-    fn into(self) -> InputReactions {
-        InputReactions::emoticon(self)
+impl From<&str> for InputReactions {
+    fn from(val: &str) -> Self {
+        InputReactions::emoticon(val)
     }
 }
 
@@ -89,8 +79,8 @@ impl From<Vec<Reaction>> for InputReactions {
     }
 }
 
-impl Into<Vec<Reaction>> for InputReactions {
-    fn into(self) -> Vec<Reaction> {
-        self.reactions
+impl From<InputReactions> for Vec<Reaction> {
+    fn from(val: InputReactions) -> Self {
+        val.reactions
     }
 }

@@ -53,7 +53,7 @@ impl InlineQuery {
         }
     }
 
-    ///	User that sent the query
+    /// User that sent the query
     pub fn sender(&self) -> &User {
         match self
             .chats

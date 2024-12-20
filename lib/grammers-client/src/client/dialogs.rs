@@ -5,18 +5,24 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{ChatMap, Dialog, IterBuffer, Message};
-use crate::Client;
+use std::collections::HashMap;
+use std::future::Future;
+use std::task::Poll;
+
+use futures::Stream;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
-use std::collections::HashMap;
+
+use crate::types::{ChatMap, Dialog, IterBuffer, Message};
+use crate::Client;
 
 const MAX_LIMIT: usize = 100;
 
-pub type DialogIter = IterBuffer<tl::functions::messages::GetDialogs, Dialog>;
+pub type DialogStream = IterBuffer<tl::functions::messages::GetDialogs, Dialog>;
 
-impl DialogIter {
+impl DialogStream {
     fn new(client: &Client) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
@@ -53,20 +59,33 @@ impl DialogIter {
         self.total = Some(total);
         Ok(total)
     }
+}
 
-    /// Return the next `Dialog` from the internal buffer, filling the buffer previously if it's
-    /// empty.
-    ///
-    /// Returns `None` if the `limit` is reached or there are no dialogs left.
-    pub async fn next(&mut self) -> Result<Option<Dialog>, InvocationError> {
+impl Stream for DialogStream {
+    type Item = Result<Dialog, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
-            return result;
+            match result {
+                Ok(Some(d)) => return Poll::Ready(Some(Ok(d))),
+                Err(e) => return Poll::Ready(Some(Err(e))),
+                _ => (),
+            }
         }
 
         use tl::enums::messages::Dialogs;
 
-        self.request.limit = self.determine_limit(MAX_LIMIT);
-        let (dialogs, messages, users, chats) = match self.client.invoke(&self.request).await? {
+        let result = {
+            self.request.limit = self.determine_limit(MAX_LIMIT);
+            let this = self.client.invoke(&self.request);
+            futures::pin_mut!(this);
+            futures::ready!(this.poll(cx))
+        }?;
+
+        let (dialogs, messages, users, chats) = match result {
             Dialogs::Dialogs(d) => {
                 self.last_chunk = true;
                 self.total = Some(d.dialogs.len());
@@ -96,33 +115,41 @@ impl DialogIter {
             .collect::<HashMap<_, _>>();
 
         {
-            let mut state = self.client.0.state.write().unwrap();
-            self.buffer.extend(dialogs.into_iter().map(|dialog| {
-                if let tl::enums::Dialog::Dialog(tl::types::Dialog {
-                    peer: tl::enums::Peer::Channel(channel),
-                    pts: Some(pts),
-                    ..
-                }) = &dialog
-                {
-                    state
-                        .message_box
-                        .try_set_channel_state(channel.channel_id, *pts);
+            {
+                let mut state = self.client.0.state.write().unwrap();
+                for dialog in dialogs.iter() {
+                    if let tl::enums::Dialog::Dialog(tl::types::Dialog {
+                        peer: tl::enums::Peer::Channel(channel),
+                        pts: Some(pts),
+                        ..
+                    }) = dialog
+                    {
+                        state
+                            .message_box
+                            .try_set_channel_state(channel.channel_id, *pts);
+                    }
                 }
-                Dialog::new(dialog, &mut messages, &chats)
-            }));
+            }
+
+            self.buffer.extend(
+                dialogs
+                    .into_iter()
+                    .map(|dialog| Dialog::new(dialog, &mut messages, &chats)),
+            );
         }
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             self.request.exclude_pinned = true;
-            if let Some(last_message) = self
+            if let Some((date, id)) = self
                 .buffer
                 .iter()
                 .rev()
                 .find_map(|dialog| dialog.last_message.as_ref())
+                .map(|lm| (lm.raw.date, lm.raw.id))
             {
-                self.request.offset_date = last_message.raw.date;
-                self.request.offset_id = last_message.raw.id;
+                self.request.offset_date = date;
+                self.request.offset_id = id;
             }
             self.request.offset_peer = self.buffer[self.buffer.len() - 1]
                 .chat()
@@ -130,7 +157,7 @@ impl DialogIter {
                 .to_input_peer();
         }
 
-        Ok(self.pop_item())
+        Poll::Ready(self.pop_item().map(Ok))
     }
 }
 
@@ -155,8 +182,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_dialogs(&self) -> DialogIter {
-        DialogIter::new(self)
+    pub fn stream_dialogs(&self) -> DialogStream {
+        DialogStream::new(self)
     }
 
     /// Deletes a dialog, effectively removing it from your list of open conversations.
