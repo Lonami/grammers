@@ -201,7 +201,10 @@ impl ParticipantStream {
 impl Stream for ParticipantStream {
     type Item = Result<Participant, InvocationError>;
 
-    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
         match self.deref_mut() {
             Self::Empty => {}
@@ -221,7 +224,7 @@ impl Stream for ParticipantStream {
                         Err(e) => return Poll::Ready(Some(Err(e))),
                     }
                 }
-                
+
                 let this = self.fill_buffer();
                 futures::pin_mut!(this);
                 if let Err(e) = futures::ready!(this.poll(cx)) {
@@ -324,7 +327,10 @@ impl ProfilePhotoStream {
 impl Stream for ProfilePhotoStream {
     type Item = Result<Photo, InvocationError>;
 
-    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
         match self.deref_mut() {
             Self::User(iter) => {
@@ -334,7 +340,7 @@ impl Stream for ProfilePhotoStream {
                         Err(e) => return Poll::Ready(Some(Err(e))),
                     }
                 }
-                
+
                 let this = self.fill_buffer();
                 futures::pin_mut!(this);
                 if let Err(e) = futures::ready!(this.poll(cx)) {
@@ -342,14 +348,17 @@ impl Stream for ProfilePhotoStream {
                 }
             }
             Self::Chat(ref mut iter) => {
-                while let Some(maybe_message) =  futures::ready!(Pin::new(&mut *iter).poll_next(cx)) {
+                while let Some(maybe_message) = futures::ready!(Pin::new(&mut *iter).poll_next(cx))
+                {
                     match maybe_message {
-                        Ok(message) => if let Some(tl::enums::MessageAction::ChatEditPhoto(
-                            tl::types::MessageActionChatEditPhoto { photo },
-                        )) = message.raw_action
-                        {
-                            return Poll::Ready(Some(Ok(Photo::from_raw(photo))));
-                        },
+                        Ok(message) => {
+                            if let Some(tl::enums::MessageAction::ChatEditPhoto(
+                                tl::types::MessageActionChatEditPhoto { photo },
+                            )) = message.raw_action
+                            {
+                                return Poll::Ready(Some(Ok(Photo::from_raw(photo))));
+                            }
+                        }
                         Err(e) => return Poll::Ready(Some(Err(e))),
                     }
                 }

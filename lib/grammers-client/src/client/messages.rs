@@ -235,7 +235,10 @@ impl MessageStream {
 impl Stream for MessageStream {
     type Item = Result<Message, InvocationError>;
 
-    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
             match result {
                 Ok(m) => return Poll::Ready(m.map(Ok)),
@@ -373,7 +376,10 @@ impl SearchStream {
 impl Stream for SearchStream {
     type Item = Result<Message, InvocationError>;
 
-    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
             match result {
                 Ok(m) => return Poll::Ready(m.map(Ok)),
@@ -459,7 +465,10 @@ impl GlobalSearchStream {
 impl Stream for GlobalSearchStream {
     type Item = Result<Message, InvocationError>;
 
-    fn poll_next(mut self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
             match result {
                 Ok(m) => return Poll::Ready(m.map(Ok)),

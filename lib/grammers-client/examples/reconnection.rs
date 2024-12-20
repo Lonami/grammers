@@ -43,13 +43,14 @@ async fn async_main() -> Result {
     /// happy listening to updates forever!!
     use grammers_client::Update;
 
-    client.update_stream()
+    client
+        .update_stream()
         .try_for_each_concurrent(None, |update| async {
             match update {
                 Update::NewMessage(message) if !message.outgoing() => {
                     message.respond(message.text()).await.map(|_| ())
                 }
-                _ => Ok(())
+                _ => Ok(()),
             }
         })
         .await?;

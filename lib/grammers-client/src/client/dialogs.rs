@@ -164,7 +164,7 @@ impl Stream for DialogStream {
             Some(total) => {
                 let rem = total - self.fetched;
                 (rem, Some(rem))
-            },
+            }
             None => (0, None),
         }
     }

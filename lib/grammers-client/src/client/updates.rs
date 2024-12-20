@@ -180,7 +180,8 @@ impl<'a> UpdateStream<'a> {
                         .message_box
                         .apply_difference(response, &mut state.chat_hashes)
                 };
-                self.client.extend_update_queue(updates, ChatMap::new(users, chats));
+                self.client
+                    .extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
 
@@ -203,7 +204,8 @@ impl<'a> UpdateStream<'a> {
                         // Instead we manually extract the previously-known pts and use that.
                         log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
                         {
-                            self.client.0
+                            self.client
+                                .0
                                 .state
                                 .write()
                                 .unwrap()
@@ -223,7 +225,8 @@ impl<'a> UpdateStream<'a> {
                                 .unwrap_or_else(|| "empty channel".into())
                         );
                         {
-                            self.client.0
+                            self.client
+                                .0
                                 .state
                                 .write()
                                 .unwrap()
@@ -235,7 +238,8 @@ impl<'a> UpdateStream<'a> {
                     Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
                         log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
                         {
-                            self.client.0
+                            self.client
+                                .0
                                 .state
                                 .write()
                                 .unwrap()
@@ -259,7 +263,8 @@ impl<'a> UpdateStream<'a> {
                     )
                 };
 
-                self.client.extend_update_queue(updates, ChatMap::new(users, chats));
+                self.client
+                    .extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
 
@@ -272,13 +277,15 @@ impl<'a> UpdateStream<'a> {
             }
         }
     }
-
 }
 
 impl<'a> Stream for UpdateStream<'a> {
     type Item = Result<Update, InvocationError>;
 
-    fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+    fn poll_next(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         loop {
             let (update, chats) = {
                 let this = self.next_raw_update();
@@ -317,7 +324,7 @@ mod tests {
     #[test]
     fn ensure_next_update_future_impls_send() {
         use futures::TryStreamExt;
-        
+
         if false {
             // We just want it to type-check, not actually run.
             fn typeck(_: impl Future + Send) {}
