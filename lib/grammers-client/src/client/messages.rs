@@ -193,9 +193,9 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
     }
 }
 
-pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
+pub type MessageStream = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
-impl MessageIter {
+impl MessageStream {
     fn new(client: &Client, peer: PackedChat) -> Self {
         Self::from_request(
             client,
@@ -230,27 +230,44 @@ impl MessageIter {
         self.request.limit = 1;
         self.get_total().await
     }
+}
 
-    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
-    /// empty.
-    ///
-    /// Returns `None` if the `limit` is reached or there are no messages left.
-    pub async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
+impl Stream for MessageStream {
+    type Item = Result<Message, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
-            return result;
+            match result {
+                Ok(m) => return Poll::Ready(m.map(Ok)),
+                Err(e) => return Poll::Ready(Some(Err(e))),
+            }
         }
 
-        self.request.limit = self.determine_limit(MAX_LIMIT);
-        self.fill_buffer(self.request.limit).await?;
+        {
+            self.request.limit = self.determine_limit(MAX_LIMIT);
+            let limit = self.request.limit;
+            let this = self.fill_buffer(limit);
+            futures::pin_mut!(this);
+            if let Err(e) = futures::ready!(this.poll(cx)) {
+                return Poll::Ready(Some(Err(e)));
+            }
+        }
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
-            let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_id = last.raw.id;
-            self.request.offset_date = last.raw.date;
+            let (offset_id, offset_date) = {
+                let last = &self.buffer[self.buffer.len() - 1];
+                (last.raw.id, last.raw.date)
+            };
+
+            self.request.offset_id = offset_id;
+            self.request.offset_date = offset_date;
         }
 
-        Ok(self.pop_item())
+        Poll::Ready(self.pop_item().map(Ok))
     }
 }
 
@@ -394,9 +411,9 @@ impl Stream for SearchStream {
     }
 }
 
-pub type GlobalSearchIter = IterBuffer<tl::functions::messages::SearchGlobal, Message>;
+pub type GlobalSearchStream = IterBuffer<tl::functions::messages::SearchGlobal, Message>;
 
-impl GlobalSearchIter {
+impl GlobalSearchStream {
     fn new(client: &Client) -> Self {
         // TODO let users tweak all the options from the request
         Self::from_request(
@@ -443,28 +460,45 @@ impl GlobalSearchIter {
         self.request.limit = 1;
         self.get_total().await
     }
+}
 
-    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
-    /// empty.
-    ///
-    /// Returns `None` if the `limit` is reached or there are no messages left.
-    pub async fn next(&mut self) -> Result<Option<Message>, InvocationError> {
+impl Stream for GlobalSearchStream {
+    type Item = Result<Message, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         if let Some(result) = self.next_raw() {
-            return result;
+            match result {
+                Ok(m) => return Poll::Ready(m.map(Ok)),
+                Err(e) => return Poll::Ready(Some(Err(e))),
+            }
         }
 
-        self.request.limit = self.determine_limit(MAX_LIMIT);
-        let offset_rate = self.fill_buffer(self.request.limit).await?;
+        let offset_rate = {
+            self.request.limit = self.determine_limit(MAX_LIMIT);
+            let limit = self.request.limit;
+            let this = self.fill_buffer(limit);
+            futures::pin_mut!(this);
+            match futures::ready!(this.poll(cx)) {
+                Ok(offset_rate) => offset_rate,
+                Err(e) => return Poll::Ready(Some(Err(e))),
+            }
+        };
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
-            let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = last.chat().pack().to_input_peer();
-            self.request.offset_id = last.raw.id;
+            let (offset_peer, offset_id) = {
+                let last = &self.buffer[self.buffer.len() - 1];
+                (last.chat().pack().to_input_peer(), last.raw.id)
+            };
+            self.request.offset_peer = offset_peer;
+            self.request.offset_id = offset_id;
         }
 
-        Ok(self.pop_item())
+        Poll::Ready(self.pop_item().map(Ok))
     }
 }
 
@@ -929,23 +963,24 @@ impl Client {
             .filter(|m| !filter_req || m.raw.peer_id == message.raw.peer_id))
     }
 
-    /// Iterate over the message history of a chat, from most recent to oldest.
+    /// Get a stream over the message history of a chat, from most recent to oldest.
     ///
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in chat!
-    /// let mut messages = client.iter_messages(&chat).limit(100);
+    /// let mut messages = client.stream_messages(&chat).limit(100);
     ///
-    /// while let Some(message) = messages.next().await? {
+    /// while let Some(message) = messages.try_next().await? {
     ///     println!("{}", message.text());
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_messages<C: Into<PackedChat>>(&self, chat: C) -> MessageIter {
-        MessageIter::new(self, chat.into())
+    pub fn stream_messages<C: Into<PackedChat>>(&self, chat: C) -> MessageStream {
+        MessageStream::new(self, chat.into())
     }
 
     /// Get a stream over the messages that match certain search criteria.
@@ -971,7 +1006,7 @@ impl Client {
         SearchStream::new(self, chat.into())
     }
 
-    /// Iterate over the messages that match certain search criteria, without being restricted to
+    /// Get a stream over the messages that match certain search criteria, without being restricted to
     /// searching in a specific chat. The downside is that this global search supports less filters.
     ///
     /// This allows you to search by text within a chat or filter by media among other things.
@@ -979,18 +1014,19 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let's print all the chats were people think grammers is cool.
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
-    /// while let Some(message) = messages.next().await? {
+    /// while let Some(message) = messages.try_next().await? {
     ///     println!("{}", message.chat().name().unwrap_or(&message.chat().id().to_string()));
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn search_all_messages(&self) -> GlobalSearchIter {
-        GlobalSearchIter::new(self)
+    pub fn search_all_messages(&self) -> GlobalSearchStream {
+        GlobalSearchStream::new(self)
     }
 
     /// Get up to 100 messages using their ID.
