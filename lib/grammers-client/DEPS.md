@@ -80,10 +80,6 @@ without having to use `Box`.
 
 Provides Stream functionality
 
-## futures-util
-
-Provides useful functions for working with futures/tasks.
-
 ## url
 
 Used to parse certain URLs to offer features such as joining private chats via their invite link.

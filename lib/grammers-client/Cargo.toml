@@ -23,9 +23,6 @@ serde = ["grammers-tl-types/impl-serde"]
 [dependencies]
 chrono = "0.4.38"
 futures = "0.3.31"
-futures-util = { version = "0.3.30", default-features = false, features = [
-    "alloc"
-] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.7.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.7.0" }

@@ -103,3 +103,23 @@ pub(crate) fn always_find_entity(
         None => types::Chat::unpack(get_packed()),
     }
 }
+
+/// A helper macro to poll the future using the given context.
+macro_rules! poll_future {
+    ($cx:expr, $($future:tt)*) => {{
+        let this = $($future)*;
+        futures::pin_mut!(this);
+        this.poll($cx)
+    }};
+}
+
+/// A helper macro to poll the future using the given context.
+/// return `Poll::Pending` early in case that future returned `Poll::Pending`.
+macro_rules! poll_future_ready {
+    ($cx:expr, $($future:tt)*) => {
+        futures::ready!(crate::utils::poll_future!($cx, $($future)*))
+    };
+}
+
+pub(crate) use poll_future;
+pub(crate) use poll_future_ready;

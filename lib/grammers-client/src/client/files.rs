@@ -9,8 +9,10 @@ use std::future::Future;
 use std::task::Poll;
 use std::{io::SeekFrom, path::Path, sync::Arc};
 
-use futures::{Stream, TryStreamExt};
-use futures_util::stream::{FuturesUnordered, StreamExt};
+use futures::{
+    stream::{FuturesUnordered, StreamExt},
+    Stream, TryStreamExt,
+};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
     fs,
@@ -22,7 +24,7 @@ use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 
 use crate::types::{photo_sizes::PhotoSize, Downloadable, Media, Uploaded};
-use crate::utils::generate_random_id;
+use crate::utils::{generate_random_id, poll_future_ready};
 use crate::Client;
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
@@ -139,15 +141,9 @@ impl Stream for DownloadStream {
         loop {
             let result = match self.dc.take() {
                 Some(dc) => {
-                    let this = self.client.invoke_in_dc(&self.request, dc as i32);
-                    futures::pin_mut!(this);
-                    futures::ready!(this.poll(cx))
+                    poll_future_ready!(cx, self.client.invoke_in_dc(&self.request, dc as i32))
                 }
-                None => {
-                    let this = self.client.invoke(&self.request);
-                    futures::pin_mut!(this);
-                    futures::ready!(this.poll(cx))
-                }
+                None => poll_future_ready!(cx, self.client.invoke(&self.request)),
             };
 
             break match result {
