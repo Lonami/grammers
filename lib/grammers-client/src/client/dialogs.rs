@@ -16,6 +16,7 @@ use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 
 use crate::types::{ChatMap, Dialog, IterBuffer, Message};
+use crate::utils::poll_future_ready;
 use crate::Client;
 
 const MAX_LIMIT: usize = 100;
@@ -79,9 +80,7 @@ impl Stream for DialogStream {
 
         let result = {
             self.request.limit = self.determine_limit(MAX_LIMIT);
-            let this = self.client.invoke(&self.request);
-            futures::pin_mut!(this);
-            futures::ready!(this.poll(cx))
+            poll_future_ready!(cx, self.client.invoke(&self.request))
         }?;
 
         let (dialogs, messages, users, chats) = match result {

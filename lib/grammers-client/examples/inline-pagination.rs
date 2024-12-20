@@ -22,14 +22,18 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
-use futures::StreamExt;
-use futures_util::future::{select, Either};
-use grammers_client::session::Session;
-use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
-use simple_logger::SimpleLogger;
 use std::env;
 use std::pin::pin;
+
+use futures::{
+    future::{select, Either},
+    StreamExt,
+};
+use simple_logger::SimpleLogger;
 use tokio::{runtime, task};
+
+use grammers_client::session::Session;
+use grammers_client::{button, reply_markup, Client, Config, InputMessage, Update};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 

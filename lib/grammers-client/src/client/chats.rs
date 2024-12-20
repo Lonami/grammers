@@ -23,9 +23,13 @@ use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 
 use super::Client;
-use crate::types::{
-    chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
-    BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
+use crate::{
+    types::{
+        chats::{AdminRightsBuilderInner, BannedRightsBuilderInner},
+        AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
+        Photo, User,
+    },
+    utils::poll_future_ready,
 };
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 
@@ -210,9 +214,7 @@ impl Stream for ParticipantStream {
             Self::Empty => {}
             Self::Chat { buffer, .. } => {
                 if buffer.is_empty() {
-                    let this = self.fill_buffer();
-                    futures::pin_mut!(this);
-                    if let Err(e) = futures::ready!(this.poll(cx)) {
+                    if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
                         return Poll::Ready(Some(Err(e)));
                     }
                 }
@@ -225,9 +227,7 @@ impl Stream for ParticipantStream {
                     }
                 }
 
-                let this = self.fill_buffer();
-                futures::pin_mut!(this);
-                if let Err(e) = futures::ready!(this.poll(cx)) {
+                if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
                     return Poll::Ready(Some(Err(e)));
                 }
             }
@@ -341,9 +341,7 @@ impl Stream for ProfilePhotoStream {
                     }
                 }
 
-                let this = self.fill_buffer();
-                futures::pin_mut!(this);
-                if let Err(e) = futures::ready!(this.poll(cx)) {
+                if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
                     return Poll::Ready(Some(Err(e)));
                 }
             }

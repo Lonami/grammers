@@ -9,7 +9,7 @@
 //! Methods related to sending messages.
 use crate::types::message::EMPTY_MESSAGE;
 use crate::types::{InputReactions, IterBuffer, Message};
-use crate::utils::{generate_random_id, generate_random_ids};
+use crate::utils::{generate_random_id, generate_random_ids, poll_future_ready};
 use crate::{types, ChatMap, Client, InputMedia};
 use chrono::{DateTime, FixedOffset};
 use futures::Stream;
@@ -249,9 +249,7 @@ impl Stream for MessageStream {
         {
             self.request.limit = self.determine_limit(MAX_LIMIT);
             let limit = self.request.limit;
-            let this = self.fill_buffer(limit);
-            futures::pin_mut!(this);
-            if let Err(e) = futures::ready!(this.poll(cx)) {
+            if let Err(e) = poll_future_ready!(cx, self.fill_buffer(limit)) {
                 return Poll::Ready(Some(Err(e)));
             }
         }
@@ -390,9 +388,7 @@ impl Stream for SearchStream {
         {
             self.request.limit = self.determine_limit(MAX_LIMIT);
             let limit = self.request.limit;
-            let this = self.fill_buffer(limit);
-            futures::pin_mut!(this);
-            if let Err(e) = futures::ready!(this.poll(cx)) {
+            if let Err(e) = poll_future_ready!(cx, self.fill_buffer(limit)) {
                 return Poll::Ready(Some(Err(e)));
             }
         }
@@ -479,9 +475,7 @@ impl Stream for GlobalSearchStream {
         let offset_rate = {
             self.request.limit = self.determine_limit(MAX_LIMIT);
             let limit = self.request.limit;
-            let this = self.fill_buffer(limit);
-            futures::pin_mut!(this);
-            match futures::ready!(this.poll(cx)) {
+            match poll_future_ready!(cx, self.fill_buffer(limit)) {
                 Ok(offset_rate) => offset_rate,
                 Err(e) => return Poll::Ready(Some(Err(e))),
             }
