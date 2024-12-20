@@ -8,25 +8,32 @@
 
 //! Methods related to users, groups and channels.
 
+use std::collections::VecDeque;
+use std::future::Future;
+use std::ops::DerefMut;
+use std::pin::Pin;
+use std::sync::Arc;
+use std::task::Poll;
+use std::time::Duration;
+
+use futures::Stream;
+
+use grammers_mtsender::RpcError;
+use grammers_session::{PackedChat, PackedType};
+use grammers_tl_types as tl;
+
 use super::Client;
 use crate::types::{
     chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
     BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
 };
-use grammers_mtsender::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{PackedChat, PackedType};
-use grammers_tl_types as tl;
-use std::collections::VecDeque;
-use std::future::Future;
-use std::sync::Arc;
-use std::time::Duration;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
 
-pub enum ParticipantIter {
+pub enum ParticipantStream {
     Empty,
     Chat {
         client: Client,
@@ -37,7 +44,7 @@ pub enum ParticipantIter {
     Channel(IterBuffer<tl::functions::channels::GetParticipants, Participant>),
 }
 
-impl ParticipantIter {
+impl ParticipantStream {
     fn new(client: &Client, chat: PackedChat) -> Self {
         if let Some(channel) = chat.try_to_input_channel() {
             Self::Channel(IterBuffer::from_request(
@@ -179,48 +186,63 @@ impl ParticipantIter {
         }
     }
 
-    /// Return the next `Participant` from the internal buffer, filling the buffer previously if
-    /// it's empty.
-    ///
-    /// Returns `None` if the `limit` is reached or there are no participants left.
-    pub async fn next(&mut self) -> Result<Option<Participant>, InvocationError> {
-        // Need to split the `match` because `fill_buffer()` borrows mutably.
+    /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
+    pub fn filter_participants(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
         match self {
+            ParticipantStream::Channel(ref mut c) => {
+                c.request.filter = filter;
+                self
+            }
+            _ => self,
+        }
+    }
+}
+
+impl Stream for ParticipantStream {
+    type Item = Result<Participant, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
+        // Need to split the `match` because `fill_buffer()` borrows mutably.
+        match self.deref_mut() {
             Self::Empty => {}
             Self::Chat { buffer, .. } => {
                 if buffer.is_empty() {
-                    self.fill_buffer().await?;
+                    let this = self.fill_buffer();
+                    futures::pin_mut!(this);
+                    if let Err(e) = futures::ready!(this.poll(cx)) {
+                        return Poll::Ready(Some(Err(e)));
+                    }
                 }
             }
             Self::Channel(iter) => {
                 if let Some(result) = iter.next_raw() {
-                    return result;
+                    match result {
+                        Ok(m) => return Poll::Ready(m.map(Ok)),
+                        Err(e) => return Poll::Ready(Some(Err(e))),
+                    }
                 }
-                self.fill_buffer().await?;
+
+                let this = self.fill_buffer();
+                futures::pin_mut!(this);
+                if let Err(e) = futures::ready!(this.poll(cx)) {
+                    return Poll::Ready(Some(Err(e)));
+                }
             }
         }
 
-        match self {
-            Self::Empty => Ok(None),
+        match self.deref_mut() {
+            Self::Empty => Poll::Ready(None),
             Self::Chat { buffer, .. } => {
                 let result = buffer.pop_front();
                 if buffer.is_empty() {
                     *self = Self::Empty;
                 }
-                Ok(result)
+                Poll::Ready(result.map(Ok))
             }
-            Self::Channel(iter) => Ok(iter.pop_item()),
-        }
-    }
-
-    /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
-    pub fn filter(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
-        match self {
-            ParticipantIter::Channel(ref mut c) => {
-                c.request.filter = filter;
-                self
-            }
-            _ => self,
+            Self::Channel(iter) => Poll::Ready(iter.pop_item().map(Ok)),
         }
     }
 }
@@ -431,7 +453,7 @@ impl Client {
         Ok(User::from_raw(res.pop().unwrap()))
     }
 
-    /// Iterate over the participants of a chat.
+    /// Get a stream over participants of a chat.
     ///
     /// The participants are returned in no particular order.
     ///
@@ -440,10 +462,11 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut participants = client.iter_participants(&chat);
+    /// let mut participants = client.stream_participants(&chat);
     ///
-    /// while let Some(participant) = participants.next().await? {
+    /// while let Some(participant) = participants.try_next().await? {
     ///     println!(
     ///         "{} has role {:?}",
     ///         participant.user.first_name().unwrap_or(&participant.user.id().to_string()),
@@ -453,8 +476,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantIter {
-        ParticipantIter::new(self, chat.into())
+    pub fn stream_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantStream {
+        ParticipantStream::new(self, chat.into())
     }
 
     /// Kicks the participant from the chat.
