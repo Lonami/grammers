@@ -76,6 +76,10 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 Used for return custom types that `impl Future` so that the requests can be further configured
 without having to use `Box`.
 
+## futures
+
+Provides Stream functionality
+
 ## futures-util
 
 Provides useful functions for working with futures/tasks.

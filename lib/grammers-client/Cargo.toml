@@ -22,6 +22,7 @@ serde = ["grammers-tl-types/impl-serde"]
 
 [dependencies]
 chrono = "0.4.38"
+futures = "0.3.31"
 futures-util = { version = "0.3.30", default-features = false, features = [
     "alloc"
 ] }
