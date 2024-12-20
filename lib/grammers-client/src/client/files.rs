@@ -9,7 +9,7 @@ use std::future::Future;
 use std::task::Poll;
 use std::{io::SeekFrom, path::Path, sync::Arc};
 
-use futures::Stream;
+use futures::{Stream, TryStreamExt};
 use futures_util::stream::{FuturesUnordered, StreamExt};
 use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
@@ -259,8 +259,11 @@ impl Client {
 
     async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadStream) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
-        while let Some(res) = download.next().await {
-            let chunk = res.map_err(|e| io::Error::new(io::ErrorKind::Other, e))?;
+        while let Some(chunk) = download
+            .try_next()
+            .await
+            .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
+        {
             file.write_all(&chunk).await?;
         }
 
