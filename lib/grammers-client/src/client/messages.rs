@@ -971,7 +971,7 @@ impl Client {
     /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in chat!
-    /// let mut messages = client.iter_messages(&chat).limit(100);
+    /// let mut messages = client.stream_messages(&chat).limit(100);
     ///
     /// while let Some(message) = messages.try_next().await? {
     ///     println!("{}", message.text());
