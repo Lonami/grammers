@@ -10,13 +10,17 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
+use futures::stream::FusedStream;
+use futures::Stream;
 use futures_util::future::{select, Either};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
+use std::future::Future;
 use std::pin::pin;
 use std::sync::Arc;
+use std::task::Poll;
 use std::time::{Duration, Instant};
 use tokio::time::sleep_until;
 
@@ -45,150 +49,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn next_update(&self) -> Result<Update, InvocationError> {
-        loop {
-            let (update, chats) = self.next_raw_update().await?;
-
-            if let Some(update) = Update::new(self, update, &chats) {
-                return Ok(update);
-            }
-        }
-    }
-
-    /// Returns the next raw update and associated chat map from the buffer where they are queued until used.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// loop {
-    ///     let (update, chats) = client.next_raw_update().await?;
-    ///
-    ///     // Print all incoming updates in their raw form
-    ///     dbg!(update);
-    /// }
-    /// # Ok(())
-    /// # }
-    ///
-    /// ```
-    ///
-    /// P.S. If you don't receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
-    ///
-    pub async fn next_raw_update(
-        &self,
-    ) -> Result<(tl::enums::Update, Arc<ChatMap>), InvocationError> {
-        loop {
-            let (deadline, get_diff, get_channel_diff) = {
-                let state = &mut *self.0.state.write().unwrap();
-                if let Some(update) = state.updates.pop_front() {
-                    return Ok(update);
-                }
-                (
-                    state.message_box.check_deadlines(), // first, as it might trigger differences
-                    state.message_box.get_difference(),
-                    state.message_box.get_channel_difference(&state.chat_hashes),
-                )
-            };
-
-            if let Some(request) = get_diff {
-                let response = self.invoke(&request).await?;
-                let (updates, users, chats) = {
-                    let state = &mut *self.0.state.write().unwrap();
-                    state
-                        .message_box
-                        .apply_difference(response, &mut state.chat_hashes)
-                };
-                self.extend_update_queue(updates, ChatMap::new(users, chats));
-                continue;
-            }
-
-            if let Some(request) = get_channel_diff {
-                let maybe_response = self.invoke(&request).await;
-
-                let response = match maybe_response {
-                    Ok(r) => r,
-                    Err(e) if e.is("PERSISTENT_TIMESTAMP_OUTDATED") => {
-                        // According to Telegram's docs:
-                        // "Channel internal replication issues, try again later (treat this like an RPC_CALL_FAIL)."
-                        // We can treat this as "empty difference" and not update the local pts.
-                        // Then this same call will be retried when another gap is detected or timeout expires.
-                        //
-                        // Another option would be to literally treat this like an RPC_CALL_FAIL and retry after a few
-                        // seconds, but if Telegram is having issues it's probably best to wait for it to send another
-                        // update (hinting it may be okay now) and retry then.
-                        //
-                        // This is a bit hacky because MessageBox doesn't really have a way to "not update" the pts.
-                        // Instead we manually extract the previously-known pts and use that.
-                        log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
-                        {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
-                                .end_channel_difference(
-                                    &request,
-                                    PrematureEndReason::TemporaryServerIssues,
-                                );
-                        }
-                        continue;
-                    }
-                    Err(e) if e.is("CHANNEL_PRIVATE") => {
-                        log::info!(
-                            "Account is now banned in {} so we can no longer fetch updates from it",
-                            channel_id(&request)
-                                .map(|i| i.to_string())
-                                .unwrap_or_else(|| "empty channel".into())
-                        );
-                        {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
-                                .end_channel_difference(&request, PrematureEndReason::Banned);
-                        }
-                        continue;
-                    }
-                    Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
-                        log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
-                        {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
-                                .end_channel_difference(
-                                    &request,
-                                    PrematureEndReason::TemporaryServerIssues,
-                                );
-                        }
-                        continue;
-                    }
-                    Err(e) => return Err(e),
-                };
-
-                let (updates, users, chats) = {
-                    let state = &mut *self.0.state.write().unwrap();
-                    state.message_box.apply_channel_difference(
-                        request,
-                        response,
-                        &mut state.chat_hashes,
-                    )
-                };
-
-                self.extend_update_queue(updates, ChatMap::new(users, chats));
-                continue;
-            }
-
-            let sleep = pin!(async { sleep_until(deadline.into()).await });
-            let step = pin!(async { self.step().await });
-
-            match select(sleep, step).await {
-                Either::Left(_) => {}
-                Either::Right((step, _)) => step?,
-            }
-        }
+    pub fn update_stream(&self) -> UpdateStream<'_> {
+        UpdateStream { client: self }
     }
 
     pub(crate) fn process_socket_updates(&self, all_updates: Vec<tl::enums::Updates>) {
@@ -270,6 +132,179 @@ impl Client {
     }
 }
 
+pub struct UpdateStream<'a> {
+    client: &'a Client,
+}
+
+impl<'a> UpdateStream<'a> {
+    /// Returns the next raw update and associated chat map from the buffer where they are queued until used.
+    ///
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// loop {
+    ///     let (update, chats) = client.next_raw_update().await?;
+    ///
+    ///     // Print all incoming updates in their raw form
+    ///     dbg!(update);
+    /// }
+    /// # Ok(())
+    /// # }
+    ///
+    /// ```
+    ///
+    /// P.S. If you don't receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
+    ///
+    pub async fn next_raw_update(
+        &self,
+    ) -> Result<(tl::enums::Update, Arc<ChatMap>), InvocationError> {
+        loop {
+            let (deadline, get_diff, get_channel_diff) = {
+                let state = &mut *self.client.0.state.write().unwrap();
+                if let Some(update) = state.updates.pop_front() {
+                    return Ok(update);
+                }
+                (
+                    state.message_box.check_deadlines(), // first, as it might trigger differences
+                    state.message_box.get_difference(),
+                    state.message_box.get_channel_difference(&state.chat_hashes),
+                )
+            };
+
+            if let Some(request) = get_diff {
+                let response = self.client.invoke(&request).await?;
+                let (updates, users, chats) = {
+                    let state = &mut *self.client.0.state.write().unwrap();
+                    state
+                        .message_box
+                        .apply_difference(response, &mut state.chat_hashes)
+                };
+                self.client.extend_update_queue(updates, ChatMap::new(users, chats));
+                continue;
+            }
+
+            if let Some(request) = get_channel_diff {
+                let maybe_response = self.client.invoke(&request).await;
+
+                let response = match maybe_response {
+                    Ok(r) => r,
+                    Err(e) if e.is("PERSISTENT_TIMESTAMP_OUTDATED") => {
+                        // According to Telegram's docs:
+                        // "Channel internal replication issues, try again later (treat this like an RPC_CALL_FAIL)."
+                        // We can treat this as "empty difference" and not update the local pts.
+                        // Then this same call will be retried when another gap is detected or timeout expires.
+                        //
+                        // Another option would be to literally treat this like an RPC_CALL_FAIL and retry after a few
+                        // seconds, but if Telegram is having issues it's probably best to wait for it to send another
+                        // update (hinting it may be okay now) and retry then.
+                        //
+                        // This is a bit hacky because MessageBox doesn't really have a way to "not update" the pts.
+                        // Instead we manually extract the previously-known pts and use that.
+                        log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
+                        {
+                            self.client.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(
+                                    &request,
+                                    PrematureEndReason::TemporaryServerIssues,
+                                );
+                        }
+                        continue;
+                    }
+                    Err(e) if e.is("CHANNEL_PRIVATE") => {
+                        log::info!(
+                            "Account is now banned in {} so we can no longer fetch updates from it",
+                            channel_id(&request)
+                                .map(|i| i.to_string())
+                                .unwrap_or_else(|| "empty channel".into())
+                        );
+                        {
+                            self.client.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(&request, PrematureEndReason::Banned);
+                        }
+                        continue;
+                    }
+                    Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
+                        log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
+                        {
+                            self.client.0
+                                .state
+                                .write()
+                                .unwrap()
+                                .message_box
+                                .end_channel_difference(
+                                    &request,
+                                    PrematureEndReason::TemporaryServerIssues,
+                                );
+                        }
+                        continue;
+                    }
+                    Err(e) => return Err(e),
+                };
+
+                let (updates, users, chats) = {
+                    let state = &mut *self.client.0.state.write().unwrap();
+                    state.message_box.apply_channel_difference(
+                        request,
+                        response,
+                        &mut state.chat_hashes,
+                    )
+                };
+
+                self.client.extend_update_queue(updates, ChatMap::new(users, chats));
+                continue;
+            }
+
+            let sleep = pin!(async { sleep_until(deadline.into()).await });
+            let step = pin!(async { self.client.step().await });
+
+            match select(sleep, step).await {
+                Either::Left(_) => {}
+                Either::Right((step, _)) => step?,
+            }
+        }
+    }
+
+}
+
+impl<'a> Stream for UpdateStream<'a> {
+    type Item = Result<Update, InvocationError>;
+
+    fn poll_next(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> Poll<Option<Self::Item>> {
+        loop {
+            let (update, chats) = {
+                let this = self.next_raw_update();
+                futures::pin_mut!(this);
+                match futures::ready!(this.poll(cx)) {
+                    Ok(update) => update,
+                    Err(e) => return Poll::Ready(Some(Err(e))),
+                }
+            };
+
+            if let Some(update) = Update::new(self.client, update, &chats) {
+                return Poll::Ready(Some(Ok(update)));
+            }
+        }
+    }
+}
+
+impl<'a> FusedStream for UpdateStream<'a> {
+    fn is_terminated(&self) -> bool {
+        // The update stream is a continuous flow of updates.
+        // As a long-running stream, it never reaches a
+        // terminated state, hence we always return false.
+        false
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -281,10 +316,12 @@ mod tests {
 
     #[test]
     fn ensure_next_update_future_impls_send() {
+        use futures::TryStreamExt;
+        
         if false {
             // We just want it to type-check, not actually run.
             fn typeck(_: impl Future + Send) {}
-            typeck(get_client().next_update());
+            typeck(get_client().update_stream().try_next());
         }
     }
 }
