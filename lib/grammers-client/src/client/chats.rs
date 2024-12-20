@@ -247,12 +247,12 @@ impl Stream for ParticipantStream {
     }
 }
 
-pub enum ProfilePhotoIter {
+pub enum ProfilePhotoStream {
     User(IterBuffer<tl::functions::photos::GetUserPhotos, Photo>),
     Chat(IterBuffer<tl::functions::messages::Search, Message>),
 }
 
-impl ProfilePhotoIter {
+impl ProfilePhotoStream {
     fn new(client: &Client, chat: PackedChat) -> Self {
         if let Some(user_id) = chat.try_to_input_user() {
             Self::User(IterBuffer::from_request(
@@ -315,45 +315,59 @@ impl ProfilePhotoIter {
                     iter.request.offset += photos.len() as i32;
                 }
 
-                iter.buffer
-                    .extend(photos.into_iter().map(|x| Photo::from_raw(x)));
+                iter.buffer.extend(photos.into_iter().map(Photo::from_raw));
 
                 Ok(total)
             }
             Self::Chat(_) => panic!("fill_buffer should not be called for Chat variant"),
         }
     }
+}
 
-    /// Return the next photo from the internal buffer, filling the buffer previously if it's
-    /// empty.
-    ///
-    /// Returns `None` if the `limit` is reached or there are no photos left.
-    pub async fn next(&mut self) -> Result<Option<Photo>, InvocationError> {
+impl Stream for ProfilePhotoStream {
+    type Item = Result<Photo, InvocationError>;
+
+    fn poll_next(
+        mut self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> Poll<Option<Self::Item>> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
-        match self {
+        match self.deref_mut() {
             Self::User(iter) => {
                 if let Some(result) = iter.next_raw() {
-                    return result;
+                    match result {
+                        Ok(m) => return Poll::Ready(m.map(Ok)),
+                        Err(e) => return Poll::Ready(Some(Err(e))),
+                    }
                 }
-                self.fill_buffer().await?;
+
+                let this = self.fill_buffer();
+                futures::pin_mut!(this);
+                if let Err(e) = futures::ready!(this.poll(cx)) {
+                    return Poll::Ready(Some(Err(e)));
+                }
             }
-            Self::Chat(iter) => {
-                while let Some(message) = iter.next().await? {
-                    if let Some(tl::enums::MessageAction::ChatEditPhoto(
-                        tl::types::MessageActionChatEditPhoto { photo },
-                    )) = message.raw_action
-                    {
-                        return Ok(Some(Photo::from_raw(photo)));
-                    } else {
-                        continue;
+            Self::Chat(ref mut iter) => {
+                while let Some(maybe_message) = futures::ready!(Pin::new(&mut *iter).poll_next(cx))
+                {
+                    match maybe_message {
+                        Ok(message) => {
+                            if let Some(tl::enums::MessageAction::ChatEditPhoto(
+                                tl::types::MessageActionChatEditPhoto { photo },
+                            )) = message.raw_action
+                            {
+                                return Poll::Ready(Some(Ok(Photo::from_raw(photo))));
+                            }
+                        }
+                        Err(e) => return Poll::Ready(Some(Err(e))),
                     }
                 }
             }
         }
 
-        match self {
-            Self::User(iter) => Ok(iter.pop_item()),
-            Self::Chat(_) => Ok(None),
+        match self.get_mut() {
+            Self::User(iter) => Poll::Ready(iter.pop_item().map(Ok)),
+            Self::Chat(_) => Poll::Ready(None),
         }
     }
 }
@@ -627,7 +641,7 @@ impl Client {
         )
     }
 
-    /// Iterate over the history of profile photos for the given user or chat.
+    /// Get stream over the history of profile photos for the given user or chat.
     ///
     /// Note that the current photo might not be present in the history, and to avoid doing more
     /// work when it's generally not needed (the photo history tends to be complete but in some
@@ -639,17 +653,18 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut photos = client.iter_profile_photos(&chat);
+    /// let mut photos = client.stream_profile_photos(&chat);
     ///
-    /// while let Some(photo) = photos.next().await? {
+    /// while let Some(photo) = photos.try_next().await? {
     ///     println!("Did you know chat has a photo with ID {}?", photo.id());
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_profile_photos<C: Into<PackedChat>>(&self, chat: C) -> ProfilePhotoIter {
-        ProfilePhotoIter::new(self, chat.into())
+    pub fn stream_profile_photos<C: Into<PackedChat>>(&self, chat: C) -> ProfilePhotoStream {
+        ProfilePhotoStream::new(self, chat.into())
     }
 
     /// Convert a [`PackedChat`] back into a [`Chat`].
