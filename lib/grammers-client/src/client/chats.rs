@@ -655,7 +655,7 @@ impl Client {
     /// ```
     /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut photos = client.iter_profile_photos(&chat);
+    /// let mut photos = client.stream_profile_photos(&chat);
     ///
     /// while let Some(photo) = photos.try_next().await? {
     ///     println!("Did you know chat has a photo with ID {}?", photo.id());
