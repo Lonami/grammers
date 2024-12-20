@@ -24,7 +24,7 @@ impl Clone for ReadError {
         match self {
             Self::Io(e) => Self::Io(
                 e.raw_os_error()
-                    .map(|raw| io::Error::from_raw_os_error(raw))
+                    .map(io::Error::from_raw_os_error)
                     .unwrap_or_else(|| io::Error::new(e.kind(), e.to_string())),
             ),
             Self::Transport(e) => Self::Transport(e.clone()),
