@@ -6,26 +6,36 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use std::future::Future;
+use std::sync::Arc;
 use std::task::Poll;
-use std::{io::SeekFrom, path::Path, sync::Arc};
 
 use futures::{
     stream::{FuturesUnordered, StreamExt},
-    Stream, TryStreamExt,
+    Stream,
 };
-use tokio::sync::mpsc::unbounded_channel;
 use tokio::{
-    fs,
-    io::{self, AsyncRead, AsyncReadExt, AsyncSeekExt, AsyncWriteExt},
+    io::{self, AsyncRead, AsyncReadExt},
     sync::Mutex as AsyncMutex,
 };
 
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 
-use crate::types::{photo_sizes::PhotoSize, Downloadable, Media, Uploaded};
+use crate::types::{photo_sizes::PhotoSize, Downloadable, Uploaded};
 use crate::utils::{generate_random_id, poll_future_ready};
 use crate::Client;
+
+#[cfg(feature = "fs")]
+use {
+    crate::types::Media,
+    futures::TryStreamExt,
+    std::{io::SeekFrom, path::Path},
+    tokio::{
+        fs,
+        io::{AsyncSeekExt, AsyncWriteExt},
+        sync::mpsc::unbounded_channel,
+    },
+};
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;
@@ -210,6 +220,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
+    #[cfg(feature = "fs")]
     pub async fn download_media<P: AsRef<Path>>(
         &self,
         downloadable: &Downloadable,
@@ -253,6 +264,7 @@ impl Client {
         Client::load(path, &mut download).await
     }
 
+    #[cfg(feature = "fs")]
     async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadStream) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
         while let Some(chunk) = download
@@ -267,6 +279,7 @@ impl Client {
     }
 
     /// Downloads a `Document` to specified path using multiple connections
+    #[cfg(feature = "fs")]
     async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
         media: &Media,
@@ -520,6 +533,7 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
+    #[cfg(feature = "fs")]
     pub async fn upload_file<P: AsRef<Path>>(&self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();
 
