@@ -62,7 +62,7 @@ impl Transport for Full {
         self.send_seq += 1;
     }
 
-    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error> {
+    fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error> {
         // Need 4 bytes for the initial length
         if buffer.len() < 4 {
             return Err(Error::MissingBytes);
@@ -188,7 +188,7 @@ mod tests {
         let mut transport = Full::new();
         let mut buffer = DequeBuffer::with_capacity(3, 0);
         buffer.extend([0, 1, 3]);
-        assert_eq!(transport.unpack(&buffer[..]), Err(Error::MissingBytes));
+        assert_eq!(transport.unpack(&mut buffer[..]), Err(Error::MissingBytes));
     }
 
     #[test]
@@ -196,7 +196,7 @@ mod tests {
         let (mut transport, mut buffer) = setup_pack(128);
         let orig = buffer.clone();
         transport.pack(&mut buffer);
-        let offset = transport.unpack(&buffer[..]).unwrap();
+        let offset = transport.unpack(&mut buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -214,12 +214,12 @@ mod tests {
         transport.pack(&mut buffer);
         two_buffer.extend(&buffer[..]);
 
-        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        let offset = transport.unpack(&mut two_buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         let n = offset.next_offset;
-        let offset = transport.unpack(&two_buffer[n..]).unwrap();
+        let offset = transport.unpack(&mut two_buffer[n..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -230,7 +230,7 @@ mod tests {
         buffer[4] = 1;
 
         assert_eq!(
-            transport.unpack(&buffer[..]),
+            transport.unpack(&mut buffer[..]),
             Err(Error::BadSeq {
                 expected: 0,
                 got: 1,
@@ -246,7 +246,7 @@ mod tests {
         buffer[len - 1] ^= 0xff;
 
         assert_eq!(
-            transport.unpack(&buffer[..]),
+            transport.unpack(&mut buffer[..]),
             Err(Error::BadCrc {
                 expected: 932541318,
                 got: 3365237638,
@@ -261,7 +261,7 @@ mod tests {
         buffer.extend(&(-404_i32).to_le_bytes());
 
         assert_eq!(
-            transport.unpack(&buffer[..]),
+            transport.unpack(&mut buffer[..]),
             Err(Error::BadStatus { status: 404 })
         );
     }

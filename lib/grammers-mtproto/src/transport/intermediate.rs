@@ -49,7 +49,7 @@ impl Transport for Intermediate {
         }
     }
 
-    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error> {
+    fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error> {
         if buffer.len() < 4 {
             return Err(Error::MissingBytes);
         }
@@ -123,7 +123,7 @@ mod tests {
         let mut transport = Intermediate::new();
         let mut buffer = DequeBuffer::with_capacity(1, 0);
         buffer.extend([1]);
-        assert_eq!(transport.unpack(&buffer[..],), Err(Error::MissingBytes));
+        assert_eq!(transport.unpack(&mut buffer[..],), Err(Error::MissingBytes));
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
         let orig = buffer.clone();
         transport.pack(&mut buffer);
         let n = 4; // init bytes
-        let offset = transport.unpack(&buffer[n..]).unwrap();
+        let offset = transport.unpack(&mut buffer[n..]).unwrap();
         assert_eq!(&buffer[n..][offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -150,12 +150,12 @@ mod tests {
         transport.pack(&mut buffer);
         two_buffer.extend(&buffer[..]);
 
-        let offset = transport.unpack(&two_buffer[..]).unwrap();
+        let offset = transport.unpack(&mut two_buffer[..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         let n = offset.next_offset;
-        let offset = transport.unpack(&two_buffer[n..]).unwrap();
+        let offset = transport.unpack(&mut two_buffer[n..]).unwrap();
         assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
     }
 
@@ -167,7 +167,7 @@ mod tests {
         buffer.extend(&(-404_i32).to_le_bytes());
 
         assert_eq!(
-            transport.unpack(&buffer[..]),
+            transport.unpack(&mut buffer[..]),
             Err(Error::BadStatus { status: 404 })
         );
     }
