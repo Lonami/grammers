@@ -91,7 +91,7 @@ pub trait Transport {
     fn pack(&mut self, buffer: &mut DequeBuffer<u8>);
 
     /// Unpacks the input buffer in-place.
-    fn unpack(&mut self, buffer: &[u8]) -> Result<UnpackedOffset, Error>;
+    fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);
