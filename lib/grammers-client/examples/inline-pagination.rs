@@ -25,10 +25,7 @@
 use std::env;
 use std::pin::pin;
 
-use futures::{
-    future::{select, Either},
-    StreamExt,
-};
+use futures::future::{select, Either};
 use simple_logger::SimpleLogger;
 use tokio::{runtime, task};
 
@@ -137,12 +134,10 @@ async fn async_main() -> Result {
         println!("Signed in!");
     }
 
-    let mut update_stream = client.update_stream();
-
     println!("Waiting for messages...");
     loop {
         let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { update_stream.select_next_some().await });
+        let upd = pin!(async { client.next_update().await });
 
         let update = match select(exit, upd).await {
             Either::Left(_) => {
