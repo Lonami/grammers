@@ -13,6 +13,7 @@ mod auth_key;
 pub mod deque_buffer;
 pub mod factorize;
 pub mod hex;
+pub mod obfuscated;
 pub mod rsa;
 pub mod sha;
 pub mod two_factor_auth;

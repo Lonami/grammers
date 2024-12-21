@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Error, Transport, UnpackedOffset};
+use super::{Error, Tagged, Transport, UnpackedOffset};
 use grammers_crypto::DequeBuffer;
 
 /// The lightest MTProto transport protocol available. This is an
@@ -109,6 +109,13 @@ impl Transport for Abridged {
     fn reset(&mut self) {
         log::info!("resetting sending of header in abridged transport");
         self.init = false;
+    }
+}
+
+impl Tagged for Abridged {
+    fn init_tag(&mut self) -> [u8; 4] {
+        self.init = true;
+        [0xef, 0xef, 0xef, 0xef]
     }
 }
 
