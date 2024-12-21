@@ -19,6 +19,8 @@ html = ["html5ever"]
 proxy = ["grammers-mtsender/proxy"]
 parse_invite_link = ["url"]
 serde = ["grammers-tl-types/impl-serde"]
+fs = ["tokio/fs"]
+default = ["fs"]
 
 [dependencies]
 chrono = "0.4.38"
@@ -39,7 +41,6 @@ os_info = { version = "3.8.2", default-features = false }
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.12.1", default-features = false, optional = true }
 tokio = { version = "1.40.0", default-features = false, features = [
-    "fs",
     "rt",
 ] }
 url = { version = "2.5.2", optional = true }
