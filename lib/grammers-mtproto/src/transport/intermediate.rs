@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Error, Transport, UnpackedOffset};
+use super::{Error, Tagged, Transport, UnpackedOffset};
 use grammers_crypto::DequeBuffer;
 
 /// A light MTProto transport protocol available that guarantees data padded
@@ -31,6 +31,8 @@ pub struct Intermediate {
 
 #[allow(clippy::new_without_default)]
 impl Intermediate {
+    const TAG: [u8; 4] = 0xee_ee_ee_ee_u32.to_le_bytes();
+
     pub fn new() -> Self {
         Self { init: false }
     }
@@ -44,7 +46,7 @@ impl Transport for Intermediate {
         buffer.extend_front(&(len as i32).to_le_bytes());
 
         if !self.init {
-            buffer.extend_front(&0xee_ee_ee_ee_u32.to_le_bytes());
+            buffer.extend_front(&Self::TAG);
             self.init = true;
         }
     }
@@ -81,6 +83,13 @@ impl Transport for Intermediate {
     fn reset(&mut self) {
         log::info!("resetting sending of header in intermediate transport");
         self.init = false;
+    }
+}
+
+impl Tagged for Intermediate {
+    fn init_tag(&mut self) -> [u8; 4] {
+        self.init = true;
+        Self::TAG
     }
 }
 

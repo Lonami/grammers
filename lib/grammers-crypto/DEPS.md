@@ -48,3 +48,7 @@ Used for methods relied on by the 2-factor offered by Telegram.
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
+
+## ctr
+
+Used for the AES-CTR mode needed for the obfuscated MTProto transport.

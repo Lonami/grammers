@@ -14,11 +14,13 @@
 mod abridged;
 mod full;
 mod intermediate;
+mod obfuscated;
 
 pub use abridged::Abridged;
 pub use full::Full;
 use grammers_crypto::DequeBuffer;
 pub use intermediate::Intermediate;
+pub use obfuscated::Obfuscated;
 use std::fmt;
 
 /// The error type reported by the different transports when something is wrong.
@@ -91,8 +93,17 @@ pub trait Transport {
     fn pack(&mut self, buffer: &mut DequeBuffer<u8>);
 
     /// Unpacks the input buffer in-place.
+    /// Subsequent calls to `unpack` should be made with the same buffer,
+    /// with the data on the ranges from previous `UnpackedOffset` removed.
     fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error>;
 
     /// Reset the state, as if a new instance was just created.
     fn reset(&mut self);
+}
+
+/// The trait used by the obfuscated transport to get the transport tags.
+pub trait Tagged {
+    /// Gets the transport tag for use in the obfuscated transport and
+    /// changes the internal state to avoid sending the tag again.
+    fn init_tag(&mut self) -> [u8; 4];
 }
