@@ -11,13 +11,13 @@
 use super::Client;
 use crate::types::{ChatMap, Update};
 use futures::future::{select, Either};
+use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use std::pin::pin;
 use std::sync::Arc;
-use tokio::time::sleep_until;
 use std::time::Duration;
 use web_time::Instant;
 

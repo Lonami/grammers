@@ -10,6 +10,7 @@
 
 mod errors;
 mod reconnection;
+pub mod utils;
 
 pub use crate::reconnection::*;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
@@ -35,7 +36,7 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::time::sleep_until;
+use utils::{sleep, sleep_until};
 use web_time::{Instant, SystemTime};
 
 #[cfg(feature = "proxy")]
@@ -387,7 +388,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 Err(e) => {
                     attempts += 1;
                     log::warn!("auto-reconnect failed {} time(s): {}", attempts, e);
-                    tokio::time::sleep(Duration::from_secs(1)).await;
+                    sleep(Duration::from_secs(1)).await;
 
                     match self.reconnection_policy.should_retry(attempts) {
                         ControlFlow::Break(_) => {
@@ -398,7 +399,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             return Err(e);
                         }
                         ControlFlow::Continue(duration) => {
-                            tokio::time::sleep(duration).await;
+                            sleep(duration).await;
                         }
                     }
                 }

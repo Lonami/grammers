@@ -31,6 +31,10 @@ hickory-resolver = { version = "0.24.1", optional = true }
 url = { version = "2.5.2", optional = true }
 web-time = "1.1.0"
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+wasm-bindgen-futures = "0.4.49"
+web-sys = {version = "0.3.76", features = ["Window"]}
+
 [dev-dependencies]
 simple_logger = { version = "5.0.0", default-features = false, features = ["colors"] }
 tokio = { version = "1.40.0", features = ["rt"] }
