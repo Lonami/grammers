@@ -8,7 +8,7 @@
 use super::attributes::Attribute;
 use crate::types::{Media, ReplyMarkup, Uploaded};
 use grammers_tl_types as tl;
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7ffffffe;

@@ -39,7 +39,7 @@ use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializ
 use num_bigint::{BigUint, ToBigUint};
 use sha1::{Digest, Sha1};
 use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
+use web_time::{SystemTime, UNIX_EPOCH};
 
 // NOTE! Turning this on will leak the key generation process to stdout!
 // Should only be used for debugging purposes and generating test cases.

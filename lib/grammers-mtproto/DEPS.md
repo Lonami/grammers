@@ -41,3 +41,8 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 ## log
 
 Used to help debug what's going on at the MTP level (such as when future salts are asked for).
+
+## web-time
+
+Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
+Automatically falls back to `std::time` when we're not targeting web.
