@@ -23,6 +23,7 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
 log = "0.4.22"
 num-bigint = "0.4.6"
 sha1 = "0.10.6"
+web-time = "1.1.0"
 
 [dev-dependencies]
 toml = "0.8.19"

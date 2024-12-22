@@ -49,3 +49,8 @@ Provides useful functions for working with futures/tasks.
 ## tokio-socks
 
 SOCKS5 proxy support.
+
+## web-time
+
+Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
+Automatically falls back to `std::time` when we're not targeting web.

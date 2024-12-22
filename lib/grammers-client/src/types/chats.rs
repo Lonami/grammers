@@ -12,11 +12,12 @@ use std::{
     mem::drop,
     pin::Pin,
     task::{Context, Poll},
-    time::{Duration, SystemTime, UNIX_EPOCH},
+    time::Duration,
 };
 
 use futures::TryStreamExt;
 use pin_project_lite::pin_project;
+use web_time::{SystemTime, UNIX_EPOCH};
 
 use grammers_mtsender::{InvocationError, RpcError};
 use grammers_session::PackedChat;

@@ -27,7 +27,7 @@ use std::io::Error;
 use std::ops::ControlFlow;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::SystemTime;
+use std::time::Duration;
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::net::tcp::{ReadHalf, WriteHalf};
@@ -35,7 +35,8 @@ use tokio::net::TcpStream;
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use tokio::time::{sleep_until, Duration, Instant};
+use tokio::time::sleep_until;
+use web_time::{Instant, SystemTime};
 
 #[cfg(feature = "proxy")]
 use {

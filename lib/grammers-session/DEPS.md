@@ -27,3 +27,8 @@ Used to log messages during update processing.
 ## toml
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
+
+## web-time
+
+Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
+Automatically falls back to `std::time` when we're not targeting web.

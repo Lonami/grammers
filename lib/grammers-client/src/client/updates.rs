@@ -17,8 +17,9 @@ pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use std::pin::pin;
 use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::time::sleep_until;
+use std::time::Duration;
+use web_time::Instant;
 
 /// How long to wait after warning the user that the updates limit was exceeded.
 const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);

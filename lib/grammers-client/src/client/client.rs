@@ -15,8 +15,8 @@ use std::fmt;
 use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, RwLock};
-use std::time::Instant;
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
+use web_time::Instant;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";

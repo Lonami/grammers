@@ -38,8 +38,9 @@ use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
 use std::mem;
-use std::time::{Duration, Instant};
+use std::time::Duration;
 use tl::enums::InputChannel;
+use web_time::Instant;
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT
