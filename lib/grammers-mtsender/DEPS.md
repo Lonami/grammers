@@ -54,3 +54,13 @@ SOCKS5 proxy support.
 
 Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
 Automatically falls back to `std::time` when we're not targeting web.
+
+## web-sys
+
+Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
+call `setTimeout` and `clearTimeout` in the browser.
+
+## wasm-bindgen-futures
+
+Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
+convert a `Promise` into a `Future`.

@@ -10,7 +10,9 @@ use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtproto::mtp;
 use grammers_mtproto::transport;
-use grammers_mtsender::{self as sender, AuthorizationError, InvocationError, RpcError, Sender};
+use grammers_mtsender::{
+    self as sender, utils::sleep, AuthorizationError, InvocationError, RpcError, Sender,
+};
 use grammers_session::{ChatHashCache, MessageBox};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::{debug, info};
@@ -397,7 +399,7 @@ impl Connection {
                             delay,
                             std::any::type_name::<R>()
                         );
-                        tokio::time::sleep(delay).await;
+                        sleep(delay).await;
                         slept_flood = true;
                         rx = self.request_tx.read().unwrap().enqueue(request);
                         continue;

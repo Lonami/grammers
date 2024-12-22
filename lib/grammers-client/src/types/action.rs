@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use futures::future::Either;
+use grammers_mtsender::utils;
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
@@ -118,7 +119,7 @@ impl ActionSender {
 
             let action = async {
                 request_result = self.oneshot(action().into()).await;
-                tokio::time::sleep(self.repeat_delay).await;
+                utils::sleep(self.repeat_delay).await;
             };
 
             tokio::pin!(action);
