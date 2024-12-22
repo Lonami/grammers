@@ -10,6 +10,7 @@ use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtproto::mtp;
 use grammers_mtproto::transport;
+use grammers_mtsender::ServerAddr;
 use grammers_mtsender::{
     self as sender, utils::sleep, AuthorizationError, InvocationError, RpcError, Sender,
 };
@@ -18,7 +19,7 @@ use grammers_tl_types::{self as tl, Deserializable};
 use log::{debug, info};
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
-use std::net::{Ipv4Addr, SocketAddr};
+use std::net::Ipv4Addr;
 use std::sync::atomic::{AtomicU32, Ordering};
 use std::sync::{Arc, RwLock};
 use tokio::sync::oneshot::error::TryRecvError;
@@ -46,10 +47,29 @@ pub(crate) async fn connect_sender(
 ) -> Result<(Sender<transport::Full, mtp::Encrypted>, Enqueuer), AuthorizationError> {
     let transport = transport::Full::new();
 
-    let addr: SocketAddr = if let Some(ip) = config.params.server_addr {
-        ip
+
+    let tcp_addr = DC_ADDRESSES[dc_id as usize].into();
+    let addr: ServerAddr = if let Some(ref sa) = config.params.server_addr {
+        sa.clone()
     } else {
-        DC_ADDRESSES[dc_id as usize].into()
+        let addr = {
+            #[cfg(not(feature = "proxy"))]
+            let addr = ServerAddr::Tcp { address: tcp_addr };
+
+            #[cfg(feature = "proxy")]
+            let addr = if let Some(proxy) = &config.params.proxy_url {
+                ServerAddr::Proxied {
+                    address: tcp_addr,
+                    proxy: proxy.to_owned(),
+                }
+            } else {
+                ServerAddr::Tcp { address: tcp_addr }
+            };
+
+            addr
+        };
+
+        addr
     };
 
     let (mut sender, request_tx) = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
@@ -58,22 +78,6 @@ pub(crate) async fn connect_sender(
             dc_id, addr
         );
 
-        #[cfg(feature = "proxy")]
-        if let Some(url) = config.params.proxy_url.as_ref() {
-            sender::connect_via_proxy_with_auth(
-                transport,
-                addr,
-                auth_key,
-                url,
-                config.params.reconnection_policy,
-            )
-            .await?
-        } else {
-            sender::connect_with_auth(transport, addr, auth_key, config.params.reconnection_policy)
-                .await?
-        }
-
-        #[cfg(not(feature = "proxy"))]
         sender::connect_with_auth(transport, addr, auth_key, config.params.reconnection_policy)
             .await?
     } else {
@@ -82,19 +86,10 @@ pub(crate) async fn connect_sender(
             dc_id, addr
         );
 
-        #[cfg(feature = "proxy")]
-        let (sender, tx) = if let Some(url) = config.params.proxy_url.as_ref() {
-            sender::connect_via_proxy(transport, addr, url, config.params.reconnection_policy)
-                .await?
-        } else {
-            sender::connect(transport, addr, config.params.reconnection_policy).await?
-        };
-
-        #[cfg(not(feature = "proxy"))]
         let (sender, tx) =
             sender::connect(transport, addr, config.params.reconnection_policy).await?;
 
-        config.session.insert_dc(dc_id, addr, sender.auth_key());
+        config.session.insert_dc(dc_id, tcp_addr, sender.auth_key());
         (sender, tx)
     };
 

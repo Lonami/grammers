@@ -33,7 +33,9 @@ fn test_invoke_encrypted_method() {
     rt.block_on(async {
         let (mut sender, enqueuer) = connect(
             transport::Full::new(),
-            std::net::SocketAddr::from_str(TELEGRAM_TEST_DC_2).unwrap(),
+            grammers_mtsender::ServerAddr::Tcp {
+                address: std::net::SocketAddr::from_str(TELEGRAM_TEST_DC_2).unwrap(),
+            },
             &NoReconnect,
         )
         .await
