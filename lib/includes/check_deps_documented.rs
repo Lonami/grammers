@@ -11,6 +11,8 @@ use toml::Value;
 
 #[test]
 fn check_deps_documented() {
+    const KEYS: [&str; 3] = ["dependencies", "build-dependencies", "dev-dependencies"];
+
     let mut listed_deps = {
         let mut deps = std::collections::HashSet::new();
         let mut file = File::open("Cargo.toml").expect("Cargo.toml must exist");
@@ -20,10 +22,24 @@ fn check_deps_documented() {
 
         match toml.parse::<toml::Value>() {
             Ok(Value::Table(mut map)) => {
-                for &key in ["dependencies", "build-dependencies", "dev-dependencies"].iter() {
+                for &key in KEYS.iter() {
                     if let Some(Value::Table(build)) = map.remove(key) {
                         for (dep, _) in build {
                             deps.insert(dep);
+                        }
+                    }
+                }
+
+                if let Some(Value::Table(target)) = map.remove("target") {
+                    for (_, target) in target {
+                        if let Value::Table(mut map) = target {
+                            for &key in KEYS.iter() {
+                                if let Some(Value::Table(build)) = map.remove(key) {
+                                    for (dep, _) in build {
+                                        deps.insert(dep);
+                                    }
+                                }
+                            }
                         }
                     }
                 }
