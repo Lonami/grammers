@@ -6,13 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtproto::{mtp, transport};
-use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender};
+use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender, ServerAddr};
 use grammers_session::{ChatHashCache, MessageBox, Session};
 use grammers_tl_types as tl;
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
 use std::fmt;
-use std::net::SocketAddr;
 use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, RwLock};
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
@@ -60,7 +59,7 @@ pub struct InitParams {
     /// in the session file (or a default production address if no such address exists). This
     /// field can be used to override said address, and is most commonly used to connect to one
     /// of Telegram's test servers instead.
-    pub server_addr: Option<SocketAddr>,
+    pub server_addr: Option<ServerAddr>,
     /// The threshold below which the library should automatically sleep on flood-wait and slow
     /// mode wait errors (inclusive). For instance, if an
     /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
