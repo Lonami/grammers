@@ -281,6 +281,7 @@ mod tests {
     }
 
     #[test]
+    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     fn ensure_next_update_future_impls_send() {
         if false {
             // We just want it to type-check, not actually run.
