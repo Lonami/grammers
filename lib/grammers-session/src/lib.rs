@@ -91,43 +91,53 @@ impl Session {
             .unwrap()
             .dcs
             .iter()
-            .filter_map(|enums::DataCenter::Center(dc)| {
-                if dc.id == dc_id {
-                    if let Some(auth) = &dc.auth {
-                        let mut bytes = [0; 256];
-                        bytes.copy_from_slice(auth);
-                        Some(bytes)
-                    } else {
-                        None
-                    }
-                } else {
-                    None
-                }
+            .filter_map(|dc| match dc {
+                enums::DataCenter::Center(types::DataCenter {
+                    id,
+                    auth: Some(auth),
+                    ..
+                }) if *id == dc_id => auth.clone().try_into().ok(),
+                enums::DataCenter::Ws(types::DataCenterWs {
+                    id,
+                    auth: Some(auth),
+                    ..
+                }) if *id == dc_id => auth.clone().try_into().ok(),
+                _ => None,
             })
             .next()
     }
 
-    pub fn insert_dc(&self, id: i32, addr: SocketAddr, auth: [u8; 256]) {
+    fn insert_dc(&self, dc: enums::DataCenter) {
         let mut session = self.session.lock().unwrap();
-        if let Some(pos) = session
-            .dcs
-            .iter()
-            .position(|enums::DataCenter::Center(dc)| dc.id == id)
-        {
+        if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == dc.id()) {
             session.dcs.remove(pos);
         }
+        session.dcs.push(dc);
+    }
 
-        let (ip_v4, ip_v6): (Option<&SocketAddrV4>, Option<&SocketAddrV6>) = match &addr {
+    pub fn insert_dc_tcp(&self, id: i32, addr: &SocketAddr, auth: [u8; 256]) {
+        let (ip_v4, ip_v6): (Option<&SocketAddrV4>, Option<&SocketAddrV6>) = match addr {
             SocketAddr::V4(ip_v4) => (Some(ip_v4), None),
             SocketAddr::V6(ip_v6) => (None, Some(ip_v6)),
         };
 
-        session.dcs.push(
+        self.insert_dc(
             types::DataCenter {
                 id,
                 ipv4: ip_v4.map(|addr| i32::from_le_bytes(addr.ip().octets())),
                 ipv6: ip_v6.map(|addr| addr.ip().octets()),
                 port: addr.port() as i32,
+                auth: Some(auth.into()),
+            }
+            .into(),
+        );
+    }
+
+    pub fn insert_dc_ws(&self, id: i32, url: &str, auth: [u8; 256]) {
+        self.insert_dc(
+            types::DataCenterWs {
+                id,
+                url: url.to_string(),
                 auth: Some(auth.into()),
             }
             .into(),
@@ -158,14 +168,8 @@ impl Session {
         self.session.lock().unwrap().state = Some(state.into())
     }
 
-    pub fn get_dcs(&self) -> Vec<types::DataCenter> {
-        self.session
-            .lock()
-            .unwrap()
-            .dcs
-            .iter()
-            .map(|enums::DataCenter::Center(dc)| dc.clone())
-            .collect()
+    pub fn get_dcs(&self) -> Vec<enums::DataCenter> {
+        self.session.lock().unwrap().dcs.iter().cloned().collect()
     }
 
     #[must_use]
