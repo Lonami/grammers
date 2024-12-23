@@ -10,7 +10,7 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
-use futures::future::{select, Either};
+use futures_util::future::{select, Either};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;

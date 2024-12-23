@@ -17,7 +17,6 @@ use std::io::{BufRead, Write};
 use std::path::Path;
 use std::{env, io};
 
-use futures::TryStreamExt;
 use grammers_client::{Client, Config, SignInError};
 use mime::Mime;
 use mime_guess::mime;
@@ -90,7 +89,7 @@ async fn async_main() -> Result<()> {
 
     let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {chat_name} could not be found"));
 
-    let mut messages = client.stream_messages(&chat);
+    let mut messages = client.iter_messages(&chat);
 
     println!(
         "Chat {} has {} total messages.",
@@ -100,7 +99,7 @@ async fn async_main() -> Result<()> {
 
     let mut counter = 0;
 
-    while let Some(msg) = messages.try_next().await? {
+    while let Some(msg) = messages.next().await? {
         counter += 1;
         println!("Message {}:{}", msg.id(), msg.text());
         if let Some(media) = msg.media() {

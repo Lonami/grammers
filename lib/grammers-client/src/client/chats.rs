@@ -8,36 +8,25 @@
 
 //! Methods related to users, groups and channels.
 
-use std::collections::VecDeque;
-use std::future::Future;
-use std::ops::DerefMut;
-use std::pin::Pin;
-use std::sync::Arc;
-use std::task::Poll;
-use std::time::Duration;
-
-use futures::Stream;
-
+use super::Client;
+use crate::types::{
+    chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
+    BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
+};
 use grammers_mtsender::RpcError;
+pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
-
-use super::Client;
-use crate::{
-    types::{
-        chats::{AdminRightsBuilderInner, BannedRightsBuilderInner},
-        AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
-        Photo, User,
-    },
-    utils::poll_future_ready,
-};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use std::collections::VecDeque;
+use std::future::Future;
+use std::sync::Arc;
+use std::time::Duration;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
 
-pub enum ParticipantStream {
+pub enum ParticipantIter {
     Empty,
     Chat {
         client: Client,
@@ -48,7 +37,7 @@ pub enum ParticipantStream {
     Channel(IterBuffer<tl::functions::channels::GetParticipants, Participant>),
 }
 
-impl ParticipantStream {
+impl ParticipantIter {
     fn new(client: &Client, chat: PackedChat) -> Self {
         if let Some(channel) = chat.try_to_input_channel() {
             Self::Channel(IterBuffer::from_request(
@@ -190,10 +179,44 @@ impl ParticipantStream {
         }
     }
 
-    /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
-    pub fn filter_participants(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
+    /// Return the next `Participant` from the internal buffer, filling the buffer previously if
+    /// it's empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no participants left.
+    pub async fn next(&mut self) -> Result<Option<Participant>, InvocationError> {
+        // Need to split the `match` because `fill_buffer()` borrows mutably.
         match self {
-            ParticipantStream::Channel(ref mut c) => {
+            Self::Empty => {}
+            Self::Chat { buffer, .. } => {
+                if buffer.is_empty() {
+                    self.fill_buffer().await?;
+                }
+            }
+            Self::Channel(iter) => {
+                if let Some(result) = iter.next_raw() {
+                    return result;
+                }
+                self.fill_buffer().await?;
+            }
+        }
+
+        match self {
+            Self::Empty => Ok(None),
+            Self::Chat { buffer, .. } => {
+                let result = buffer.pop_front();
+                if buffer.is_empty() {
+                    *self = Self::Empty;
+                }
+                Ok(result)
+            }
+            Self::Channel(iter) => Ok(iter.pop_item()),
+        }
+    }
+
+    /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
+    pub fn filter(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
+        match self {
+            ParticipantIter::Channel(ref mut c) => {
                 c.request.filter = filter;
                 self
             }
@@ -202,57 +225,12 @@ impl ParticipantStream {
     }
 }
 
-impl Stream for ParticipantStream {
-    type Item = Result<Participant, InvocationError>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
-        // Need to split the `match` because `fill_buffer()` borrows mutably.
-        match self.deref_mut() {
-            Self::Empty => {}
-            Self::Chat { buffer, .. } => {
-                if buffer.is_empty() {
-                    if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
-                        return Poll::Ready(Some(Err(e)));
-                    }
-                }
-            }
-            Self::Channel(iter) => {
-                if let Some(result) = iter.next_raw() {
-                    match result {
-                        Ok(m) => return Poll::Ready(m.map(Ok)),
-                        Err(e) => return Poll::Ready(Some(Err(e))),
-                    }
-                }
-
-                if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
-                    return Poll::Ready(Some(Err(e)));
-                }
-            }
-        }
-
-        match self.deref_mut() {
-            Self::Empty => Poll::Ready(None),
-            Self::Chat { buffer, .. } => {
-                let result = buffer.pop_front();
-                if buffer.is_empty() {
-                    *self = Self::Empty;
-                }
-                Poll::Ready(result.map(Ok))
-            }
-            Self::Channel(iter) => Poll::Ready(iter.pop_item().map(Ok)),
-        }
-    }
-}
-
-pub enum ProfilePhotoStream {
+pub enum ProfilePhotoIter {
     User(IterBuffer<tl::functions::photos::GetUserPhotos, Photo>),
     Chat(IterBuffer<tl::functions::messages::Search, Message>),
 }
 
-impl ProfilePhotoStream {
+impl ProfilePhotoIter {
     fn new(client: &Client, chat: PackedChat) -> Self {
         if let Some(user_id) = chat.try_to_input_user() {
             Self::User(IterBuffer::from_request(
@@ -315,57 +293,45 @@ impl ProfilePhotoStream {
                     iter.request.offset += photos.len() as i32;
                 }
 
-                iter.buffer.extend(photos.into_iter().map(Photo::from_raw));
+                iter.buffer
+                    .extend(photos.into_iter().map(|x| Photo::from_raw(x)));
 
                 Ok(total)
             }
             Self::Chat(_) => panic!("fill_buffer should not be called for Chat variant"),
         }
     }
-}
 
-impl Stream for ProfilePhotoStream {
-    type Item = Result<Photo, InvocationError>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    /// Return the next photo from the internal buffer, filling the buffer previously if it's
+    /// empty.
+    ///
+    /// Returns `None` if the `limit` is reached or there are no photos left.
+    pub async fn next(&mut self) -> Result<Option<Photo>, InvocationError> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
-        match self.deref_mut() {
+        match self {
             Self::User(iter) => {
                 if let Some(result) = iter.next_raw() {
-                    match result {
-                        Ok(m) => return Poll::Ready(m.map(Ok)),
-                        Err(e) => return Poll::Ready(Some(Err(e))),
-                    }
+                    return result;
                 }
-
-                if let Err(e) = poll_future_ready!(cx, self.fill_buffer()) {
-                    return Poll::Ready(Some(Err(e)));
-                }
+                self.fill_buffer().await?;
             }
-            Self::Chat(ref mut iter) => {
-                while let Some(maybe_message) = futures::ready!(Pin::new(&mut *iter).poll_next(cx))
-                {
-                    match maybe_message {
-                        Ok(message) => {
-                            if let Some(tl::enums::MessageAction::ChatEditPhoto(
-                                tl::types::MessageActionChatEditPhoto { photo },
-                            )) = message.raw_action
-                            {
-                                return Poll::Ready(Some(Ok(Photo::from_raw(photo))));
-                            }
-                        }
-                        Err(e) => return Poll::Ready(Some(Err(e))),
+            Self::Chat(iter) => {
+                while let Some(message) = iter.next().await? {
+                    if let Some(tl::enums::MessageAction::ChatEditPhoto(
+                        tl::types::MessageActionChatEditPhoto { photo },
+                    )) = message.raw_action
+                    {
+                        return Ok(Some(Photo::from_raw(photo)));
+                    } else {
+                        continue;
                     }
                 }
             }
         }
 
-        match self.get_mut() {
-            Self::User(iter) => Poll::Ready(iter.pop_item().map(Ok)),
-            Self::Chat(_) => Poll::Ready(None),
+        match self {
+            Self::User(iter) => Ok(iter.pop_item()),
+            Self::Chat(_) => Ok(None),
         }
     }
 }
@@ -465,7 +431,7 @@ impl Client {
         Ok(User::from_raw(res.pop().unwrap()))
     }
 
-    /// Get a stream over participants of a chat.
+    /// Iterate over the participants of a chat.
     ///
     /// The participants are returned in no particular order.
     ///
@@ -474,11 +440,10 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut participants = client.stream_participants(&chat);
+    /// let mut participants = client.iter_participants(&chat);
     ///
-    /// while let Some(participant) = participants.try_next().await? {
+    /// while let Some(participant) = participants.next().await? {
     ///     println!(
     ///         "{} has role {:?}",
     ///         participant.user.first_name().unwrap_or(&participant.user.id().to_string()),
@@ -488,8 +453,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn stream_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantStream {
-        ParticipantStream::new(self, chat.into())
+    pub fn iter_participants<C: Into<PackedChat>>(&self, chat: C) -> ParticipantIter {
+        ParticipantIter::new(self, chat.into())
     }
 
     /// Kicks the participant from the chat.
@@ -639,7 +604,7 @@ impl Client {
         )
     }
 
-    /// Get stream over the history of profile photos for the given user or chat.
+    /// Iterate over the history of profile photos for the given user or chat.
     ///
     /// Note that the current photo might not be present in the history, and to avoid doing more
     /// work when it's generally not needed (the photo history tends to be complete but in some
@@ -651,18 +616,17 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # use futures::TryStreamExt;
     /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// let mut photos = client.stream_profile_photos(&chat);
+    /// let mut photos = client.iter_profile_photos(&chat);
     ///
-    /// while let Some(photo) = photos.try_next().await? {
+    /// while let Some(photo) = photos.next().await? {
     ///     println!("Did you know chat has a photo with ID {}?", photo.id());
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn stream_profile_photos<C: Into<PackedChat>>(&self, chat: C) -> ProfilePhotoStream {
-        ProfilePhotoStream::new(self, chat.into())
+    pub fn iter_profile_photos<C: Into<PackedChat>>(&self, chat: C) -> ProfilePhotoIter {
+        ProfilePhotoIter::new(self, chat.into())
     }
 
     /// Convert a [`PackedChat`] back into a [`Chat`].

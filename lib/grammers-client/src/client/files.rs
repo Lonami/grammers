@@ -5,30 +5,22 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::future::Future;
-use std::sync::Arc;
-use std::task::Poll;
 
-use futures::{
-    stream::{FuturesUnordered, StreamExt},
-    Stream,
-};
+use crate::types::{photo_sizes::PhotoSize, Downloadable, Uploaded};
+use crate::utils::generate_random_id;
+use crate::Client;
+use futures_util::stream::{FuturesUnordered, StreamExt as _};
+use grammers_mtsender::InvocationError;
+use grammers_tl_types as tl;
+use std::sync::Arc;
 use tokio::{
     io::{self, AsyncRead, AsyncReadExt},
     sync::Mutex as AsyncMutex,
 };
 
-use grammers_mtsender::InvocationError;
-use grammers_tl_types as tl;
-
-use crate::types::{photo_sizes::PhotoSize, Downloadable, Uploaded};
-use crate::utils::{generate_random_id, poll_future_ready};
-use crate::Client;
-
 #[cfg(feature = "fs")]
 use {
     crate::types::Media,
-    futures::TryStreamExt,
     std::{io::SeekFrom, path::Path},
     tokio::{
         fs,
@@ -43,15 +35,14 @@ const FILE_MIGRATE_ERROR: i32 = 303;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
 
-pub struct DownloadStream {
+pub struct DownloadIter {
     client: Client,
     done: bool,
     request: tl::functions::upload::GetFile,
     photo_size_data: Option<Vec<u8>>,
-    dc: Option<u32>,
 }
 
-impl DownloadStream {
+impl DownloadIter {
     fn new(client: &Client, downloadable: &Downloadable) -> Self {
         match downloadable {
             Downloadable::PhotoSize(photo_size)
@@ -79,7 +70,6 @@ impl DownloadStream {
                 limit: MAX_CHUNK_SIZE,
             },
             photo_size_data: None,
-            dc: None,
         }
     }
 
@@ -103,7 +93,6 @@ impl DownloadStream {
                 limit: MAX_CHUNK_SIZE,
             },
             photo_size_data: Some(data),
-            dc: None,
         }
     }
 
@@ -127,33 +116,26 @@ impl DownloadStream {
         self.request.offset += (self.request.limit * n) as i64;
         self
     }
-}
 
-impl Stream for DownloadStream {
-    type Item = Result<Vec<u8>, InvocationError>;
-
-    fn poll_next(
-        mut self: std::pin::Pin<&mut Self>,
-        cx: &mut std::task::Context<'_>,
-    ) -> Poll<Option<Self::Item>> {
+    /// Fetch and return the next chunk.
+    pub async fn next(&mut self) -> Result<Option<Vec<u8>>, InvocationError> {
         if self.done {
-            return Poll::Ready(None);
+            return Ok(None);
         }
 
-        if let Some(data) = self.photo_size_data.take() {
+        if let Some(data) = &self.photo_size_data {
             self.done = true;
-            return Poll::Ready(Some(Ok(data)));
+            return Ok(Some(data.clone()));
         }
 
         use tl::enums::upload::File;
 
         // TODO handle maybe FILEREF_UPGRADE_NEEDED
+        let mut dc: Option<u32> = None;
         loop {
-            let result = match self.dc.take() {
-                Some(dc) => {
-                    poll_future_ready!(cx, self.client.invoke_in_dc(&self.request, dc as i32))
-                }
-                None => poll_future_ready!(cx, self.client.invoke(&self.request)),
+            let result = match dc.take() {
+                None => self.client.invoke(&self.request).await,
+                Some(dc) => self.client.invoke_in_dc(&self.request, dc as i32).await,
             };
 
             break match result {
@@ -161,21 +143,21 @@ impl Stream for DownloadStream {
                     if f.bytes.len() < self.request.limit as usize {
                         self.done = true;
                         if f.bytes.is_empty() {
-                            return Poll::Ready(None);
+                            return Ok(None);
                         }
                     }
 
                     self.request.offset += self.request.limit as i64;
-                    Poll::Ready(Some(Ok(f.bytes)))
+                    Ok(Some(f.bytes))
                 }
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
                 }
                 Err(InvocationError::Rpc(err)) if err.code == FILE_MIGRATE_ERROR => {
-                    self.dc = err.value;
+                    dc = err.value;
                     continue;
                 }
-                Err(e) => Poll::Ready(Some(Err(e))),
+                Err(e) => Err(e),
             };
         }
     }
@@ -183,17 +165,16 @@ impl Stream for DownloadStream {
 
 /// Method implementations related to uploading or downloading files.
 impl Client {
-    /// Returns a new stream over the contents of a media document that will be downloaded.
+    /// Returns a new iterator over the contents of a media document that will be downloaded.
     ///
     /// # Examples
     ///
     /// ```
-    /// # use futures::TryStreamExt;
     /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
-    /// let mut download = client.stream_download(&downloadable);
+    /// let mut download = client.iter_download(&downloadable);
     ///
-    /// while let Some(chunk) = download.try_next().await? {
+    /// while let Some(chunk) = download.next().await? {
     ///     file_bytes.extend(chunk);
     /// }
     ///
@@ -201,15 +182,15 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn stream_download(&self, downloadable: &Downloadable) -> DownloadStream {
-        DownloadStream::new(self, downloadable)
+    pub fn iter_download(&self, downloadable: &Downloadable) -> DownloadIter {
+        DownloadIter::new(self, downloadable)
     }
 
     /// Downloads a media file into the specified path.
     ///
     /// If the file already exists, it will be overwritten.
     ///
-    /// This is a small wrapper around [`Client::stream_download`] for the common case of
+    /// This is a small wrapper around [`Client::iter_download`] for the common case of
     /// wanting to save the file locally.
     ///
     /// # Examples
@@ -260,15 +241,15 @@ impl Client {
             return Ok(());
         }
 
-        let mut download = self.stream_download(downloadable);
+        let mut download = self.iter_download(downloadable);
         Client::load(path, &mut download).await
     }
 
     #[cfg(feature = "fs")]
-    async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadStream) -> Result<(), io::Error> {
+    async fn load<P: AsRef<Path>>(path: P, download: &mut DownloadIter) -> Result<(), io::Error> {
         let mut file = fs::File::create(path).await?;
         while let Some(chunk) = download
-            .try_next()
+            .next()
             .await
             .map_err(|e| io::Error::new(io::ErrorKind::Other, e))?
         {
@@ -279,7 +260,6 @@ impl Client {
     }
 
     /// Downloads a `Document` to specified path using multiple connections
-    #[cfg(feature = "fs")]
     async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
         media: &Media,
@@ -533,7 +513,6 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
-    #[cfg(feature = "fs")]
     pub async fn upload_file<P: AsRef<Path>>(&self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();
 
