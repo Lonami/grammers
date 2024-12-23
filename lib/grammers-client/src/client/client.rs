@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_mtproto::{mtp, transport};
+use grammers_mtproto::mtp;
 use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender, ServerAddr};
 use grammers_session::{ChatHashCache, MessageBox, Session};
 use grammers_tl_types as tl;
@@ -16,6 +16,8 @@ use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, RwLock};
 use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use web_time::Instant;
+
+use super::net;
 
 /// When no locale is found, use this one instead.
 const DEFAULT_LOCALE: &str = "en";
@@ -138,7 +140,7 @@ pub(crate) struct ClientState {
 }
 
 pub(crate) struct Connection {
-    pub(crate) sender: AsyncMutex<Sender<transport::Full, mtp::Encrypted>>,
+    pub(crate) sender: AsyncMutex<Sender<net::Transport, mtp::Encrypted>>,
     pub(crate) request_tx: RwLock<Enqueuer>,
     pub(crate) step_counter: AtomicU32,
 }
