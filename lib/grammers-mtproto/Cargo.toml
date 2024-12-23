@@ -25,5 +25,8 @@ num-bigint = "0.4.6"
 sha1 = "0.10.6"
 web-time = "1.1.0"
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.2.15", features = ["js"] }
+
 [dev-dependencies]
 toml = "0.8.19"

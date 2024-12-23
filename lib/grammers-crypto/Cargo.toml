@@ -25,6 +25,9 @@ sha2 = "0.10.8"
 num-traits = "0.2.19"
 ctr = "0.9.2"
 
+[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
+getrandom = { version = "0.2.15", features = ["js"] }
+
 [dev-dependencies]
 bencher = "0.1.5"
 toml = "0.8.19"
