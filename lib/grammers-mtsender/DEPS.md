@@ -64,3 +64,13 @@ call `setTimeout` and `clearTimeout` in the browser.
 
 Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
 convert a `Promise` into a `Future`.
+
+## ws_stream_wasm
+
+Only used when targeting `wasm32-unknown-unknown`. Used to create a WebSocket connection
+and get a byte stream from it.
+
+## async_io_stream
+
+Only used when targeting `wasm32-unknown-unknown`. Used to create a tokio-compatible stream
+from a WebSocket connection.
