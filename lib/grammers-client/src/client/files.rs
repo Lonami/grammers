@@ -260,6 +260,7 @@ impl Client {
     }
 
     /// Downloads a `Document` to specified path using multiple connections
+    #[cfg(feature = "fs")]
     async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
         media: &Media,
@@ -513,6 +514,7 @@ impl Client {
     /// ```
     ///
     /// [`InputMessage`]: crate::InputMessage
+    #[cfg(feature = "fs")]
     pub async fn upload_file<P: AsRef<Path>>(&self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();
 
