@@ -30,6 +30,7 @@ use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 ///
 /// The addresses were obtained from the `static` addresses through a call to
 /// `functions::help::GetConfig`.
+#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
 const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
     (Ipv4Addr::new(0, 0, 0, 0), 0),
     (Ipv4Addr::new(149, 154, 175, 53), 443),
@@ -72,12 +73,13 @@ pub(crate) async fn connect_sender(
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     let transport = transport::Obfuscated::new(transport::Intermediate::new());
 
-    let tcp_addr = DC_ADDRESSES[dc_id as usize].into();
     let addr: ServerAddr = if let Some(ref sa) = config.params.server_addr {
         sa.clone()
     } else {
         #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let addr = {
+            let tcp_addr = DC_ADDRESSES[dc_id as usize].into();
+
             #[cfg(not(feature = "proxy"))]
             let addr = ServerAddr::Tcp { address: tcp_addr };
 
@@ -117,9 +119,31 @@ pub(crate) async fn connect_sender(
         );
 
         let (sender, tx) =
-            sender::connect(transport, addr, config.params.reconnection_policy).await?;
+            sender::connect(transport, addr.clone(), config.params.reconnection_policy).await?;
 
-        config.session.insert_dc(dc_id, tcp_addr, sender.auth_key());
+        match addr {
+            #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
+            ServerAddr::Tcp { ref address, .. } => {
+                config
+                    .session
+                    .insert_dc_tcp(dc_id, address, sender.auth_key());
+            }
+            #[cfg(all(
+                not(all(target_arch = "wasm32", target_os = "unknown")),
+                feature = "proxy"
+            ))]
+            ServerAddr::Proxied { ref address, .. } => {
+                config
+                    .session
+                    .insert_dc_tcp(dc_id, address, sender.auth_key());
+            }
+            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+            ServerAddr::Ws { ref address } => {
+                config
+                    .session
+                    .insert_dc_ws(dc_id, address, sender.auth_key());
+            }
+        }
         (sender, tx)
     };
 
