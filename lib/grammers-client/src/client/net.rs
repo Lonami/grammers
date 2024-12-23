@@ -39,6 +39,21 @@ const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
     (Ipv4Addr::new(91, 108, 56, 190), 443),
 ];
 
+/// WebSocket addresses to Telegram datacenters, where the index into this array
+/// represents the data center ID.
+///
+/// The addresses were obtained from the official docs.
+/// See [URI Format](https://core.telegram.org/mtproto/transports#uri-format).
+#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+const WS_ADDRESSES: [&str; 6] = [
+    "",
+    "wss://pluto.web.telegram.org/apiws",
+    "wss://venus.web.telegram.org/apiws",
+    "wss://aurora.web.telegram.org/apiws",
+    "wss://vesta.web.telegram.org/apiws",
+    "wss://flora.web.telegram.org/apiws",
+];
+
 const DEFAULT_DC: i32 = 2;
 
 pub(crate) async fn connect_sender(
@@ -52,6 +67,7 @@ pub(crate) async fn connect_sender(
     let addr: ServerAddr = if let Some(ref sa) = config.params.server_addr {
         sa.clone()
     } else {
+        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
         let addr = {
             #[cfg(not(feature = "proxy"))]
             let addr = ServerAddr::Tcp { address: tcp_addr };
@@ -67,6 +83,11 @@ pub(crate) async fn connect_sender(
             };
 
             addr
+        };
+
+        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
+        let addr = ServerAddr::Ws {
+            address: WS_ADDRESSES[dc_id as usize].to_string(),
         };
 
         addr
