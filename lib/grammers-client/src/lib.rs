@@ -49,6 +49,9 @@ pub mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
+#[cfg(all(feature = "fs", target_arch = "wasm32", target_os = "unknown"))]
+compile_error!("The `fs` feature is not supported on wasm32-unknown-unknown.");
+
 pub use client::{Client, Config, InitParams, SignInError};
 pub use types::{button, reply_markup, ChatMap, InputMedia, InputMessage, Update};
 
