@@ -113,7 +113,7 @@ impl DownloadIter {
     /// skip less data, modify the `chunk_size` before calling this method, and then reset it to
     /// any value you want.
     pub fn skip_chunks(mut self, n: i32) -> Self {
-        self.request.offset += (self.request.limit * n) as i64;
+        self.request.offset += self.request.limit as i64 * (n as i64);
         self
     }
 
