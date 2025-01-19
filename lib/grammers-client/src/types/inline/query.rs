@@ -82,7 +82,10 @@ impl InlineQuery {
 
     /// Answer the inline query.
     // TODO: add example
-    pub fn answer(&self, results: impl IntoIterator<Item = InlineResult>) -> Answer {
+    pub fn answer<T>(&self, results: impl IntoIterator<Item = T>) -> Answer
+    where
+        T: Into<tl::enums::InputBotInlineResult>,
+    {
         Answer {
             request: tl::functions::messages::SetInlineBotResults {
                 gallery: false,
