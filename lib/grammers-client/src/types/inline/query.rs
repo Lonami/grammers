@@ -209,36 +209,40 @@ impl Article {
 
 impl From<Article> for InlineResult {
     fn from(article: Article) -> Self {
-        Self(tl::enums::InputBotInlineResult::Result(
-            tl::types::InputBotInlineResult {
-                id: article
-                    .id
-                    .unwrap_or_else(|| generate_random_id().to_string()),
-                r#type: "article".into(),
-                title: Some(article.title),
-                description: article.description,
-                url: article.url,
-                thumb: article.thumb_url.map(|url| {
-                    tl::enums::InputWebDocument::Document(tl::types::InputWebDocument {
-                        url,
-                        size: 0,
-                        mime_type: "image/jpeg".into(),
-                        attributes: vec![],
-                    })
-                }),
-                content: None,
-                // TODO: also allow other types of messages than text
-                send_message: tl::enums::InputBotInlineMessage::Text(
-                    tl::types::InputBotInlineMessageText {
-                        no_webpage: !article.input_message.link_preview,
-                        invert_media: article.input_message.invert_media,
-                        message: article.input_message.text,
-                        entities: Some(article.input_message.entities),
-                        reply_markup: article.input_message.reply_markup,
-                    },
-                ),
-            },
-        ))
+        Self(article.into())
+    }
+}
+
+impl From<Article> for tl::enums::InputBotInlineResult {
+    fn from(article: Article) -> Self {
+        tl::enums::InputBotInlineResult::Result(tl::types::InputBotInlineResult {
+            id: article
+                .id
+                .unwrap_or_else(|| generate_random_id().to_string()),
+            r#type: "article".into(),
+            title: Some(article.title),
+            description: article.description,
+            url: article.url,
+            thumb: article.thumb_url.map(|url| {
+                tl::enums::InputWebDocument::Document(tl::types::InputWebDocument {
+                    url,
+                    size: 0,
+                    mime_type: "image/jpeg".into(),
+                    attributes: vec![],
+                })
+            }),
+            content: None,
+            // TODO: also allow other types of messages than text
+            send_message: tl::enums::InputBotInlineMessage::Text(
+                tl::types::InputBotInlineMessageText {
+                    no_webpage: !article.input_message.link_preview,
+                    invert_media: article.input_message.invert_media,
+                    message: article.input_message.text,
+                    entities: Some(article.input_message.entities),
+                    reply_markup: article.input_message.reply_markup,
+                },
+            ),
+        })
     }
 }
 
