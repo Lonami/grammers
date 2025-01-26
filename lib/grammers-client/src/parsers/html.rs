@@ -59,11 +59,13 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         entities.push(tl::types::MessageEntityUnderline { offset, length }.into());
                     }
                     tag!("blockquote") => {
+                        let collapsed = attrs.into_iter().any(|a| &a.name.local == "collapsed");
+
                         entities.push(
                             tl::types::MessageEntityBlockquote {
                                 offset,
                                 length,
-                                collapsed: false,
+                                collapsed,
                             }
                             .into(),
                         );
