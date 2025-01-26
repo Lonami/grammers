@@ -313,7 +313,14 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
                 insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</del>")));
             }
             ME::Blockquote(e) => {
-                insertions.push((before(i, 0, e.offset), Segment::Fixed("<blockquote>")));
+                if e.collapsed {
+                    insertions.push((
+                        before(i, 0, e.offset),
+                        Segment::Fixed("<blockquote expandable>"),
+                    ));
+                } else {
+                    insertions.push((before(i, 0, e.offset), Segment::Fixed("<blockquote>")));
+                }
                 insertions.push((
                     after(i, 0, e.offset + e.length),
                     Segment::Fixed("</blockquote>"),
