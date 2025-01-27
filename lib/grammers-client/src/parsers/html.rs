@@ -59,11 +59,13 @@ pub fn parse_html_message(message: &str) -> (String, Vec<tl::enums::MessageEntit
                         entities.push(tl::types::MessageEntityUnderline { offset, length }.into());
                     }
                     tag!("blockquote") => {
+                        let collapsed = attrs.into_iter().any(|a| &a.name.local == "expandable");
+
                         entities.push(
                             tl::types::MessageEntityBlockquote {
                                 offset,
                                 length,
-                                collapsed: false,
+                                collapsed,
                             }
                             .into(),
                         );
@@ -311,7 +313,14 @@ pub fn generate_html_message(message: &str, entities: &[tl::enums::MessageEntity
                 insertions.push((after(i, 0, e.offset + e.length), Segment::Fixed("</del>")));
             }
             ME::Blockquote(e) => {
-                insertions.push((before(i, 0, e.offset), Segment::Fixed("<blockquote>")));
+                if e.collapsed {
+                    insertions.push((
+                        before(i, 0, e.offset),
+                        Segment::Fixed("<blockquote expandable>"),
+                    ));
+                } else {
+                    insertions.push((before(i, 0, e.offset), Segment::Fixed("<blockquote>")));
+                }
                 insertions.push((
                     after(i, 0, e.offset + e.length),
                     Segment::Fixed("</blockquote>"),
