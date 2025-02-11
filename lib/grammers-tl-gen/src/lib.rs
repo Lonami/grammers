@@ -20,6 +20,22 @@ mod structs;
 use grammers_tl_parser::tl::{Category, Definition, Type};
 use std::io::{self, Write};
 
+pub struct Outputs<W: Write> {
+    pub common: W,
+    pub types: W,
+    pub functions: W,
+    pub enums: W,
+}
+
+impl<W: Write> Outputs<W> {
+    pub fn flush(&mut self) -> std::io::Result<()> {
+        self.common.flush()?;
+        self.types.flush()?;
+        self.functions.flush()?;
+        self.enums.flush()
+    }
+}
+
 pub struct Config {
     pub gen_name_for_id: bool,
     pub deserializable_functions: bool,
@@ -50,31 +66,22 @@ fn ignore_type(ty: &Type) -> bool {
     SPECIAL_CASED_TYPES.iter().any(|&x| x == ty.name)
 }
 
-pub fn generate_rust_code(
-    file: &mut impl Write,
+pub fn generate_rust_code<W: Write>(
+    outputs: &mut Outputs<W>,
     definitions: &[Definition],
     layer: i32,
     config: &Config,
 ) -> io::Result<()> {
     writeln!(
-        file,
-        r#"
-// Copyright 2020 - developers of the `grammers` project.
-//
-// Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
-// https://www.apache.org/licenses/LICENSE-2.0> or the MIT license
-// <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
-// option. This file may not be copied, modified, or distributed
-// except according to those terms.
-
-/// The schema layer from which the definitions were generated.
+        &mut outputs.common,
+        r#"/// The schema layer from which the definitions were generated.
 pub const LAYER: i32 = {layer};
 "#
     )?;
 
     if config.gen_name_for_id {
         writeln!(
-            file,
+            outputs.common,
             r#"
 /// Return the name from the `.tl` definition corresponding to the provided definition identifier.
 pub fn name_for_id(id: u32) -> &'static str {{
@@ -82,11 +89,16 @@ pub fn name_for_id(id: u32) -> &'static str {{
         0x1cb5c415 => "vector","#
         )?;
         for def in definitions {
-            writeln!(file, r#"        0x{:x} => "{}","#, def.id, def.full_name())?;
+            writeln!(
+                &mut outputs.common,
+                r#"        0x{:x} => "{}","#,
+                def.id,
+                def.full_name()
+            )?;
         }
 
         writeln!(
-            file,
+            outputs.common,
             r#"
         _ => "(unknown)",
     }}
@@ -96,9 +108,21 @@ pub fn name_for_id(id: u32) -> &'static str {{
     }
 
     let metadata = metadata::Metadata::new(definitions);
-    structs::write_category_mod(file, Category::Types, definitions, &metadata, config)?;
-    structs::write_category_mod(file, Category::Functions, definitions, &metadata, config)?;
-    enums::write_enums_mod(file, definitions, &metadata, config)?;
+    structs::write_category_mod(
+        &mut outputs.types,
+        Category::Types,
+        definitions,
+        &metadata,
+        config,
+    )?;
+    structs::write_category_mod(
+        &mut outputs.functions,
+        Category::Functions,
+        definitions,
+        &metadata,
+        config,
+    )?;
+    enums::write_enums_mod(&mut outputs.enums, definitions, &metadata, config)?;
 
     Ok(())
 }

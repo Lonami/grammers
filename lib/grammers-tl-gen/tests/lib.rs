@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config};
+use grammers_tl_gen::{generate_rust_code, Config, Outputs};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::io;
@@ -16,10 +16,16 @@ fn get_definitions(contents: &str) -> Vec<Definition> {
     parse_tl_file(contents).map(|d| d.unwrap()).collect()
 }
 
-fn gen_rust_code(definitions: &[Definition]) -> io::Result<String> {
-    let mut file = Vec::new();
+fn gen_rust_code(definitions: &[Definition]) -> io::Result<(String, String, String, String)> {
+    let mut outputs = Outputs {
+        common: Vec::new(),
+        types: Vec::new(),
+        functions: Vec::new(),
+        enums: Vec::new(),
+    };
+
     generate_rust_code(
-        &mut file,
+        &mut outputs,
         definitions,
         LAYER,
         &Config {
@@ -31,7 +37,13 @@ fn gen_rust_code(definitions: &[Definition]) -> io::Result<String> {
             impl_serde: true,
         },
     )?;
-    Ok(String::from_utf8(file).unwrap())
+
+    Ok((
+        String::from_utf8(outputs.common).unwrap(),
+        String::from_utf8(outputs.types).unwrap(),
+        String::from_utf8(outputs.functions).unwrap(),
+        String::from_utf8(outputs.enums).unwrap(),
+    ))
 }
 
 #[test]
@@ -42,18 +54,20 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
         invokeWithLayer#da9b0d0d {X:Type} layer:int query:!X = X;
     ",
     );
-    let result = gen_rust_code(&definitions)?;
-    eprintln!("{result}");
-    assert!(result.contains("pub struct InvokeWithLayer<X>"));
-    assert!(result.contains("pub query: X,"));
-    assert!(result.contains("impl<X> crate::Identifiable for InvokeWithLayer<X>"));
-    assert!(
-        result.contains("impl<X: crate::Serializable> crate::Serializable for InvokeWithLayer<X>")
-    );
-    assert!(result
+    let (_, _, functions, _) = gen_rust_code(&definitions)?;
+    eprintln!("{functions}");
+
+    assert!(functions.contains("pub struct InvokeWithLayer<X>"));
+    assert!(functions.contains("pub query: X,"));
+    assert!(functions.contains("impl<X> crate::Identifiable for InvokeWithLayer<X>"));
+    assert!(functions
+        .contains("impl<X: crate::Serializable> crate::Serializable for InvokeWithLayer<X>"));
+    assert!(functions
         .contains("impl<X: crate::Deserializable> crate::Deserializable for InvokeWithLayer<X>"));
-    assert!(result.contains("impl<X: crate::RemoteCall> crate::RemoteCall for InvokeWithLayer<X>"));
-    assert!(result.contains("type Return = X::Return;"));
+    assert!(
+        functions.contains("impl<X: crate::RemoteCall> crate::RemoteCall for InvokeWithLayer<X>")
+    );
+    assert!(functions.contains("type Return = X::Return;"));
     Ok(())
 }
 
@@ -64,11 +78,11 @@ fn recursive_types_direct_boxed() -> io::Result<()> {
         textBold#6724abc4 text:RichText = RichText;
     ",
     );
-    let result = gen_rust_code(&definitions)?;
-    eprintln!("{result}");
-    assert!(result.contains("TextBold(Box<crate::types::TextBold>)"));
-    assert!(result.contains("RichText::TextBold(Box::new("));
-    assert!(result.contains("Self::TextBold(Box::new("));
+    let (_, _, _, enums) = gen_rust_code(&definitions)?;
+    eprintln!("{enums}");
+    assert!(enums.contains("TextBold(Box<crate::types::TextBold>)"));
+    assert!(enums.contains("RichText::TextBold(Box::new("));
+    assert!(enums.contains("Self::TextBold(Box::new("));
     Ok(())
 }
 
@@ -80,14 +94,14 @@ fn recursive_types_indirect_boxed() -> io::Result<()> {
         messageMediaInvoice#f6a548d3 flags:# extended_media:flags.4?MessageExtendedMedia = MessageMedia;
     ",
     );
-    let result = gen_rust_code(&definitions)?;
-    eprintln!("{result}");
-    assert!(result.contains("Media(Box<crate::types::MessageExtendedMedia>),"));
-    assert!(result.contains("Box::new(crate::types::MessageExtendedMedia::deserialize("));
-    assert!(result.contains("MessageExtendedMedia::Media(Box::new("));
-    assert!(result.contains("Invoice(Box<crate::types::MessageMediaInvoice>),"));
-    assert!(result.contains("Box::new(crate::types::MessageMediaInvoice::deserialize("));
-    assert!(result.contains("MessageMedia::Invoice(Box::new("));
+    let (_, _, _, enums) = gen_rust_code(&definitions)?;
+    eprintln!("{enums}");
+    assert!(enums.contains("Media(Box<crate::types::MessageExtendedMedia>),"));
+    assert!(enums.contains("Box::new(crate::types::MessageExtendedMedia::deserialize("));
+    assert!(enums.contains("MessageExtendedMedia::Media(Box::new("));
+    assert!(enums.contains("Invoice(Box<crate::types::MessageMediaInvoice>),"));
+    assert!(enums.contains("Box::new(crate::types::MessageMediaInvoice::deserialize("));
+    assert!(enums.contains("MessageMedia::Invoice(Box::new("));
     Ok(())
 }
 
@@ -113,11 +127,11 @@ fn recursive_types_vec_indirect_not_boxed() -> io::Result<()> {
         jsonObject#99c1d49d value:Vector<JSONObjectValue> = JSONValue;
     ",
     );
-    let result = gen_rust_code(&definitions)?;
-    eprintln!("{result}");
-    assert!(result.contains("JsonObjectValue(crate::types::JsonObjectValue)"));
-    assert!(result.contains("JsonArray(crate::types::JsonArray)"));
-    assert!(result.contains("JsonObject(crate::types::JsonObject)"));
+    let (_, _, _, enums) = gen_rust_code(&definitions)?;
+    eprintln!("{enums}");
+    assert!(enums.contains("JsonObjectValue(crate::types::JsonObjectValue)"));
+    assert!(enums.contains("JsonArray(crate::types::JsonArray)"));
+    assert!(enums.contains("JsonObject(crate::types::JsonObject)"));
     Ok(())
 }
 
@@ -130,9 +144,9 @@ fn generic_bytes_with_serde_bytes() -> io::Result<()> {
         "#,
     );
 
-    let result = gen_rust_code(&definitions)?;
-    eprintln!("{result}");
-    assert!(result.contains(r#"#[serde(with = "serde_bytes")]"#));
-    assert!(result.contains("pub stripped_thumb: Option<Vec<u8>>,"));
+    let (_, types, _, _) = gen_rust_code(&definitions)?;
+    eprintln!("{types}");
+    assert!(types.contains(r#"#[serde(with = "serde_bytes")]"#));
+    assert!(types.contains("pub stripped_thumb: Option<Vec<u8>>,"));
     Ok(())
 }

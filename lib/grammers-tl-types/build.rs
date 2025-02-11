@@ -5,12 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config};
+use grammers_tl_gen::{generate_rust_code, Config, Outputs};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::env;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read};
 use std::path::Path;
 
 /// Load the type language definitions from a certain file.
@@ -66,9 +66,13 @@ fn main() -> std::io::Result<()> {
         definitions
     };
 
-    let mut file = BufWriter::new(File::create(
-        Path::new(&env::var("OUT_DIR").unwrap()).join("generated.rs"),
-    )?);
+    let output_dir = Path::new(&env::var("OUT_DIR").unwrap()).to_path_buf();
+    let mut outputs = Outputs {
+        common: BufWriter::new(File::create(output_dir.join("generated_common.rs"))?),
+        types: BufWriter::new(File::create(output_dir.join("generated_types.rs"))?),
+        functions: BufWriter::new(File::create(output_dir.join("generated_functions.rs"))?),
+        enums: BufWriter::new(File::create(output_dir.join("generated_enums.rs"))?),
+    };
 
     let config = Config {
         gen_name_for_id: true,
@@ -79,7 +83,9 @@ fn main() -> std::io::Result<()> {
         impl_serde: cfg!(feature = "impl-serde"),
     };
 
-    generate_rust_code(&mut file, &definitions, layer, &config)?;
-    file.flush()?;
+    generate_rust_code(&mut outputs, &definitions, layer, &config)?;
+
+    outputs.flush()?;
+
     Ok(())
 }
