@@ -105,17 +105,16 @@ impl Chat {
 
     pub(crate) fn unpack(packed: PackedChat) -> Self {
         match packed.ty {
-            PackedType::User => {
-                let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
-                user.raw.access_hash = packed.access_hash;
-                Chat::User(user)
-            }
-            PackedType::Bot => {
-                let mut user = User::from_raw(tl::types::UserEmpty { id: packed.id }.into());
-                user.raw.access_hash = packed.access_hash;
-                user.raw.bot = true;
-                Chat::User(user)
-            }
+            PackedType::User => Chat::User(User::empty_with_hash_and_bot(
+                packed.id,
+                packed.access_hash,
+                false,
+            )),
+            PackedType::Bot => Chat::User(User::empty_with_hash_and_bot(
+                packed.id,
+                packed.access_hash,
+                true,
+            )),
             PackedType::Chat => Chat::Group(Group::from_raw(
                 tl::types::ChatEmpty { id: packed.id }.into(),
             )),
@@ -180,9 +179,12 @@ impl Chat {
     // is missing).
     pub(crate) fn get_min_hash_ref(&mut self) -> Option<(&mut bool, &mut i64)> {
         match self {
-            Self::User(user) => match (&mut user.raw.min, user.raw.access_hash.as_mut()) {
-                (m @ true, Some(ah)) => Some((m, ah)),
-                _ => None,
+            Self::User(user) => match &mut user.raw {
+                tl::enums::User::User(raw) => match (&mut raw.min, raw.access_hash.as_mut()) {
+                    (m @ true, Some(ah)) => Some((m, ah)),
+                    _ => None,
+                },
+                tl::enums::User::Empty(_) => None,
             },
             // Small group chats don't have an `access_hash` to begin with.
             Self::Group(_group) => None,

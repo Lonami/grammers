@@ -77,7 +77,57 @@ impl User {
         Self { raw: user }
     }
 
-    fn user(&self) -> Option<&tl::types::User> {
+    pub(crate) fn empty_with_hash_and_bot(id: i64, access_hash: Option<i64>, bot: bool) -> Self {
+        Self {
+            raw: tl::enums::User::User(tl::types::User {
+                is_self: false,
+                contact: false,
+                mutual_contact: false,
+                deleted: false,
+                bot,
+                bot_chat_history: false,
+                bot_nochats: false,
+                verified: false,
+                restricted: false,
+                min: false, // not min because the input hash is not a min hash
+                bot_inline_geo: false,
+                support: false,
+                scam: false,
+                apply_min_photo: false,
+                fake: false,
+                bot_attach_menu: false,
+                premium: false,
+                attach_menu_enabled: false,
+                bot_can_edit: false,
+                close_friend: false,
+                stories_hidden: false,
+                stories_unavailable: true,
+                contact_require_premium: false,
+                bot_business: false,
+                bot_has_main_app: false,
+                id,
+                access_hash,
+                first_name: None,
+                last_name: None,
+                username: None,
+                phone: None,
+                photo: None,
+                status: None,
+                bot_info_version: None,
+                restriction_reason: None,
+                bot_inline_placeholder: None,
+                lang_code: None,
+                emoji_status: None,
+                usernames: None,
+                stories_max_id: None,
+                color: None,
+                profile_color: None,
+                bot_active_users: None,
+            }),
+        }
+    }
+
+    pub(crate) fn user(&self) -> Option<&tl::types::User> {
         match &self.raw {
             tl::enums::User::User(u) => Some(u),
             tl::enums::User::Empty(_) => None,
