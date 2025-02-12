@@ -169,7 +169,7 @@ impl Session {
     }
 
     pub fn get_dcs(&self) -> Vec<enums::DataCenter> {
-        self.session.lock().unwrap().dcs.iter().cloned().collect()
+        self.session.lock().unwrap().dcs.to_vec()
     }
 
     #[must_use]

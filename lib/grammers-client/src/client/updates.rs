@@ -182,7 +182,7 @@ impl Client {
                 continue;
             }
 
-            let sleep = pin!(async { sleep_until(deadline.into()).await });
+            let sleep = pin!(async { sleep_until(deadline).await });
             let step = pin!(async { self.step().await });
 
             match select(sleep, step).await {

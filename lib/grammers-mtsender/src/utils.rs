@@ -72,7 +72,7 @@ impl Timeout {
 pub async fn sleep(duration: Duration) {
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     {
-        return tokio::time::sleep(duration).await;
+        tokio::time::sleep(duration).await;
     }
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     {
@@ -84,7 +84,7 @@ pub async fn sleep(duration: Duration) {
 pub async fn sleep_until(deadline: Instant) {
     #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     {
-        return tokio::time::sleep_until(deadline.into()).await;
+        tokio::time::sleep_until(deadline.into()).await;
     }
     #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
     {
