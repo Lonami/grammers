@@ -24,8 +24,7 @@ use simple_logger::SimpleLogger;
 use tokio::runtime;
 
 use grammers_client::session::Session;
-use grammers_client::types::Media::{Contact, Document, Photo, Sticker};
-use grammers_client::types::{Downloadable, Media};
+use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -109,7 +108,7 @@ async fn async_main() -> Result<()> {
                 get_file_extension(&media)
             );
             client
-                .download_media(&Downloadable::Media(media), &Path::new(dest.as_str()))
+                .download_media(&media, &Path::new(dest.as_str()))
                 .await
                 .expect("Error downloading message");
         }

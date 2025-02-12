@@ -6,12 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{photo_sizes::PhotoSize, Downloadable, Uploaded};
+use crate::types::{Downloadable, Uploaded};
 use crate::utils::generate_random_id;
 use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
+use std::mem;
 use std::sync::Arc;
 use tokio::{
     io::{self, AsyncRead, AsyncReadExt},
@@ -20,7 +21,6 @@ use tokio::{
 
 #[cfg(feature = "fs")]
 use {
-    crate::types::Media,
     std::{io::SeekFrom, path::Path},
     tokio::{
         fs,
@@ -38,64 +38,17 @@ const WORKER_COUNT: usize = 4;
 pub struct DownloadIter {
     client: Client,
     done: bool,
-    request: tl::functions::upload::GetFile,
-    photo_size_data: Option<Vec<u8>>,
+    variant: DownloadIterVariant,
+}
+
+enum DownloadIterVariant {
+    Request(tl::functions::upload::GetFile),
+    PreDownloaded(Vec<u8>),
+    PreFailed(io::Error),
+    Empty,
 }
 
 impl DownloadIter {
-    fn new(client: &Client, downloadable: &Downloadable) -> Self {
-        match downloadable {
-            Downloadable::PhotoSize(photo_size)
-                if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
-            {
-                Self::new_from_photo_size(client, photo_size.data())
-            }
-            _ => {
-                Self::new_from_file_location(client, downloadable.to_raw_input_location().unwrap())
-            }
-        }
-    }
-
-    fn new_from_file_location(client: &Client, location: tl::enums::InputFileLocation) -> Self {
-        // TODO let users tweak all the options from the request
-        // TODO cdn support
-        Self {
-            client: client.clone(),
-            done: false,
-            request: tl::functions::upload::GetFile {
-                precise: false,
-                cdn_supported: false,
-                location,
-                offset: 0,
-                limit: MAX_CHUNK_SIZE,
-            },
-            photo_size_data: None,
-        }
-    }
-
-    fn new_from_photo_size(client: &Client, data: Vec<u8>) -> Self {
-        Self {
-            client: client.clone(),
-            done: false,
-            // request is not needed, so fake one
-            request: tl::functions::upload::GetFile {
-                precise: false,
-                cdn_supported: false,
-                location: tl::enums::InputFileLocation::InputPhotoFileLocation(
-                    tl::types::InputPhotoFileLocation {
-                        id: 0,
-                        access_hash: 0,
-                        file_reference: vec![],
-                        thumb_size: "".to_string(),
-                    },
-                ),
-                offset: 0,
-                limit: MAX_CHUNK_SIZE,
-            },
-            photo_size_data: Some(data),
-        }
-    }
-
     /// Changes the chunk size, in bytes, used to make requests. Useful if you only need to get a
     /// small part of a file. By default, `MAX_CHUNK_SIZE` is used.
     ///
@@ -105,7 +58,10 @@ impl DownloadIter {
     /// the range `MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE`.
     pub fn chunk_size(mut self, size: i32) -> Self {
         assert!((MIN_CHUNK_SIZE..=MAX_CHUNK_SIZE).contains(&size) && size % MIN_CHUNK_SIZE == 0);
-        self.request.limit = size;
+        match &mut self.variant {
+            DownloadIterVariant::Request(request) => request.limit = size,
+            _ => {}
+        }
         self
     }
 
@@ -113,7 +69,12 @@ impl DownloadIter {
     /// skip less data, modify the `chunk_size` before calling this method, and then reset it to
     /// any value you want.
     pub fn skip_chunks(mut self, n: i32) -> Self {
-        self.request.offset += self.request.limit as i64 * (n as i64);
+        match &mut self.variant {
+            DownloadIterVariant::Request(request) => {
+                request.offset += request.limit as i64 * (n as i64)
+            }
+            _ => {}
+        }
         self
     }
 
@@ -123,10 +84,19 @@ impl DownloadIter {
             return Ok(None);
         }
 
-        if let Some(data) = &self.photo_size_data {
-            self.done = true;
-            return Ok(Some(data.clone()));
-        }
+        let variant = mem::replace(&mut self.variant, DownloadIterVariant::Empty);
+
+        let mut request = match variant {
+            DownloadIterVariant::Request(r) => r,
+            DownloadIterVariant::PreDownloaded(data) => {
+                self.done = true;
+                return Ok(Some(data.clone()));
+            }
+            DownloadIterVariant::PreFailed(error) => {
+                return Err(InvocationError::Read(error.into()))
+            }
+            DownloadIterVariant::Empty => return Ok(None),
+        };
 
         use tl::enums::upload::File;
 
@@ -134,20 +104,22 @@ impl DownloadIter {
         let mut dc: Option<u32> = None;
         loop {
             let result = match dc.take() {
-                None => self.client.invoke(&self.request).await,
-                Some(dc) => self.client.invoke_in_dc(&self.request, dc as i32).await,
+                None => self.client.invoke(&request).await,
+                Some(dc) => self.client.invoke_in_dc(&request, dc as i32).await,
             };
 
             break match result {
                 Ok(File::File(f)) => {
-                    if f.bytes.len() < self.request.limit as usize {
+                    if f.bytes.len() < request.limit as usize {
                         self.done = true;
                         if f.bytes.is_empty() {
-                            return Ok(None);
+                            break Ok(None);
                         }
                     }
 
-                    self.request.offset += self.request.limit as i64;
+                    request.offset += request.limit as i64;
+                    self.variant = DownloadIterVariant::Request(request);
+
                     Ok(Some(f.bytes))
                 }
                 Ok(File::CdnRedirect(_)) => {
@@ -170,7 +142,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(downloadable: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut file_bytes = Vec::new();
     /// let mut download = client.iter_download(&downloadable);
     ///
@@ -182,8 +154,35 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_download(&self, downloadable: &Downloadable) -> DownloadIter {
-        DownloadIter::new(self, downloadable)
+    pub fn iter_download<D: Downloadable>(&self, downloadable: &D) -> DownloadIter {
+        if let Some(data) = downloadable.to_data() {
+            DownloadIter {
+                client: self.clone(),
+                done: false,
+                variant: DownloadIterVariant::PreDownloaded(data),
+            }
+        } else if let Some(location) = downloadable.to_raw_input_location() {
+            DownloadIter {
+                client: self.clone(),
+                done: false,
+                variant: DownloadIterVariant::Request(tl::functions::upload::GetFile {
+                    precise: false,
+                    cdn_supported: false,
+                    location,
+                    offset: 0,
+                    limit: MAX_CHUNK_SIZE,
+                }),
+            }
+        } else {
+            DownloadIter {
+                client: self.clone(),
+                done: false,
+                variant: DownloadIterVariant::PreFailed(io::Error::new(
+                    io::ErrorKind::Other,
+                    "media not downloadable",
+                )),
+            }
+        }
     }
 
     /// Downloads a media file into the specified path.
@@ -196,49 +195,27 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(downloadable: grammers_client::types::Downloadable, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(downloadable: grammers_client::types::Media, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.download_media(&downloadable, "/home/username/photos/holidays.jpg").await?;
     /// # Ok(())
     /// # }
     /// ```
     #[cfg(feature = "fs")]
-    pub async fn download_media<P: AsRef<Path>>(
+    pub async fn download_media<D: Downloadable, P: AsRef<Path>>(
         &self,
-        downloadable: &Downloadable,
+        downloadable: &D,
         path: P,
     ) -> Result<(), io::Error> {
         // Concurrent downloader
-        if let Downloadable::Media(media) = downloadable {
-            if let Media::Document(document) = media {
-                if document.size() as usize > BIG_FILE_SIZE {
-                    return self
-                        .download_media_concurrent(media, path, WORKER_COUNT)
-                        .await;
-                }
+        if let Some((location, size)) = downloadable
+            .to_raw_input_location()
+            .zip(downloadable.size())
+        {
+            if size > BIG_FILE_SIZE {
+                return self
+                    .download_media_concurrent(location, size, path, WORKER_COUNT)
+                    .await;
             }
-        }
-
-        if downloadable.to_raw_input_location().is_none() {
-            let data = match downloadable {
-                Downloadable::PhotoSize(photo_size)
-                    if !matches!(photo_size, PhotoSize::Size(_) | PhotoSize::Progressive(_)) =>
-                {
-                    photo_size.data()
-                }
-                _ => {
-                    return Err(io::Error::new(
-                        io::ErrorKind::Other,
-                        "media not downloadable",
-                    ));
-                }
-            };
-
-            if !data.is_empty() {
-                let mut file = fs::File::create(&path).await.unwrap();
-                file.write_all(&data).await.unwrap();
-            }
-
-            return Ok(());
         }
 
         let mut download = self.iter_download(downloadable);
@@ -263,16 +240,11 @@ impl Client {
     #[cfg(feature = "fs")]
     async fn download_media_concurrent<P: AsRef<Path>>(
         &self,
-        media: &Media,
+        location: tl::enums::InputFileLocation,
+        size: usize,
         path: P,
         workers: usize,
     ) -> Result<(), io::Error> {
-        let document = match media {
-            Media::Document(document) => document,
-            _ => panic!("Only Document type is supported!"),
-        };
-        let size = document.size();
-        let location = media.to_raw_input_location().unwrap();
         // Allocate
         let mut file = fs::File::create(path).await?;
         file.set_len(size as u64).await?;
@@ -302,7 +274,7 @@ impl Client {
                             (MAX_CHUNK_SIZE * (*i - 1)) as i64
                         }
                     };
-                    if offset > size {
+                    if offset > size as i64 {
                         break;
                     }
                     // Fetch from telegram

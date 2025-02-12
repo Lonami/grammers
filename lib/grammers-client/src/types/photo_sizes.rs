@@ -7,6 +7,8 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
+use super::Downloadable;
+
 #[derive(Clone, Debug, PartialEq)]
 pub enum PhotoSize {
     Empty(SizeEmpty),
@@ -125,7 +127,20 @@ impl PhotoSize {
         }
     }
 
-    pub fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+    pub fn photo_type(&self) -> String {
+        match self {
+            PhotoSize::Empty(size) => size.photo_type.clone(),
+            PhotoSize::Size(size) => size.photo_type.clone(),
+            PhotoSize::Cached(size) => size.photo_type.clone(),
+            PhotoSize::Stripped(size) => size.photo_type.clone(),
+            PhotoSize::Progressive(size) => size.photo_type.clone(),
+            PhotoSize::Path(size) => size.photo_type.clone(),
+        }
+    }
+}
+
+impl Downloadable for PhotoSize {
+    fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         match self {
             PhotoSize::Size(size) => size.to_raw_input_location(),
             PhotoSize::Empty(_) => None,
@@ -136,25 +151,14 @@ impl PhotoSize {
         }
     }
 
-    pub(crate) fn data(&self) -> Vec<u8> {
+    fn to_data(&self) -> Option<Vec<u8>> {
         match self {
-            PhotoSize::Empty(_) => vec![],
-            PhotoSize::Size(_) => vec![],
-            PhotoSize::Cached(size) => size.data(),
-            PhotoSize::Stripped(size) => size.data(),
-            PhotoSize::Progressive(_) => vec![],
-            PhotoSize::Path(size) => size.data(),
-        }
-    }
-
-    pub fn photo_type(&self) -> String {
-        match self {
-            PhotoSize::Empty(size) => size.photo_type.clone(),
-            PhotoSize::Size(size) => size.photo_type.clone(),
-            PhotoSize::Cached(size) => size.photo_type.clone(),
-            PhotoSize::Stripped(size) => size.photo_type.clone(),
-            PhotoSize::Progressive(size) => size.photo_type.clone(),
-            PhotoSize::Path(size) => size.photo_type.clone(),
+            PhotoSize::Empty(_) => None,
+            PhotoSize::Size(_) => None,
+            PhotoSize::Cached(size) => Some(size.data()),
+            PhotoSize::Stripped(size) => Some(size.data()),
+            PhotoSize::Progressive(_) => None,
+            PhotoSize::Path(size) => Some(size.data()),
         }
     }
 }

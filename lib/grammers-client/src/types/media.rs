@@ -10,6 +10,8 @@ use chrono::{DateTime, Utc};
 use grammers_tl_types as tl;
 use std::fmt::Debug;
 
+use super::Downloadable;
+
 #[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
     pub raw: tl::types::MessageMediaPhoto,
@@ -70,6 +72,12 @@ pub struct WebPage {
     pub raw: tl::types::MessageMediaWebPage,
 }
 
+// Not `MessageMedia`, but media nonetheless.
+#[derive(Clone, Debug, PartialEq)]
+pub struct ChatPhoto {
+    pub raw: tl::enums::InputFileLocation,
+}
+
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
@@ -98,27 +106,6 @@ impl Photo {
 
     pub fn from_raw_media(photo: tl::types::MessageMediaPhoto) -> Self {
         Self { raw: photo }
-    }
-
-    pub fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
-        use tl::enums::Photo as P;
-
-        self.raw.photo.as_ref().and_then(|p| match p {
-            P::Empty(_) => None,
-            P::Photo(photo) => Some(
-                tl::types::InputPhotoFileLocation {
-                    id: photo.id,
-                    access_hash: photo.access_hash,
-                    file_reference: photo.file_reference.clone(),
-                    thumb_size: self
-                        .thumbs()
-                        .largest()
-                        .map(|ps| ps.photo_type())
-                        .unwrap_or(String::from("w")),
-                }
-                .into(),
-            ),
-        })
     }
 
     pub fn to_raw_input_media(&self) -> tl::types::InputMediaPhoto {
@@ -199,26 +186,32 @@ impl Photo {
     }
 }
 
-impl Document {
-    pub fn from_raw_media(document: tl::types::MessageMediaDocument) -> Self {
-        Self { raw: document }
-    }
+impl Downloadable for Photo {
+    fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+        use tl::enums::Photo as P;
 
-    pub fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
-        use tl::enums::Document as D;
-
-        self.raw.document.as_ref().and_then(|p| match p {
-            D::Empty(_) => None,
-            D::Document(document) => Some(
-                tl::types::InputDocumentFileLocation {
-                    id: document.id,
-                    access_hash: document.access_hash,
-                    file_reference: document.file_reference.clone(),
-                    thumb_size: String::new(),
+        self.raw.photo.as_ref().and_then(|p| match p {
+            P::Empty(_) => None,
+            P::Photo(photo) => Some(
+                tl::types::InputPhotoFileLocation {
+                    id: photo.id,
+                    access_hash: photo.access_hash,
+                    file_reference: photo.file_reference.clone(),
+                    thumb_size: self
+                        .thumbs()
+                        .largest()
+                        .map(|ps| ps.photo_type())
+                        .unwrap_or(String::from("w")),
                 }
                 .into(),
             ),
         })
+    }
+}
+
+impl Document {
+    pub fn from_raw_media(document: tl::types::MessageMediaDocument) -> Self {
+        Self { raw: document }
     }
 
     pub fn to_raw_input_media(&self) -> tl::types::InputMediaDocument {
@@ -408,6 +401,29 @@ impl Document {
     /// Returns true if the document is a spoiler
     pub fn is_spoiler(&self) -> bool {
         self.raw.spoiler
+    }
+}
+
+impl Downloadable for Document {
+    fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+        use tl::enums::Document as D;
+
+        self.raw.document.as_ref().and_then(|p| match p {
+            D::Empty(_) => None,
+            D::Document(document) => Some(
+                tl::types::InputDocumentFileLocation {
+                    id: document.id,
+                    access_hash: document.access_hash,
+                    file_reference: document.file_reference.clone(),
+                    thumb_size: String::new(),
+                }
+                .into(),
+            ),
+        })
+    }
+
+    fn size(&self) -> Option<usize> {
+        Some(self.size() as usize)
     }
 }
 
@@ -778,8 +794,10 @@ impl Media {
             Media::WebPage(_) => None,
         }
     }
+}
 
-    pub fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+impl Downloadable for Media {
+    fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
         match self {
             Media::Photo(photo) => photo.to_raw_input_location(),
             Media::Document(document) => document.to_raw_input_location(),
@@ -798,5 +816,11 @@ impl Media {
 impl From<Photo> for Media {
     fn from(photo: Photo) -> Self {
         Self::Photo(photo)
+    }
+}
+
+impl Downloadable for ChatPhoto {
+    fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation> {
+        Some(self.raw.clone())
     }
 }

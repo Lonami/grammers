@@ -197,30 +197,36 @@ impl Chat {
         }
     }
 
-    // get an chat photo downloadable
-    pub fn photo_downloadable(&self, big: bool) -> Option<crate::types::Downloadable> {
+    // Return the profile picture or chat photo of this chat, if any.
+    pub fn photo(&self, big: bool) -> Option<crate::types::ChatPhoto> {
         let peer = self.pack().to_input_peer();
         match self {
-            Self::User(user) => user.photo().map(|x| {
-                crate::types::Downloadable::UserProfilePhoto(crate::types::UserProfilePhoto {
-                    big,
-                    peer,
-                    raw: x.clone(),
-                })
+            Self::User(user) => user.photo().map(|x| crate::types::ChatPhoto {
+                raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
+                    tl::types::InputPeerPhotoFileLocation {
+                        big,
+                        peer,
+                        photo_id: x.photo_id,
+                    },
+                ),
             }),
-            Self::Group(group) => group.photo().map(|x| {
-                crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
-                    big,
-                    peer,
-                    raw: x.clone(),
-                })
+            Self::Group(group) => group.photo().map(|x| crate::types::ChatPhoto {
+                raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
+                    tl::types::InputPeerPhotoFileLocation {
+                        big,
+                        peer,
+                        photo_id: x.photo_id,
+                    },
+                ),
             }),
-            Self::Channel(channel) => channel.photo().map(|x| {
-                crate::types::Downloadable::ChatPhoto(crate::types::ChatPhoto {
-                    big,
-                    peer,
-                    raw: x.clone(),
-                })
+            Self::Channel(channel) => channel.photo().map(|x| crate::types::ChatPhoto {
+                raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
+                    tl::types::InputPeerPhotoFileLocation {
+                        big,
+                        peer,
+                        photo_id: x.photo_id,
+                    },
+                ),
             }),
         }
     }
