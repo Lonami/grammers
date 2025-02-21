@@ -300,7 +300,7 @@ fn write_deserializable<W: Write>(
                     )?;
                 } else {
                     write!(file, "let {} = ", rustifier::parameters::attr_name(param))?;
-                    if let Some(ref flag) = flag {
+                    if let Some(flag) = flag {
                         writeln!(file, "if ({} & {}) != 0 {{", flag.name, 1 << flag.index)?;
                         write!(file, "{indent}            Some(")?;
                     }

@@ -83,7 +83,7 @@ pin_project! {
     #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct AdminRightsBuilder<F: Future<Output = BuilderRes>> {
         inner: Option<AdminRightsBuilderInner>,
-        gen: AdminFutGen<F>,
+        fut_gen: AdminFutGen<F>,
         #[pin]
         fut: Option<F>,
         _phantom: PhantomPinned
@@ -97,7 +97,7 @@ impl<F: Future<Output = BuilderRes>> Future for AdminRightsBuilder<F> {
         if s.fut.is_none() {
             // unwrap safety: s.inner is None only when s.fut is some
             // or s.fut is resolved
-            s.fut.set(Some((s.gen)(s.inner.take().unwrap())))
+            s.fut.set(Some((s.fut_gen)(s.inner.take().unwrap())))
         }
 
         s.fut.as_pin_mut().unwrap().poll(cx)
@@ -109,7 +109,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
         client: Client,
         chat: PackedChat,
         user: PackedChat,
-        gen: AdminFutGen<F>,
+        fut_gen: AdminFutGen<F>,
     ) -> Self {
         Self {
             inner: Some(AdminRightsBuilderInner {
@@ -136,7 +136,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                     delete_stories: false,
                 },
             }),
-            gen,
+            fut_gen,
             fut: None,
             _phantom: PhantomPinned,
         }
@@ -360,7 +360,7 @@ pin_project! {
     #[must_use = "futures do nothing unless you `.await` or poll them"]
     pub struct BannedRightsBuilder<F: Future<Output = BuilderRes>> {
         inner: Option<BannedRightsBuilderInner>,
-        gen: BannedFutGen<F>,
+        fut_gen: BannedFutGen<F>,
         #[pin]
         fut: Option<F>,
         _phantom: PhantomPinned
@@ -374,7 +374,7 @@ impl<F: Future<Output = BuilderRes>> Future for BannedRightsBuilder<F> {
         if s.fut.is_none() {
             // unwrap safety: s.inner is None only when s.fut is some
             // or s.fut is resolved
-            s.fut.set(Some((s.gen)(s.inner.take().unwrap())))
+            s.fut.set(Some((s.fut_gen)(s.inner.take().unwrap())))
         }
 
         s.fut.as_pin_mut().unwrap().poll(cx)
@@ -386,7 +386,7 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
         client: Client,
         chat: PackedChat,
         user: PackedChat,
-        gen: BannedFutGen<F>,
+        fut_gen: BannedFutGen<F>,
     ) -> Self {
         Self {
             inner: Some(BannedRightsBuilderInner {
@@ -418,7 +418,7 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
                     until_date: 0,
                 },
             }),
-            gen,
+            fut_gen,
             fut: None,
             _phantom: PhantomPinned,
         }
