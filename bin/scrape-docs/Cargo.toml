@@ -2,7 +2,7 @@
 name = "scrape-docs"
 version = "0.1.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 reqwest = "0.12.7"

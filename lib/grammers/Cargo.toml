@@ -10,7 +10,7 @@ homepage = "https://github.com/Lonami/grammers"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = []
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 grammers-client = "0.7.0"

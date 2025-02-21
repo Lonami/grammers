@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-crypto"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = ["cryptography"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 aes = "0.8.4"

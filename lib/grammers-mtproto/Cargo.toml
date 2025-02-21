@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-mtproto"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["mtproto", "telegram", "tl"]
 categories = ["network-programming"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 bytes = "1.7.1"

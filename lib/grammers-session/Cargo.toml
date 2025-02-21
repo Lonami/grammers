@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-session"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = []
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0" }

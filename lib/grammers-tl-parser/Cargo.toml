@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-tl-parser"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["telegram", "tl"]
 categories = ["parser-implementations"]
-edition = "2021"
+edition = "2024"
 
 [dependencies]
 crc32fast = "1.4.2"

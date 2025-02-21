@@ -11,7 +11,7 @@ documentation = "https://docs.rs/grammers-mtsender"
 repository = "https://github.com/Lonami/grammers"
 keywords = ["api", "mtproto", "telegram", "tl"]
 categories = ["api-bindings", "network-programming"]
-edition = "2021"
+edition = "2024"
 
 [features]
 proxy = ["tokio-socks", "hickory-resolver", "url"]
