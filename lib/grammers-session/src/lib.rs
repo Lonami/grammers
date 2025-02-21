@@ -13,13 +13,13 @@ mod generated;
 mod message_box;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
+pub use generated::LAYER as VERSION;
 pub use generated::types::UpdateState;
 pub use generated::types::User;
-pub use generated::LAYER as VERSION;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
-pub use message_box::{channel_id, PrematureEndReason};
 pub use message_box::{Gap, MessageBox};
+pub use message_box::{PrematureEndReason, channel_id};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
@@ -28,7 +28,7 @@ use std::path::Path;
 use std::sync::Mutex;
 
 // Needed for auto-generated definitions.
-use grammers_tl_types::{deserialize, Deserializable, Identifiable, Serializable};
+use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};
 
 pub struct Session {
     session: Mutex<types::Session>,

@@ -10,8 +10,8 @@
 
 use super::Client;
 use crate::types::{
-    chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner, AdminRightsBuilder,
-    BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant, Photo, User,
+    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
+    Photo, User, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
 };
 use grammers_mtsender::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};

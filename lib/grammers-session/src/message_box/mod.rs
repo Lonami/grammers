@@ -26,13 +26,13 @@ mod adaptor;
 mod defs;
 
 use super::ChatHashCache;
+use crate::UpdateState;
 use crate::generated::enums::ChannelState as ChannelStateEnum;
 use crate::generated::types::ChannelState;
 use crate::message_box::defs::PossibleGap;
-use crate::UpdateState;
 pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
-use defs::{PtsInfo, State, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT};
+use defs::{NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PtsInfo, State};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
@@ -729,7 +729,9 @@ impl MessageBox {
             let secret = self.getting_diff_for.contains(&Entry::SecretChats);
 
             if !account && !secret {
-                panic!("Should not be applying the difference when neither account or secret diff was active")
+                panic!(
+                    "Should not be applying the difference when neither account or secret diff was active"
+                )
             }
 
             if account {
@@ -872,8 +874,7 @@ impl MessageBox {
         let channel_id = channel_id(&request).expect("request had wrong input channel");
         trace!(
             "applying channel difference for {}: {:?}",
-            channel_id,
-            difference
+            channel_id, difference
         );
         let entry = Entry::Channel(channel_id);
 
@@ -975,8 +976,7 @@ impl MessageBox {
         if let Some(channel_id) = channel_id(request) {
             trace!(
                 "ending channel difference for {} because {:?}",
-                channel_id,
-                reason
+                channel_id, reason
             );
             let entry = Entry::Channel(channel_id);
             match reason {

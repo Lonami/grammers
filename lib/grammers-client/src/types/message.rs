@@ -5,13 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::ChatMap;
 #[cfg(any(feature = "markdown", feature = "html"))]
 use crate::parsers;
 use crate::types::reactions::InputReactions;
 use crate::types::{InputMessage, Media, Photo};
-use crate::ChatMap;
-use crate::{types, Client};
-use crate::{utils, InputMedia};
+use crate::{Client, types};
+use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;

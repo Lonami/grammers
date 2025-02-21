@@ -7,8 +7,8 @@
 // except according to those terms.
 
 use log::info;
-pub use tokio::net::tcp::{ReadHalf, WriteHalf};
 use tokio::net::TcpStream;
+pub use tokio::net::tcp::{ReadHalf, WriteHalf};
 
 use super::ServerAddr;
 
@@ -49,8 +49,8 @@ impl NetStream {
         };
 
         use hickory_resolver::{
-            config::{ResolverConfig, ResolverOpts},
             AsyncResolver,
+            config::{ResolverConfig, ResolverOpts},
         };
         use url::Host;
 

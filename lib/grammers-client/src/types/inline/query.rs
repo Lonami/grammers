@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use super::super::{Chat, ChatMap, User};
-use crate::{client::Client, utils::generate_random_id, InputMessage};
+use crate::{InputMessage, client::Client, utils::generate_random_id};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::fmt;

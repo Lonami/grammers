@@ -10,7 +10,7 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
-use futures_util::future::{select, Either};
+use futures_util::future::{Either, select};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::channel_id;
@@ -120,7 +120,9 @@ impl Client {
                         //
                         // This is a bit hacky because MessageBox doesn't really have a way to "not update" the pts.
                         // Instead we manually extract the previously-known pts and use that.
-                        log::warn!("Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved");
+                        log::warn!(
+                            "Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved"
+                        );
                         {
                             self.0
                                 .state

@@ -8,7 +8,7 @@
 #![cfg(feature = "markdown")]
 
 use super::common::{
-    after, before, inject_into_message, telegram_string_len, Segment, MENTION_URL_PREFIX,
+    MENTION_URL_PREFIX, Segment, after, before, inject_into_message, telegram_string_len,
 };
 use crate::update_entity_len;
 use grammers_tl_types as tl;
@@ -225,11 +225,13 @@ mod tests {
         assert_eq!(text, "Hello world!");
         assert_eq!(
             entities,
-            vec![tl::types::MessageEntityBold {
-                offset: 0,
-                length: 5
-            }
-            .into()]
+            vec![
+                tl::types::MessageEntityBold {
+                    offset: 0,
+                    length: 5
+                }
+                .into()
+            ]
         );
     }
 
@@ -239,11 +241,13 @@ mod tests {
         assert_eq!(text, "Hello world!");
         assert_eq!(
             entities,
-            vec![tl::types::MessageEntityBold {
-                offset: 6,
-                length: 6
-            }
-            .into()]
+            vec![
+                tl::types::MessageEntityBold {
+                    offset: 6,
+                    length: 6
+                }
+                .into()
+            ]
         );
     }
 
@@ -253,11 +257,13 @@ mod tests {
         assert_eq!(text, "A little 🦀 here");
         assert_eq!(
             entities,
-            vec![tl::types::MessageEntityBold {
-                offset: 2,
-                length: 9
-            }
-            .into()]
+            vec![
+                tl::types::MessageEntityBold {
+                    offset: 2,
+                    length: 9
+                }
+                .into()
+            ]
         );
     }
 

@@ -126,7 +126,9 @@ mod tests {
         let new_nonce = get_test_new_nonce();
         assert_eq!(
             auth_key.calc_new_nonce_hash(&new_nonce, 1),
-            [194, 206, 210, 179, 62, 89, 58, 85, 210, 127, 74, 93, 171, 238, 124, 103]
+            [
+                194, 206, 210, 179, 62, 89, 58, 85, 210, 127, 74, 93, 171, 238, 124, 103
+            ]
         );
     }
 
@@ -136,7 +138,9 @@ mod tests {
         let new_nonce = get_test_new_nonce();
         assert_eq!(
             auth_key.calc_new_nonce_hash(&new_nonce, 2),
-            [244, 49, 142, 133, 189, 47, 243, 190, 132, 217, 254, 252, 227, 220, 227, 159]
+            [
+                244, 49, 142, 133, 189, 47, 243, 190, 132, 217, 254, 252, 227, 220, 227, 159
+            ]
         );
     }
 
@@ -146,7 +150,9 @@ mod tests {
         let new_nonce = get_test_new_nonce();
         assert_eq!(
             auth_key.calc_new_nonce_hash(&new_nonce, 3),
-            [75, 249, 215, 179, 125, 180, 19, 238, 67, 29, 40, 81, 118, 49, 203, 61]
+            [
+                75, 249, 215, 179, 125, 180, 19, 238, 67, 29, 40, 81, 118, 49, 203, 61
+            ]
         );
     }
 }

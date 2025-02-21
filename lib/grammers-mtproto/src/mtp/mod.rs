@@ -22,7 +22,7 @@ mod plain;
 use crate::MsgId;
 use crypto::DequeBuffer;
 pub use encrypted::{
-    Encrypted, ENCRYPTED_PACKET_HEADER_LEN, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
+    ENCRYPTED_PACKET_HEADER_LEN, Encrypted, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
     PLAIN_PACKET_HEADER_LEN,
 };
 use grammers_crypto as crypto;
@@ -66,7 +66,9 @@ impl BadMessage {
             16 => "msg_id too low",
             17 => "msg_id too high",
             18 => "incorrect two lower order msg_id bits; this is a bug",
-            19 => "container msg_id is the same as msg_id of a previously received message; this is a bug",
+            19 => {
+                "container msg_id is the same as msg_id of a previously received message; this is a bug"
+            }
             20 => "message too old",
             32 => "msg_seqno too low",
             33 => "msg_seqno too high",

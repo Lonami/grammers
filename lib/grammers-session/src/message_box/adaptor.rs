@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::defs::{Entry, Gap, PtsInfo, NO_PTS, NO_SEQ};
 use super::ChatHashCache;
+use super::defs::{Entry, Gap, NO_PTS, NO_SEQ, PtsInfo};
 use grammers_tl_types as tl;
 use log::info;
 

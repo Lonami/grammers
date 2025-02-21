@@ -10,7 +10,7 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use futures_util::future::{select, Either};
+use futures_util::future::{Either, select};
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, Update};
 use simple_logger::SimpleLogger;

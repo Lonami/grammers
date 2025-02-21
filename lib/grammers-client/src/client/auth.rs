@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::net::connect_sender;
 use super::Client;
+use super::net::connect_sender;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};

@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::{types, Client, InputMessage};
+use crate::{Client, InputMessage, types};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
 use std::convert::TryInto;

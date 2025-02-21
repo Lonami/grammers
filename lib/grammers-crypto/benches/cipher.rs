@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use bencher::{benchmark_group, benchmark_main, black_box, Bencher};
+use bencher::{Bencher, benchmark_group, benchmark_main, black_box};
 use grammers_crypto::aes::{ige_decrypt, ige_encrypt};
 
 macro_rules! define_benches {

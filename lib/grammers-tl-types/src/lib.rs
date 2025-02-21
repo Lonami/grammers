@@ -83,7 +83,7 @@ mod generated;
 pub mod serialize;
 
 pub use deserialize::{Cursor, Deserializable};
-pub use generated::{enums, functions, name_for_id, types, LAYER};
+pub use generated::{LAYER, enums, functions, name_for_id, types};
 pub use serialize::Serializable;
 
 #[cfg(feature = "impl-serde")]

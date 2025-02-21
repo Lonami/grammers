@@ -15,13 +15,13 @@ pub mod utils;
 
 pub use crate::reconnection::*;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
-use futures_util::future::{pending, select, Either};
+use futures_util::future::{Either, pending, select};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
 };
 use grammers_mtproto::transport::{self, Transport};
-use grammers_mtproto::{authentication, MsgId};
+use grammers_mtproto::{MsgId, authentication};
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use net::NetStream;
@@ -691,7 +691,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                     panic!("got response {msg_id:?} for unsent request {pair:?}");
                 }
                 RequestState::Sent(pair) if pair.msg_id == msg_id => {
-                    return Some(self.requests.swap_remove(i))
+                    return Some(self.requests.swap_remove(i));
                 }
                 _ => {}
             }

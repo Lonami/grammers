@@ -53,7 +53,7 @@ pub(crate) mod utils;
 compile_error!("The `fs` feature is not supported on wasm32-unknown-unknown.");
 
 pub use client::{Client, Config, InitParams, SignInError};
-pub use types::{button, reply_markup, ChatMap, InputMedia, InputMessage, Update};
+pub use types::{ChatMap, InputMedia, InputMessage, Update, button, reply_markup};
 
 pub use grammers_mtproto::transport;
 pub use grammers_mtsender::{FixedReconnect, InvocationError, NoReconnect, ReconnectionPolicy};

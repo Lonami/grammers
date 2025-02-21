@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_crypto::{obfuscated::ObfuscatedCipher, DequeBuffer};
+use grammers_crypto::{DequeBuffer, obfuscated::ObfuscatedCipher};
 use log::debug;
 
 use super::{Error, Tagged, Transport, UnpackedOffset};

@@ -12,7 +12,7 @@ use grammers_mtproto::mtp;
 use grammers_mtproto::transport;
 use grammers_mtsender::ServerAddr;
 use grammers_mtsender::{
-    self as sender, utils::sleep, AuthorizationError, InvocationError, RpcError, Sender,
+    self as sender, AuthorizationError, InvocationError, RpcError, Sender, utils::sleep,
 };
 use grammers_session::{ChatHashCache, MessageBox};
 use grammers_tl_types::{self as tl, Deserializable};

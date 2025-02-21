@@ -49,8 +49,15 @@ pub(crate) fn date(date: i32) -> DateTime<Utc> {
 pub(crate) fn extract_password_parameters(
     current_algo: &tl::enums::PasswordKdfAlgo,
 ) -> (&Vec<u8>, &Vec<u8>, &Vec<u8>, &i32) {
-    let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow { salt1, salt2, p, g } = match current_algo {
-        tl::enums::PasswordKdfAlgo::Unknown => panic!("Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"),
+    let tl::types::PasswordKdfAlgoSha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow {
+        salt1,
+        salt2,
+        p,
+        g,
+    } = match current_algo {
+        tl::enums::PasswordKdfAlgo::Unknown => panic!(
+            "Unknown KDF (most likely, the client is outdated and does not support the specified KDF algorithm)"
+        ),
         tl::enums::PasswordKdfAlgo::Sha256Sha256Pbkdf2Hmacsha512iter100000Sha256ModPow(alg) => alg,
     };
     (salt1, salt2, p, g)

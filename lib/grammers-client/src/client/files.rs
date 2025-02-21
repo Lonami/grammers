@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::Client;
 use crate::types::{Downloadable, Uploaded};
 use crate::utils::generate_random_id;
-use crate::Client;
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
@@ -93,7 +93,7 @@ impl DownloadIter {
                 return Ok(Some(data.clone()));
             }
             DownloadIterVariant::PreFailed(error) => {
-                return Err(InvocationError::Read(error.into()))
+                return Err(InvocationError::Read(error.into()));
             }
             DownloadIterVariant::Empty => return Ok(None),
         };

@@ -12,8 +12,8 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transport;
-use grammers_mtsender::{connect, NoReconnect};
-use grammers_tl_types::{enums, functions, Deserializable, RemoteCall, LAYER};
+use grammers_mtsender::{NoReconnect, connect};
+use grammers_tl_types::{Deserializable, LAYER, RemoteCall, enums, functions};
 use std::str::FromStr;
 
 use simple_logger::SimpleLogger;

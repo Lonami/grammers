@@ -5,10 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use crate::Client;
 use crate::client::messages::parse_mention_entities;
 use crate::utils::generate_random_id;
-use crate::Client;
-use crate::{types::IterBuffer, InputMessage};
+use crate::{InputMessage, types::IterBuffer};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;

@@ -9,7 +9,7 @@
 use std::sync::Arc;
 
 use super::{CallbackQuery, ChatMap, InlineQuery, InlineSend, Message};
-use crate::{types::MessageDeletion, Client};
+use crate::{Client, types::MessageDeletion};
 use grammers_tl_types as tl;
 
 #[non_exhaustive]

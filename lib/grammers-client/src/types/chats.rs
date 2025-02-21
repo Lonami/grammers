@@ -5,8 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::Role;
 use crate::Client;
+use crate::types::Role;
 use grammers_mtsender::{InvocationError, RpcError};
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
@@ -181,7 +181,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         name: "PEER_ID_INVALID".to_string(),
                         value: None,
                         caused_by: None,
-                    }))
+                    }));
                 }
             };
 

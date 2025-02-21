@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use aes::cipher::{generic_array::GenericArray, KeyIvInit, StreamCipher};
+use aes::cipher::{KeyIvInit, StreamCipher, generic_array::GenericArray};
 
 /// This implements the AES-256-CTR cipher used by Telegram to encrypt data
 /// when using the obfuscated transport.

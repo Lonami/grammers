@@ -11,7 +11,7 @@
 use crate::grouper;
 use crate::metadata::Metadata;
 use crate::rustifier;
-use crate::{ignore_type, Config};
+use crate::{Config, ignore_type};
 use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
 

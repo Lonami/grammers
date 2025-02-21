@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{generate_rust_code, Config, Outputs};
+use grammers_tl_gen::{Config, Outputs, generate_rust_code};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
 use std::io;
@@ -60,10 +60,15 @@ fn generic_functions_use_generic_parameters() -> io::Result<()> {
     assert!(functions.contains("pub struct InvokeWithLayer<X>"));
     assert!(functions.contains("pub query: X,"));
     assert!(functions.contains("impl<X> crate::Identifiable for InvokeWithLayer<X>"));
-    assert!(functions
-        .contains("impl<X: crate::Serializable> crate::Serializable for InvokeWithLayer<X>"));
-    assert!(functions
-        .contains("impl<X: crate::Deserializable> crate::Deserializable for InvokeWithLayer<X>"));
+    assert!(
+        functions
+            .contains("impl<X: crate::Serializable> crate::Serializable for InvokeWithLayer<X>")
+    );
+    assert!(
+        functions.contains(
+            "impl<X: crate::Deserializable> crate::Deserializable for InvokeWithLayer<X>"
+        )
+    );
     assert!(
         functions.contains("impl<X: crate::RemoteCall> crate::RemoteCall for InvokeWithLayer<X>")
     );
