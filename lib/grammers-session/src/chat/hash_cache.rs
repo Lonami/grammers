@@ -393,6 +393,8 @@ impl ChatHashCache {
                     self.has(u.user_id) && self.extend_from_message(&u.message)
                 }
                 U::StarsRevenueStatus(u) => self.has_peer(&u.peer),
+                U::BotPurchasedPaidMedia(u) => self.has(u.user_id),
+                U::PaidReactionPrivacy(_) => true, // paidReactionPrivacyPeer is already InputPeer
             },
             // Telegram should be including all the peers referenced in the updates in
             // `.users` and `.chats`, so no instrospection is done (unlike for `UpdateShort`).
@@ -576,11 +578,22 @@ impl ChatHashCache {
                             Some(p) => self.has_peer(p),
                             None => true,
                         },
-                        MA::GiveawayLaunch => true,
+                        MA::GiveawayLaunch(_) => true,
                         MA::GiveawayResults(_) => true,
                         MA::BoostApply(_) => true,
                         MA::PaymentRefunded(c) => self.has_peer(&c.peer),
                         MA::GiftStars(_) => true,
+                        MA::PrizeStars(c) => self.has_peer(&c.boost_peer),
+                        MA::StarGift(c) => {
+                            // TODO owner_id from unique gift
+                            c.peer.as_ref().map(|p| self.has_peer(p)).unwrap_or(true)
+                                && c.from_id.as_ref().map(|p| self.has_peer(p)).unwrap_or(true)
+                        }
+                        MA::StarGiftUnique(c) => {
+                            // TODO owner_id from unique gift
+                            c.peer.as_ref().map(|p| self.has_peer(p)).unwrap_or(true)
+                                && c.from_id.as_ref().map(|p| self.has_peer(p)).unwrap_or(true)
+                        }
                     }
             }
         }

@@ -36,6 +36,7 @@ pub(crate) const EMPTY_MESSAGE: tl::types::Message = tl::types::Message {
     noforwards: false,
     invert_media: false,
     offline: false,
+    video_processing_pending: false,
     id: 0,
     from_id: None,
     from_boosts_applied: None,
@@ -62,6 +63,7 @@ pub(crate) const EMPTY_MESSAGE: tl::types::Message = tl::types::Message {
     quick_reply_shortcut_id: None,
     effect: None,
     factcheck: None,
+    report_delivery_until_date: None,
 };
 
 /// Represents a Telegram message, which includes text messages, messages with media, and service
@@ -113,6 +115,7 @@ impl Message {
                     pinned: false,
                     noforwards: false,
                     invert_media: false,
+                    video_processing_pending: false,
                     id: msg.id,
                     from_id: msg.from_id,
                     from_boosts_applied: None,
@@ -140,6 +143,7 @@ impl Message {
                     offline: false,
                     effect: None,
                     factcheck: None,
+                    report_delivery_until_date: None,
                 },
                 raw_action: Some(msg.action),
                 client: client.clone(),
@@ -166,6 +170,7 @@ impl Message {
                 edit_hide: false,
                 pinned: false,
                 noforwards: false, // TODO true if channel has noforwads?
+                video_processing_pending: false,
                 invert_media: input.invert_media,
                 id: updates.id,
                 from_id: None, // TODO self
@@ -209,6 +214,7 @@ impl Message {
                 offline: false,
                 effect: None,
                 factcheck: None,
+                report_delivery_until_date: None,
             },
             raw_action: None,
             client: client.clone(),

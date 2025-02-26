@@ -88,6 +88,7 @@ impl Channel {
                             emoji_status: None,
                             level: None,
                             subscription_until_date: None,
+                            bot_verification_icon: None,
                         },
                     }
                 } else {

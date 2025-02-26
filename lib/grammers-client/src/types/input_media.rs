@@ -92,6 +92,8 @@ impl InputMedia {
                 attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
+                video_cover: None,
+                video_timestamp: None,
             })
             .into(),
         );
@@ -134,6 +136,8 @@ impl InputMedia {
                 spoiler: false,
                 url: url.into(),
                 ttl_seconds: self.media_ttl,
+                video_cover: None,
+                video_timestamp: None,
             })
             .into(),
         );
@@ -197,6 +201,8 @@ impl InputMedia {
                 attributes: vec![(tl::types::DocumentAttributeFilename { file_name }).into()],
                 stickers: None,
                 ttl_seconds: self.media_ttl,
+                video_cover: None,
+                video_timestamp: None,
             })
             .into(),
         );

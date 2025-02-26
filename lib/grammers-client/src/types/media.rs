@@ -233,6 +233,8 @@ impl Document {
             },
             ttl_seconds: self.raw.ttl_seconds,
             query: None,
+            video_cover: None,
+            video_timestamp: None,
         }
     }
 

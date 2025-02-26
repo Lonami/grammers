@@ -123,6 +123,7 @@ impl User {
                 color: None,
                 profile_color: None,
                 bot_active_users: None,
+                bot_verification_icon: None,
             }),
         }
     }
