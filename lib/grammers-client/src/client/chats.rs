@@ -757,7 +757,7 @@ impl Client {
     }
 
     #[cfg(feature = "parse_invite_link")]
-    fn parse_invite_link(invite_link: &str) -> Option<String> {
+    pub fn parse_invite_link(invite_link: &str) -> Option<String> {
         let url_parse_result = url::Url::parse(invite_link);
         if url_parse_result.is_err() {
             return None;
