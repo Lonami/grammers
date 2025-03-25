@@ -18,7 +18,7 @@ const MAX_LIMIT: usize = 50;
 pub struct InlineResult {
     client: Client,
     query_id: i64,
-    result: tl::enums::BotInlineResult,
+    pub raw: tl::enums::BotInlineResult,
 }
 
 pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
@@ -50,7 +50,7 @@ impl InlineResult {
     pub fn id(&self) -> &str {
         use tl::enums::BotInlineResult::*;
 
-        match &self.result {
+        match &self.raw {
             Result(r) => &r.id,
             BotInlineMediaResult(r) => &r.id,
         }
@@ -60,7 +60,7 @@ impl InlineResult {
     pub fn title(&self) -> Option<&String> {
         use tl::enums::BotInlineResult::*;
 
-        match &self.result {
+        match &self.raw {
             Result(r) => r.title.as_ref(),
             BotInlineMediaResult(r) => r.title.as_ref(),
         }
@@ -118,7 +118,7 @@ impl InlineResultIter {
             .extend(results.into_iter().map(|r| InlineResult {
                 client: client.clone(),
                 query_id,
-                result: r,
+                raw: r,
             }));
 
         Ok(self.pop_item())
