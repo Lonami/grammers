@@ -193,3 +193,9 @@ impl From<&Group> for PackedChat {
         chat.pack()
     }
 }
+
+impl From<&mut Group> for PackedChat {
+    fn from(chat: &mut Group) -> Self {
+        chat.pack()
+    }
+}
