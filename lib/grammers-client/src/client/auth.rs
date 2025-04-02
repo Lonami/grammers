@@ -64,9 +64,9 @@ impl Client {
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if client.is_authorized().await? {
-    ///     println!("Client is not authorized, you will need to sign_in!");
+    ///     println!("Client already authorized and ready to use!");
     /// } else {
-    ///     println!("Client already authorized and ready to use!")
+    ///     println!("Client is not authorized, you will need to sign_in!");
     /// }
     /// # Ok(())
     /// # }
