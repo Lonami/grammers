@@ -34,6 +34,7 @@ pub(crate) use defs::Entry;
 pub use defs::{Gap, MessageBox};
 use defs::{NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PtsInfo, State};
 use grammers_tl_types as tl;
+use grammers_tl_types::enums::Update;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
 use std::collections::{HashMap, HashSet};
@@ -495,8 +496,11 @@ impl MessageBox {
                 reset_deadlines_for.insert(entry);
             }
             if let Some(update) = update {
+                // BotInlineSend updates are sent with `seq` != NO_SEQ. `seq` must be updated in
+                // that case, otherwise every other BotInlineSend update will be counted as a gap
+                // and dropped.
+                any_pts_applied |= entry.is_some() || matches!(update, Update::BotInlineSend(_));
                 result.push(update);
-                any_pts_applied |= entry.is_some();
             }
         }
         self.reset_deadlines(&reset_deadlines_for, next_updates_deadline());
