@@ -484,7 +484,6 @@ impl MessageBox {
         // It mutates the local pts state, remembers possible gaps, builds a set of entries for
         // which the deadlines should be reset, and determines whether any local pts was changed
         // so that the seq can be updated too (which could otherwise have been done earlier).
-        let mut any_pts_applied = false;
         let mut reset_deadlines_for = mem::take(&mut self.tmp_entries);
         for update in updates {
             let (entry, update) = self.apply_pts_info(update);
@@ -496,28 +495,11 @@ impl MessageBox {
             }
             if let Some(update) = update {
                 result.push(update);
-                any_pts_applied |= entry.is_some();
             }
         }
         self.reset_deadlines(&reset_deadlines_for, next_updates_deadline());
         reset_deadlines_for.clear();
         self.tmp_entries = reset_deadlines_for;
-
-        // > If the updates were applied, local *Updates* state must be updated
-        // > with `seq` (unless it's 0) and `date` from the constructor.
-        //
-        // By "were applied", we assume it means "some other pts was applied".
-        // Updates which can be applied in any order, such as `UpdateChat`,
-        // should not cause `seq` to be updated (or upcoming updates such as
-        // `UpdateChatParticipant` could be missed).
-        if any_pts_applied {
-            if date != NO_DATE {
-                self.date = date;
-            }
-            if seq != NO_SEQ {
-                self.seq = seq;
-            }
-        }
 
         if !self.possible_gaps.is_empty() {
             // For each update in possible gaps, see if the gap has been resolved already.
@@ -543,6 +525,17 @@ impl MessageBox {
             self.possible_gaps.retain(|_, v| !v.updates.is_empty());
             if self.possible_gaps.is_empty() {
                 debug!("successfully resolved gap by waiting");
+            }
+        }
+
+        if !result.is_empty() && self.possible_gaps.is_empty() {
+            // > If the updates were applied, local *Updates* state must be updated
+            // > with `seq` (unless it's 0) and `date` from the constructor.
+            if date != NO_DATE {
+                self.date = date;
+            }
+            if seq != NO_SEQ {
+                self.seq = seq;
             }
         }
 
