@@ -6,13 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::Client;
+use super::client::Connection;
 use super::net::connect_sender;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
+use grammers_tl_types::functions::auth::{ExportLoginToken, ImportLoginToken};
 use std::fmt;
+use std::sync::Arc;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -256,6 +259,40 @@ impl Client {
             phone: phone.to_string(),
             phone_code_hash: sent_code.phone_code_hash,
         })
+    }
+
+    //Returns Some(token) if not logged in, None if logged in
+    pub async fn request_qr_code(&self) -> Result<Option<Vec<u8>>, InvocationError> {
+        let req = ExportLoginToken {
+            api_id: self.0.config.api_id,
+            api_hash: self.0.config.api_hash.clone(),
+            except_ids: Vec::new(),
+        };
+
+        let response = match self.invoke(&req).await? {
+            grammers_tl_types::enums::auth::LoginToken::Token(logintoken) => {
+                let token = logintoken.token;
+                Some(token)
+            }
+            grammers_tl_types::enums::auth::LoginToken::MigrateTo(migratetoken) => {
+                log::debug!("Received migrate to: {:?}", migratetoken);
+                let new_req = ImportLoginToken {
+                    token: migratetoken.token,
+                };
+                log::debug!("invoking.");
+                let (new_sender, new_tx) = connect_sender(migratetoken.dc_id, &self.0.config)
+                    .await
+                    .unwrap();
+                let downloader = Arc::new(Connection::new(new_sender, new_tx));
+                let response = downloader
+                    .invoke(&new_req, self.0.config.params.flood_sleep_threshold, drop)
+                    .await;
+                println!("{:?}", response);
+                None
+            }
+            grammers_tl_types::enums::auth::LoginToken::Success(_) => None,
+        };
+        Ok(response)
     }
 
     /// Signs in to the user account.
