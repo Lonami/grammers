@@ -15,7 +15,6 @@ pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
 use grammers_tl_types::functions::auth::{ExportLoginToken, ImportLoginToken};
 use std::fmt;
-use std::sync::Arc;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -261,37 +260,47 @@ impl Client {
         })
     }
 
-    //Returns Some(token) if not logged in, None if logged in
-    pub async fn request_qr_code(&self) -> Result<Option<Vec<u8>>, InvocationError> {
-        let req = ExportLoginToken {
+    /// Returns a QR login code OR authenticates after QR code is scanned
+    ///
+    /// You can call [`Client::request_qr_code`] to obtain
+    /// the necessary login token to display the QR code and you
+    /// have to call it again after the QR code is scanned.
+    ///
+    /// It is recommended to save the [`Client::session()`] in between calls to this function
+    pub async fn request_qr_code(
+        &self,
+    ) -> Result<grammers_tl_types::enums::auth::LoginToken, InvocationError> {
+        let export_login_token = ExportLoginToken {
             api_id: self.0.config.api_id,
             api_hash: self.0.config.api_hash.clone(),
             except_ids: Vec::new(),
         };
 
-        let response = match self.invoke(&req).await? {
-            grammers_tl_types::enums::auth::LoginToken::Token(logintoken) => {
-                let token = logintoken.token;
-                Some(token)
+        let mut response = self.invoke(&export_login_token).await?;
+        if let grammers_tl_types::enums::auth::LoginToken::MigrateTo(ref migrateto) = response {
+            let import_login_token = ImportLoginToken {
+                token: migrateto.token.clone(),
+            };
+            let (new_sender, new_tx) = connect_sender(migrateto.dc_id, &self.0.config)
+                .await
+                .unwrap();
+            let downloader = Connection::new(new_sender, new_tx);
+            let second_response = downloader
+                .invoke(
+                    &import_login_token,
+                    self.0.config.params.flood_sleep_threshold,
+                    drop,
+                )
+                .await?;
+            if matches!(
+                second_response,
+                grammers_tl_types::enums::auth::LoginToken::Success(_)
+            ) {
+                response = second_response;
+            } else {
+                return Err(InvocationError::Dropped);
             }
-            grammers_tl_types::enums::auth::LoginToken::MigrateTo(migratetoken) => {
-                log::debug!("Received migrate to: {:?}", migratetoken);
-                let new_req = ImportLoginToken {
-                    token: migratetoken.token,
-                };
-                log::debug!("invoking.");
-                let (new_sender, new_tx) = connect_sender(migratetoken.dc_id, &self.0.config)
-                    .await
-                    .unwrap();
-                let downloader = Arc::new(Connection::new(new_sender, new_tx));
-                let response = downloader
-                    .invoke(&new_req, self.0.config.params.flood_sleep_threshold, drop)
-                    .await;
-                println!("{:?}", response);
-                None
-            }
-            grammers_tl_types::enums::auth::LoginToken::Success(_) => None,
-        };
+        }
         Ok(response)
     }
 
