@@ -414,7 +414,7 @@ impl Client {
 }
 
 impl Connection {
-    fn new(sender: Sender<Transport, mtp::Encrypted>, request_tx: Enqueuer) -> Self {
+    pub(crate) fn new(sender: Sender<Transport, mtp::Encrypted>, request_tx: Enqueuer) -> Self {
         Self {
             sender: AsyncMutex::new(sender),
             request_tx: RwLock::new(request_tx),
