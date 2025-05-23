@@ -107,12 +107,13 @@ impl Session {
             .next()
     }
 
-    fn insert_dc(&self, dc: enums::DataCenter) {
+    fn insert_dc(&self, new_dc: enums::DataCenter) {
         let mut session = self.session.lock().unwrap();
-        if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == dc.id()) {
+
+        if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == new_dc.id()) {
             session.dcs.remove(pos);
         }
-        session.dcs.push(dc);
+        session.dcs.push(new_dc);
     }
 
     pub fn insert_dc_tcp(&self, id: i32, addr: &SocketAddr, auth: [u8; 256]) {
