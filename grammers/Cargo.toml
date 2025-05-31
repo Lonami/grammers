@@ -13,4 +13,19 @@ categories = []
 edition = "2024"
 
 [dependencies]
-grammers-client = "0.8.0"
+arbitrary = { version = "1.4.2", features = ["derive"] }
+async-compat = "0.2.4"
+chrono = "0.4.41"
+grammers-client = { path = "../grammers-client", version = "0.8.0" }
+grammers-session = { path = "../grammers-session", version = "0.8.0" }
+grammers-mtsender = { path = "../grammers-mtsender", version = "0.8.0" }
+log = "0.4.27"
+simple_logger = "5.0.0"
+slint = "1.8.0"
+tokio = { version = "1.45.1", features = ["sync"] }
+
+[build-dependencies]
+slint-build = "1.8.0"
+
+[dev-dependencies]
+arbtest = "0.3.2"

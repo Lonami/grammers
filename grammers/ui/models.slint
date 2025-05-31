@@ -1,0 +1,22 @@
+import { ChatId } from "types.slint";
+
+export struct DialogItemModel {
+    id: ChatId,
+    picture-thumbnail: image,
+    name: string,
+    last-message-time: string,
+    last-message-sender-name: string,
+    last-message-text: string,
+    last-message-sent: bool,
+    last-message-read: bool,
+}
+
+export struct MessageItemModel {
+    id: int,
+    sender-picture-thumbnail: image,
+    sender-name: string,
+    text: string,
+    time: string,
+    sent: bool,
+    read: bool,
+}
