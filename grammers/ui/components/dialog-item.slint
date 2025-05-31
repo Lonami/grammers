@@ -1,0 +1,61 @@
+import { DialogItemModel as Model } from "../models.slint";
+
+export component DialogItem inherits Rectangle {
+    in property <Model> model;
+    in property <bool> selected;
+
+    callback clicked <=> ta.clicked;
+    callback request-settings();
+
+    HorizontalLayout {
+        Image {
+            height: 48px;
+            width: 48px;
+        }
+
+        VerticalLayout {
+            alignment: space-around;
+
+            HorizontalLayout {
+                Text {
+                    text: model.name;
+                    font-weight: 800;
+                    horizontal-stretch: 1;
+                }
+
+                Text {
+                    text: model.last-message-time;
+                }
+            }
+
+            HorizontalLayout {
+                Text {
+                    text: model.last-message-sender-name;
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: ": ";
+                    font-weight: 600;
+                }
+
+                Text {
+                    text: model.last-message-text;
+                    horizontal-stretch: 1;
+                }
+            }
+        }
+    }
+
+    ta := TouchArea { }
+
+    states [
+        active when selected: {
+            root.background: white.darker(3);
+        }
+        hover when !selected && ta.has-hover: {
+            root.background: white.darker(5);
+        }
+        inactive when !selected && !ta.has-hover: {}
+    ]
+}

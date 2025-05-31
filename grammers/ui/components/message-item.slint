@@ -1,0 +1,39 @@
+import { HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { ReadIndicator  } from "read-indicator.slint";
+import { MessageItemModel as Model } from "../models.slint";
+import { DoubleCheck } from "../icons.slint";
+
+export component MessageItem inherits HorizontalBox {
+    in property <Model> model;
+
+    Image {
+        source: model.sender-picture-thumbnail;
+        width: 48px;
+        height: 48px;
+    }
+
+    Rectangle {
+        VerticalBox {
+            Text {
+                text: model.sender-name;
+                color: gray;
+            }
+
+            HorizontalBox {
+                Text {
+                    text: model.text;
+                }
+
+                Text {
+                    text: model.time;
+                }
+
+                ReadIndicator {
+                    width: 16px;
+                    sent: model.sent;
+                    read: model.read;
+                }
+            }
+        }
+    }
+}

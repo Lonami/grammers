@@ -1,0 +1,25 @@
+import { LoginStepEnum } from "enums.slint";
+import { ChatId } from "types.slint";
+import { DialogItemModel, MessageItemModel } from "models.slint";
+
+export global LoginScreenGlobal {
+    in-out property <string> password-hint;
+
+    in-out property <LoginStepEnum> step;
+
+    in-out property <string> phone;
+    in-out property <string> code;
+    in-out property <string> password;
+
+    pure callback request-continue(value: string);
+}
+
+export global MainScreenGlobal {
+    in property <[DialogItemModel]> dialogs;
+    in property <[MessageItemModel]> messages;
+
+    in-out property <ChatId> selected-dialog-id;
+
+    pure callback request-messages();
+    pure callback request-send-message(message: string);
+}
