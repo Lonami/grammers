@@ -1,0 +1,20 @@
+import { Button } from "std-widgets.slint";
+
+export component SettingsScreen inherits VerticalLayout {
+    callback request-back();
+    callback request-logout();
+
+    Button {
+        text: "Go back";
+        clicked => {
+            root.request-back();
+        }
+    }
+
+    Button {
+        text: "Logout";
+        clicked => {
+            root.request-logout();
+        }
+    }
+}

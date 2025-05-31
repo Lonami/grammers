@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::PeerAuth;
+use grammers_session::types::{PeerAuth, PeerInfo};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -102,6 +102,11 @@ impl User {
             .and_then(|u| u.access_hash)
             .map(PeerAuth::from_hash)
             .unwrap_or_default()
+    }
+
+    /// Useful information about this peer.
+    pub fn info(&self) -> PeerInfo {
+        <PeerInfo as From<&Self>>::from(self)
     }
 
     /// Return the first name of this user.
@@ -278,5 +283,17 @@ impl User {
     /// Language code of the user, if any.
     pub fn lang_code(&self) -> Option<&str> {
         self.user().and_then(|u| u.lang_code.as_deref())
+    }
+}
+
+impl From<User> for PeerInfo {
+    #[inline]
+    fn from(user: User) -> Self {
+        <Self as From<&User>>::from(&user)
+    }
+}
+impl<'a> From<&'a User> for PeerInfo {
+    fn from(user: &'a User) -> Self {
+        <PeerInfo as From<&'a tl::enums::User>>::from(&user.raw)
     }
 }

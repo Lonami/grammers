@@ -1,0 +1,28 @@
+import { LoginScreen } from "screens/login-screen.slint";
+import { MainScreen } from "screens/main-screen.slint";
+import { SettingsScreen } from "screens/settings-screen.slint";
+import { ScreenEnum } from "enums.slint";
+
+export * from "globals.slint";
+
+export component AppWindow inherits Window {
+    in-out property <ScreenEnum> screen: ScreenEnum.main;
+
+    title: "Grammers";
+    preferred-width: 480px;
+
+    if screen == ScreenEnum.login: LoginScreen { }
+    if screen == ScreenEnum.main: MainScreen {
+        request-settings => {
+            screen = ScreenEnum.settings;
+        }
+    }
+    if screen == ScreenEnum.settings: SettingsScreen {
+        request-back => {
+            screen = ScreenEnum.main;
+        }
+        request-logout => {
+            screen = ScreenEnum.login;
+        }
+    }
+}
