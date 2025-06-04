@@ -16,27 +16,22 @@ use std::sync::Arc;
 /// Represents an update of user choosing the result of inline query and sending it to their chat partner.
 #[derive(Clone)]
 pub struct InlineSend {
-    raw: tl::types::UpdateBotInlineSend,
-    client: Client,
-    chats: Arc<ChatMap>,
+    pub raw: tl::enums::Update,
+    pub(crate) client: Client,
+    pub(crate) chats: Arc<ChatMap>,
 }
 
 impl InlineSend {
-    pub fn from_raw(
-        query: tl::types::UpdateBotInlineSend,
-        client: &Client,
-        chats: &Arc<ChatMap>,
-    ) -> Self {
-        Self {
-            raw: query,
-            client: client.clone(),
-            chats: chats.clone(),
+    fn update(&self) -> &tl::types::UpdateBotInlineSend {
+        match &self.raw {
+            tl::enums::Update::BotInlineSend(update) => update,
+            _ => unreachable!(),
         }
     }
 
     /// The query that was used to obtain the result.
     pub fn text(&self) -> &str {
-        self.raw.query.as_str()
+        self.update().query.as_str()
     }
 
     /// The user that chose the result.
@@ -45,7 +40,7 @@ impl InlineSend {
             .chats
             .get(
                 &tl::types::PeerUser {
-                    user_id: self.raw.user_id,
+                    user_id: self.update().user_id,
                 }
                 .into(),
             )
@@ -58,14 +53,14 @@ impl InlineSend {
 
     /// The unique identifier for the result that was chosen
     pub fn result_id(&self) -> &str {
-        self.raw.id.as_str()
+        self.update().id.as_str()
     }
 
     /// Identifier of sent inline message.
     /// Available only if there is an inline keyboard attached.
     /// Will be also received in callback queries and can be used to edit the message.
     pub fn message_id(&self) -> Option<tl::enums::InputBotInlineMessageId> {
-        self.raw.msg_id.clone()
+        self.update().msg_id.clone()
     }
 
     /// Edits this inline message.
@@ -75,7 +70,7 @@ impl InlineSend {
         &self,
         input_message: impl Into<InputMessage>,
     ) -> Result<Option<bool>, InvocationError> {
-        let msg_id = match self.raw.msg_id.clone() {
+        let msg_id = match self.update().msg_id.clone() {
             None => return Ok(None),
             Some(msg_id) => msg_id,
         };

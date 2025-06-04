@@ -17,9 +17,9 @@ use std::sync::Arc;
 /// inline query such as `@bot query`.
 #[derive(Clone)]
 pub struct InlineQuery {
-    raw: tl::types::UpdateBotInlineQuery,
-    client: Client,
-    chats: Arc<ChatMap>,
+    pub raw: tl::enums::Update,
+    pub(crate) client: Client,
+    pub(crate) chats: Arc<ChatMap>,
 }
 
 /// An inline query answer builder.
@@ -41,15 +41,10 @@ impl From<InlineResult> for tl::enums::InputBotInlineResult {
 }
 
 impl InlineQuery {
-    pub fn from_raw(
-        client: &Client,
-        query: tl::types::UpdateBotInlineQuery,
-        chats: &Arc<ChatMap>,
-    ) -> Self {
-        Self {
-            raw: query,
-            client: client.clone(),
-            chats: chats.clone(),
+    fn update(&self) -> &tl::types::UpdateBotInlineQuery {
+        match &self.raw {
+            tl::enums::Update::BotInlineQuery(update) => update,
+            _ => unreachable!(),
         }
     }
 
@@ -59,7 +54,7 @@ impl InlineQuery {
             .chats
             .get(
                 &tl::types::PeerUser {
-                    user_id: self.raw.user_id,
+                    user_id: self.update().user_id,
                 }
                 .into(),
             )
@@ -72,12 +67,12 @@ impl InlineQuery {
 
     /// The text of the inline query.
     pub fn text(&self) -> &str {
-        self.raw.query.as_str()
+        self.update().query.as_str()
     }
 
     /// The offset of the inline query.
     pub fn offset(&self) -> &str {
-        self.raw.offset.as_str()
+        self.update().offset.as_str()
     }
 
     /// Answer the inline query.
@@ -90,7 +85,7 @@ impl InlineQuery {
             request: tl::functions::messages::SetInlineBotResults {
                 gallery: false,
                 private: false,
-                query_id: self.raw.query_id,
+                query_id: self.update().query_id,
                 results: results.into_iter().map(Into::into).collect(),
                 cache_time: 0,
                 next_offset: None,
@@ -103,12 +98,12 @@ impl InlineQuery {
 
     /// Type of the chat from which the inline query was sent.
     pub fn peer_type(&self) -> Option<tl::enums::InlineQueryPeerType> {
-        self.raw.peer_type.clone()
+        self.update().peer_type.clone()
     }
 
     /// Query ID
     pub fn query_id(&self) -> i64 {
-        self.raw.query_id
+        self.update().query_id
     }
 }
 
