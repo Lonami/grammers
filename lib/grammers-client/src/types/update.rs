@@ -41,60 +41,58 @@ pub enum Update {
 
 impl Update {
     /// Create new friendly to use Update from its raw version and chat map
-    pub fn new(client: &Client, update: tl::enums::Update, chats: &Arc<ChatMap>) -> Option<Self> {
+    pub fn new(client: &Client, update: tl::enums::Update, chats: &Arc<ChatMap>) -> Self {
         match update {
             // NewMessage
             tl::enums::Update::NewMessage(tl::types::UpdateNewMessage { message, .. }) => {
-                Message::from_raw(client, message, chats).map(Self::NewMessage)
+                Self::NewMessage(Message::from_raw(client, message, chats))
             }
             tl::enums::Update::NewChannelMessage(tl::types::UpdateNewChannelMessage {
                 message,
                 ..
-            }) => Message::from_raw(client, message, chats).map(Self::NewMessage),
+            }) => Self::NewMessage(Message::from_raw(client, message, chats)),
 
             // MessageEdited
             tl::enums::Update::EditMessage(tl::types::UpdateEditMessage { message, .. }) => {
-                Message::from_raw(client, message, chats).map(Self::MessageEdited)
+                Self::MessageEdited(Message::from_raw(client, message, chats))
             }
             tl::enums::Update::EditChannelMessage(tl::types::UpdateEditChannelMessage {
                 message,
                 ..
-            }) => Message::from_raw(client, message, chats).map(Self::MessageEdited),
+            }) => Self::MessageEdited(Message::from_raw(client, message, chats)),
 
             // MessageDeleted
             tl::enums::Update::DeleteMessages(tl::types::UpdateDeleteMessages {
                 messages, ..
-            }) => Some(Self::MessageDeleted(MessageDeletion::new(messages))),
+            }) => Self::MessageDeleted(MessageDeletion::new(messages)),
             tl::enums::Update::DeleteChannelMessages(tl::types::UpdateDeleteChannelMessages {
                 messages,
                 channel_id,
                 ..
-            }) => Some(Self::MessageDeleted(MessageDeletion::new_with_channel(
-                messages, channel_id,
-            ))),
+            }) => Self::MessageDeleted(MessageDeletion::new_with_channel(messages, channel_id)),
 
             // CallbackQuery
-            tl::enums::Update::BotCallbackQuery(query) => Some(Self::CallbackQuery(
-                CallbackQuery::from_raw(client, query, chats),
-            )),
+            tl::enums::Update::BotCallbackQuery(query) => {
+                Self::CallbackQuery(CallbackQuery::from_raw(client, query, chats))
+            }
 
             // InlineCallbackQuery
-            tl::enums::Update::InlineBotCallbackQuery(query) => Some(Self::CallbackQuery(
-                CallbackQuery::from_inline_raw(client, query, chats),
-            )),
+            tl::enums::Update::InlineBotCallbackQuery(query) => {
+                Self::CallbackQuery(CallbackQuery::from_inline_raw(client, query, chats))
+            }
 
             // InlineQuery
-            tl::enums::Update::BotInlineQuery(query) => Some(Self::InlineQuery(
-                InlineQuery::from_raw(client, query, chats),
-            )),
+            tl::enums::Update::BotInlineQuery(query) => {
+                Self::InlineQuery(InlineQuery::from_raw(client, query, chats))
+            }
 
             // InlineSend
             tl::enums::Update::BotInlineSend(query) => {
-                Some(Self::InlineSend(InlineSend::from_raw(query, client, chats)))
+                Self::InlineSend(InlineSend::from_raw(query, client, chats))
             }
 
             // Raw
-            update => Some(Self::Raw(update)),
+            update => Self::Raw(update),
         }
     }
 }

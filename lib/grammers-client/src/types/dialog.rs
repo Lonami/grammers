@@ -6,9 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::{Chat, ChatMap, Message, Peer};
+use std::sync::Arc;
+
+use crate::Client;
+use crate::utils::peer_from_message;
+
+use super::{Chat, ChatMap, Message};
 use grammers_tl_types as tl;
-use std::collections::HashMap;
 
 #[derive(Debug, Clone)]
 pub struct Dialog {
@@ -19,9 +23,10 @@ pub struct Dialog {
 
 impl Dialog {
     pub(crate) fn new(
+        client: &Client,
         dialog: tl::enums::Dialog,
-        messages: &mut HashMap<Peer, Message>,
-        chats: &ChatMap,
+        messages: &mut Vec<tl::enums::Message>,
+        chats: &Arc<ChatMap>,
     ) -> Self {
         // TODO helper utils (ext trait?) to extract data from dialogs or messages
         let peer = match dialog {
@@ -29,12 +34,19 @@ impl Dialog {
             tl::enums::Dialog::Folder(ref dialog) => &dialog.peer,
         };
 
+        let chat = chats
+            .get(peer)
+            .expect("dialogs use an unknown peer")
+            .clone();
+
+        let message = messages
+            .iter()
+            .position(|m| peer_from_message(m).is_some_and(|p| p == peer))
+            .map(|i| messages.swap_remove(i));
+
         Self {
-            chat: chats
-                .get(peer)
-                .expect("dialogs use an unknown peer")
-                .clone(),
-            last_message: messages.remove(&peer.into()),
+            chat,
+            last_message: message.map(|m| Message::from_raw(client, m, chats)),
             raw: dialog,
         }
     }

@@ -6,11 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::Client;
-use crate::types::{ChatMap, Dialog, IterBuffer, Message};
+use crate::types::{ChatMap, Dialog, IterBuffer};
 use grammers_mtsender::InvocationError;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
-use std::collections::HashMap;
 
 const MAX_LIMIT: usize = 100;
 
@@ -66,7 +65,7 @@ impl DialogIter {
         use tl::enums::messages::Dialogs;
 
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        let (dialogs, messages, users, chats) = match self.client.invoke(&self.request).await? {
+        let (dialogs, mut messages, users, chats) = match self.client.invoke(&self.request).await? {
             Dialogs::Dialogs(d) => {
                 self.last_chunk = true;
                 self.total = Some(d.dialogs.len());
@@ -89,11 +88,6 @@ impl DialogIter {
         }
 
         let chats = ChatMap::new(users, chats);
-        let mut messages = messages
-            .into_iter()
-            .flat_map(|m| Message::from_raw(&self.client, m, &chats))
-            .map(|m| ((&m.raw.peer_id).into(), m))
-            .collect::<HashMap<_, _>>();
 
         {
             let mut state = self.client.0.state.write().unwrap();
@@ -108,7 +102,7 @@ impl DialogIter {
                         .message_box
                         .try_set_channel_state(channel.channel_id, *pts);
                 }
-                Dialog::new(dialog, &mut messages, &chats)
+                Dialog::new(&self.client, dialog, &mut messages, &chats)
             }));
         }
 
@@ -121,8 +115,8 @@ impl DialogIter {
                 .rev()
                 .find_map(|dialog| dialog.last_message.as_ref())
             {
-                self.request.offset_date = last_message.raw.date;
-                self.request.offset_id = last_message.raw.id;
+                self.request.offset_date = last_message.date_timestamp();
+                self.request.offset_id = last_message.id();
             }
             self.request.offset_peer = self.buffer[self.buffer.len() - 1]
                 .chat()

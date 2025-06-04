@@ -7,7 +7,6 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
-use crate::types::message::EMPTY_MESSAGE;
 use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{ChatMap, Client, InputMedia, types};
@@ -59,8 +58,8 @@ fn map_random_ids_to_messages(
                     ) => Some(message),
                     _ => None,
                 })
-                .filter_map(|message| Message::from_raw(client, message, &chats))
-                .map(|message| (message.raw.id, message))
+                .map(|message| Message::from_raw(client, message, &chats))
+                .map(|message| (message.id(), message))
                 .collect::<HashMap<_, _>>();
 
             random_ids
@@ -183,7 +182,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
         self.buffer.extend(
             messages
                 .into_iter()
-                .flat_map(|message| Message::from_raw(&client, message, &chats)),
+                .map(|message| Message::from_raw(&client, message, &chats)),
         );
 
         Ok(rate)
@@ -243,8 +242,8 @@ impl MessageIter {
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_id = last.raw.id;
-            self.request.offset_date = last.raw.date;
+            self.request.offset_id = last.id();
+            self.request.offset_date = last.date_timestamp();
         }
 
         Ok(self.pop_item())
@@ -367,8 +366,8 @@ impl SearchIter {
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
-            self.request.offset_id = last.raw.id;
-            self.request.max_date = last.raw.date;
+            self.request.offset_id = last.id();
+            self.request.max_date = last.date_timestamp();
         }
 
         Ok(self.pop_item())
@@ -444,7 +443,7 @@ impl GlobalSearchIter {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
             self.request.offset_peer = last.chat().pack().to_input_peer();
-            self.request.offset_id = last.raw.id;
+            self.request.offset_id = last.id();
         }
 
         Ok(self.pop_item())
@@ -577,7 +576,14 @@ impl Client {
                             );
                             warn!("{:#?}", updates);
                         }
-                        Message::from_raw(self, EMPTY_MESSAGE.into(), &ChatMap::empty()).unwrap()
+                        Message::from_raw(
+                            self,
+                            tl::enums::Message::Empty(tl::types::MessageEmpty {
+                                id: 0,
+                                peer_id: Some(chat.to_peer()),
+                            }),
+                            &ChatMap::empty(),
+                        )
                     }
                 }
             }
@@ -888,7 +894,7 @@ impl Client {
         };
 
         let input_id =
-            tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.raw.id });
+            tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id() });
 
         let (res, filter_req) = match get_message(self, chat, input_id).await {
             Ok(tup) => tup,
@@ -914,9 +920,9 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .flat_map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, &chats))
             .next()
-            .filter(|m| !filter_req || m.raw.peer_id == message.raw.peer_id))
+            .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
     }
 
     /// Iterate over the message history of a chat, from most recent to oldest.
@@ -1032,9 +1038,9 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         let mut map = messages
             .into_iter()
-            .flat_map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, &chats))
             .filter(|m| m.chat().pack() == chat)
-            .map(|m| (m.raw.id, m))
+            .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
 
         Ok(message_ids.iter().map(|id| map.remove(id)).collect())
@@ -1084,7 +1090,7 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .flat_map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, &chats))
             .find(|m| m.chat().pack() == chat))
     }
 

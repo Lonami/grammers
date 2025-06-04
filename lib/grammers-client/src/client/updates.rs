@@ -47,13 +47,8 @@ impl Client {
     /// # }
     /// ```
     pub async fn next_update(&self) -> Result<Update, InvocationError> {
-        loop {
-            let (update, chats) = self.next_raw_update().await?;
-
-            if let Some(update) = Update::new(self, update, &chats) {
-                return Ok(update);
-            }
-        }
+        let (update, chats) = self.next_raw_update().await?;
+        Ok(Update::new(self, update, &chats))
     }
 
     /// Returns the next raw update and associated chat map from the buffer where they are queued until used.

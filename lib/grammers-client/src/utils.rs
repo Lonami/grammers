@@ -110,3 +110,11 @@ pub(crate) fn always_find_entity(
         None => types::Chat::unpack(get_packed()),
     }
 }
+
+pub fn peer_from_message(message: &tl::enums::Message) -> Option<&tl::enums::Peer> {
+    match &message {
+        tl::enums::Message::Empty(message) => message.peer_id.as_ref(),
+        tl::enums::Message::Message(message) => Some(&message.peer_id),
+        tl::enums::Message::Service(message) => Some(&message.peer_id),
+    }
+}

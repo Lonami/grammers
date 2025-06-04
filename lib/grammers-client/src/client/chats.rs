@@ -318,9 +318,9 @@ impl ProfilePhotoIter {
                 while let Some(message) = iter.next().await? {
                     if let Some(tl::enums::MessageAction::ChatEditPhoto(
                         tl::types::MessageActionChatEditPhoto { photo },
-                    )) = message.raw_action
+                    )) = message.action()
                     {
-                        return Ok(Some(Photo::from_raw(photo)));
+                        return Ok(Some(Photo::from_raw(photo.clone())));
                     } else {
                         continue;
                     }
