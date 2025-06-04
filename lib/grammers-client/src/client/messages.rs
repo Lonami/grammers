@@ -8,7 +8,7 @@
 
 //! Methods related to sending messages.
 use crate::types::{InputReactions, IterBuffer, Message};
-use crate::utils::{generate_random_id, generate_random_ids};
+use crate::utils::{self, generate_random_id, generate_random_ids};
 use crate::{ChatMap, Client, InputMedia, types};
 use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
@@ -20,6 +20,7 @@ use tl::enums::InputPeer;
 
 fn map_random_ids_to_messages(
     client: &Client,
+    fetched_in: tl::enums::Peer,
     random_ids: &[i64],
     updates: tl::enums::Updates,
 ) -> Vec<Option<Message>> {
@@ -58,7 +59,7 @@ fn map_random_ids_to_messages(
                     ) => Some(message),
                     _ => None,
                 })
-                .map(|message| Message::from_raw(client, message, &chats))
+                .map(|message| Message::from_raw(client, message, Some(fetched_in.clone()), &chats))
                 .map(|message| (message.id(), message))
                 .collect::<HashMap<_, _>>();
 
@@ -140,7 +141,11 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
     /// Performs the network call, fills the buffer, and returns the `offset_rate` if any.
     ///
     /// The `request.limit` should be set to the right value before calling this method.
-    async fn fill_buffer(&mut self, limit: i32) -> Result<Option<i32>, InvocationError> {
+    async fn fill_buffer(
+        &mut self,
+        limit: i32,
+        peer: Option<tl::enums::Peer>,
+    ) -> Result<Option<i32>, InvocationError> {
         use tl::enums::messages::Messages;
 
         let (messages, users, chats, rate) = match self.client.invoke(&self.request).await? {
@@ -182,7 +187,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
         self.buffer.extend(
             messages
                 .into_iter()
-                .map(|message| Message::from_raw(&client, message, &chats)),
+                .map(|message| Message::from_raw(&client, message, peer.clone(), &chats)),
         );
 
         Ok(rate)
@@ -237,7 +242,11 @@ impl MessageIter {
         }
 
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        self.fill_buffer(self.request.limit).await?;
+        self.fill_buffer(
+            self.request.limit,
+            Some(utils::peer_from_input_peer(&self.request.peer)),
+        )
+        .await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -361,7 +370,11 @@ impl SearchIter {
         }
 
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        self.fill_buffer(self.request.limit).await?;
+        self.fill_buffer(
+            self.request.limit,
+            Some(utils::peer_from_input_peer(&self.request.peer)),
+        )
+        .await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -436,7 +449,7 @@ impl GlobalSearchIter {
         }
 
         self.request.limit = self.determine_limit(MAX_LIMIT);
-        let offset_rate = self.fill_buffer(self.request.limit).await?;
+        let offset_rate = self.fill_buffer(self.request.limit, None).await?;
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
@@ -564,7 +577,7 @@ impl Client {
                     None
                 };
 
-                match map_random_ids_to_messages(self, &[random_id], updates)
+                match map_random_ids_to_messages(self, chat.to_peer(), &[random_id], updates)
                     .pop()
                     .flatten()
                 {
@@ -582,6 +595,7 @@ impl Client {
                                 id: 0,
                                 peer_id: Some(chat.to_peer()),
                             }),
+                            Some(chat.to_peer()),
                             &ChatMap::empty(),
                         )
                     }
@@ -693,7 +707,12 @@ impl Client {
             })
             .await?;
 
-        Ok(map_random_ids_to_messages(self, &random_ids, updates))
+        Ok(map_random_ids_to_messages(
+            self,
+            chat.to_peer(),
+            &random_ids,
+            updates,
+        ))
     }
 
     /// Edits an existing message.
@@ -824,6 +843,7 @@ impl Client {
         source: S,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         // TODO let user customize more options
+        let chat = destination.into();
         let request = tl::functions::messages::ForwardMessages {
             silent: false,
             background: false,
@@ -833,7 +853,7 @@ impl Client {
             from_peer: source.into().to_input_peer(),
             id: message_ids.to_vec(),
             random_id: generate_random_ids(message_ids.len()),
-            to_peer: destination.into().to_input_peer(),
+            to_peer: chat.to_input_peer(),
             top_msg_id: None,
             schedule_date: None,
             send_as: None,
@@ -843,7 +863,12 @@ impl Client {
             video_timestamp: None,
         };
         let result = self.invoke(&request).await?;
-        Ok(map_random_ids_to_messages(self, &request.random_id, result))
+        Ok(map_random_ids_to_messages(
+            self,
+            chat.to_peer(),
+            &request.random_id,
+            result,
+        ))
     }
 
     /// Gets the [`Message`] to which the input message is replying to.
@@ -920,7 +945,7 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
             .next()
             .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
     }
@@ -1038,7 +1063,7 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         let mut map = messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
             .filter(|m| m.chat().pack() == chat)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
@@ -1090,7 +1115,7 @@ impl Client {
         let chats = ChatMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, &chats))
+            .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
             .find(|m| m.chat().pack() == chat))
     }
 

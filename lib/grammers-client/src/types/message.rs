@@ -31,6 +31,7 @@ use std::{io, path::Path};
 #[derive(Clone)]
 pub struct Message {
     pub raw: tl::enums::Message,
+    pub(crate) fetched_in: Option<tl::enums::Peer>,
     pub(crate) client: Client,
     // When fetching messages or receiving updates, a set of chats will be present. A single
     // server response contains a lot of chats, and some might be related to deep layers of
@@ -40,9 +41,15 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn from_raw(client: &Client, message: tl::enums::Message, chats: &Arc<ChatMap>) -> Self {
+    pub fn from_raw(
+        client: &Client,
+        message: tl::enums::Message,
+        fetched_in: Option<tl::enums::Peer>,
+        chats: &Arc<ChatMap>,
+    ) -> Self {
         Self {
             raw: message,
+            fetched_in,
             client: client.clone(),
             chats: Arc::clone(chats),
         }
@@ -112,6 +119,7 @@ impl Message {
                 factcheck: None,
                 report_delivery_until_date: None,
             }),
+            fetched_in: None,
             client: client.clone(),
             chats: ChatMap::single(Chat::unpack(chat)),
         }
@@ -221,6 +229,7 @@ impl Message {
 
     pub(crate) fn peer_id(&self) -> &tl::enums::Peer {
         utils::peer_from_message(&self.raw)
+            .or_else(|| self.fetched_in.as_ref())
             .expect("empty messages from updates should contain peer_id")
     }
 

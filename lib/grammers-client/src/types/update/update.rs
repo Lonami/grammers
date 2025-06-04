@@ -56,25 +56,25 @@ impl Update {
         match &update {
             // NewMessage
             tl::enums::Update::NewMessage(raw) => Self::NewMessage(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), chats),
+                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
                 raw: update,
                 state,
             }),
 
             tl::enums::Update::NewChannelMessage(raw) => Self::NewMessage(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), chats),
+                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
                 raw: update,
                 state,
             }),
 
             // MessageEdited
             tl::enums::Update::EditMessage(raw) => Self::MessageEdited(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), chats),
+                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
                 raw: update,
                 state,
             }),
             tl::enums::Update::EditChannelMessage(raw) => Self::MessageEdited(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), chats),
+                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
                 raw: update,
                 state,
             }),

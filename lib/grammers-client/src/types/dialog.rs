@@ -46,7 +46,7 @@ impl Dialog {
 
         Self {
             chat,
-            last_message: message.map(|m| Message::from_raw(client, m, chats)),
+            last_message: message.map(|m| Message::from_raw(client, m, Some(peer.clone()), chats)),
             raw: dialog,
         }
     }
