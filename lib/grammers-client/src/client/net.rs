@@ -14,7 +14,7 @@ use grammers_mtsender::ServerAddr;
 use grammers_mtsender::{
     self as sender, AuthorizationError, InvocationError, RpcError, Sender, utils::sleep,
 };
-use grammers_session::{ChatHashCache, MessageBox};
+use grammers_session::{ChatHashCache, MessageBoxes};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::{debug, info};
 use sender::Enqueuer;
@@ -209,14 +209,14 @@ impl Client {
         let (sender, request_tx) = connect_sender(dc_id, &config).await?;
         let message_box = if config.params.catch_up {
             if let Some(state) = config.session.get_state() {
-                MessageBox::load(state)
+                MessageBoxes::load(state)
             } else {
-                MessageBox::new()
+                MessageBoxes::new()
             }
         } else {
             // If the user doesn't want to bother with catching up on previous update, start with
             // pristine state instead.
-            MessageBox::new()
+            MessageBoxes::new()
         };
 
         // Pre-allocate the right `VecDeque` size if a limit is given.

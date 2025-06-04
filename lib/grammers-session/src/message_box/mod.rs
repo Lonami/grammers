@@ -10,17 +10,17 @@
 //! should "get difference" (the set of updates that the client should know by now minus the set
 //! of updates that it actually knows).
 //!
-//! Each chat has its own [`Entry`] in the [`MessageBox`] (this `struct` is the "entry point").
+//! Each chat has its own [`Entry`] in the [`MessageBoxes`] (this `struct` is the "entry point").
 //! At any given time, the message box may be either getting difference for them (entry is in
-//! [`MessageBox::getting_diff_for`]) or not. If not getting difference, a possible gap may be
-//! found for the updates (entry is in [`MessageBox::possible_gaps`]). Otherwise, the entry is
+//! [`MessageBoxes::getting_diff_for`]) or not. If not getting difference, a possible gap may be
+//! found for the updates (entry is in [`MessageBoxes::possible_gaps`]). Otherwise, the entry is
 //! on its happy path.
 //!
 //! Gaps are cleared when they are either resolved on their own (by waiting for a short time)
 //! or because we got the difference for the corresponding entry.
 //!
 //! While there are entries for which their difference must be fetched,
-//! [`MessageBox::check_deadlines`] will always return [`Instant::now`], since "now" is the time
+//! [`MessageBoxes::check_deadlines`] will always return [`Instant::now`], since "now" is the time
 //! to get the difference.
 mod adaptor;
 mod defs;
@@ -31,8 +31,8 @@ use crate::generated::enums::ChannelState as ChannelStateEnum;
 use crate::generated::types::ChannelState;
 use crate::message_box::defs::PossibleGap;
 pub(crate) use defs::Entry;
-pub use defs::{Gap, MessageBox};
-use defs::{NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PtsInfo, State};
+pub use defs::{Gap, MessageBox, MessageBoxes, State};
+use defs::{InnerState, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PtsInfo};
 use grammers_tl_types as tl;
 use log::{debug, info, trace, warn};
 use std::cmp::Ordering;
@@ -48,10 +48,10 @@ fn next_updates_deadline() -> Instant {
 
 #[allow(clippy::new_without_default)]
 /// Creation, querying, and setting base state.
-impl MessageBox {
-    /// Create a new, empty [`MessageBox`].
+impl MessageBoxes {
+    /// Create a new, empty [`MessageBoxes`].
     ///
-    /// This is the only way it may return `true` from [`MessageBox::is_empty`].
+    /// This is the only way it may return `true` from [`MessageBoxes::is_empty`].
     pub fn new() -> Self {
         trace!("created new message box with no previous state");
         Self {
@@ -65,7 +65,7 @@ impl MessageBox {
         }
     }
 
-    /// Create a [`MessageBox`] from a previously known update state.
+    /// Create a [`MessageBoxes`] from a previously known update state.
     pub fn load(state: UpdateState) -> Self {
         trace!("created new message box with state: {:?}", state);
         let deadline = next_updates_deadline();
@@ -74,7 +74,7 @@ impl MessageBox {
 
         map.insert(
             Entry::AccountWide,
-            State {
+            InnerState {
                 pts: state.pts,
                 deadline,
             },
@@ -85,7 +85,7 @@ impl MessageBox {
 
         map.insert(
             Entry::SecretChats,
-            State {
+            InnerState {
                 pts: state.qts,
                 deadline,
             },
@@ -97,7 +97,7 @@ impl MessageBox {
         map.extend(state.channels.iter().map(|ChannelStateEnum::State(c)| {
             (
                 Entry::Channel(c.channel_id),
-                State {
+                InnerState {
                     pts: c.pts,
                     deadline,
                 },
@@ -284,7 +284,7 @@ impl MessageBox {
 
     /// Sets the update state.
     ///
-    /// Should be called right after login if [`MessageBox::new`] was used, otherwise undesirable
+    /// Should be called right after login if [`MessageBoxes::new`] was used, otherwise undesirable
     /// updates will be fetched.
     pub fn set_state(&mut self, state: tl::enums::updates::State) {
         trace!("setting state {:?}", state);
@@ -292,14 +292,14 @@ impl MessageBox {
         let state: tl::types::updates::State = state.into();
         self.map.insert(
             Entry::AccountWide,
-            State {
+            InnerState {
                 pts: state.pts,
                 deadline,
             },
         );
         self.map.insert(
             Entry::SecretChats,
-            State {
+            InnerState {
                 pts: state.qts,
                 deadline,
             },
@@ -308,15 +308,17 @@ impl MessageBox {
         self.seq = state.seq;
     }
 
-    /// Like [`MessageBox::set_state`], but for channels. Useful when getting dialogs.
+    /// Like [`MessageBoxes::set_state`], but for channels. Useful when getting dialogs.
     ///
     /// The update state will only be updated if no entry was known previously.
     pub fn try_set_channel_state(&mut self, id: i64, pts: i32) {
         trace!("trying to set channel state for {}: {}", id, pts);
-        self.map.entry(Entry::Channel(id)).or_insert_with(|| State {
-            pts,
-            deadline: next_updates_deadline(),
-        });
+        self.map
+            .entry(Entry::Channel(id))
+            .or_insert_with(|| InnerState {
+                pts,
+                deadline: next_updates_deadline(),
+            });
     }
 
     /// Try to begin getting difference for the given entry.
@@ -354,7 +356,7 @@ impl MessageBox {
 }
 
 // "Normal" updates flow (processing and detection of gaps).
-impl MessageBox {
+impl MessageBoxes {
     /// Make sure all peer hashes contained in the update are known by the client
     /// (either by checking if they were already known, or by extending the hash cache
     /// with those that were not known).
@@ -438,6 +440,14 @@ impl MessageBox {
             }
         };
 
+        let new_date = if date == NO_DATE { self.date } else { date };
+        let new_seq = if seq == NO_SEQ { self.seq } else { seq };
+        let mk_state = |message_box| State {
+            date: new_date,
+            seq: new_seq,
+            message_box,
+        };
+
         // > For all the other [not `updates` or `updatesCombined`] `Updates` type constructors
         // > there is no need to check `seq` or change a local state.
         if seq_start != NO_SEQ {
@@ -493,8 +503,8 @@ impl MessageBox {
                 // once via the temporary entries buffer as an optimization.
                 reset_deadlines_for.insert(entry);
             }
-            if let Some(update) = update {
-                result.push(update);
+            if let Some((update, message_box)) = update {
+                result.push((update, mk_state(message_box)));
             }
         }
         self.reset_deadlines(&reset_deadlines_for, next_updates_deadline());
@@ -515,8 +525,8 @@ impl MessageBox {
                     let update = self.possible_gaps.get_mut(&key).unwrap().updates.remove(0);
                     // If this fails to apply, it will get re-inserted at the end.
                     // All should fail, so the order will be preserved (it would've cycled once).
-                    if let (_, Some(update)) = self.apply_pts_info(update) {
-                        result.push(update);
+                    if let (_, Some((update, message_box))) = self.apply_pts_info(update) {
+                        result.push((update, mk_state(message_box)));
                     }
                 }
             }
@@ -531,12 +541,8 @@ impl MessageBox {
         if !result.is_empty() && self.possible_gaps.is_empty() {
             // > If the updates were applied, local *Updates* state must be updated
             // > with `seq` (unless it's 0) and `date` from the constructor.
-            if date != NO_DATE {
-                self.date = date;
-            }
-            if seq != NO_SEQ {
-                self.seq = seq;
-            }
+            self.date = new_date;
+            self.seq = new_seq;
         }
 
         Ok((result, users, chats))
@@ -550,7 +556,10 @@ impl MessageBox {
     fn apply_pts_info(
         &mut self,
         update: tl::enums::Update,
-    ) -> (Option<Entry>, Option<tl::enums::Update>) {
+    ) -> (
+        Option<Entry>,
+        Option<(tl::enums::Update, Option<MessageBox>)>,
+    ) {
         if let tl::enums::Update::ChannelTooLong(u) = update {
             self.try_begin_get_diff(Entry::Channel(u.channel_id));
             return (None, None);
@@ -559,7 +568,7 @@ impl MessageBox {
         let pts = match PtsInfo::from_update(&update) {
             Some(pts) => pts,
             // No pts means that the update can be applied in any order.
-            None => return (None, Some(update)),
+            None => return (None, Some((update, None))),
         };
 
         if self.getting_diff_for.contains(&pts.entry) {
@@ -609,18 +618,18 @@ impl MessageBox {
 
         self.map
             .entry(pts.entry)
-            .or_insert_with(|| State {
+            .or_insert_with(|| InnerState {
                 pts: NO_PTS,
                 deadline: next_updates_deadline(),
             })
             .pts = pts.pts;
 
-        (Some(pts.entry), Some(update))
+        (Some(pts.entry), Some((update, Some(pts.to_message_box()))))
     }
 }
 
 /// Getting and applying account difference.
-impl MessageBox {
+impl MessageBoxes {
     /// Return the request that needs to be made to get the difference, if any.
     pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
         for entry in [Entry::AccountWide, Entry::SecretChats] {
@@ -650,7 +659,7 @@ impl MessageBox {
         None
     }
 
-    /// Similar to [`MessageBox::process_updates`], but using the result from getting difference.
+    /// Similar to [`MessageBoxes::process_updates`], but using the result from getting difference.
     pub fn apply_difference(
         &mut self,
         difference: tl::enums::updates::Difference,
@@ -754,13 +763,18 @@ impl MessageBox {
         self.map
             .entry(Entry::SecretChats)
             // AccountWide affects SecretChats, but this may not have been initialized yet (#258)
-            .or_insert_with(|| State {
+            .or_insert_with(|| InnerState {
                 pts: NO_PTS,
                 deadline: next_updates_deadline(),
             })
             .pts = state.qts;
         self.date = state.date;
         self.seq = state.seq;
+        let mk_state = |message_box| State {
+            date: state.date,
+            seq: state.seq,
+            message_box: Some(message_box),
+        };
 
         // other_updates can contain things like UpdateChannelTooLong and UpdateNewChannelMessage.
         // We need to process those as if they were socket updates to discard any we have already handled.
@@ -782,19 +796,25 @@ impl MessageBox {
             new_messages
                 .into_iter()
                 .map(|message| {
-                    tl::types::UpdateNewMessage {
-                        message,
-                        pts: NO_PTS,
-                        pts_count: 0,
-                    }
-                    .into()
+                    (
+                        tl::types::UpdateNewMessage {
+                            message,
+                            pts: NO_PTS,
+                            pts_count: 0,
+                        }
+                        .into(),
+                        mk_state(MessageBox::Common { pts: state.pts }),
+                    )
                 })
                 .chain(new_encrypted_messages.into_iter().map(|message| {
-                    tl::types::UpdateNewEncryptedMessage {
-                        message,
-                        qts: NO_PTS,
-                    }
-                    .into()
+                    (
+                        tl::types::UpdateNewEncryptedMessage {
+                            message,
+                            qts: NO_PTS,
+                        }
+                        .into(),
+                        mk_state(MessageBox::Secondary { qts: state.qts }),
+                    )
                 })),
         );
 
@@ -803,7 +823,7 @@ impl MessageBox {
 }
 
 /// Getting and applying channel difference.
-impl MessageBox {
+impl MessageBoxes {
     /// Return the request that needs to be made to get a channel's difference, if any.
     pub fn get_channel_difference(
         &mut self,
@@ -857,7 +877,7 @@ impl MessageBox {
         }
     }
 
-    /// Similar to [`MessageBox::process_updates`], but using the result from getting difference.
+    /// Similar to [`MessageBoxes::process_updates`], but using the result from getting difference.
     pub fn apply_channel_difference(
         &mut self,
         request: tl::functions::updates::GetChannelDifference,
@@ -946,13 +966,22 @@ impl MessageBox {
                     .process_updates(us, chat_hashes)
                     .expect("gap is detected while applying channel difference");
 
+                let mk_state = || State {
+                    date: self.date,
+                    seq: self.seq,
+                    message_box: Some(MessageBox::Channel { channel_id, pts }),
+                };
+
                 result_updates.extend(new_messages.into_iter().map(|message| {
-                    tl::types::UpdateNewChannelMessage {
-                        message,
-                        pts: NO_PTS,
-                        pts_count: 0,
-                    }
-                    .into()
+                    (
+                        tl::types::UpdateNewChannelMessage {
+                            message,
+                            pts: NO_PTS,
+                            pts_count: 0,
+                        }
+                        .into(),
+                        mk_state(),
+                    )
                 }));
                 self.reset_channel_deadline(channel_id, timeout);
 

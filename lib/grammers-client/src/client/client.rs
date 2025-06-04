@@ -7,7 +7,7 @@
 // except according to those terms.
 use grammers_mtproto::mtp;
 use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender, ServerAddr};
-use grammers_session::{ChatHashCache, MessageBox, Session};
+use grammers_session::{ChatHashCache, MessageBoxes, Session, State};
 use grammers_tl_types as tl;
 use sender::Enqueuer;
 use std::collections::{HashMap, VecDeque};
@@ -44,8 +44,7 @@ pub struct Config {
     pub params: InitParams,
 }
 
-/// Optional initialization parameters, required when initializing a connection to Telegram's
-/// API.
+/// Optional initialization parameters, used when initializing a connection to Telegram's API.
 #[derive(Clone)]
 pub struct InitParams {
     pub device_model: String,
@@ -131,12 +130,12 @@ pub(crate) struct ClientInner {
 
 pub(crate) struct ClientState {
     pub(crate) dc_id: i32,
-    pub(crate) message_box: MessageBox,
+    pub(crate) message_box: MessageBoxes,
     pub(crate) chat_hashes: ChatHashCache,
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     pub(crate) last_update_limit_warn: Option<Instant>,
-    pub(crate) updates: VecDeque<(tl::enums::Update, Arc<crate::types::ChatMap>)>,
+    pub(crate) updates: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
 }
 
 pub(crate) struct Connection {

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::ChatHashCache;
-use super::defs::{Entry, Gap, NO_PTS, NO_SEQ, PtsInfo};
+use super::defs::{Entry, Gap, MessageBox, NO_PTS, NO_SEQ, PtsInfo};
 use grammers_tl_types as tl;
 use log::info;
 
@@ -545,5 +545,16 @@ impl PtsInfo {
             PaidReactionPrivacy(_) => None,
         }
         .filter(|info| info.pts != NO_PTS)
+    }
+
+    pub(super) fn to_message_box(&self) -> MessageBox {
+        match self.entry {
+            Entry::AccountWide => MessageBox::Common { pts: self.pts },
+            Entry::SecretChats => MessageBox::Secondary { qts: self.pts },
+            Entry::Channel(channel_id) => MessageBox::Channel {
+                channel_id,
+                pts: self.pts,
+            },
+        }
     }
 }

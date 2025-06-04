@@ -11,11 +11,13 @@ use std::ops::{Deref, DerefMut};
 use grammers_tl_types as tl;
 
 use crate::types::Message as Msg;
+use grammers_session::State;
 
 #[derive(Debug, Clone)]
 pub struct Message {
     pub(crate) msg: Msg,
     pub raw: tl::enums::Update,
+    pub state: State,
 }
 
 impl Deref for Message {

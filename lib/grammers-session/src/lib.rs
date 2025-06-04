@@ -18,7 +18,7 @@ pub use generated::types::UpdateState;
 pub use generated::types::User;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
-pub use message_box::{Gap, MessageBox};
+pub use message_box::{Gap, MessageBox, MessageBoxes, State};
 pub use message_box::{PrematureEndReason, channel_id};
 use std::fmt;
 use std::fs::{File, OpenOptions};

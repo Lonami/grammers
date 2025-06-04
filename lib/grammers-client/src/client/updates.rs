@@ -13,8 +13,8 @@ use crate::types::{ChatMap, Update};
 use futures_util::future::{Either, select};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::channel_id;
 pub use grammers_session::{PrematureEndReason, UpdateState};
+use grammers_session::{State, channel_id};
 use grammers_tl_types as tl;
 use std::pin::pin;
 use std::sync::Arc;
@@ -47,8 +47,8 @@ impl Client {
     /// # }
     /// ```
     pub async fn next_update(&self) -> Result<Update, InvocationError> {
-        let (update, chats) = self.next_raw_update().await?;
-        Ok(Update::new(self, update, &chats))
+        let (update, state, chats) = self.next_raw_update().await?;
+        Ok(Update::new(self, update, state, &chats))
     }
 
     /// Returns the next raw update and associated chat map from the buffer where they are queued until used.
@@ -72,7 +72,7 @@ impl Client {
     ///
     pub async fn next_raw_update(
         &self,
-    ) -> Result<(tl::enums::Update, Arc<ChatMap>), InvocationError> {
+    ) -> Result<(tl::enums::Update, State, Arc<ChatMap>), InvocationError> {
         loop {
             let (deadline, get_diff, get_channel_diff) = {
                 let state = &mut *self.0.state.write().unwrap();
@@ -229,7 +229,11 @@ impl Client {
         }
     }
 
-    fn extend_update_queue(&self, mut updates: Vec<tl::enums::Update>, chat_map: Arc<ChatMap>) {
+    fn extend_update_queue(
+        &self,
+        mut updates: Vec<(tl::enums::Update, State)>,
+        chat_map: Arc<ChatMap>,
+    ) {
         let mut state = self.0.state.write().unwrap();
 
         if let Some(limit) = self.0.config.params.update_queue_limit {
@@ -255,7 +259,7 @@ impl Client {
 
         state
             .updates
-            .extend(updates.into_iter().map(|u| (u, chat_map.clone())));
+            .extend(updates.into_iter().map(|(u, s)| (u, s, chat_map.clone())));
     }
 
     /// Synchronize the updates state to the session.

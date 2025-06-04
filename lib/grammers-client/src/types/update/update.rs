@@ -11,6 +11,7 @@ use std::sync::Arc;
 use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
 use crate::types::Message as Msg;
 use crate::{ChatMap, Client};
+use grammers_session::State;
 use grammers_tl_types as tl;
 
 /// An update that indicates some event, which may be of interest to the logged-in account, has occured.
@@ -46,40 +47,50 @@ pub enum Update {
 
 impl Update {
     /// Create new friendly to use Update from its raw version and chat map
-    pub fn new(client: &Client, update: tl::enums::Update, chats: &Arc<ChatMap>) -> Self {
+    pub fn new(
+        client: &Client,
+        update: tl::enums::Update,
+        state: State,
+        chats: &Arc<ChatMap>,
+    ) -> Self {
         match &update {
             // NewMessage
             tl::enums::Update::NewMessage(raw) => Self::NewMessage(Message {
                 msg: Msg::from_raw(client, raw.message.clone(), chats),
                 raw: update,
+                state,
             }),
 
             tl::enums::Update::NewChannelMessage(raw) => Self::NewMessage(Message {
                 msg: Msg::from_raw(client, raw.message.clone(), chats),
                 raw: update,
+                state,
             }),
 
             // MessageEdited
             tl::enums::Update::EditMessage(raw) => Self::MessageEdited(Message {
                 msg: Msg::from_raw(client, raw.message.clone(), chats),
                 raw: update,
+                state,
             }),
             tl::enums::Update::EditChannelMessage(raw) => Self::MessageEdited(Message {
                 msg: Msg::from_raw(client, raw.message.clone(), chats),
                 raw: update,
+                state,
             }),
 
             // MessageDeleted
             tl::enums::Update::DeleteMessages(_) => {
-                Self::MessageDeleted(MessageDeletion { raw: update })
+                Self::MessageDeleted(MessageDeletion { raw: update, state })
             }
             tl::enums::Update::DeleteChannelMessages(_) => {
-                Self::MessageDeleted(MessageDeletion { raw: update })
+                Self::MessageDeleted(MessageDeletion { raw: update, state })
             }
 
             // CallbackQuery
             tl::enums::Update::BotCallbackQuery(_) => Self::CallbackQuery(CallbackQuery {
                 raw: update,
+                state,
                 client: client.clone(),
                 chats: Arc::clone(chats),
             }),
@@ -87,6 +98,7 @@ impl Update {
             // InlineCallbackQuery
             tl::enums::Update::InlineBotCallbackQuery(_) => Self::CallbackQuery(CallbackQuery {
                 raw: update,
+                state,
                 client: client.clone(),
                 chats: Arc::clone(chats),
             }),
@@ -94,6 +106,7 @@ impl Update {
             // InlineQuery
             tl::enums::Update::BotInlineQuery(_) => Self::InlineQuery(InlineQuery {
                 raw: update,
+                state,
                 client: client.clone(),
                 chats: Arc::clone(chats),
             }),
@@ -101,12 +114,26 @@ impl Update {
             // InlineSend
             tl::enums::Update::BotInlineSend(_) => Self::InlineSend(InlineSend {
                 raw: update,
+                state,
                 client: client.clone(),
                 chats: Arc::clone(chats),
             }),
 
             // Raw
-            _ => Self::Raw(Raw { raw: update }),
+            _ => Self::Raw(Raw { raw: update, state }),
+        }
+    }
+
+    /// Update state.
+    pub fn state(&self) -> &State {
+        match self {
+            Update::NewMessage(update) => &update.state,
+            Update::MessageEdited(update) => &update.state,
+            Update::MessageDeleted(update) => &update.state,
+            Update::CallbackQuery(update) => &update.state,
+            Update::InlineQuery(update) => &update.state,
+            Update::InlineSend(update) => &update.state,
+            Update::Raw(update) => &update.state,
         }
     }
 

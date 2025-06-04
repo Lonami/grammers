@@ -9,6 +9,7 @@
 use crate::types::{Chat, User};
 use crate::{ChatMap, Client, InputMessage};
 use grammers_mtsender::InvocationError;
+use grammers_session::State;
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
@@ -17,6 +18,7 @@ use std::sync::Arc;
 #[derive(Clone)]
 pub struct InlineSend {
     pub raw: tl::enums::Update,
+    pub state: State,
     pub(crate) client: Client,
     pub(crate) chats: Arc<ChatMap>,
 }

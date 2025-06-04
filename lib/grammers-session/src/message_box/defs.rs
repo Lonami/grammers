@@ -64,9 +64,9 @@ pub(crate) enum Entry {
 ///
 /// See <https://core.telegram.org/api/updates#message-related-event-sequences>.
 #[derive(Debug)]
-pub struct MessageBox {
+pub struct MessageBoxes {
     /// Map each entry to their current state.
-    pub(super) map: HashMap<Entry, State>,
+    pub(super) map: HashMap<Entry, InnerState>,
 
     // Additional fields beyond PTS needed by `Entry::AccountWide`.
     pub(super) date: i32,
@@ -102,7 +102,7 @@ pub(super) struct PtsInfo {
 
 /// The state of a particular entry in the message box.
 #[derive(Debug)]
-pub(super) struct State {
+pub(super) struct InnerState {
     /// Current local persistent timestamp.
     pub(super) pts: i32,
 
@@ -130,7 +130,27 @@ pub struct Gap;
 
 /// Alias for the commonly-referenced three-tuple of update and related peers.
 pub(super) type UpdateAndPeers = (
-    Vec<tl::enums::Update>,
+    Vec<(tl::enums::Update, State)>,
     Vec<tl::enums::User>,
     Vec<tl::enums::Chat>,
 );
+
+// Public interface around the more tightly-packed internal state.
+
+/// Update state, up to and including the update it is a part of.
+/// That is, when using [`catch_up`](crate::InitParams::catch_up),
+/// all updates with a state containing a [`MessageBox`] higher than this one will be fetched.
+#[derive(Debug, Clone)]
+pub struct State {
+    pub date: i32,
+    pub seq: i32,
+    pub message_box: Option<MessageBox>,
+}
+
+/// The message box and pts value that uniquely identifies the message-related update.
+#[derive(Debug, Clone, Copy)]
+pub enum MessageBox {
+    Common { pts: i32 },
+    Secondary { qts: i32 },
+    Channel { channel_id: i64, pts: i32 },
+}
