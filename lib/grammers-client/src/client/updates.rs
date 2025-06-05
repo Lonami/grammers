@@ -58,7 +58,7 @@ impl Client {
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// loop {
-    ///     let (update, chats) = client.next_raw_update().await?;
+    ///     let (update, state, chats) = client.next_raw_update().await?;
     ///
     ///     // Print all incoming updates in their raw form
     ///     dbg!(update);
