@@ -45,19 +45,20 @@ pub(super) const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// A [`MessageBox`] entry key.
 #[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
-pub(crate) enum Entry {
-    /// Account-wide `pts`.
-    ///
-    /// This includes private conversations (one-to-one) and small group chats.
-    AccountWide,
-    /// Account-wide `qts`.
-    ///
-    /// This includes only "secret" one-to-one chats.
-    SecretChats,
-    /// Channel-specific `pts`.
-    ///
-    /// This includes "megagroup", "broadcast" and "supergroup" channels.
+pub(crate) enum Key {
+    Common,
+    Secondary,
     Channel(i64),
+}
+
+/// A [`MessageBox`] entry value, along with additional state bound to the same key.
+#[derive(Debug)]
+pub(super) struct Value {
+    /// Current local persistent timestamp.
+    pub(super) pts: i32,
+
+    /// Next instant when we would get the update difference if no updates arrived before then.
+    pub(super) deadline: Instant,
 }
 
 /// Represents a "message box" (event `pts` for a specific entry).
@@ -66,7 +67,7 @@ pub(crate) enum Entry {
 #[derive(Debug)]
 pub struct MessageBoxes {
     /// Map each entry to their current state.
-    pub(super) map: HashMap<Entry, InnerState>,
+    pub(super) map: HashMap<Key, Value>,
 
     // Additional fields beyond PTS needed by `Entry::AccountWide`.
     pub(super) date: i32,
@@ -79,35 +80,24 @@ pub struct MessageBoxes {
     ///
     /// Not stored directly in `map` as an optimization (else we would need another way of knowing which entries have
     /// a gap in them).
-    pub(super) possible_gaps: HashMap<Entry, PossibleGap>,
+    pub(super) possible_gaps: HashMap<Key, PossibleGap>,
 
     /// For which entries are we currently getting difference.
-    pub(super) getting_diff_for: HashSet<Entry>,
+    pub(super) getting_diff_for: HashSet<Key>,
 
     /// Holds the entry with the closest deadline.
     /// This field is merely an optimization, to avoid recalculating the closest deadline.
-    pub(super) next_deadline: Option<Entry>,
+    pub(super) next_deadline: Option<Key>,
 
     /// This field is merely an optimization, to reuse the same allocation.
-    pub(super) tmp_entries: HashSet<Entry>,
+    pub(super) tmp_entries: HashSet<Key>,
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
 #[derive(Debug)]
 pub(super) struct PtsInfo {
-    pub(super) pts: i32,
-    pub(super) pts_count: i32,
-    pub(super) entry: Entry,
-}
-
-/// The state of a particular entry in the message box.
-#[derive(Debug)]
-pub(super) struct InnerState {
-    /// Current local persistent timestamp.
-    pub(super) pts: i32,
-
-    /// Next instant when we would get the update difference if no updates arrived before then.
-    pub(super) deadline: Instant,
+    pub(super) entry: MessageBox,
+    pub(super) count: i32,
 }
 
 // > ### Recovering gaps
@@ -150,7 +140,16 @@ pub struct State {
 /// The message box and pts value that uniquely identifies the message-related update.
 #[derive(Debug, Clone, Copy)]
 pub enum MessageBox {
+    /// Account-wide persistent timestamp.
+    ///
+    /// This includes private conversations (one-to-one) and small group chats.
     Common { pts: i32 },
+    /// Account-wide secondary persistent timestamp.
+    ///
+    /// This includes only certain bot updates and secret one-to-one chats.
     Secondary { qts: i32 },
+    /// Channel-specific persistent timestamp.
+    ///
+    /// This includes "megagroup", "broadcast" and "supergroup" channels.
     Channel { channel_id: i64, pts: i32 },
 }
