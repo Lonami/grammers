@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
-use std::collections::{HashMap, HashSet};
 use std::time::Duration;
 use web_time::Instant;
 
@@ -43,60 +42,57 @@ pub(super) const POSSIBLE_GAP_TIMEOUT: Duration = Duration::from_millis(500);
 /// Documentation recommends 15 minutes without updates (https://core.telegram.org/api/updates).
 pub(super) const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
-/// A [`MessageBox`] entry key.
-#[derive(Clone, Copy, Debug, Hash, PartialEq, Eq, PartialOrd, Ord)]
+/// A sortable [`MessageBox`] entry key.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub(crate) enum Key {
     Common,
     Secondary,
     Channel(i64),
 }
 
-/// A [`MessageBox`] entry value, along with additional state bound to the same key.
+/// A live [`MessageBox`] entry.
 #[derive(Debug)]
-pub(super) struct Value {
-    /// Current local persistent timestamp.
+pub(super) struct LiveEntry {
+    /// The variant of the [`MessageBox`] that this entry represents.
+    pub(super) key: Key,
+
+    /// The local persistent timestamp value that this [`MessageBox`] has.
     pub(super) pts: i32,
 
     /// Next instant when we would get the update difference if no updates arrived before then.
     pub(super) deadline: Instant,
+
+    /// If the entry has a gap and may soon trigger the need to get difference.
+    pub(super) possible_gap: Option<PossibleGap>,
 }
 
-/// Represents a "message box" (event `pts` for a specific entry).
+/// Contains all live message boxes and is able to process incoming updates for each of them.
 ///
 /// See <https://core.telegram.org/api/updates#message-related-event-sequences>.
 #[derive(Debug)]
 pub struct MessageBoxes {
-    /// Map each entry to their current state.
-    pub(super) map: HashMap<Key, Value>,
+    /// Live entries, sorted by key.
+    pub(super) entries: Vec<LiveEntry>,
 
-    // Additional fields beyond PTS needed by `Entry::AccountWide`.
+    /// Common [`State`] fields.
     pub(super) date: i32,
     pub(super) seq: i32,
 
-    /// Which entries have a gap and may soon trigger a need to get difference.
-    ///
-    /// If a gap is found, stores the required information to resolve it (when should it timeout and what updates
-    /// should be held in case the gap is resolved on its own).
-    ///
-    /// Not stored directly in `map` as an optimization (else we would need another way of knowing which entries have
-    /// a gap in them).
-    pub(super) possible_gaps: HashMap<Key, PossibleGap>,
+    /// Optimization field to quickly query all entries that are currently being fetched.
+    pub(super) getting_diff_for: Vec<Key>,
 
-    /// For which entries are we currently getting difference.
-    pub(super) getting_diff_for: HashSet<Key>,
+    /// Optimization field to quickly query all entries that have a possible gap.
+    pub(super) possible_gaps: Vec<Key>,
 
-    /// Holds the entry with the closest deadline.
-    /// This field is merely an optimization, to avoid recalculating the closest deadline.
-    pub(super) next_deadline: Option<Key>,
-
-    /// This field is merely an optimization, to reuse the same allocation.
-    pub(super) tmp_entries: HashSet<Key>,
+    /// Optimization field holding the closest deadline instant.
+    pub(super) next_deadline: Instant,
 }
 
 /// Represents the information needed to correctly handle a specific `tl::enums::Update`.
 #[derive(Debug)]
 pub(super) struct PtsInfo {
-    pub(super) entry: MessageBox,
+    pub(super) key: Key,
+    pub(super) pts: i32,
     pub(super) count: i32,
 }
 
