@@ -82,7 +82,7 @@ impl MessageBoxes {
         trace!("created new message box with no previous state");
         Self {
             entries: Vec::new(),
-            date: 1, // non-zero or getting difference will fail
+            date: NO_DATE,
             seq: NO_SEQ,
             getting_diff_for: Vec::new(),
             possible_gaps: Vec::new(),
@@ -585,7 +585,7 @@ impl MessageBoxes {
                     pts,
                     pts_limit: None,
                     pts_total_limit: None,
-                    date: self.date,
+                    date: self.date.max(1), // non-zero or the request will fail
                     qts: self
                         .entry(Key::Secondary)
                         .map(|entry| entry.pts)
