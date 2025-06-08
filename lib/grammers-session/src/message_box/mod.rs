@@ -80,8 +80,6 @@ impl LiveEntry {
 /// Creation, querying, and setting base state.
 impl MessageBoxes {
     /// Create a new, empty [`MessageBoxes`].
-    ///
-    /// This is the only way it may return `true` from [`MessageBoxes::is_empty`].
     pub fn new() -> Self {
         trace!("created new message box with no previous state");
         Self {
@@ -280,8 +278,11 @@ impl MessageBoxes {
     ///
     /// Should be called right after login if [`MessageBoxes::new`] was used, otherwise undesirable
     /// updates will be fetched.
+    ///
+    /// Should only be called while [`MessageBoxes::is_empty`].
     pub fn set_state(&mut self, state: tl::enums::updates::State) {
         trace!("setting state {:?}", state);
+        debug_assert!(self.is_empty());
         let deadline = next_updates_deadline();
         let state: tl::types::updates::State = state.into();
         self.set_entry(LiveEntry {
@@ -298,6 +299,7 @@ impl MessageBoxes {
         });
         self.date = state.date;
         self.seq = state.seq;
+        self.next_deadline = deadline;
     }
 
     /// Like [`MessageBoxes::set_state`], but for channels. Useful when getting dialogs.
