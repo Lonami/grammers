@@ -264,6 +264,13 @@ impl MessageBoxes {
             for i in 0..self.getting_diff_for.len() {
                 self.push_gap(self.getting_diff_for[i], None);
             }
+
+            // To avoid hogging up all CPU by sleeping for no duration,
+            // if the deadline was met but there's no state to fetch,
+            // advance the deadline.
+            if self.getting_diff_for.is_empty() {
+                self.next_deadline = next_updates_deadline();
+            }
         }
 
         self.next_deadline
