@@ -352,50 +352,6 @@ impl MessageBoxes {
 
 // "Normal" updates flow (processing and detection of gaps).
 impl MessageBoxes {
-    /// Make sure all peer hashes contained in the update are known by the client
-    /// (either by checking if they were already known, or by extending the hash cache
-    /// with those that were not known).
-    ///
-    /// If a peer is found, but it doesn't contain a non-`min` hash and no hash for it
-    /// is known, it is treated as a gap.
-    pub fn ensure_known_peer_hashes(
-        &mut self,
-        updates: &tl::enums::Updates,
-        chat_hashes: &mut crate::ChatHashCache,
-    ) -> Result<(), Gap> {
-        // In essence, "min constructors suck".
-        // Apparently, TDLib just does `getDifference` if encounters non-cached min peers.
-        // So rather than using the `inputPeer*FromMessage` (which not only are considerably
-        // larger but may need to be nested, and may stop working if the message is gone),
-        // just treat it as a gap when encountering peers for which the hash is not known.
-        // Context: https://t.me/tdlibchat/15096.
-        if chat_hashes.extend_from_updates(updates) {
-            Ok(())
-        } else {
-            // However, some updates do not change the pts, so attempting to recover the gap
-            // will just result in an empty result from `getDifference` (being just wasteful).
-            // Check if this update has any pts we can try to recover from.
-            let can_recover = match updates {
-                tl::enums::Updates::TooLong => true,
-                tl::enums::Updates::UpdateShortMessage(_) => true,
-                tl::enums::Updates::UpdateShortChatMessage(_) => true,
-                tl::enums::Updates::UpdateShort(u) => PtsInfo::from_update(&u.update).is_some(),
-                tl::enums::Updates::Combined(_) => true,
-                tl::enums::Updates::Updates(_) => true,
-                tl::enums::Updates::UpdateShortSentMessage(_) => true,
-            };
-
-            if can_recover {
-                info!("received an update referencing an unknown peer, treating as gap");
-                self.try_begin_get_diff(Key::Common);
-                Err(Gap)
-            } else {
-                info!("received an update referencing an unknown peer, but cannot find out who");
-                Ok(())
-            }
-        }
-    }
-
     /// Process an update and return what should be done with it.
     ///
     /// Updates corresponding to entries for which their difference is currently being fetched
