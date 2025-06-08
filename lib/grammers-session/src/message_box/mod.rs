@@ -325,15 +325,13 @@ impl MessageBoxes {
         }
     }
 
-    /// Finish getting difference for the given entry.
-    ///
-    /// It also resets the deadline.
-    fn end_get_diff(&mut self, key: Key) {
-        let i = self
-            .getting_diff_for
-            .iter()
-            .position(|&k| k == key)
-            .expect("end_get_diff to be called on an entry which was getting diff for");
+    /// Finish getting difference for the given entry, and resets its deadline.
+    /// Does nothing if no difference was being fetched for the given key.
+    fn try_end_get_diff(&mut self, key: Key) {
+        let i = match self.getting_diff_for.iter().position(|&k| k == key) {
+            Some(i) => i,
+            None => return,
+        };
         self.getting_diff_for.remove(i);
 
         let deadline = next_updates_deadline();
@@ -343,9 +341,9 @@ impl MessageBoxes {
             self.next_deadline = self.next_deadline.min(deadline);
         }
 
-        assert!(
+        debug_assert!(
             self.entry(key)
-                .is_some_and(|entry| entry.possible_gap.is_none()),
+                .is_none_or(|entry| entry.possible_gap.is_none()),
             "gaps shouldn't be created while getting difference"
         );
     }
@@ -653,6 +651,10 @@ impl MessageBoxes {
         chat_hashes: &mut ChatHashCache,
     ) -> defs::UpdateAndPeers {
         trace!("applying account difference: {:?}", difference);
+        debug_assert!(
+            self.getting_diff_for.contains(&Key::Common)
+                || self.getting_diff_for.contains(&Key::Secondary)
+        );
         let finish: bool;
         let result = match difference {
             tl::enums::updates::Difference::Empty(diff) => {
@@ -714,21 +716,8 @@ impl MessageBoxes {
         };
 
         if finish {
-            let account = self.getting_diff_for.contains(&Key::Common);
-            let secret = self.getting_diff_for.contains(&Key::Secondary);
-
-            if !account && !secret {
-                panic!(
-                    "Should not be applying the difference when neither account or secret diff was active"
-                )
-            }
-
-            if account {
-                self.end_get_diff(Key::Common);
-            }
-            if secret {
-                self.end_get_diff(Key::Secondary);
-            }
+            self.try_end_get_diff(Key::Common);
+            self.try_end_get_diff(Key::Secondary);
         }
 
         result
@@ -882,7 +871,7 @@ impl MessageBoxes {
                     "handling empty channel {} difference (pts = {}); no longer getting diff",
                     channel_id, diff.pts
                 );
-                self.end_get_diff(key);
+                self.try_end_get_diff(key);
                 self.update_entry(key, |entry| entry.pts = diff.pts);
                 (Vec::new(), Vec::new(), Vec::new())
             }
@@ -934,7 +923,7 @@ impl MessageBoxes {
                         "handling channel {} difference; no longer getting diff",
                         channel_id
                     );
-                    self.end_get_diff(key);
+                    self.try_end_get_diff(key);
                 } else {
                     debug!("handling channel {} difference", channel_id);
                 }
@@ -996,11 +985,11 @@ impl MessageBoxes {
             match reason {
                 PrematureEndReason::TemporaryServerIssues => {
                     self.push_gap(key, None);
-                    self.end_get_diff(key);
+                    self.try_end_get_diff(key);
                 }
                 PrematureEndReason::Banned => {
                     self.push_gap(key, None);
-                    self.end_get_diff(key);
+                    self.try_end_get_diff(key);
                     self.pop_entry(key);
                 }
             }
