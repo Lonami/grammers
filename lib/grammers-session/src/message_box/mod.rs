@@ -292,7 +292,7 @@ impl MessageBoxes {
         });
         self.set_entry(LiveEntry {
             key: Key::Secondary,
-            pts: state.pts,
+            pts: state.qts,
             deadline,
             possible_gap: None,
         });
