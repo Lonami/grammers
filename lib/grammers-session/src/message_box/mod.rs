@@ -36,7 +36,6 @@ use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
 use std::time::Duration;
-use tl::enums::InputChannel;
 use web_time::Instant;
 
 fn next_updates_deadline() -> Instant {
@@ -777,15 +776,21 @@ impl MessageBoxes {
     /// Similar to [`MessageBoxes::process_updates`], but using the result from getting difference.
     pub fn apply_channel_difference(
         &mut self,
-        request: tl::functions::updates::GetChannelDifference,
         difference: tl::enums::updates::ChannelDifference,
     ) -> defs::UpdateAndPeers {
-        let channel_id = channel_id(&request).expect("request had wrong input channel");
+        let (key, channel_id) = self
+            .getting_diff_for
+            .iter()
+            .find_map(|&key| match key {
+                Key::Channel(id) => Some((key, id)),
+                _ => None,
+            })
+            .expect("applying channel difference to have a channel in getting_diff_for");
+
         trace!(
             "applying channel difference for {}: {:?}",
             channel_id, difference
         );
-        let key = Key::Channel(channel_id);
 
         self.push_gap(key, None);
 
@@ -890,37 +895,31 @@ impl MessageBoxes {
         }
     }
 
-    pub fn end_channel_difference(
-        &mut self,
-        request: &tl::functions::updates::GetChannelDifference,
-        reason: PrematureEndReason,
-    ) {
-        if let Some(channel_id) = channel_id(request) {
-            trace!(
-                "ending channel difference for {} because {:?}",
-                channel_id, reason
-            );
-            let key = Key::Channel(channel_id);
-            match reason {
-                PrematureEndReason::TemporaryServerIssues => {
-                    self.push_gap(key, None);
-                    self.try_end_get_diff(key);
-                }
-                PrematureEndReason::Banned => {
-                    self.push_gap(key, None);
-                    self.try_end_get_diff(key);
-                    self.pop_entry(key);
-                }
-            }
-        };
-    }
-}
+    pub fn end_channel_difference(&mut self, reason: PrematureEndReason) {
+        let (key, channel_id) = self
+            .getting_diff_for
+            .iter()
+            .find_map(|&key| match key {
+                Key::Channel(id) => Some((key, id)),
+                _ => None,
+            })
+            .expect("ending channel difference to have a channel in getting_diff_for");
 
-pub fn channel_id(request: &tl::functions::updates::GetChannelDifference) -> Option<i64> {
-    match request.channel {
-        InputChannel::Channel(ref c) => Some(c.channel_id),
-        InputChannel::FromMessage(ref c) => Some(c.channel_id),
-        InputChannel::Empty => None,
+        trace!(
+            "ending channel difference for {} because {:?}",
+            channel_id, reason
+        );
+        match reason {
+            PrematureEndReason::TemporaryServerIssues => {
+                self.push_gap(key, None);
+                self.try_end_get_diff(key);
+            }
+            PrematureEndReason::Banned => {
+                self.push_gap(key, None);
+                self.try_end_get_diff(key);
+                self.pop_entry(key);
+            }
+        }
     }
 }
 

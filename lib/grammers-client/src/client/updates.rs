@@ -13,7 +13,7 @@ use crate::types::{ChatMap, Update};
 use futures_util::future::{Either, select};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, State, channel_id};
+use grammers_session::{ChatHashCache, MessageBoxes, State};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -59,7 +59,7 @@ fn prepare_channel_difference(
             "cannot getChannelDifference for {} as we're missing its hash",
             id
         );
-        message_box.end_channel_difference(&request, PrematureEndReason::Banned);
+        message_box.end_channel_difference(PrematureEndReason::Banned);
         None
     }
 }
@@ -166,19 +166,14 @@ impl Client {
                                 .write()
                                 .unwrap()
                                 .message_box
-                                .end_channel_difference(
-                                    &request,
-                                    PrematureEndReason::TemporaryServerIssues,
-                                );
+                                .end_channel_difference(PrematureEndReason::TemporaryServerIssues);
                         }
                         continue;
                     }
                     Err(e) if e.is("CHANNEL_PRIVATE") => {
                         log::info!(
-                            "Account is now banned in {} so we can no longer fetch updates from it",
-                            channel_id(&request)
-                                .map(|i| i.to_string())
-                                .unwrap_or_else(|| "empty channel".into())
+                            "Account is now banned so we can no longer fetch updates with request: {:?}",
+                            request
                         );
                         {
                             self.0
@@ -186,7 +181,7 @@ impl Client {
                                 .write()
                                 .unwrap()
                                 .message_box
-                                .end_channel_difference(&request, PrematureEndReason::Banned);
+                                .end_channel_difference(PrematureEndReason::Banned);
                         }
                         continue;
                     }
@@ -198,10 +193,7 @@ impl Client {
                                 .write()
                                 .unwrap()
                                 .message_box
-                                .end_channel_difference(
-                                    &request,
-                                    PrematureEndReason::TemporaryServerIssues,
-                                );
+                                .end_channel_difference(PrematureEndReason::TemporaryServerIssues);
                         }
                         continue;
                     }
@@ -210,9 +202,8 @@ impl Client {
 
                 let (updates, users, chats) = {
                     let state = &mut *self.0.state.write().unwrap();
-                    let (updates, users, chats) = state
-                        .message_box
-                        .apply_channel_difference(request, response);
+                    let (updates, users, chats) =
+                        state.message_box.apply_channel_difference(response);
                     let _ = state.chat_hashes.extend(&users, &chats);
                     (updates, users, chats)
                 };
