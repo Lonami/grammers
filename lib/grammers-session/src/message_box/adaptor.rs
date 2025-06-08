@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::ChatHashCache;
 use super::defs::{Gap, Key, NO_PTS, NO_SEQ, PtsInfo};
 use grammers_tl_types as tl;
 use log::info;
@@ -43,7 +42,6 @@ pub(super) fn update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesC
 
 pub(super) fn update_short_message(
     short: tl::types::UpdateShortMessage,
-    self_id: i64,
 ) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
         update: tl::types::UpdateNewMessage {
@@ -62,12 +60,7 @@ pub(super) fn update_short_message(
                 video_processing_pending: false,
                 reactions: None,
                 id: short.id,
-                from_id: Some(
-                    tl::types::PeerUser {
-                        user_id: if short.out { self_id } else { short.user_id },
-                    }
-                    .into(),
-                ),
+                from_id: None,
                 from_boosts_applied: None,
                 peer_id: tl::types::PeerChat {
                     chat_id: short.user_id,
@@ -188,10 +181,7 @@ pub(super) fn update_short_sent_message(
     })
 }
 
-pub(super) fn adapt(
-    updates: tl::enums::Updates,
-    chat_hashes: &ChatHashCache,
-) -> Result<tl::types::UpdatesCombined, Gap> {
+pub(super) fn adapt(updates: tl::enums::Updates) -> Result<tl::types::UpdatesCombined, Gap> {
     Ok(match updates {
         // > `updatesTooLong` indicates that there are too many events pending to be pushed
         // > to the client, so one needs to fetch them manually.
@@ -211,7 +201,7 @@ pub(super) fn adapt(
             // about the chat so that [min constructors][0] can be used.
             //
             // [0]: https://core.telegram.org/api/min
-            update_short_message(short, chat_hashes.self_id())
+            update_short_message(short)
         }
         tl::enums::Updates::UpdateShortChatMessage(short) => {
             // No need to check for chats here. Small group chats do not require an access

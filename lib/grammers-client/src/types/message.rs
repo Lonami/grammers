@@ -241,17 +241,23 @@ impl Message {
             tl::enums::Message::Service(message) => message.from_id.as_ref(),
         };
         from_id
+            .cloned()
             .or({
                 // Incoming messages in private conversations don't include `from_id` since
                 // layer 119, but the sender can only be the chat we're in.
                 let peer_id = self.peer_id();
-                if !self.outgoing() && matches!(peer_id, tl::enums::Peer::User(_)) {
-                    Some(&peer_id)
+                if matches!(peer_id, tl::enums::Peer::User(_)) {
+                    if self.outgoing() {
+                        Some(peer_id.clone())
+                    } else {
+                        let user_id = self.client.0.state.read().unwrap().chat_hashes.self_id();
+                        Some(tl::types::PeerUser { user_id }.into())
+                    }
                 } else {
                     None
                 }
             })
-            .map(|from| utils::always_find_entity(from, &self.chats, &self.client))
+            .map(|from| utils::always_find_entity(&from, &self.chats, &self.client))
     }
 
     /// The chat where this message was sent to.

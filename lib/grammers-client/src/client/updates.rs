@@ -13,9 +13,10 @@ use crate::types::{ChatMap, Update};
 use futures_util::future::{Either, select};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::{ChatHashCache, MessageBoxes, State, channel_id};
 pub use grammers_session::{PrematureEndReason, UpdateState};
-use grammers_session::{State, channel_id};
 use grammers_tl_types as tl;
+use log::{trace, warn};
 use std::pin::pin;
 use std::sync::Arc;
 use std::time::Duration;
@@ -23,6 +24,45 @@ use web_time::Instant;
 
 /// How long to wait after warning the user that the updates limit was exceeded.
 const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
+
+// See https://core.telegram.org/method/updates.getChannelDifference.
+const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
+const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
+
+fn prepare_channel_difference(
+    mut request: tl::functions::updates::GetChannelDifference,
+    chat_hashes: &ChatHashCache,
+    message_box: &mut MessageBoxes,
+) -> Option<tl::functions::updates::GetChannelDifference> {
+    let id = match &request.channel {
+        tl::enums::InputChannel::Channel(channel) => channel.channel_id,
+        _ => unreachable!(),
+    };
+
+    if let Some(packed) = chat_hashes.get(id) {
+        request.channel = tl::types::InputChannel {
+            channel_id: packed.id,
+            access_hash: packed
+                .access_hash
+                .expect("chat_hashes had chat without hash"),
+        }
+        .into();
+        request.limit = if chat_hashes.is_self_bot() {
+            BOT_CHANNEL_DIFF_LIMIT
+        } else {
+            USER_CHANNEL_DIFF_LIMIT
+        };
+        trace!("requesting {:?}", request);
+        Some(request)
+    } else {
+        warn!(
+            "cannot getChannelDifference for {} as we're missing its hash",
+            id
+        );
+        message_box.end_channel_difference(&request, PrematureEndReason::Banned);
+        None
+    }
+}
 
 impl Client {
     /// Returns the next update from the buffer where they are queued until used.
@@ -82,7 +122,9 @@ impl Client {
                 (
                     state.message_box.check_deadlines(), // first, as it might trigger differences
                     state.message_box.get_difference(),
-                    state.message_box.get_channel_difference(&state.chat_hashes),
+                    state.message_box.get_channel_difference().and_then(|gd| {
+                        prepare_channel_difference(gd, &state.chat_hashes, &mut state.message_box)
+                    }),
                 )
             };
 
@@ -90,9 +132,9 @@ impl Client {
                 let response = self.invoke(&request).await?;
                 let (updates, users, chats) = {
                     let state = &mut *self.0.state.write().unwrap();
-                    state
-                        .message_box
-                        .apply_difference(response, &mut state.chat_hashes)
+                    let (updates, users, chats) = state.message_box.apply_difference(response);
+                    let _ = state.chat_hashes.extend(&users, &chats);
+                    (updates, users, chats)
                 };
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
@@ -168,11 +210,11 @@ impl Client {
 
                 let (updates, users, chats) = {
                     let state = &mut *self.0.state.write().unwrap();
-                    state.message_box.apply_channel_difference(
-                        request,
-                        response,
-                        &mut state.chat_hashes,
-                    )
+                    let (updates, users, chats) = state
+                        .message_box
+                        .apply_channel_difference(request, response);
+                    let _ = state.chat_hashes.extend(&users, &chats);
+                    (updates, users, chats)
                 };
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
@@ -199,17 +241,7 @@ impl Client {
             let state = &mut *self.0.state.write().unwrap();
 
             for updates in all_updates {
-                if state
-                    .message_box
-                    .ensure_known_peer_hashes(&updates, &mut state.chat_hashes)
-                    .is_err()
-                {
-                    continue;
-                }
-                match state
-                    .message_box
-                    .process_updates(updates, &state.chat_hashes)
-                {
+                match state.message_box.process_updates(updates) {
                     Ok(tup) => {
                         if let Some(res) = result.as_mut() {
                             res.0.extend(tup.0);

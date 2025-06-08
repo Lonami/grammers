@@ -26,10 +26,6 @@ pub(super) const NO_PTS: i32 = 0;
 /// the `date` when constructing the dummy `Updates` (in order to handle them uniformly).
 pub(super) const NO_DATE: i32 = 0;
 
-// See https://core.telegram.org/method/updates.getChannelDifference.
-pub(super) const BOT_CHANNEL_DIFF_LIMIT: i32 = 100000;
-pub(super) const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
-
 // > It may be useful to wait up to 0.5 seconds
 pub(super) const POSSIBLE_GAP_TIMEOUT: Duration = Duration::from_millis(500);
 
