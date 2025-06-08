@@ -620,7 +620,7 @@ impl MessageBoxes {
 /// Getting and applying account difference.
 impl MessageBoxes {
     /// Return the request that needs to be made to get the difference, if any.
-    pub fn get_difference(&mut self) -> Option<tl::functions::updates::GetDifference> {
+    pub fn get_difference(&self) -> Option<tl::functions::updates::GetDifference> {
         for entry in [Key::Common, Key::Secondary] {
             if self.getting_diff_for.contains(&entry) {
                 let pts = self
@@ -813,7 +813,7 @@ impl MessageBoxes {
 impl MessageBoxes {
     /// Return the request that needs to be made to get a channel's difference, if any.
     pub fn get_channel_difference(
-        &mut self,
+        &self,
         chat_hashes: &ChatHashCache,
     ) -> Option<tl::functions::updates::GetChannelDifference> {
         let (key, id) = self.getting_diff_for.iter().find_map(|&key| match key {
