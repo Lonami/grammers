@@ -821,97 +821,57 @@ impl MessageBoxes {
 
         self.push_gap(key, None);
 
-        match difference {
-            tl::enums::updates::ChannelDifference::Empty(diff) => {
-                assert!(diff.r#final);
-                debug!(
-                    "handling empty channel {} difference (pts = {}); no longer getting diff",
-                    channel_id, diff.pts
-                );
-                self.try_end_get_diff(key);
-                self.set_pts(key, diff.pts);
-                (Vec::new(), Vec::new(), Vec::new())
-            }
-            tl::enums::updates::ChannelDifference::TooLong(diff) => {
-                assert!(diff.r#final);
-                info!(
-                    "handling too long channel {} difference; no longer getting diff",
-                    channel_id
-                );
-                match diff.dialog {
-                    tl::enums::Dialog::Dialog(d) => {
-                        let pts = d.pts.expect(
-                            "channelDifferenceTooLong dialog did not actually contain a pts",
-                        );
-                        self.update_entry(key, |entry| entry.pts = pts);
-                    }
-                    tl::enums::Dialog::Folder(_) => {
-                        panic!("received a folder on channelDifferenceTooLong")
-                    }
+        let tl::types::updates::ChannelDifference {
+            r#final,
+            pts,
+            timeout,
+            new_messages,
+            other_updates: updates,
+            chats,
+            users,
+        } = adaptor::adapt_channel_difference(difference);
+
+        if r#final {
+            debug!(
+                "handling channel {} difference; no longer getting diff",
+                channel_id
+            );
+            self.try_end_get_diff(key);
+        } else {
+            debug!("handling channel {} difference", channel_id);
+        }
+
+        self.set_pts(key, pts);
+        let us = tl::enums::Updates::Updates(tl::types::Updates {
+            updates,
+            users,
+            chats,
+            date: NO_DATE,
+            seq: NO_SEQ,
+        });
+        let (mut result_updates, users, chats) = self
+            .process_updates(us)
+            .expect("gap is detected while applying channel difference");
+
+        result_updates.extend(new_messages.into_iter().map(|message| {
+            (
+                tl::types::UpdateNewChannelMessage {
+                    message,
+                    pts: NO_PTS,
+                    pts_count: 0,
                 }
-
-                self.reset_timeout(key, diff.timeout);
-                // This `diff` has the "latest messages and corresponding chats", but it would
-                // be strange to give the user only partial changes of these when they would
-                // expect all updates to be fetched. Instead, nothing is returned.
-                (Vec::new(), diff.users, diff.chats)
-            }
-            tl::enums::updates::ChannelDifference::Difference(
-                tl::types::updates::ChannelDifference {
-                    r#final,
-                    pts,
-                    timeout,
-                    new_messages,
-                    other_updates: updates,
-                    chats,
-                    users,
-                },
-            ) => {
-                if r#final {
-                    debug!(
-                        "handling channel {} difference; no longer getting diff",
-                        channel_id
-                    );
-                    self.try_end_get_diff(key);
-                } else {
-                    debug!("handling channel {} difference", channel_id);
-                }
-
-                self.set_pts(key, pts);
-                let us = tl::enums::Updates::Updates(tl::types::Updates {
-                    updates,
-                    users,
-                    chats,
-                    date: NO_DATE,
-                    seq: NO_SEQ,
-                });
-                let (mut result_updates, users, chats) = self
-                    .process_updates(us)
-                    .expect("gap is detected while applying channel difference");
-
-                let mk_state = || State {
+                .into(),
+                State {
                     date: self.date,
                     seq: self.seq,
                     message_box: Some(MessageBox::Channel { channel_id, pts }),
-                };
+                },
+            )
+        }));
 
-                result_updates.extend(new_messages.into_iter().map(|message| {
-                    (
-                        tl::types::UpdateNewChannelMessage {
-                            message,
-                            pts: NO_PTS,
-                            pts_count: 0,
-                        }
-                        .into(),
-                        mk_state(),
-                    )
-                }));
+        self.reset_timeout(key, timeout);
 
-                self.reset_timeout(key, timeout);
-
-                (result_updates, users, chats)
-            }
-        }
+        (result_updates, users, chats)
     }
 
     pub fn end_channel_difference(&mut self, reason: PrematureEndReason) {

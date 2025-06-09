@@ -228,6 +228,43 @@ pub(super) fn adapt(updates: tl::enums::Updates) -> Result<tl::types::UpdatesCom
     })
 }
 
+pub(super) fn adapt_channel_difference(
+    difference: tl::enums::updates::ChannelDifference,
+) -> tl::types::updates::ChannelDifference {
+    match difference {
+        tl::enums::updates::ChannelDifference::Empty(difference) => {
+            tl::types::updates::ChannelDifference {
+                r#final: difference.r#final,
+                pts: difference.pts,
+                timeout: difference.timeout,
+                new_messages: Vec::new(),
+                other_updates: Vec::new(),
+                chats: Vec::new(),
+                users: Vec::new(),
+            }
+        }
+        tl::enums::updates::ChannelDifference::TooLong(difference) => {
+            tl::types::updates::ChannelDifference {
+                r#final: difference.r#final,
+                pts: match difference.dialog {
+                    tl::enums::Dialog::Dialog(d) => d
+                        .pts
+                        .expect("channelDifferenceTooLong dialog did not actually contain a pts"),
+                    tl::enums::Dialog::Folder(_) => {
+                        panic!("received a folder on channelDifferenceTooLong")
+                    }
+                },
+                timeout: difference.timeout,
+                new_messages: Vec::new(),
+                other_updates: Vec::new(),
+                chats: difference.chats,
+                users: difference.users,
+            }
+        }
+        tl::enums::updates::ChannelDifference::Difference(difference) => difference,
+    }
+}
+
 fn message_peer(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
     match message {
         tl::enums::Message::Empty(_) => None,
