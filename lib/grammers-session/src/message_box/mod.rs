@@ -258,7 +258,7 @@ impl MessageBoxes {
         let now = Instant::now();
 
         if !self.getting_diff_for.is_empty() {
-            return now;
+            return self.next_deadline;
         }
 
         if now >= self.next_deadline {
@@ -287,6 +287,34 @@ impl MessageBoxes {
         }
 
         self.next_deadline
+    }
+
+    /// Reset the deadline of an existing entry.
+    /// Does nothing if the entry doesn't exist.
+    ///
+    /// If the updated deadline was the currently-next-deadline,
+    /// the new closest deadline is calculated and stored as the next.
+    fn reset_deadline(&mut self, key: Key, deadline: Instant) {
+        let mut old_deadline = self.next_deadline;
+        self.update_entry(key, |entry| {
+            old_deadline = entry.deadline;
+            entry.deadline = deadline;
+        });
+        if self.next_deadline == old_deadline {
+            self.next_deadline = self
+                .entries
+                .iter()
+                .fold(deadline, |d, entry| d.min(entry.effective_deadline()));
+        }
+    }
+
+    fn reset_timeout(&mut self, key: Key, timeout: Option<i32>) {
+        self.reset_deadline(
+            key,
+            timeout
+                .map(|t| Instant::now() + Duration::from_secs(t as _))
+                .unwrap_or_else(next_updates_deadline),
+        );
     }
 
     /// Sets the update state.
@@ -350,13 +378,7 @@ impl MessageBoxes {
             None => return,
         };
         self.getting_diff_for.remove(i);
-
-        let deadline = next_updates_deadline();
-        if self.update_entry(key, |entry| {
-            entry.deadline = deadline;
-        }) {
-            self.next_deadline = self.next_deadline.min(deadline);
-        }
+        self.reset_deadline(key, next_updates_deadline());
 
         debug_assert!(
             self.entry(key)
@@ -468,9 +490,7 @@ impl MessageBoxes {
                 // As soon as we receive an update of any form related to messages (has `PtsInfo`),
                 // the "no updates" period for that entry is reset. All the deadlines are reset at
                 // once via the temporary entries buffer as an optimization.
-                if self.update_entry(key, |entry| entry.deadline = deadline) {
-                    self.next_deadline = self.next_deadline.min(deadline);
-                }
+                self.reset_deadline(key, deadline);
             }
             if let Some((update, message_box)) = update {
                 result.push((update, mk_state(message_box)));
@@ -826,9 +846,7 @@ impl MessageBoxes {
                     }
                 }
 
-                let deadline = next_updates_deadline();
-                self.update_entry(key, |entry| entry.deadline = deadline);
-                self.next_deadline = self.next_deadline.min(deadline);
+                self.reset_timeout(key, diff.timeout);
                 // This `diff` has the "latest messages and corresponding chats", but it would
                 // be strange to give the user only partial changes of these when they would
                 // expect all updates to be fetched. Instead, nothing is returned.
@@ -885,13 +903,7 @@ impl MessageBoxes {
                     )
                 }));
 
-                let deadline = Instant::now()
-                    + timeout
-                        .map(|t| Duration::from_secs(t as _))
-                        .unwrap_or(NO_UPDATES_TIMEOUT);
-                if self.update_entry(key, |entry| entry.deadline = deadline) {
-                    self.next_deadline = self.next_deadline.min(deadline);
-                }
+                self.reset_timeout(key, timeout);
 
                 (result_updates, users, chats)
             }
