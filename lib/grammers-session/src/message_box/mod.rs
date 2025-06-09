@@ -169,6 +169,17 @@ impl MessageBoxes {
         }
     }
 
+    fn set_pts(&mut self, key: Key, pts: i32) {
+        if !self.update_entry(key, |entry| entry.pts = pts) {
+            self.set_entry(LiveEntry {
+                key: key,
+                pts: pts,
+                deadline: next_updates_deadline(),
+                possible_gap: None,
+            });
+        }
+    }
+
     fn pop_entry(&mut self, key: Key) -> Option<LiveEntry> {
         match self.entries.binary_search_by_key(&key, |entry| entry.key) {
             Ok(i) => Some(self.entries.remove(i)),
@@ -177,6 +188,7 @@ impl MessageBoxes {
     }
 
     fn push_gap(&mut self, key: Key, gap: Option<tl::enums::Update>) -> bool {
+        let deadline = Instant::now() + POSSIBLE_GAP_TIMEOUT;
         let has_gap = gap.is_some();
         let exists = self.update_entry(key, |entry| {
             let possible_gap = entry.possible_gap.take();
@@ -187,16 +199,21 @@ impl MessageBoxes {
                     possible
                 }
                 None => PossibleGap {
-                    deadline: Instant::now() + POSSIBLE_GAP_TIMEOUT,
+                    deadline,
                     updates: vec![update],
                 },
             });
         });
         if exists {
             if has_gap {
+                if !self.possible_gaps.contains(&key) {
                 self.possible_gaps.push(key);
+                    self.next_deadline = self.next_deadline.min(deadline);
+                }
             } else {
-                self.possible_gaps.retain(|&k| k != key);
+                if let Some(i) = self.possible_gaps.iter().position(|&k| k == key) {
+                    self.possible_gaps.remove(i);
+                }
             }
         }
         exists
@@ -436,8 +453,8 @@ impl MessageBoxes {
         // is `0` and `1` respectively), so we sort them first.
         updates.sort_by_key(update_sort_key);
 
-        // Add one in case there's a single gap.
-        let mut result = Vec::with_capacity(updates.len() + 1);
+        let mut result = Vec::with_capacity(updates.len() + self.possible_gaps.len());
+        let had_gaps = !self.possible_gaps.is_empty();
 
         // This loop does a lot at once to reduce the amount of times we need to iterate over
         // the updates as an optimization.
@@ -460,7 +477,8 @@ impl MessageBoxes {
             }
         }
 
-        if !self.possible_gaps.is_empty() {
+        if had_gaps {
+            // Newly-added gaps won't be resolved immediately, so we check if we had gaps before.
             // For each update in possible gaps, see if the gap has been resolved already.
             for i in (0..self.possible_gaps.len()).rev() {
                 let key = self.possible_gaps[i];
@@ -557,15 +575,7 @@ impl MessageBoxes {
         // else, there is no previous `pts` known, and because this update has to be "right"
         // (it's the first one) our `local_pts` must be `pts - pts_count`.
 
-        let deadline = next_updates_deadline();
-        self.set_entry(LiveEntry {
-            key: info.key,
-            pts: info.pts,
-            deadline: deadline,
-            possible_gap: None,
-        });
-        self.next_deadline = self.next_deadline.min(deadline);
-
+        self.set_pts(info.key, info.pts);
         (Some(info.key), Some((update, Some(info.into()))))
     }
 }
@@ -655,7 +665,7 @@ impl MessageBoxes {
                 );
                 finish = true;
                 // the deadline will be reset once the diff ends
-                self.update_entry(Key::Common, |entry| entry.pts = diff.pts);
+                self.set_pts(Key::Common, diff.pts);
                 (Vec::new(), Vec::new(), Vec::new())
             }
         };
@@ -679,17 +689,10 @@ impl MessageBoxes {
             state: tl::enums::updates::State::State(state),
         }: tl::types::updates::Difference,
     ) -> defs::UpdateAndPeers {
-        let deadline = next_updates_deadline();
-        self.update_entry(Key::Common, |entry| entry.pts = state.pts);
-        self.set_entry(LiveEntry {
-            key: Key::Secondary,
-            pts: state.qts,
-            deadline: deadline,
-            possible_gap: None,
-        });
-        self.next_deadline = self.next_deadline.min(deadline);
         self.date = state.date;
         self.seq = state.seq;
+        self.set_pts(Key::Common, state.pts);
+        self.set_pts(Key::Secondary, state.qts);
         let mk_state = |message_box| State {
             date: state.date,
             seq: state.seq,
@@ -802,7 +805,7 @@ impl MessageBoxes {
                     channel_id, diff.pts
                 );
                 self.try_end_get_diff(key);
-                self.update_entry(key, |entry| entry.pts = diff.pts);
+                self.set_pts(key, diff.pts);
                 (Vec::new(), Vec::new(), Vec::new())
             }
             tl::enums::updates::ChannelDifference::TooLong(diff) => {
@@ -852,7 +855,7 @@ impl MessageBoxes {
                     debug!("handling channel {} difference", channel_id);
                 }
 
-                self.update_entry(key, |entry| entry.pts = pts);
+                self.set_pts(key, pts);
                 let us = tl::enums::Updates::Updates(tl::types::Updates {
                     updates,
                     users,
