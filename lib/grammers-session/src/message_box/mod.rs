@@ -24,11 +24,12 @@
 //! to get the difference.
 mod adaptor;
 mod defs;
+#[cfg(test)]
+mod tests;
 
 use crate::UpdateState;
 use crate::generated::enums::ChannelState as ChannelStateEnum;
 use crate::generated::types::ChannelState;
-use crate::message_box::defs::NO_UPDATES_TIMEOUT;
 pub(crate) use defs::Key;
 pub use defs::{Gap, MessageBox, MessageBoxes, State};
 use defs::{LiveEntry, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PossibleGap, PtsInfo};
@@ -36,6 +37,9 @@ use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
 use std::time::Duration;
+#[cfg(test)]
+use tests::Instant;
+#[cfg(not(test))]
 use web_time::Instant;
 
 fn next_updates_deadline() -> Instant {
@@ -207,7 +211,7 @@ impl MessageBoxes {
         if exists {
             if has_gap {
                 if !self.possible_gaps.contains(&key) {
-                self.possible_gaps.push(key);
+                    self.possible_gaps.push(key);
                     self.next_deadline = self.next_deadline.min(deadline);
                 }
             } else {

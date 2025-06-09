@@ -5,8 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#[cfg(test)]
+use super::tests::Instant;
 use grammers_tl_types as tl;
 use std::time::Duration;
+#[cfg(not(test))]
 use web_time::Instant;
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
@@ -107,7 +110,7 @@ pub(super) struct PossibleGap {
     pub(super) updates: Vec<tl::enums::Update>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Gap;
 
 /// Alias for the commonly-referenced three-tuple of update and related peers.
@@ -122,7 +125,7 @@ pub(super) type UpdateAndPeers = (
 /// Update state, up to and including the update it is a part of.
 /// That is, when using [`catch_up`](crate::InitParams::catch_up),
 /// all updates with a state containing a [`MessageBox`] higher than this one will be fetched.
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct State {
     pub date: i32,
     pub seq: i32,
@@ -130,7 +133,7 @@ pub struct State {
 }
 
 /// The message box and pts value that uniquely identifies the message-related update.
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
 pub enum MessageBox {
     /// Account-wide persistent timestamp.
     ///
