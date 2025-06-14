@@ -460,7 +460,11 @@ fn write_definition<W: Write>(
     write_struct(file, indent, def, metadata, config)?;
     write_identifiable(file, indent, def, metadata)?;
     write_serializable(file, indent, def, metadata)?;
-    if def.category == Category::Types || config.deserializable_functions {
+    if def.category == Category::Types
+        || config.deserializable_functions
+        // special-case needed for update handling
+        || def.name == "sendMessage"
+    {
         write_deserializable(file, indent, def, metadata)?;
     }
     if def.category == Category::Functions {
