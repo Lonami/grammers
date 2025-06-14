@@ -483,7 +483,7 @@ impl Encrypted {
                 let body = match manual_tl::GzipPacked::from_bytes(&result) {
                     Ok(gzip) => match gzip.decompress() {
                         Ok(x) => {
-                            self.store_own_updates(&x);
+                            self.store_own_updates(msg_id, &x);
                             Ok(x)
                         }
                         Err(e) => Err(e),
@@ -501,7 +501,7 @@ impl Encrypted {
                 }
             }
             _ => {
-                self.store_own_updates(&result);
+                self.store_own_updates(msg_id, &result);
                 self.deserialization
                     .push(Deserialization::RpcResult(RpcResult {
                         msg_id,
@@ -518,13 +518,18 @@ impl Encrypted {
     ///
     /// Users may also be interested in handling updates produced by the client as if they were
     /// like any other.
-    fn store_own_updates(&mut self, body: &[u8]) {
+    ///
+    /// This MUST be done before storing the [`Deserialization::RpcResult`],
+    /// because the stored update might need to reference the request, which
+    /// must not have been dropped yet.
+    fn store_own_updates(&mut self, msg_id: MsgId, body: &[u8]) {
         match u32::from_bytes(body) {
             Ok(body_id) => {
                 if UPDATE_IDS.iter().any(|&id| body_id == id) {
-                    // TODO somehow signal that this updates is our own, to avoid getting into nasty loops
-                    self.deserialization
-                        .push(Deserialization::Update(body.to_vec()));
+                    self.deserialization.push(Deserialization::OwnUpdate {
+                        msg_id,
+                        update: body.to_vec(),
+                    });
                 }
             }
             Err(_err) => {

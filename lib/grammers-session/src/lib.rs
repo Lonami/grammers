@@ -19,7 +19,7 @@ pub use generated::types::User;
 use generated::{enums, types};
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::PrematureEndReason;
-pub use message_box::{Gap, MessageBox, MessageBoxes, State};
+pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};

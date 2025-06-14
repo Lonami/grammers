@@ -111,35 +111,6 @@ pub(crate) fn always_find_entity(
     }
 }
 
-pub fn peer_from_input_peer(input_peer: &tl::enums::InputPeer) -> tl::enums::Peer {
-    match input_peer {
-        grammers_tl_types::enums::InputPeer::Empty => tl::types::PeerUser { user_id: 0 }.into(),
-        grammers_tl_types::enums::InputPeer::PeerSelf => tl::types::PeerUser { user_id: 0 }.into(), // TODO can get self from client
-        grammers_tl_types::enums::InputPeer::Chat(chat) => tl::types::PeerChat {
-            chat_id: chat.chat_id,
-        }
-        .into(),
-        grammers_tl_types::enums::InputPeer::User(user) => tl::types::PeerUser {
-            user_id: user.user_id,
-        }
-        .into(),
-        grammers_tl_types::enums::InputPeer::Channel(channel) => tl::types::PeerChannel {
-            channel_id: channel.channel_id,
-        }
-        .into(),
-        grammers_tl_types::enums::InputPeer::UserFromMessage(user) => tl::types::PeerUser {
-            user_id: user.user_id,
-        }
-        .into(),
-        grammers_tl_types::enums::InputPeer::ChannelFromMessage(channel) => {
-            tl::types::PeerChannel {
-                channel_id: channel.channel_id,
-            }
-            .into()
-        }
-    }
-}
-
 pub fn peer_from_message(message: &tl::enums::Message) -> Option<&tl::enums::Peer> {
     match &message {
         tl::enums::Message::Empty(message) => message.peer_id.as_ref(),

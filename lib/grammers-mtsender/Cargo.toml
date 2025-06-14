@@ -23,6 +23,7 @@ futures-util = { version = "0.3.30", default-features = false, features = [
 ] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.7.0" }
+grammers-session = { path = "../grammers-session", version = "0.7.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = [ "tl-mtproto" ] }
 log = "0.4.22"
 tokio = { version = "1.40.0", default-features = false, features = ["io-util", "sync", "time"] }

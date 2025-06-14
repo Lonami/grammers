@@ -11,9 +11,9 @@ use super::defs::{
     UpdateAndPeers,
 };
 use super::{PrematureEndReason, next_updates_deadline};
-use crate::UpdateState;
 use crate::generated::types::ChannelState;
 use crate::message_box::POSSIBLE_GAP_TIMEOUT;
+use crate::{UpdateState, UpdatesLike};
 use grammers_tl_types as tl;
 use std::cell::RefCell;
 use std::ops::Add;
@@ -66,14 +66,14 @@ fn update(pts: i32) -> tl::enums::Update {
     })
 }
 
-fn updates(date: i32, seq: i32, pts: i32) -> tl::enums::Updates {
-    tl::enums::Updates::Updates(tl::types::Updates {
+fn updates(date: i32, seq: i32, pts: i32) -> UpdatesLike {
+    UpdatesLike::Updates(tl::enums::Updates::Updates(tl::types::Updates {
         updates: vec![update(pts)],
         users: Vec::new(),
         chats: Vec::new(),
         date,
         seq,
-    })
+    }))
 }
 
 fn updates_ok(date: i32, seq: i32, pts: i32) -> Result<UpdateAndPeers, Gap> {
