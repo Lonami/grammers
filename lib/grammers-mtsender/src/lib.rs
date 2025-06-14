@@ -22,6 +22,7 @@ use grammers_mtproto::mtp::{
 };
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{MsgId, authentication};
+use grammers_session::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use net::NetStream;
@@ -240,7 +241,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Step network events, writing and reading at the same time.
     ///
     /// Updates received during this step, if any, are returned.
-    pub async fn step(&mut self) -> Result<Vec<tl::enums::Updates>, ReadError> {
+    pub async fn step(&mut self) -> Result<Vec<UpdatesLike>, ReadError> {
         enum Sel {
             Sleep,
             Request(Option<Request>),
@@ -386,7 +387,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Handle `n` more read bytes being ready to process by the transport.
     ///
     /// This won't cause `ReadError::Io`, but yet another enum would be overkill.
-    fn on_net_read(&mut self, n: usize) -> Result<Vec<tl::enums::Updates>, ReadError> {
+    fn on_net_read(&mut self, n: usize) -> Result<Vec<UpdatesLike>, ReadError> {
         if n == 0 {
             return Err(ReadError::Io(io::Error::new(
                 io::ErrorKind::ConnectionReset,
@@ -471,7 +472,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Handle errors that occured while performing I/O.
-    async fn on_error(&mut self, error: ReadError) -> Result<Vec<tl::enums::Updates>, ReadError> {
+    async fn on_error(&mut self, error: ReadError) -> Result<Vec<UpdatesLike>, ReadError> {
         log::info!("handling error: {error}");
         self.transport.reset();
         self.mtp.reset();
@@ -501,10 +502,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                             .iter_mut()
                             .for_each(|r| r.state = RequestState::NotSerialized);
 
-                        // We'll return a TooLong update to signal to the client
-                        // that it needs to call getDifference and query the server
-                        // for new updates again.
-                        return Ok(vec![tl::enums::Updates::TooLong]);
+                        return Ok(vec![UpdatesLike::Reconnection]);
                     }
                     Err(e) => ReadError::from(e),
                 }
@@ -529,10 +527,13 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn process_mtp_buffer(
         &mut self,
         results: Vec<Deserialization>,
-        updates: &mut Vec<tl::enums::Updates>,
+        updates: &mut Vec<UpdatesLike>,
     ) {
         for result in results {
             match result {
+                Deserialization::OwnUpdate { msg_id, update } => {
+                    self.process_own_update(updates, msg_id, update)
+                }
                 Deserialization::Update(update) => self.process_update(updates, update),
                 Deserialization::RpcResult(result) => self.process_result(result),
                 Deserialization::RpcError(error) => self.process_error(error),
@@ -542,44 +543,55 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         }
     }
 
-    fn process_update(&mut self, updates: &mut Vec<tl::enums::Updates>, update: Vec<u8>) {
-        let update = match tl::enums::Updates::from_bytes(&update) {
-            Ok(u) => Some(u),
-            Err(e) => {
-                // Annoyingly enough, `messages.affectedMessages` also has `pts`.
-                // Mostly received when deleting messages, so pretend that's the
-                // update that actually occured.
-                match tl::enums::messages::AffectedMessages::from_bytes(&update) {
-                    Ok(tl::enums::messages::AffectedMessages::Messages(
-                        tl::types::messages::AffectedMessages { pts, pts_count },
-                    )) => Some(
-                        tl::types::UpdateShort {
-                            update: tl::types::UpdateDeleteMessages {
-                                messages: Vec::new(),
-                                pts,
-                                pts_count,
-                            }
-                            .into(),
-                            date: 0,
-                        }
-                        .into(),
-                    ),
-                    Err(_) => match tl::types::messages::InvitedUsers::from_bytes(&update) {
-                        Ok(u) => Some(u.updates),
-                        Err(_) => {
-                            warn!(
-                                "telegram sent updates that failed to be deserialized: {}",
-                                e
-                            );
-                            None
-                        }
-                    },
-                }
+    fn process_own_update(
+        &mut self,
+        updates: &mut Vec<UpdatesLike>,
+        msg_id: MsgId,
+        update: Vec<u8>,
+    ) {
+        match (
+            tl::enums::Updates::from_bytes(&update),
+            self.peek_request(msg_id).and_then(|request| {
+                tl::functions::messages::SendMessage::from_bytes(&request.body).ok()
+            }),
+        ) {
+            (Ok(tl::enums::Updates::UpdateShortSentMessage(u)), Some(request)) => {
+                // As far as I know, UpdateShortSentMessage can only occur from SendMessage.
+                // If that's not the case, new variants with additional requests should be added.
+                updates.push(UpdatesLike::ShortSentMessage { request, update: u })
             }
-        };
+            (Ok(u), _) => {
+                // In the future, we might want to flag "updates produced by the client" somehow.
+                // This would be the starting place to do it.
+                updates.push(UpdatesLike::Updates(u));
+                return;
+            }
+            (Err(e), _) => warn!("telegram sent updates that failed to be deserialized: {e}"),
+        }
 
-        if let Some(update) = update {
-            updates.push(update);
+        match tl::enums::messages::AffectedMessages::from_bytes(&update) {
+            Ok(tl::enums::messages::AffectedMessages::Messages(u)) => {
+                updates.push(UpdatesLike::AffectedMessages(u));
+                return;
+            }
+            Err(_) => {}
+        }
+
+        match tl::types::messages::InvitedUsers::from_bytes(&update) {
+            Ok(u) => {
+                updates.push(UpdatesLike::InvitedUsers(u));
+                return;
+            }
+            Err(_) => {}
+        }
+
+        warn!("telegram sent an unknown or invalid updates-like type for a response");
+    }
+
+    fn process_update(&mut self, updates: &mut Vec<UpdatesLike>, update: Vec<u8>) {
+        match tl::enums::Updates::from_bytes(&update) {
+            Ok(u) => updates.push(UpdatesLike::Updates(u)),
+            Err(e) => warn!("telegram sent updates that failed to be deserialized: {e}"),
         }
     }
 
@@ -682,6 +694,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
                 failure.error
             );
         }
+    }
+
+    fn peek_request(&mut self, msg_id: MsgId) -> Option<&Request> {
+        self.requests.iter().find(|request| match request.state {
+            RequestState::NotSerialized => todo!(),
+            RequestState::Serialized(MsgIdPair { msg_id: m, .. }) => m == msg_id,
+            RequestState::Sent(MsgIdPair { msg_id: m, .. }) => m == msg_id,
+        })
     }
 
     fn pop_request(&mut self, msg_id: MsgId) -> Option<Request> {

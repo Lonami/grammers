@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::defs::{Gap, Key, NO_PTS, NO_SEQ, PtsInfo};
+use super::defs::{Gap, Key, NO_PTS, NO_SEQ, PtsInfo, UpdatesLike};
 use grammers_tl_types as tl;
 use log::info;
 
@@ -18,7 +18,7 @@ use log::info;
 // This module's job is just converting the various updates types into `updatesCombined`.
 // It also converts updates into their corresponding `PtsInfo`.
 
-pub(super) fn updates(updates: tl::types::Updates) -> tl::types::UpdatesCombined {
+fn updates(updates: tl::types::Updates) -> tl::types::UpdatesCombined {
     tl::types::UpdatesCombined {
         updates: updates.updates,
         users: updates.users,
@@ -29,7 +29,7 @@ pub(super) fn updates(updates: tl::types::Updates) -> tl::types::UpdatesCombined
     }
 }
 
-pub(super) fn update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesCombined {
+fn update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesCombined {
     tl::types::UpdatesCombined {
         updates: vec![short.update],
         users: Vec::new(),
@@ -40,9 +40,7 @@ pub(super) fn update_short(short: tl::types::UpdateShort) -> tl::types::UpdatesC
     }
 }
 
-pub(super) fn update_short_message(
-    short: tl::types::UpdateShortMessage,
-) -> tl::types::UpdatesCombined {
+fn update_short_message(short: tl::types::UpdateShortMessage) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
         update: tl::types::UpdateNewMessage {
             message: tl::types::Message {
@@ -99,7 +97,7 @@ pub(super) fn update_short_message(
     })
 }
 
-pub(super) fn update_short_chat_message(
+fn update_short_chat_message(
     short: tl::types::UpdateShortChatMessage,
 ) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
@@ -163,7 +161,7 @@ pub(super) fn update_short_chat_message(
     })
 }
 
-pub(super) fn update_short_sent_message(
+fn update_short_sent_message(
     short: tl::types::UpdateShortSentMessage,
 ) -> tl::types::UpdatesCombined {
     update_short(tl::types::UpdateShort {
@@ -181,7 +179,7 @@ pub(super) fn update_short_sent_message(
     })
 }
 
-pub(super) fn adapt(updates: tl::enums::Updates) -> Result<tl::types::UpdatesCombined, Gap> {
+fn adapt_updates(updates: tl::enums::Updates) -> Result<tl::types::UpdatesCombined, Gap> {
     Ok(match updates {
         // > `updatesTooLong` indicates that there are too many events pending to be pushed
         // > to the client, so one needs to fetch them manually.
@@ -228,6 +226,111 @@ pub(super) fn adapt(updates: tl::enums::Updates) -> Result<tl::types::UpdatesCom
     })
 }
 
+pub(super) fn adapt(updates: UpdatesLike) -> Result<tl::types::UpdatesCombined, Gap> {
+    match updates {
+        UpdatesLike::Updates(updates) => adapt_updates(updates),
+        UpdatesLike::ShortSentMessage { request, update } => {
+            Ok(update_short(tl::types::UpdateShort {
+                update: tl::types::UpdateNewMessage {
+                    message: tl::types::Message {
+                        out: update.out,
+                        mentioned: false,
+                        media_unread: false,
+                        silent: request.silent,
+                        post: false,
+                        from_scheduled: false,
+                        legacy: false,
+                        edit_hide: false,
+                        pinned: false,
+                        noforwards: request.noforwards,
+                        invert_media: request.invert_media,
+                        offline: false,
+                        video_processing_pending: false,
+                        id: update.id,
+                        from_id: request.send_as.as_ref().map(peer_from_input_peer),
+                        from_boosts_applied: None,
+                        peer_id: peer_from_input_peer(&request.peer),
+                        saved_peer_id: None,
+                        fwd_from: None,
+                        via_bot_id: None,
+                        via_business_bot_id: None,
+                        reply_to: request.reply_to.map(|r| match r {
+                            tl::enums::InputReplyTo::Message(i) => {
+                                tl::enums::MessageReplyHeader::Header(
+                                    tl::types::MessageReplyHeader {
+                                        reply_to_scheduled: false,
+                                        forum_topic: false,
+                                        quote: i.quote_offset.is_some(),
+                                        reply_to_msg_id: Some(i.reply_to_msg_id),
+                                        reply_to_peer_id: i
+                                            .reply_to_peer_id
+                                            .as_ref()
+                                            .map(peer_from_input_peer),
+                                        reply_from: None,
+                                        reply_media: None,
+                                        reply_to_top_id: i.top_msg_id,
+                                        quote_text: i.quote_text,
+                                        quote_entities: i.quote_entities,
+                                        quote_offset: i.quote_offset,
+                                    },
+                                )
+                            }
+                            tl::enums::InputReplyTo::Story(i) => {
+                                tl::enums::MessageReplyHeader::MessageReplyStoryHeader(
+                                    tl::types::MessageReplyStoryHeader {
+                                        peer: peer_from_input_peer(&i.peer),
+                                        story_id: i.story_id,
+                                    },
+                                )
+                            }
+                        }),
+                        date: update.date,
+                        message: request.message,
+                        media: update.media,
+                        reply_markup: request.reply_markup,
+                        entities: update.entities.or(request.entities),
+                        views: None,
+                        forwards: None,
+                        replies: None,
+                        edit_date: None,
+                        post_author: None,
+                        grouped_id: None,
+                        reactions: None,
+                        restriction_reason: None,
+                        ttl_period: update.ttl_period,
+                        quick_reply_shortcut_id: request.quick_reply_shortcut.and_then(
+                            |q| match q {
+                                tl::enums::InputQuickReplyShortcut::Shortcut(_) => None,
+                                tl::enums::InputQuickReplyShortcut::Id(i) => Some(i.shortcut_id),
+                            },
+                        ),
+                        effect: request.effect,
+                        factcheck: None,
+                        report_delivery_until_date: None,
+                    }
+                    .into(),
+                    pts: update.pts,
+                    pts_count: update.pts_count,
+                }
+                .into(),
+                date: update.date,
+            }))
+        }
+        // For simplicity, instead of introducing an extra enum, reuse a closely-related update type.
+        UpdatesLike::AffectedMessages(affected) => Ok(update_short(tl::types::UpdateShort {
+            update: tl::types::UpdateDeleteMessages {
+                messages: Vec::new(),
+                pts: affected.pts,
+                pts_count: affected.pts_count,
+            }
+            .into(),
+            date: 0,
+        })),
+        UpdatesLike::InvitedUsers(invited) => adapt_updates(invited.updates),
+        UpdatesLike::Reconnection => Err(Gap),
+    }
+}
+
 pub(super) fn adapt_channel_difference(
     difference: tl::enums::updates::ChannelDifference,
 ) -> tl::types::updates::ChannelDifference {
@@ -262,6 +365,35 @@ pub(super) fn adapt_channel_difference(
             }
         }
         tl::enums::updates::ChannelDifference::Difference(difference) => difference,
+    }
+}
+
+pub fn peer_from_input_peer(input_peer: &tl::enums::InputPeer) -> tl::enums::Peer {
+    match input_peer {
+        grammers_tl_types::enums::InputPeer::Empty => tl::types::PeerUser { user_id: 0 }.into(),
+        grammers_tl_types::enums::InputPeer::PeerSelf => tl::types::PeerUser { user_id: 0 }.into(), // TODO can get self from client
+        grammers_tl_types::enums::InputPeer::Chat(chat) => tl::types::PeerChat {
+            chat_id: chat.chat_id,
+        }
+        .into(),
+        grammers_tl_types::enums::InputPeer::User(user) => tl::types::PeerUser {
+            user_id: user.user_id,
+        }
+        .into(),
+        grammers_tl_types::enums::InputPeer::Channel(channel) => tl::types::PeerChannel {
+            channel_id: channel.channel_id,
+        }
+        .into(),
+        grammers_tl_types::enums::InputPeer::UserFromMessage(user) => tl::types::PeerUser {
+            user_id: user.user_id,
+        }
+        .into(),
+        grammers_tl_types::enums::InputPeer::ChannelFromMessage(channel) => {
+            tl::types::PeerChannel {
+                channel_id: channel.channel_id,
+            }
+            .into()
+        }
     }
 }
 

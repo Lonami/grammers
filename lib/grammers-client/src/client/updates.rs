@@ -13,7 +13,7 @@ use crate::types::{ChatMap, Update};
 use futures_util::future::{Either, select};
 use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, State};
+use grammers_session::{ChatHashCache, MessageBoxes, State, UpdatesLike};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -222,7 +222,7 @@ impl Client {
         }
     }
 
-    pub(crate) fn process_socket_updates(&self, all_updates: Vec<tl::enums::Updates>) {
+    pub(crate) fn process_socket_updates(&self, all_updates: Vec<UpdatesLike>) {
         if all_updates.is_empty() {
             return;
         }

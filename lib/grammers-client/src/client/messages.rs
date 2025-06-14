@@ -8,11 +8,11 @@
 
 //! Methods related to sending messages.
 use crate::types::{InputReactions, IterBuffer, Message};
-use crate::utils::{self, generate_random_id, generate_random_ids};
+use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{ChatMap, Client, InputMedia, types};
 use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::PackedChat;
+use grammers_session::{PackedChat, peer_from_input_peer};
 use grammers_tl_types as tl;
 use log::{Level, log_enabled, warn};
 use std::collections::HashMap;
@@ -244,7 +244,7 @@ impl MessageIter {
         self.request.limit = self.determine_limit(MAX_LIMIT);
         self.fill_buffer(
             self.request.limit,
-            Some(utils::peer_from_input_peer(&self.request.peer)),
+            Some(peer_from_input_peer(&self.request.peer)),
         )
         .await?;
 
@@ -372,7 +372,7 @@ impl SearchIter {
         self.request.limit = self.determine_limit(MAX_LIMIT);
         self.fill_buffer(
             self.request.limit,
-            Some(utils::peer_from_input_peer(&self.request.peer)),
+            Some(peer_from_input_peer(&self.request.peer)),
         )
         .await?;
 

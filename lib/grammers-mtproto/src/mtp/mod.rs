@@ -52,6 +52,7 @@ pub struct DeserializationFailure {
 
 /// Results from the deserialization of a response.
 pub enum Deserialization {
+    OwnUpdate { msg_id: MsgId, update: Vec<u8> },
     Update(Vec<u8>),
     RpcResult(RpcResult),
     RpcError(RpcResultError),

@@ -120,6 +120,21 @@ pub(super) type UpdateAndPeers = (
     Vec<tl::enums::Chat>,
 );
 
+/// Anything that should be treated like an update.
+#[derive(Debug)]
+pub enum UpdatesLike {
+    Updates(tl::enums::Updates),
+    ShortSentMessage {
+        request: tl::functions::messages::SendMessage,
+        update: tl::types::UpdateShortSentMessage,
+    },
+    AffectedMessages(tl::types::messages::AffectedMessages),
+    InvitedUsers(tl::types::messages::InvitedUsers),
+    /// Not an update sent by Telegram, but still something that affects handling of updates.
+    /// The caller should getDifference and query the server for any possibly-lost updates.
+    Reconnection,
+}
+
 // Public interface around the more tightly-packed internal state.
 
 /// Update state, up to and including the update it is a part of.

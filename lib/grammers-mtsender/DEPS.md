@@ -13,6 +13,14 @@ is to make use of said protocol over an actual network, and to coordinate sendin
 
 Used to be able to execute certain protocol functions and to refer to the items produced by it.
 
+## grammers-session
+
+Update handling is very spread across Telegram's entire protocol.
+Notable exceptions are types which aren't updates but affect them,
+and partial updates that depend on the request that produced them.
+
+Depending on the session means the bulk of that logic can remain separate.
+
 ## tokio
 
 Primarly used for its asynchronous `TcpStream`, although its channels are also used in order to

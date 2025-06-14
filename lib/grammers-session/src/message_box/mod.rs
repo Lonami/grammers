@@ -30,8 +30,9 @@ mod tests;
 use crate::UpdateState;
 use crate::generated::enums::ChannelState as ChannelStateEnum;
 use crate::generated::types::ChannelState;
+pub use adaptor::peer_from_input_peer;
 pub(crate) use defs::Key;
-pub use defs::{Gap, MessageBox, MessageBoxes, State};
+pub use defs::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
 use defs::{LiveEntry, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PossibleGap, PtsInfo};
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
@@ -406,10 +407,7 @@ impl MessageBoxes {
     /// In practice, these updates should have also been retrieved through getting difference.
     ///
     /// [updates' documentation]: https://core.telegram.org/api/updates
-    pub fn process_updates(
-        &mut self,
-        updates: tl::enums::Updates,
-    ) -> Result<defs::UpdateAndPeers, Gap> {
+    pub fn process_updates(&mut self, updates: UpdatesLike) -> Result<defs::UpdateAndPeers, Gap> {
         trace!("processing updates: {:?}", updates);
         let deadline = next_updates_deadline();
 
@@ -725,13 +723,13 @@ impl MessageBoxes {
 
         // other_updates can contain things like UpdateChannelTooLong and UpdateNewChannelMessage.
         // We need to process those as if they were socket updates to discard any we have already handled.
-        let us = tl::enums::Updates::Updates(tl::types::Updates {
+        let us = UpdatesLike::Updates(tl::enums::Updates::Updates(tl::types::Updates {
             updates,
             users,
             chats,
             date: NO_DATE,
             seq: NO_SEQ,
-        });
+        }));
 
         // It is possible that the result from `GetDifference` includes users with `min = true`.
         // TODO in that case, we will have to resort to getUsers.
@@ -842,13 +840,13 @@ impl MessageBoxes {
         }
 
         self.set_pts(key, pts);
-        let us = tl::enums::Updates::Updates(tl::types::Updates {
+        let us = UpdatesLike::Updates(tl::enums::Updates::Updates(tl::types::Updates {
             updates,
             users,
             chats,
             date: NO_DATE,
             seq: NO_SEQ,
-        });
+        }));
         let (mut result_updates, users, chats) = self
             .process_updates(us)
             .expect("gap is detected while applying channel difference");
