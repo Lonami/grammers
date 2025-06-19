@@ -569,7 +569,7 @@ impl MessageBoxes {
             );
             // Note: early returning here also prevents gap from being inserted (which they should
             // not be while getting difference).
-            return (Some(info.key), None);
+            return (Some(info.key), Some((update, Some(info.into()))));
         }
 
         if let Some(local_pts) = self.entry(info.key).map(|entry| entry.pts) {
