@@ -469,6 +469,24 @@ fn test_process_socket_updates_flow_common_already_applied() {
 }
 
 #[test]
+fn test_process_socket_updates_flow_common_difference_ok() {
+    reset_time();
+    let mut message_boxes = MessageBoxes::new();
+
+    message_boxes.set_state(state(12, 34, 56, 78));
+    message_boxes.try_begin_get_diff(super::Key::Common);
+
+    assert_eq!(
+        message_boxes.get_difference(),
+        Some(get_difference(12, 56, 78))
+    );
+    assert_eq!(
+        message_boxes.process_updates(updates(NO_DATE, NO_SEQ, 57)),
+        updates_ok(12, 34, 57)
+    );
+}
+
+#[test]
 fn test_process_socket_updates_flow_common_ok() {
     reset_time();
     let mut message_boxes = MessageBoxes::new();
