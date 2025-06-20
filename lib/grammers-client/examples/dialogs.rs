@@ -76,7 +76,10 @@ async fn async_main() -> Result<()> {
                     .await?;
             }
             Ok(_) => (),
-            Err(e) => panic!("{}", e),
+            Err(e) => {
+                eprintln!("Failed to save signed in session: {}", e);
+                std::process::exit(1);
+            }
         };
         println!("Signed in!");
         match client.session().save_to_file(SESSION_FILE) {

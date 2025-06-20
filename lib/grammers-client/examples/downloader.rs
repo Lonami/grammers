@@ -72,7 +72,10 @@ async fn async_main() -> Result<()> {
                     .await?;
             }
             Ok(_) => (),
-            Err(e) => panic!("{}", e),
+            Err(e) => {
+                eprintln!("Failed to save signed in session: {}", e);
+                std::process::exit(1);
+            }
         };
         println!("Signed in!");
         match client.session().save_to_file(SESSION_FILE) {
@@ -86,7 +89,13 @@ async fn async_main() -> Result<()> {
 
     let maybe_chat = client.resolve_username(chat_name.as_str()).await?;
 
-    let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {chat_name} could not be found"));
+    let chat = match maybe_chat {
+        Some(chat) => chat,
+        None => {
+            eprintln!("Chat {} could not be found", chat_name);
+            std::process::exit(1);
+        }
+    };
 
     let mut messages = client.iter_messages(&chat);
 

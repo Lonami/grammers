@@ -1,0 +1,9 @@
+# Enterprise-grade clippy configuration
+warn-on-all-wildcard-imports = true
+max-fn-params-bools = 2
+max-struct-bools = 3
+type-complexity-threshold = 250
+too-many-arguments-threshold = 7
+too-many-lines-threshold = 400
+cognitive-complexity-threshold = 30
+single-char-binding-names-threshold = 3 
