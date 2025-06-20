@@ -1,3 +1,52 @@
 [env]
 TG_ID = ""
 TG_HASH = ""
+
+# Build configuration
+[build]
+# Number of parallel jobs, defaults to # of CPUs
+# jobs = 8
+# Increase if you have sufficient RAM
+# Default is 16, increase for better performance with enough RAM
+incremental = true
+# Enable for faster rebuilds
+rustflags = ["-C", "link-arg=-fuse-ld=lld", "-C", "target-cpu=native"]
+
+# Target-specific settings
+[target.x86_64-pc-windows-msvc]
+linker = "lld-link"
+
+[target.x86_64-unknown-linux-gnu]
+linker = "clang"
+rustflags = ["-C", "link-arg=-fuse-ld=lld"]
+
+# Alias for common commands
+[alias]
+# Run tests with all features
+test-all = "test --all-features"
+# Check code without building
+check-all = "check --all-targets --all-features"
+# Build with maximum optimization
+build-release = "build --release"
+# Generate and open documentation
+docs = "doc --no-deps --all-features --open"
+
+# Registry configuration
+[registries.crates-io]
+protocol = "sparse"
+
+# Network configuration
+[net]
+retry = 3
+offline = false
+
+# Profile overrides for dependencies in dev builds
+[profile.dev.package."*"]
+opt-level = 2
+
+# Profile for faster debug builds
+[profile.dev]
+# Faster compilation at the cost of runtime performance
+opt-level = 0
+# Faster linking on Windows
+split-debuginfo = "packed"

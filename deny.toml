@@ -1,0 +1,71 @@
+# cargo-deny configuration for enterprise compliance
+
+[licenses]
+# List of explicitly allowed licenses
+allow = [
+    "MIT",
+    "Apache-2.0",
+    "Apache-2.0 WITH LLVM-exception",
+    "BSD-2-Clause",
+    "BSD-3-Clause",
+    "ISC",
+    "Unicode-DFS-2016",
+]
+
+# Confidence threshold for detecting licenses
+confidence-threshold = 0.9
+
+[[licenses.clarify]]
+name = "encoding_rs"
+expression = "(Apache-2.0 OR MIT) AND BSD-3-Clause"
+license-files = [
+    { path = "COPYRIGHT", hash = 0x39f8ad31 }
+]
+
+[bans]
+# Lint level for when multiple versions of the same crate are detected
+multiple-versions = "warn"
+
+# Deny specific crates
+deny = [
+    # Crates with known security issues
+    { name = "openssl", version = "<0.10.38" },
+]
+
+# Skip certain crates when checking for duplicates
+skip = []
+
+# Wildcard dependencies are not allowed
+wildcards = "deny"
+
+# Allow git sources
+allow-git = []
+
+[sources]
+# Lint level for what to happen when a crate from a crate registry that is not in the allow list is detected
+unknown-registry = "warn"
+
+# Lint level for what to happen when a crate from a git repository that is not in the allow list is detected
+unknown-git = "warn"
+
+# List of allowed crate registries
+allow-registry = ["https://github.com/rust-lang/crates.io-index"]
+
+[advisories]
+# The path where the advisory database is cloned/fetched into
+db-path = "~/.cargo/advisory-db"
+
+# The url(s) of the advisory databases to use
+db-urls = ["https://github.com/rustsec/advisory-db"]
+
+# The lint level for security vulnerabilities
+vulnerability = "deny"
+
+# The lint level for unmaintained crates
+unmaintained = "warn"
+
+# The lint level for crates with security notices
+notice = "warn"
+
+# A list of advisory IDs to ignore
+ignore = [] 
