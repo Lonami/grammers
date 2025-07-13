@@ -30,6 +30,18 @@ impl From<&tl::enums::Peer> for Peer {
     }
 }
 
+impl From<&mut tl::enums::Peer> for Peer {
+    fn from(peer: &mut tl::enums::Peer) -> Self {
+        use tl::enums::Peer::*;
+
+        match peer {
+            User(user) => Self::User(user.user_id),
+            Chat(chat) => Self::Chat(chat.chat_id),
+            Channel(channel) => Self::Channel(channel.channel_id),
+        }
+    }
+}
+
 /// Helper structure to efficiently retrieve chats via their peer.
 ///
 /// A lot of responses include the chats related to them in the form of a list of users
