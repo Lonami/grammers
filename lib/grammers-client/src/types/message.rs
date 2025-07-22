@@ -118,6 +118,7 @@ impl Message {
                 effect: None,
                 factcheck: None,
                 report_delivery_until_date: None,
+                paid_message_stars: None,
             }),
             fetched_in: None,
             client: client.clone(),

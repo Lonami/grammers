@@ -41,6 +41,7 @@ impl InlineResult {
                 schedule_date: None,
                 send_as: None,
                 quick_reply_shortcut: None,
+                allow_paid_stars: None,
             })
             .await
             .map(drop)
