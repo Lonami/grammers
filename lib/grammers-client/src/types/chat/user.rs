@@ -124,6 +124,7 @@ impl User {
                 profile_color: None,
                 bot_active_users: None,
                 bot_verification_icon: None,
+                send_paid_messages_stars: None,
             }),
         }
     }

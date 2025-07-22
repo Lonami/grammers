@@ -228,6 +228,7 @@ impl Client {
             Ok(x) => match x {
                 SC::Code(code) => code,
                 SC::Success(_) => panic!("should not have logged in yet"),
+                SC::PaymentRequired(_) => todo!(),
             },
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
                 // Since we are not logged in (we're literally requesting for
@@ -247,6 +248,7 @@ impl Client {
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),
+                    SC::PaymentRequired(_) => todo!(),
                 }
             }
             Err(e) => return Err(e.into()),
