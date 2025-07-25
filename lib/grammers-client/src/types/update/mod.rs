@@ -15,6 +15,7 @@ mod raw;
 mod update;
 
 pub use callback_query::CallbackQuery;
+pub use inline_query::Article;
 pub use inline_query::InlineQuery;
 pub use inline_send::InlineSend;
 pub use message::Message;
