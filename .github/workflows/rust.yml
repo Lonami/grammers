@@ -4,29 +4,83 @@ on:
   push:
     branches:
       - master
+      - main
   pull_request:
     branches:
       - master
+      - main
 
 env:
   CARGO_TERM_COLOR: always
+  RUST_BACKTRACE: 1
 
 jobs:
-  build:
-
+  format:
+    name: Format Check
     runs-on: ubuntu-latest
-
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: rustfmt
+    - name: rustfmt
+      run: cargo fmt --all -- --check
+
+  lint:
+    name: Lint with Clippy
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@stable
+      with:
+        components: clippy
     - name: Setup environment
       run: echo "RUSTFLAGS=-D warnings" >> $GITHUB_ENV
-    - name: rustfmt
-      run: cargo fmt -- --check
+    - name: Run clippy
+      run: cargo clippy --all-targets --all-features -- -D warnings
+
+  security:
+    name: Security Audit
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: rustsec/audit-check@v1.4.1
+      with:
+        token: ${{ secrets.GITHUB_TOKEN }}
+
+  test:
+    name: Test Suite
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        rust: [stable, beta]
+    runs-on: ${{ matrix.os }}
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@master
+      with:
+        toolchain: ${{ matrix.rust }}
+    - name: Setup environment
+      run: echo "RUSTFLAGS=-D warnings" >> $GITHUB_ENV
+      shell: bash
     - name: Build
-      run: cargo build --verbose
+      run: cargo build --verbose --all-features
     - name: Run tests
       env:
         # Doesn't need to be valid, just set for the examples to compile
         TG_ID: 1
         TG_HASH: a
       run: cargo test --verbose --all-features
+    - name: Build examples
+      run: cargo build --examples --verbose
+
+  minimal-versions:
+    name: Minimal Dependency Versions
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    - uses: dtolnay/rust-toolchain@nightly
+    - name: Test with minimal versions
+      run: |
+        cargo +nightly update -Z minimal-versions
+        cargo test --all-features

@@ -1,5 +1,9 @@
 # gramme.rs
 
+[![CI Status](https://github.com/Lonami/grammers/workflows/Rust/badge.svg)](https://github.com/Lonami/grammers/actions)
+[![License](https://img.shields.io/badge/license-MIT%2FApache--2.0-blue.svg)](LICENSE-MIT)
+[![Crates.io](https://img.shields.io/crates/v/grammers-client.svg)](https://crates.io/crates/grammers-client)
+
 A set of Rust libraries to interact with Telegram's API, hence the name *(tele)gramme.rs*.
 
 ## Current status
@@ -31,6 +35,18 @@ The following auxiliary CLI tools are available in the [`bin/`] folder:
 * **[scrape-docs]**: scrape Telegram's website to obtain raw API documentation.
 * **[tl-to-json]**: tool to read `.tl` and output `.json`, equivalent to
   [Telegram's JSON schema][tl-json].
+
+## Enterprise Usage
+
+This library has been enhanced with enterprise-grade features:
+
+* **Optimized Release Profile**: LTO enabled, maximum optimization level, single codegen unit
+* **Enhanced CI/CD Pipeline**: Multi-OS testing, security audits, clippy linting, format checks
+* **Security Features**: Automated vulnerability scanning with cargo-audit
+* **Code Quality**: Strict clippy configuration and rustfmt standards
+* **Documentation**: CHANGELOG.md for version tracking, SECURITY.md for vulnerability reporting
+
+See [SECURITY.md](SECURITY.md) for security policies and best practices.
 
 ## Security
 
