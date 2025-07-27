@@ -698,7 +698,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
     fn peek_request(&mut self, msg_id: MsgId) -> Option<&Request> {
         self.requests.iter().find(|request| match request.state {
-            RequestState::NotSerialized => todo!(),
+            RequestState::NotSerialized => false,
             RequestState::Serialized(MsgIdPair { msg_id: m, .. }) => m == msg_id,
             RequestState::Sent(MsgIdPair { msg_id: m, .. }) => m == msg_id,
         })
