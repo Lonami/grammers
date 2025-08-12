@@ -515,6 +515,7 @@ impl Client {
                         quote_entities: None,
                         quote_offset: None,
                         monoforum_peer_id: None,
+                        todo_item_id: None,
                     }
                     .into()
                 }),
@@ -532,6 +533,7 @@ impl Client {
                 effect: None,
                 allow_paid_floodskip: false,
                 allow_paid_stars: None,
+                suggested_post: None,
             })
             .await
         } else {
@@ -550,6 +552,7 @@ impl Client {
                         quote_entities: None,
                         quote_offset: None,
                         monoforum_peer_id: None,
+                        todo_item_id: None,
                     }
                     .into()
                 }),
@@ -566,6 +569,7 @@ impl Client {
                 effect: None,
                 allow_paid_floodskip: false,
                 allow_paid_stars: None,
+                suggested_post: None,
             })
             .await
         }?;
@@ -683,6 +687,7 @@ impl Client {
                         quote_entities: None,
                         quote_offset: None,
                         monoforum_peer_id: None,
+                        todo_item_id: None,
                     }
                     .into()
                 }),
@@ -869,6 +874,7 @@ impl Client {
             allow_paid_floodskip: false,
             video_timestamp: None,
             allow_paid_stars: None,
+            suggested_post: None,
         };
         let result = self.invoke(&request).await?;
         Ok(map_random_ids_to_messages(
