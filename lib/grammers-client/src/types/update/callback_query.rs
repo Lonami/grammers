@@ -103,7 +103,7 @@ impl CallbackQuery {
     }
 
     /// Answer the callback query.
-    pub fn answer(&self) -> Answer {
+    pub fn answer(&self) -> Answer<'_> {
         let query_id = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.query_id,
             tl::enums::Update::InlineBotCallbackQuery(update) => update.query_id,
