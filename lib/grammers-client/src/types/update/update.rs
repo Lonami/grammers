@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
 use crate::types::Message as Msg;
-use crate::{ChatMap, Client};
+use crate::{ChatMap, Client, utils};
 use grammers_session::State;
 use grammers_tl_types as tl;
 
@@ -55,24 +55,42 @@ impl Update {
     ) -> Self {
         match &update {
             // NewMessage
-            tl::enums::Update::NewMessage(raw) => Self::NewMessage(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
-                raw: update,
-                state,
-            }),
+            tl::enums::Update::NewMessage(raw) => {
+                if utils::peer_from_message(&raw.message).is_none() {
+                    return Self::Raw(Raw { raw: update, state });
+                }
 
-            tl::enums::Update::NewChannelMessage(raw) => Self::NewMessage(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
-                raw: update,
-                state,
-            }),
+                Self::NewMessage(Message {
+                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    raw: update,
+                    state,
+                })
+            }
+
+            tl::enums::Update::NewChannelMessage(raw) => {
+                if utils::peer_from_message(&raw.message).is_none() {
+                    return Self::Raw(Raw { raw: update, state });
+                }
+
+                Self::NewMessage(Message {
+                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    raw: update,
+                    state,
+                })
+            }
 
             // MessageEdited
-            tl::enums::Update::EditMessage(raw) => Self::MessageEdited(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
-                raw: update,
-                state,
-            }),
+            tl::enums::Update::EditMessage(raw) => {
+                if utils::peer_from_message(&raw.message).is_none() {
+                    return Self::Raw(Raw { raw: update, state });
+                }
+
+                Self::MessageEdited(Message {
+                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    raw: update,
+                    state,
+                })
+            }
             tl::enums::Update::EditChannelMessage(raw) => Self::MessageEdited(Message {
                 msg: Msg::from_raw(client, raw.message.clone(), None, chats),
                 raw: update,
