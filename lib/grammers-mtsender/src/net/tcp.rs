@@ -19,7 +19,7 @@ pub enum NetStream {
 }
 
 impl NetStream {
-    pub(crate) fn split(&mut self) -> (ReadHalf, WriteHalf) {
+    pub(crate) fn split(&mut self) -> (ReadHalf<'_>, WriteHalf<'_>) {
         match self {
             Self::Tcp(stream) => stream.split(),
             #[cfg(feature = "proxy")]
