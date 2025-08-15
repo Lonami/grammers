@@ -455,7 +455,7 @@ impl GlobalSearchIter {
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = last.chat()?.pack().to_input_peer();
+            self.request.offset_peer = last.chat().pack().to_input_peer();
             self.request.offset_id = last.id();
         }
 
@@ -926,7 +926,7 @@ impl Client {
         }
 
         // TODO shouldn't this method take in a message id anyway?
-        let chat = message.chat()?.pack();
+        let chat = message.chat().pack();
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -961,9 +961,7 @@ impl Client {
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
             .next()
-            .filter(|m| {
-                !filter_req || matches!((m.peer_id(), message.peer_id()), (Ok(a), Ok(b)) if a == b)
-            }))
+            .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
     }
 
     /// Iterate over the message history of a chat, from most recent to oldest.
@@ -1020,7 +1018,7 @@ impl Client {
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
-    ///     println!("{}", message.chat()?.name().unwrap_or(&message.chat()?.id().to_string()));
+    ///     println!("{}", message.chat().name().unwrap_or(&message.chat().id().to_string()));
     /// }
     /// # Ok(())
     /// # }
@@ -1080,7 +1078,7 @@ impl Client {
         let mut map = messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
-            .filter(|m| m.chat().map(|c| c.pack() == chat).unwrap_or(false))
+            .filter(|m| m.chat().pack() == chat)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
 
@@ -1132,7 +1130,7 @@ impl Client {
         Ok(messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(chat.to_peer()), &chats))
-            .find(|m| m.chat().map(|c| c.pack() == chat).unwrap_or(false)))
+            .find(|m| m.chat().pack() == chat))
     }
 
     /// Pin a message in the chat. This will not notify any users.

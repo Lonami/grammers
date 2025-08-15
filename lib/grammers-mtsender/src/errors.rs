@@ -177,9 +177,6 @@ pub enum InvocationError {
 
     /// The error occured while reading the response.
     Read(ReadError),
-
-    /// The update contained an empty message without a `peer_id`.
-    MissingPeerId,
 }
 
 impl std::error::Error for InvocationError {}
@@ -190,7 +187,6 @@ impl fmt::Display for InvocationError {
             Self::Rpc(err) => write!(f, "request error: {err}"),
             Self::Dropped => write!(f, "request error: dropped (cancelled)"),
             Self::Read(err) => write!(f, "request error: {err}"),
-            Self::MissingPeerId => write!(f, "request error: missing peer id"),
         }
     }
 }

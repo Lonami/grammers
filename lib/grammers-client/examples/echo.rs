@@ -25,7 +25,7 @@ const SESSION_FILE: &str = "echo.session";
 async fn handle_update(client: Client, update: Update) -> Result {
     match update {
         Update::NewMessage(message) if !message.outgoing() => {
-            let chat = message.chat()?;
+            let chat = message.chat();
             println!(
                 "Responding to {}",
                 chat.name().unwrap_or(&format!("id {}", chat.id()))
