@@ -16,7 +16,7 @@ pub use chat::{ChatHashCache, PackedChat, PackedType};
 pub use generated::LAYER as VERSION;
 pub use generated::types::UpdateState;
 pub use generated::types::User;
-use generated::{enums, types};
+pub use generated::*;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::PrematureEndReason;
 pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
@@ -30,10 +30,6 @@ use std::sync::Mutex;
 // Needed for auto-generated definitions.
 use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};
 
-#[cfg_attr(
-    feature = "impl-serde",
-    derive(serde_derive::Serialize, serde_derive::Deserialize)
-)]
 pub struct Session {
     pub raw: Mutex<types::Session>,
 }
