@@ -35,14 +35,14 @@ use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize}
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct Session {
-    session: Mutex<types::Session>,
+    pub raw: Mutex<types::Session>,
 }
 
 #[allow(clippy::new_without_default)]
 impl Session {
     pub fn new() -> Self {
         Self {
-            session: Mutex::new(types::Session {
+            raw: Mutex::new(types::Session {
                 dcs: Vec::new(),
                 user: None,
                 state: None,
@@ -74,7 +74,7 @@ impl Session {
 
     pub fn load(data: &[u8]) -> Result<Self, Error> {
         Ok(Self {
-            session: Mutex::new(
+            raw: Mutex::new(
                 enums::Session::from_bytes(data)
                     .map_err(|e| match e {
                         DeserializeError::UnexpectedEof => Error::MalformedData,
@@ -86,11 +86,11 @@ impl Session {
     }
 
     pub fn signed_in(&self) -> bool {
-        self.session.lock().unwrap().user.is_some()
+        self.raw.lock().unwrap().user.is_some()
     }
 
     pub fn dc_auth_key(&self, dc_id: i32) -> Option<[u8; 256]> {
-        self.session
+        self.raw
             .lock()
             .unwrap()
             .dcs
@@ -112,7 +112,7 @@ impl Session {
     }
 
     fn insert_dc(&self, new_dc: enums::DataCenter) {
-        let mut session = self.session.lock().unwrap();
+        let mut session = self.raw.lock().unwrap();
 
         if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == new_dc.id()) {
             session.dcs.remove(pos);
@@ -150,12 +150,12 @@ impl Session {
     }
 
     pub fn set_user(&self, id: i64, dc: i32, bot: bool) {
-        self.session.lock().unwrap().user = Some(User { id, dc, bot }.into())
+        self.raw.lock().unwrap().user = Some(User { id, dc, bot }.into())
     }
 
     /// Returns the stored user
     pub fn get_user(&self) -> Option<User> {
-        self.session
+        self.raw
             .lock()
             .unwrap()
             .user
@@ -164,22 +164,22 @@ impl Session {
     }
 
     pub fn get_state(&self) -> Option<UpdateState> {
-        let session = self.session.lock().unwrap();
+        let session = self.raw.lock().unwrap();
         let enums::UpdateState::State(state) = session.state.clone()?;
         Some(state)
     }
 
     pub fn set_state(&self, state: UpdateState) {
-        self.session.lock().unwrap().state = Some(state.into())
+        self.raw.lock().unwrap().state = Some(state.into())
     }
 
     pub fn get_dcs(&self) -> Vec<enums::DataCenter> {
-        self.session.lock().unwrap().dcs.to_vec()
+        self.raw.lock().unwrap().dcs.to_vec()
     }
 
     #[must_use]
     pub fn save(&self) -> Vec<u8> {
-        enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
+        enums::Session::Session(self.raw.lock().unwrap().clone()).to_bytes()
     }
 
     /// Saves the session to a file.
