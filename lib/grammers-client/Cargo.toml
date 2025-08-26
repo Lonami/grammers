@@ -18,7 +18,7 @@ markdown = ["pulldown-cmark"]
 html = ["html5ever"]
 proxy = ["grammers-mtsender/proxy"]
 parse_invite_link = ["url"]
-serde = ["grammers-tl-types/impl-serde"]
+serde = ["grammers-tl-types/impl-serde", "grammers-session/impl-serde"]
 fs = ["tokio/fs"]
 default = ["fs"]
 
