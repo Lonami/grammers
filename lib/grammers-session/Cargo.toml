@@ -18,6 +18,10 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0" }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 log = "0.4.22"
 web-time = "1.1.0"
+serde = { version = "~1.0", optional = true }
+serde_derive = { version = "~1.0", optional = true }
+serde_bytes = { version = "0.11.17", optional = true }
+
 
 [build-dependencies]
 grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.7.0" }
@@ -25,3 +29,7 @@ grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.2" }
 
 [dev-dependencies]
 toml = "0.8.19"
+
+[features]
+default = []
+impl-serde = ["dep:serde", "dep:serde_derive", "dep:serde_bytes"]

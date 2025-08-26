@@ -30,6 +30,10 @@ use std::sync::Mutex;
 // Needed for auto-generated definitions.
 use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};
 
+#[cfg_attr(
+    feature = "impl-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 pub struct Session {
     session: Mutex<types::Session>,
 }

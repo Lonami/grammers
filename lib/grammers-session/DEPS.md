@@ -32,3 +32,15 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 
 Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
 Automatically falls back to `std::time` when we're not targeting web.
+
+## serde
+
+Support serde ecosystem.
+
+## serde_derive
+
+Macros that auto generate serde code.
+
+## serde_bytes
+
+Use better bytes encode/decode pattern in serde.
