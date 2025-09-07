@@ -18,6 +18,7 @@ pub mod chat_map;
 pub mod chats;
 pub mod dialog;
 pub mod downloadable;
+pub mod gift;
 pub mod input_media;
 pub mod input_message;
 pub mod iter_buffer;

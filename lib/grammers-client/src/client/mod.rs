@@ -12,6 +12,7 @@ pub mod chats;
 pub mod client;
 pub mod dialogs;
 pub mod files;
+pub mod gifts;
 pub mod messages;
 pub mod net;
 pub mod updates;
