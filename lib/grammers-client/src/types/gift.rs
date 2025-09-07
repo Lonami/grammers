@@ -4,7 +4,6 @@ use grammers_tl_types::{self as tl, enums::StarGift};
 pub enum Gift {
     SavedGift(tl::types::SavedStarGift),
     RegularGift(tl::enums::StarGift),
-    // UniqueGift(tl::types::payments::UniqueStarGift),
 }
 
 impl Gift {
