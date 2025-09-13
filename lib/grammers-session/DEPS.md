@@ -44,3 +44,11 @@ Macros that auto generate serde code.
 ## serde_bytes
 
 Use better bytes encode/decode pattern in serde.
+
+## snafu
+
+Used for more verbose error messages, allowing us to include underlying errors
+
+## base64
+
+Interaction with base64
