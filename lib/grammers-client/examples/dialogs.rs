@@ -46,7 +46,7 @@ async fn async_main() -> Result<()> {
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
+        session: Session::load_from_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
@@ -79,7 +79,7 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match client.session().save_to_file(SESSION_FILE) {
+        match client.session().save() {
             Ok(_) => {}
             Err(e) => {
                 println!("NOTE: failed to save the session, will sign out when done: {e}");

@@ -117,7 +117,7 @@ async fn async_main() -> Result {
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
+        session: Session::load_from_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
         params: Default::default(),
@@ -128,7 +128,7 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token).await?;
-        client.session().save_to_file(SESSION_FILE)?;
+        client.session().save()?;
         println!("Signed in!");
     }
 
@@ -154,7 +154,7 @@ async fn async_main() -> Result {
     }
 
     println!("Saving session file...");
-    client.session().save_to_file(SESSION_FILE)?;
+    client.session().save()?;
     Ok(())
 }
 
