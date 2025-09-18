@@ -408,12 +408,22 @@ impl From<String> for InputMessage {
     }
 }
 
-impl From<&super::Message> for InputMessage {
-    fn from(message: &super::Message) -> Self {
+impl From<super::Message> for InputMessage {
+    fn from(message: super::Message) -> Self {
+        let (text, entities, media) = match message.raw {
+            tl::enums::Message::Empty(_) => (None, None, None),
+            tl::enums::Message::Message(message) => {
+                (Some(message.message), message.entities, message.media)
+            }
+            tl::enums::Message::Service(_) => (None, None, None),
+        };
+
         Self {
-            text: message.text().to_owned(),
-            entities: message.fmt_entities().cloned().unwrap_or(Vec::new()),
-            media: message.media().and_then(|m| m.to_raw_input_media()),
+            text: text.unwrap_or_default(),
+            entities: entities.unwrap_or_default(),
+            media: media
+                .and_then(Media::from_raw)
+                .and_then(|m| m.to_raw_input_media()),
             ..Default::default()
         }
     }
