@@ -409,18 +409,12 @@ impl InputMessage {
     }
 }
 
-impl From<&str> for InputMessage {
-    fn from(text: &str) -> Self {
+impl<S> From<S> for InputMessage
+where
+    S: Into<String>,
+{
+    fn from(text: S) -> Self {
         Self::new().text(text)
-    }
-}
-
-impl From<String> for InputMessage {
-    fn from(text: String) -> Self {
-        Self {
-            text,
-            ..Self::default()
-        }
     }
 }
 
