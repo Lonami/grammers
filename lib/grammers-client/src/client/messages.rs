@@ -485,7 +485,7 @@ impl Client {
     ///
     /// use grammers_client::InputMessage;
     ///
-    /// client.send_message(&chat, InputMessage::text("Sneaky message").silent(true)).await?;
+    /// client.send_message(&chat, InputMessage::new().text("Sneaky message").silent(true)).await?;
     /// # Ok(())
     /// # }
     /// ```
