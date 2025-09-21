@@ -104,7 +104,7 @@ impl ReplyMarkup for ForceReply {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
 /// let artist = "Krewella";
-/// client.send_message(chat, InputMessage::text("Select song").reply_markup(&reply_markup::keyboard(vec![
+/// client.send_message(chat, InputMessage::new().text("Select song").reply_markup(&reply_markup::keyboard(vec![
 ///     vec![button::text(format!("Song by {}", artist))],
 ///     vec![button::text("Previous"), button::text("Next")],
 /// ]))).await?;
@@ -148,7 +148,7 @@ pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
 /// # async fn f(client: &mut grammers_client::Client, chat: &grammers_client::types::Chat) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
-/// client.send_message(chat, InputMessage::text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
+/// client.send_message(chat, InputMessage::new().text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
 ///     vec![button::text("Accept")],
 ///     vec![button::text("Cancel"), button::text("Try something else")],
 /// ]))).await?;
@@ -187,7 +187,7 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
 /// # async fn f(client: &mut grammers_client::Client, chat: &grammers_client::types::Chat) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
-/// client.send_message(chat, InputMessage::text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
+/// client.send_message(chat, InputMessage::new().text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -211,7 +211,7 @@ pub fn hide() -> Hide {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
 /// let markup = reply_markup::force_reply().single_use();
-/// client.send_message(chat, InputMessage::text("Reply me!").reply_markup(&markup)).await?;
+/// client.send_message(chat, InputMessage::new().text("Reply me!").reply_markup(&markup)).await?;
 /// # Ok(())
 /// # }
 /// ```

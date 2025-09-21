@@ -365,7 +365,7 @@ impl Client {
     /// let mut stream = std::io::Cursor::new(some_vec);
     /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
     ///
-    /// client.send_message(&chat, InputMessage::text("Zzz...").photo(uploaded_file)).await?;
+    /// client.send_message(&chat, InputMessage::new().text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -480,7 +480,7 @@ impl Client {
     ///
     /// let uploaded_file = client.upload_file("/home/username/photos/holidays.jpg").await?;
     ///
-    /// client.send_message(&chat, InputMessage::text("Check this out!").photo(uploaded_file)).await?;
+    /// client.send_message(&chat, InputMessage::new().text("Check this out!").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```
