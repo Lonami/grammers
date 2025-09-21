@@ -243,3 +243,9 @@ impl From<&Chat> for PackedChat {
         chat.pack()
     }
 }
+
+impl From<&mut Chat> for PackedChat {
+    fn from(chat: &mut Chat) -> Self {
+        chat.pack()
+    }
+}
