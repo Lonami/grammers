@@ -11,78 +11,110 @@
 mod chat;
 mod generated;
 mod message_box;
+pub mod session_storage;
 
 pub use chat::{ChatHashCache, PackedChat, PackedType};
 pub use generated::LAYER as VERSION;
 pub use generated::types::UpdateState;
 pub use generated::types::User;
 use generated::{enums, types};
-use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::PrematureEndReason;
 pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
-use std::fmt;
-use std::fs::{File, OpenOptions};
-use std::io::{self, Read, Seek, Write};
+use std::fmt::{Debug, Display};
+use std::io::{Read, Seek, Write};
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
-use std::sync::Mutex;
+use std::sync::{Arc, Mutex};
+use snafu::ResultExt;
+
+use crate::session_storage::{file_storage::{FileSessionStorage, FileSessionStorageOptions}, string_storage, SessionProviderError};
 
 // Needed for auto-generated definitions.
+use crate::session_storage::SessionProvider;
 use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};
+use crate::session_storage::file_storage::OpenMode;
+use crate::session_storage::string_storage::{StringSessionStorage, StringSessionStorageOptions};
 
 #[cfg_attr(
     feature = "impl-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
 pub struct Session {
-    session: Mutex<types::Session>,
+    session: Arc<Mutex<types::Session>>,
+    provider: Box<dyn SessionProvider + Send + Sync + 'static>,
 }
 
 #[allow(clippy::new_without_default)]
 impl Session {
-    pub fn new() -> Self {
-        Self {
-            session: Mutex::new(types::Session {
-                dcs: Vec::new(),
+    pub fn save(&self) -> Result<(), SessionProviderError> {
+        self.provider.save()
+    }
+
+    pub fn load(&self) -> Result<(), SessionProviderError> {
+        self.provider.load()
+    }
+
+    pub fn load_from_file_or_create<T: AsRef<Path> + 'static>(path: T) -> Result<Self, SessionProviderError> {
+        let fs_storage = FileSessionStorage::default_with_path(path)?;
+
+        match fs_storage.load() {
+            Ok(_) => (),
+            Err(SessionProviderError::InvalidFormat {source}) => {
+                let file_ref = fs_storage.get_file();
+                let mut file = file_ref.lock().unwrap();
+                let size = file.read_to_end(&mut vec![]).unwrap();
+                if size > 0 {
+                    return Err(SessionProviderError::InvalidFormat {source})
+                }
+            },
+            Err(e) => return Err(e)
+        };
+        let session = fs_storage.get_session();
+        let provider = Box::new(fs_storage);
+
+        Ok(
+            Self {
+                session,
+                provider,
+            }
+        )
+    }
+
+    pub fn load_from_file<T: AsRef<Path> + 'static>(path: T) -> Result<Self, SessionProviderError> {
+        let fs_storage_options = FileSessionStorageOptions{
+            path: Box::new(path),
+            mode: OpenMode::Open,
+            session: Arc::new(Mutex::new(types::Session{
+                dcs: vec![],
                 user: None,
                 state: None,
-            }),
-        }
+            }))
+        };
+
+        let fs_storage = FileSessionStorage::new(fs_storage_options)?;
+        fs_storage.load()?;
+        let session = fs_storage.get_session();
+        let provider = Box::new(fs_storage);
+
+        Ok(
+            Self {
+                session,
+                provider,
+            }
+        )
     }
 
-    /// Load a previous session instance from a file,
-    /// creating one if it doesn't exist
-    pub fn load_file_or_create<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let path = path.as_ref();
-        if !path.exists() {
-            File::create(path)?;
-            let session = Session::new();
-            session.save_to_file(path)?;
-            Ok(session)
-        } else {
-            Self::load_file(path)
-        }
-    }
+    pub fn load_from_string(string: &str) -> Result<Self, SessionProviderError> {
+        let storage = StringSessionStorage::new(StringSessionStorageOptions{ string: Some(Arc::new(Mutex::new(string.to_string()))), session: None });
 
-    /// Load a previous session instance from a file.
-    pub fn load_file<P: AsRef<Path>>(path: P) -> io::Result<Self> {
-        let mut data = Vec::new();
-        File::open(path.as_ref())?.read_to_end(&mut data)?;
+        storage.load()?;
 
-        Self::load(&data).map_err(|e| io::Error::new(io::ErrorKind::InvalidData, e))
-    }
-
-    pub fn load(data: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
-            session: Mutex::new(
-                enums::Session::from_bytes(data)
-                    .map_err(|e| match e {
-                        DeserializeError::UnexpectedEof => Error::MalformedData,
-                        DeserializeError::UnexpectedConstructor { .. } => Error::UnsupportedVersion,
-                    })?
-                    .into(),
-            ),
-        })
+        Ok(
+            Self{
+                session: storage.get_session(),
+                provider: Box::new(storage)
+            }
+        )
     }
 
     pub fn signed_in(&self) -> bool {
@@ -176,35 +208,4 @@ impl Session {
     pub fn get_dcs(&self) -> Vec<enums::DataCenter> {
         self.session.lock().unwrap().dcs.to_vec()
     }
-
-    #[must_use]
-    pub fn save(&self) -> Vec<u8> {
-        enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
-    }
-
-    /// Saves the session to a file.
-    pub fn save_to_file<P: AsRef<Path>>(&self, path: P) -> io::Result<()> {
-        let mut file = OpenOptions::new().write(true).open(path.as_ref())?;
-        file.seek(io::SeekFrom::Start(0))?;
-        file.set_len(0)?;
-        file.write_all(&self.save())?;
-        file.sync_data()
-    }
 }
-
-#[derive(Debug)]
-pub enum Error {
-    MalformedData,
-    UnsupportedVersion,
-}
-
-impl fmt::Display for Error {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Error::MalformedData => write!(f, "malformed data"),
-            Error::UnsupportedVersion => write!(f, "unsupported version"),
-        }
-    }
-}
-
-impl std::error::Error for Error {}
