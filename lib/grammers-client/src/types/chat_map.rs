@@ -41,7 +41,11 @@ pub struct ChatMap {
 
 impl ChatMap {
     /// Create a new chat set.
-    pub fn new(users: Vec<tl::enums::User>, chats: Vec<tl::enums::Chat>) -> Arc<Self> {
+    pub fn new<U, C>(users: U, chats: C) -> Arc<Self>
+    where
+        U: IntoIterator<Item = tl::enums::User>,
+        C: IntoIterator<Item = tl::enums::Chat>,
+    {
         Arc::new(Self {
             map: users
                 .into_iter()

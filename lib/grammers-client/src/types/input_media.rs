@@ -44,8 +44,11 @@ impl InputMedia {
     }
 
     /// The formatting entities within the caption (such as bold, italics, etc.).
-    pub fn fmt_entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
-        self.entities = entities;
+    pub fn fmt_entities<I>(mut self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = tl::enums::MessageEntity>,
+    {
+        self.entities = entities.into_iter().collect();
         self
     }
 
