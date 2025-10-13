@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+#[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
 use std::mem;
@@ -13,6 +14,7 @@ use std::mem;
 pub fn ige_encrypt(buffer: &mut [u8], key: &[u8; 32], iv: &[u8; 32]) {
     assert!(buffer.len() % 16 == 0);
 
+    #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
     let key = GenericArray::from_slice(key);
     let cipher = aes::Aes256::new(key);
 
@@ -33,6 +35,7 @@ pub fn ige_encrypt(buffer: &mut [u8], key: &[u8; 32], iv: &[u8; 32]) {
             .for_each(|((x, a), b)| *x = a ^ b);
 
         // block = encrypt(block);
+        #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
         let ciphertext_block = GenericArray::from_mut_slice(ciphertext_block);
         cipher.encrypt_block(ciphertext_block);
 
@@ -54,6 +57,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
     assert!(size % 16 == 0);
     let mut plaintext = vec![0; size];
 
+    #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
     let key = GenericArray::from_slice(key);
     let cipher = aes::Aes256::new(key);
     let mut iv = *iv;
@@ -68,6 +72,7 @@ pub fn ige_decrypt(ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> 
             .for_each(|((a, x), b)| *a = x ^ b);
 
         // block = decrypt(block);
+        #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
         let plaintext_block = GenericArray::from_mut_slice(plaintext_block);
         cipher.decrypt_block(plaintext_block);
 

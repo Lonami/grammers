@@ -455,7 +455,7 @@ impl Client {
                     id: file_id,
                     parts: total_parts,
                     name,
-                    md5_checksum: format!("{:x}", md5.compute()),
+                    md5_checksum: format!("{:x}", md5.finalize()),
                 }
                 .into(),
             ))

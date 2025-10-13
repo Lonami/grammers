@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
 use aes::cipher::{KeyIvInit, StreamCipher, generic_array::GenericArray};
 
 /// This implements the AES-256-CTR cipher used by Telegram to encrypt data
@@ -21,6 +22,7 @@ pub struct ObfuscatedCipher {
 impl ObfuscatedCipher {
     pub fn new(init: &[u8; 64]) -> Self {
         let init_rev = init.iter().copied().rev().collect::<Vec<_>>();
+        #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
         Self {
             rx: ctr::Ctr128BE::<aes::Aes256>::new(
                 GenericArray::from_slice(&init_rev[8..40]),

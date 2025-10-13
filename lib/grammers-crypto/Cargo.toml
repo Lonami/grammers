@@ -15,22 +15,19 @@ edition = "2024"
 
 [dependencies]
 aes = "0.8.4"
-getrandom = "0.2.15"
+getrandom = "0.3.3"
 glass_pumpkin = "1.7.0"
 hmac = "0.12.1"
 num-bigint = "0.4.6"
 pbkdf2 = "0.12.2"
 sha1 = "0.10.6"
-sha2 = "0.10.8"
+sha2 = "0.10.9"
 num-traits = "0.2.19"
 ctr = "0.9.2"
 
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-getrandom = { version = "0.2.15", features = ["js"] }
-
 [dev-dependencies]
 bencher = "0.1.5"
-toml = "0.8.19"
+toml = "0.9.8"
 
 [[bench]]
 name = "cipher"

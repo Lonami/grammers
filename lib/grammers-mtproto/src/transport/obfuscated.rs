@@ -48,7 +48,7 @@ impl<T: Transport + Tagged> Obfuscated<T> {
             || init[0] == 0xef // Abridged
             || FORBIDDEN_FIRST_INTS.iter().any(|start| start == &init[..4])
         {
-            getrandom::getrandom(&mut init).unwrap();
+            getrandom::fill(&mut init).unwrap();
         }
 
         init[56..60].copy_from_slice(&inner.init_tag());

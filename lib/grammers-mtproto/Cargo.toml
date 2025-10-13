@@ -14,19 +14,16 @@ categories = ["network-programming"]
 edition = "2024"
 
 [dependencies]
-bytes = "1.7.1"
-crc32fast = "1.4.2"
-flate2 = "1.0.33"
-getrandom = "0.2.15"
+bytes = "1.10.1"
+crc32fast = "1.5.0"
+flate2 = "1.1.4"
+getrandom = "0.3.3"
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = ["tl-mtproto"] }
-log = "0.4.22"
+log = "0.4.28"
 num-bigint = "0.4.6"
 sha1 = "0.10.6"
 web-time = "1.1.0"
 
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-getrandom = { version = "0.2.15", features = ["js"] }
-
 [dev-dependencies]
-toml = "0.8.19"
+toml = "0.9.8"

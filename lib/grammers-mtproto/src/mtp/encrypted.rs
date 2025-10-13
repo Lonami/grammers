@@ -10,7 +10,6 @@ use super::{
 };
 use crate::utils::StackBuffer;
 use crate::{MsgId, manual_tl};
-use getrandom::getrandom;
 use grammers_crypto::{AuthKey, DequeBuffer, decrypt_data_v2, encrypt_data_v2};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
 use log::info;
@@ -137,7 +136,7 @@ impl Builder {
             salt_request_msg_id: None,
             client_id: {
                 let mut buffer = [0u8; 8];
-                getrandom(&mut buffer).expect("failed to generate a secure client_id");
+                getrandom::fill(&mut buffer).expect("failed to generate a secure client_id");
                 i64::from_le_bytes(buffer)
             },
             sequence: 0,
@@ -1302,7 +1301,7 @@ impl Mtp for Encrypted {
         log::info!("resetting mtp client id and related state");
         self.client_id = {
             let mut buffer = [0u8; 8];
-            getrandom(&mut buffer).expect("failed to generate a secure client_id");
+            getrandom::fill(&mut buffer).expect("failed to generate a secure client_id");
             i64::from_le_bytes(buffer)
         };
         self.sequence = 0;

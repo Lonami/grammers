@@ -17,31 +17,31 @@ edition = "2024"
 proxy = ["tokio-socks", "hickory-resolver", "url"]
 
 [dependencies]
-bytes = "1.7.1"
-futures-util = { version = "0.3.30", default-features = false, features = [
+bytes = "1.10.1"
+futures-util = { version = "0.3.31", default-features = false, features = [
     "alloc"
 ] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.7.0" }
 grammers-session = { path = "../grammers-session", version = "0.7.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = [ "tl-mtproto" ] }
-log = "0.4.22"
-tokio = { version = "1.40.0", default-features = false, features = ["io-util", "sync", "time"] }
+log = "0.4.28"
+tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time"] }
 tokio-socks = { version = "0.5.2", optional = true }
-hickory-resolver = { version = "0.24.1", optional = true }
-url = { version = "2.5.2", optional = true }
+hickory-resolver = { version = "0.25.2", optional = true }
+url = { version = "2.5.7", optional = true }
 web-time = "1.1.0"
 
 [target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
-tokio = { version = "1.40.0", default-features = false, features = ["net"] }
+tokio = { version = "1.47.1", default-features = false, features = ["net"] }
 
 [target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-wasm-bindgen-futures = "0.4.49"
-web-sys = {version = "0.3.76", features = ["Window"]}
-ws_stream_wasm = { version = "0.7.4", features = ["tokio_io"] }
+wasm-bindgen-futures = "0.4.54"
+web-sys = {version = "0.3.81", features = ["Window"]}
+ws_stream_wasm = { version = "0.7.5", features = ["tokio_io"] }
 async_io_stream = { version = "0.3.3", features = ["tokio_io"] }
 
 [dev-dependencies]
 simple_logger = { version = "5.0.0", default-features = false, features = ["colors"] }
-tokio = { version = "1.40.0", features = ["rt"] }
-toml = "0.8.19"
+tokio = { version = "1.47.1", features = ["rt"] }
+toml = "0.9.8"

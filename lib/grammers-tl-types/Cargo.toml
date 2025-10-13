@@ -17,14 +17,14 @@ include = ["build.rs", "src/*.rs", "tl/*.tl"]
 [dependencies]
 serde = { version = "~1.0", optional = true }
 serde_derive = { version = "~1.0", optional = true }
-serde_bytes = { version = "0.11.17", optional = true }
+serde_bytes = { version = "0.11.19", optional = true }
 
 [build-dependencies]
 grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.7.0" }
 grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.2" }
 
 [dev-dependencies]
-toml = "0.8.19"
+toml = "0.9.8"
 
 [features]
 default = ["impl-debug", "impl-from-enum", "impl-from-type", "tl-api"]

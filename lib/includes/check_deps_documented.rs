@@ -20,8 +20,8 @@ fn check_deps_documented() {
         file.read_to_string(&mut toml)
             .expect("Cargo.toml should not fail to be read");
 
-        match toml.parse::<toml::Value>() {
-            Ok(Value::Table(mut map)) => {
+        match toml.parse::<toml::Table>() {
+            Ok(mut map) => {
                 for &key in KEYS.iter() {
                     if let Some(Value::Table(build)) = map.remove(key) {
                         for (dep, _) in build {

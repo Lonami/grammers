@@ -20,7 +20,6 @@ pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 pub use deque_buffer::DequeBuffer;
-use getrandom::getrandom;
 use std::fmt;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -142,7 +141,7 @@ fn do_encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey, random_p
 pub fn encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey) {
     let random_padding = {
         let mut rnd = [0; 32];
-        getrandom(&mut rnd).expect("failed to generate a secure padding");
+        getrandom::fill(&mut rnd).expect("failed to generate a secure padding");
         rnd
     };
 
@@ -224,7 +223,7 @@ pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
         padded.extend(plaintext);
 
         let mut buffer = vec![0; pad_len];
-        getrandom(&mut buffer).expect("failed to generate random padding for encryption");
+        getrandom::fill(&mut buffer).expect("failed to generate random padding for encryption");
         padded.extend(&buffer);
         padded
     };

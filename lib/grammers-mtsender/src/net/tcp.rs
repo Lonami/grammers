@@ -48,10 +48,7 @@ impl NetStream {
             net::{IpAddr, SocketAddr},
         };
 
-        use hickory_resolver::{
-            AsyncResolver,
-            config::{ResolverConfig, ResolverOpts},
-        };
+        use hickory_resolver::Resolver;
         use url::Host;
 
         let proxy = url::Url::parse(proxy_url)
@@ -69,8 +66,7 @@ impl NetStream {
         let password = proxy.password().unwrap_or("");
         let socks_addr = match host {
             Host::Domain(domain) => {
-                let resolver =
-                    AsyncResolver::tokio(ResolverConfig::default(), ResolverOpts::default());
+                let resolver = Resolver::builder_tokio().unwrap().build();
                 let response = resolver.lookup_ip(domain).await?;
                 let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
                     ErrorKind::NotFound,

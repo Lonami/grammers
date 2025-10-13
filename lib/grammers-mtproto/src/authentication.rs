@@ -32,7 +32,6 @@
 //!     Ok(())
 //! }
 //! ```
-use getrandom::getrandom;
 use grammers_crypto::hex;
 use grammers_crypto::{AuthKey, factorize::factorize, rsa};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
@@ -214,7 +213,7 @@ pub struct Step3 {
 pub fn step1() -> Result<(Vec<u8>, Step1), Error> {
     let random_bytes = {
         let mut buffer = [0; 16];
-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
+        getrandom::fill(&mut buffer).expect("failed to generate secure data for auth key");
         buffer
     };
 
@@ -249,7 +248,7 @@ pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), Error> {
 
     let random_bytes = {
         let mut buffer = [0; 32 + 224];
-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
+        getrandom::fill(&mut buffer).expect("failed to generate secure data for auth key");
         buffer
     };
 
@@ -378,7 +377,7 @@ pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), Error> {
 
     let random_bytes = {
         let mut buffer = [0; 256 + 16];
-        getrandom(&mut buffer).expect("failed to generate secure data for auth key");
+        getrandom::fill(&mut buffer).expect("failed to generate secure data for auth key");
         buffer
     };
 
