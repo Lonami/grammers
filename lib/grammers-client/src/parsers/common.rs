@@ -142,7 +142,12 @@ pub fn after(index: usize, part: u8, offset: i32) -> Position {
 /// Inject multiple text segments into a message.
 ///
 /// The insertions do not need to be sorted before-hand, as this method takes care of that.
-pub fn inject_into_message(message: &str, mut insertions: Vec<(Position, Segment)>) -> String {
+pub fn inject_into_message<'a, I>(message: &str, insertions: I) -> String
+where
+    I: IntoIterator<Item = (Position, Segment<'a>)>,
+{
+    let mut insertions = insertions.into_iter().collect::<Vec<_>>();
+
     // Allocate exactly as much as needed, then walk through the UTF-16-encoded message,
     // applying insertions at the exact position they occur.
     let mut result = String::with_capacity(

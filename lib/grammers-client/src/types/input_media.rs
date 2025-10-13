@@ -21,8 +21,69 @@ pub struct InputMedia {
 }
 
 impl InputMedia {
+    /// Creates a new empty media message for input.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
+    /// Replaces the plaintext in the message.
+    ///
+    /// The caller must ensure that formatting entities remain valid for the given text.
+    /// If you need to update formatting entities, call method [`InputMedia::fmt_entities`].
+    ///
+    /// <div class="warning">
+    /// Note that this method does not modify formatting entities, which may break
+    /// formatting or cause out-of-bounds errors if entities do not match the given text.
+    /// </div>
+    pub fn caption<T>(mut self, s: T) -> Self
+    where
+        T: Into<String>,
+    {
+        self.caption = s.into();
+        self
+    }
+
     /// The formatting entities within the caption (such as bold, italics, etc.).
-    pub fn fmt_entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
+    pub fn fmt_entities<I>(mut self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = tl::enums::MessageEntity>,
+    {
+        self.entities = entities.into_iter().collect();
+        self
+    }
+
+    /// Builds a new media from the given markdown-formatted string as the
+    /// caption contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
+    #[cfg(feature = "markdown")]
+    pub fn markdown<T>(mut self, s: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        let (caption, entities) = crate::parsers::parse_markdown_message(s.as_ref());
+        self.caption = caption;
+        self.entities = entities;
+        self
+    }
+
+    /// Builds a new media from the given HTML-formatted string as the
+    /// caption contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
+    #[cfg(feature = "html")]
+    pub fn html<T>(mut self, s: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        let (caption, entities) = crate::parsers::parse_html_message(s.as_ref());
+        self.caption = caption;
         self.entities = entities;
         self
     }
@@ -112,7 +173,7 @@ impl InputMedia {
     ///
     ///     let video = client.upload_file("video.mp4").await?;
     ///     let thumb = client.upload_file("thumb.png").await?;
-    ///     let media = InputMedia::caption("").document(video).thumbnail(thumb);
+    ///     let media = InputMedia::new().caption("").document(video).thumbnail(thumb);
     ///     Ok(())
     /// }
     /// ```
@@ -157,7 +218,7 @@ impl InputMedia {
     /// use std::time::Duration;
     /// use grammers_client::{types::Attribute, InputMedia};
     ///
-    /// let media = InputMedia::caption("").document(audio).attribute(
+    /// let media = InputMedia::new().caption("").document(audio).attribute(
     ///    Attribute::Audio {
     ///        duration: Duration::new(123, 0),
     ///        title: Some("Hello".to_string()),
@@ -244,48 +305,6 @@ impl InputMedia {
             mime.essence_str().to_string()
         } else {
             "application/octet-stream".to_string()
-        }
-    }
-
-    /// Builds a new media using the given plaintext as the caption contents.
-    pub fn caption<T: AsRef<str>>(s: T) -> Self {
-        Self {
-            caption: s.as_ref().to_string(),
-            ..Self::default()
-        }
-    }
-
-    /// Builds a new media from the given markdown-formatted string as the
-    /// caption contents and entities.
-    ///
-    /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
-    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
-    /// possible).
-    #[cfg(feature = "markdown")]
-    pub fn markdown<T: AsRef<str>>(s: T) -> Self {
-        let (caption, entities) = crate::parsers::parse_markdown_message(s.as_ref());
-        Self {
-            caption,
-            entities,
-            ..Self::default()
-        }
-    }
-
-    /// Builds a new media from the given HTML-formatted string as the
-    /// caption contents and entities.
-    ///
-    /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
-    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
-    /// possible).
-    #[cfg(feature = "html")]
-    pub fn html<T: AsRef<str>>(s: T) -> Self {
-        let (caption, entities) = crate::parsers::parse_html_message(s.as_ref());
-        Self {
-            caption,
-            entities,
-            ..Self::default()
         }
     }
 }

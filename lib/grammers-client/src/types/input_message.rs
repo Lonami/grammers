@@ -32,6 +32,11 @@ pub struct InputMessage {
 }
 
 impl InputMessage {
+    /// Creates a new empty message for input.
+    pub fn new() -> Self {
+        Self::default()
+    }
+
     /// Whether to "send this message as a background message".
     ///
     /// This description is taken from <https://core.telegram.org/method/messages.sendMessage>.
@@ -46,8 +51,64 @@ impl InputMessage {
         self
     }
 
+    /// Replaces the plaintext in the message.
+    ///
+    /// The caller must ensure that formatting entities remain valid for the given text.
+    /// If you need to update formatting entities, call method [`InputMessage::fmt_entities`].
+    ///
+    /// <div class="warning">
+    /// Note that this method does not modify formatting entities, which may break
+    /// formatting or cause out-of-bounds errors if entities do not match the given text.
+    /// </div>
+    pub fn text<T>(mut self, s: T) -> Self
+    where
+        T: Into<String>,
+    {
+        self.text = s.into();
+        self
+    }
+
     /// The formatting entities within the message (such as bold, italics, etc.).
-    pub fn fmt_entities(mut self, entities: Vec<tl::enums::MessageEntity>) -> Self {
+    pub fn fmt_entities<I>(mut self, entities: I) -> Self
+    where
+        I: IntoIterator<Item = tl::enums::MessageEntity>,
+    {
+        self.entities = entities.into_iter().collect();
+        self
+    }
+
+    /// Builds a new message from the given markdown-formatted string as the
+    /// message contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
+    #[cfg(feature = "markdown")]
+    pub fn markdown<T>(mut self, s: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        let (text, entities) = crate::parsers::parse_markdown_message(s.as_ref());
+        self.text = text;
+        self.entities = entities;
+        self
+    }
+
+    /// Builds a new message from the given HTML-formatted string as the
+    /// message contents and entities.
+    ///
+    /// Note that Telegram only supports a very limited subset of entities:
+    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
+    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
+    /// possible).
+    #[cfg(feature = "html")]
+    pub fn html<T>(mut self, s: T) -> Self
+    where
+        T: AsRef<str>,
+    {
+        let (text, entities) = crate::parsers::parse_html_message(s.as_ref());
+        self.text = text;
         self.entities = entities;
         self
     }
@@ -215,7 +276,7 @@ impl InputMessage {
     ///
     ///     let video = client.upload_file("video.mp4").await?;
     ///     let thumb = client.upload_file("thumb.png").await?;
-    ///     let message = InputMessage::text("").document(video).thumbnail(thumb);
+    ///     let message = InputMessage::new().text("").document(video).thumbnail(thumb);
     ///     Ok(())
     /// }
     /// ```
@@ -260,7 +321,7 @@ impl InputMessage {
     /// use std::time::Duration;
     /// use grammers_client::{types::Attribute, InputMessage};
     ///
-    /// let message = InputMessage::text("").document(audio).attribute(
+    /// let message = InputMessage::new().text("").document(audio).attribute(
     ///    Attribute::Audio {
     ///        duration: Duration::new(123, 0),
     ///        title: Some("Hello".to_string()),
@@ -349,71 +410,33 @@ impl InputMessage {
             "application/octet-stream".to_string()
         }
     }
+}
 
-    /// Builds a new message using the given plaintext as the message contents.
-    pub fn text<T: AsRef<str>>(s: T) -> Self {
-        Self {
-            text: s.as_ref().to_string(),
-            ..Self::default()
-        }
-    }
-
-    /// Builds a new message from the given markdown-formatted string as the
-    /// message contents and entities.
-    ///
-    /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
-    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
-    /// possible).
-    #[cfg(feature = "markdown")]
-    pub fn markdown<T: AsRef<str>>(s: T) -> Self {
-        let (text, entities) = crate::parsers::parse_markdown_message(s.as_ref());
-        Self {
-            text,
-            entities,
-            ..Self::default()
-        }
-    }
-
-    /// Builds a new message from the given HTML-formatted string as the
-    /// message contents and entities.
-    ///
-    /// Note that Telegram only supports a very limited subset of entities:
-    /// bold, italic, underline, strikethrough, code blocks, pre blocks and inline links (inline
-    /// links with this format `tg://user?id=12345678` will be replaced with inline mentions when
-    /// possible).
-    #[cfg(feature = "html")]
-    pub fn html<T: AsRef<str>>(s: T) -> Self {
-        let (text, entities) = crate::parsers::parse_html_message(s.as_ref());
-        Self {
-            text,
-            entities,
-            ..Self::default()
-        }
+impl<S> From<S> for InputMessage
+where
+    S: Into<String>,
+{
+    fn from(text: S) -> Self {
+        Self::new().text(text)
     }
 }
 
-impl From<&str> for InputMessage {
-    fn from(text: &str) -> Self {
-        Self::text(text)
-    }
-}
+impl From<super::Message> for InputMessage {
+    fn from(message: super::Message) -> Self {
+        let (text, entities, media) = match message.raw {
+            tl::enums::Message::Empty(_) => (None, None, None),
+            tl::enums::Message::Message(message) => {
+                (Some(message.message), message.entities, message.media)
+            }
+            tl::enums::Message::Service(_) => (None, None, None),
+        };
 
-impl From<String> for InputMessage {
-    fn from(text: String) -> Self {
         Self {
-            text,
-            ..Self::default()
-        }
-    }
-}
-
-impl From<&super::Message> for InputMessage {
-    fn from(message: &super::Message) -> Self {
-        Self {
-            text: message.text().to_owned(),
-            entities: message.fmt_entities().cloned().unwrap_or(Vec::new()),
-            media: message.media().and_then(|m| m.to_raw_input_media()),
+            text: text.unwrap_or_default(),
+            entities: entities.unwrap_or_default(),
+            media: media
+                .and_then(Media::from_raw)
+                .and_then(|m| m.to_raw_input_media()),
             ..Default::default()
         }
     }

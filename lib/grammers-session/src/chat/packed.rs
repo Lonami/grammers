@@ -10,6 +10,10 @@ use grammers_tl_types as tl;
 use std::fmt;
 
 #[repr(u8)]
+#[cfg_attr(
+    feature = "impl-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum PackedType {
     // The fancy bit pattern may enable some optimizations.
@@ -26,6 +30,10 @@ pub enum PackedType {
     Gigagroup = 0b0011_1000,
 }
 
+#[cfg_attr(
+    feature = "impl-serde",
+    derive(serde_derive::Serialize, serde_derive::Deserialize)
+)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 /// A packed chat
 pub struct PackedChat {

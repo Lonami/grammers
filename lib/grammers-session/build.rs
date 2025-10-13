@@ -38,6 +38,7 @@ fn main() -> std::io::Result<()> {
     .collect::<Vec<_>>();
 
     let config = Config {
+        impl_serde: cfg!(feature = "impl-serde"),
         ..Default::default()
     };
 

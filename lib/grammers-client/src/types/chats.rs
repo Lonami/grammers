@@ -134,6 +134,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                     post_stories: false,
                     edit_stories: false,
                     delete_stories: false,
+                    manage_direct_messages: false,
                 },
             }),
             fut_gen,
@@ -206,6 +207,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                         post_stories: true,
                         edit_stories: true,
                         delete_stories: true,
+                        manage_direct_messages: true, // TODO check it
                     };
                     break;
                 }

@@ -67,7 +67,11 @@ async fn handle_update(_client: Client, update: Update) -> Result {
     match update {
         Update::NewMessage(message) if message.text() == "/start" => {
             message
-                .respond(InputMessage::text("Here's a fibonacci").reply_markup(&fib_markup(0, 1)))
+                .respond(
+                    InputMessage::new()
+                        .text("Here's a fibonacci")
+                        .reply_markup(&fib_markup(0, 1)),
+                )
                 .await?;
         }
         Update::CallbackQuery(query) => {
