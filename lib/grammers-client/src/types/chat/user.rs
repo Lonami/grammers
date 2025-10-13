@@ -105,6 +105,7 @@ impl User {
                 contact_require_premium: false,
                 bot_business: false,
                 bot_has_main_app: false,
+                bot_forum_view: false,
                 id,
                 access_hash,
                 first_name: None,
