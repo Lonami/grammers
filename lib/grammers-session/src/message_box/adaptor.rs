@@ -657,8 +657,6 @@ impl PtsInfo {
             RecentReactions => None,
             MoveStickerSetToTop(_) => None,
             MessageExtendedMedia(_) => None,
-            ChannelPinnedTopic(_) => None,
-            ChannelPinnedTopics(_) => None,
             User(_) => None,
             AutoSaveSettings => None,
             Story(_) => None,
