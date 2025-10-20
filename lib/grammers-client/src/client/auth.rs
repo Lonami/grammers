@@ -6,12 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::Client;
+use super::client::Connection;
 use super::net::connect_sender;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_tl_types as tl;
+use grammers_tl_types::functions::auth::{ExportLoginToken, ImportLoginToken};
 use std::fmt;
 
 /// The error type which is returned when signing in fails.
@@ -258,6 +260,50 @@ impl Client {
             phone: phone.to_string(),
             phone_code_hash: sent_code.phone_code_hash,
         })
+    }
+
+    /// Returns a QR login code OR authenticates after QR code is scanned
+    ///
+    /// You can call [`Client::request_qr_code`] to obtain
+    /// the necessary login token to display the QR code and you
+    /// have to call it again after the QR code is scanned.
+    ///
+    /// It is recommended to save the [`Client::session()`] in between calls to this function
+    pub async fn request_qr_code(
+        &self,
+    ) -> Result<grammers_tl_types::enums::auth::LoginToken, InvocationError> {
+        let export_login_token = ExportLoginToken {
+            api_id: self.0.config.api_id,
+            api_hash: self.0.config.api_hash.clone(),
+            except_ids: Vec::new(),
+        };
+
+        let mut response = self.invoke(&export_login_token).await?;
+        if let grammers_tl_types::enums::auth::LoginToken::MigrateTo(ref migrateto) = response {
+            let import_login_token = ImportLoginToken {
+                token: migrateto.token.clone(),
+            };
+            let (new_sender, new_tx) = connect_sender(migrateto.dc_id, &self.0.config)
+                .await
+                .unwrap();
+            let downloader = Connection::new(new_sender, new_tx);
+            let second_response = downloader
+                .invoke(
+                    &import_login_token,
+                    self.0.config.params.flood_sleep_threshold,
+                    drop,
+                )
+                .await?;
+            if matches!(
+                second_response,
+                grammers_tl_types::enums::auth::LoginToken::Success(_)
+            ) {
+                response = second_response;
+            } else {
+                return Err(InvocationError::Dropped);
+            }
+        }
+        Ok(response)
     }
 
     /// Signs in to the user account.
