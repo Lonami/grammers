@@ -128,13 +128,9 @@ impl MsgIdPair {
 }
 
 impl Enqueuer {
-    /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
-    pub fn enqueue<R: RemoteCall>(
-        &self,
-        request: &R,
-    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+    /// Enqueue a Remote Procedure Call's bytes to be sent in future calls to `step`.
+    pub fn enqueue(&self, body: Vec<u8>) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
         // TODO we probably want a bound here (to not enqueue more than N at once)
-        let body = request.to_bytes();
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         debug!(

@@ -21,6 +21,17 @@ and partial updates that depend on the request that produced them.
 
 Depending on the session means the bulk of that logic can remain separate.
 
+## os_info
+
+Telegram requires clients to send some basic system information when connecting to the server,
+such as OS type or system version. If these values are not explicitly provided by the user, the
+crate is used to load the expected values.
+
+## locate-locale
+
+Similar rationale to `os_info`, Telegram expects a system language code used by the client
+(presumably for things such as localized service messages among others).
+
 ## tokio
 
 Primarly used for its asynchronous `TcpStream`, although its channels are also used in order to

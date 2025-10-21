@@ -25,6 +25,8 @@ grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.7.0" }
 grammers-session = { path = "../grammers-session", version = "0.7.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = [ "tl-mtproto" ] }
+locate-locale = "0.2.0"
+os_info = { version = "3.12.0", default-features = false }
 log = "0.4.28"
 tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time"] }
 tokio-socks = { version = "0.5.2", optional = true }

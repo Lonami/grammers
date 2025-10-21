@@ -8,13 +8,17 @@
 
 #![deny(unsafe_code)]
 
+mod configuration;
 mod errors;
 mod net;
 mod reconnection;
 mod sender;
+mod sender_pool;
 pub mod utils;
 
 pub use crate::reconnection::*;
+pub use configuration::Configuration;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 pub use net::ServerAddr;
 pub use sender::{Enqueuer, Sender, connect, connect_with_auth, generate_auth_key};
+pub use sender_pool::{SenderPool, SenderPoolHandle};
