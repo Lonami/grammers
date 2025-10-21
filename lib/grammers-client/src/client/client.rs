@@ -6,11 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::{ReconnectionPolicy, SenderPoolHandle, ServerAddr};
-use grammers_session::{ChatHashCache, MessageBoxes, Session, State};
+use grammers_session::{ChatHashCache, MessageBoxes, Session, State, UpdatesLike};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::fmt;
 use std::sync::{Arc, RwLock};
+use tokio::sync::{Mutex, mpsc};
 use web_time::Instant;
 
 /// Configuration required to create a [`Client`] instance.
@@ -33,6 +34,8 @@ pub struct Config {
 
     /// Handle to the sender pool that will manage the connections needed by the client.
     pub handle: SenderPoolHandle,
+
+    pub updates_stream: Mutex<mpsc::UnboundedReceiver<UpdatesLike>>,
 
     /// Additional initialization parameters that can have sane defaults.
     pub params: InitParams,

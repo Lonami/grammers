@@ -10,7 +10,6 @@
 
 use super::Client;
 use crate::types::{ChatMap, Update};
-use grammers_mtsender::utils::sleep_until;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{ChatHashCache, MessageBoxes, State, UpdatesLike};
 pub use grammers_session::{PrematureEndReason, UpdateState};
@@ -18,6 +17,7 @@ use grammers_tl_types as tl;
 use log::{trace, warn};
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::time::timeout_at;
 use web_time::Instant;
 
 /// How long to wait after warning the user that the updates limit was exceeded.
@@ -210,32 +210,31 @@ impl Client {
                 continue;
             }
 
-            sleep_until(deadline).await;
+            let updates_stream = &mut *self.0.config.updates_stream.lock().await;
+            match timeout_at(deadline.into(), updates_stream.recv()).await {
+                Ok(Some(updates)) => self.process_socket_updates(updates),
+                Ok(None) => break Err(InvocationError::Dropped),
+                Err(_) => {}
+            }
         }
     }
 
-    pub(crate) fn process_socket_updates(&self, all_updates: Vec<UpdatesLike>) {
-        if all_updates.is_empty() {
-            return;
-        }
-
+    pub(crate) fn process_socket_updates(&self, updates: UpdatesLike) {
         let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
         {
             let state = &mut *self.0.state.write().unwrap();
 
-            for updates in all_updates {
-                match state.message_box.process_updates(updates) {
-                    Ok(tup) => {
-                        if let Some(res) = result.as_mut() {
-                            res.0.extend(tup.0);
-                            res.1.extend(tup.1);
-                            res.2.extend(tup.2);
-                        } else {
-                            result = Some(tup);
-                        }
+            match state.message_box.process_updates(updates) {
+                Ok(tup) => {
+                    if let Some(res) = result.as_mut() {
+                        res.0.extend(tup.0);
+                        res.1.extend(tup.1);
+                        res.2.extend(tup.2);
+                    } else {
+                        result = Some(tup);
                     }
-                    Err(_) => return,
                 }
+                Err(_) => return,
             }
         }
 
