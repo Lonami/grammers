@@ -32,6 +32,7 @@ impl Client {
     /// ```
     /// use grammers_client::{Client, Config};
     /// use grammers_session::Session;
+    /// use grammers_mtsender::{SenderPool, Configuration};
     ///
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
@@ -39,10 +40,16 @@ impl Client {
     /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
+    /// let (_pool, handle, updates) = SenderPool::new(Configuration {
+    ///     api_id: API_ID,
+    ///     ..Default::default()
+    /// });
     /// let client = Client::connect(Config {
     ///     session: Session::load_file_or_create("hello-world.session")?,
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
+    ///     handle: handle,
+    ///     updates_stream: tokio::sync::Mutex::new(updates),
     ///     params: Default::default(),
     /// }).await?;
     /// # Ok(())

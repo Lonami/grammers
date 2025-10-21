@@ -12,10 +12,12 @@
 
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, SignInError};
+use grammers_mtsender::{Configuration, SenderPool};
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::runtime;
+use tokio::sync::Mutex;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -44,11 +46,19 @@ async fn async_main() -> Result<()> {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let api_hash = env!("TG_HASH").to_string();
 
+    let (pool, handle, updates) = SenderPool::new(Configuration {
+        api_id,
+        ..Default::default()
+    });
+    let pool_task = tokio::spawn(pool.run());
+
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
         session: Session::load_file_or_create(SESSION_FILE)?,
         api_id,
         api_hash: api_hash.clone(),
+        handle: handle.clone(),
+        updates_stream: Mutex::new(updates),
         params: Default::default(),
     })
     .await?;
@@ -100,6 +110,9 @@ async fn async_main() -> Result<()> {
         // TODO revisit examples and get rid of "handle references" (also, this panics)
         drop(client.sign_out_disconnect().await);
     }
+
+    handle.quit();
+    let _ = pool_task.await;
 
     Ok(())
 }

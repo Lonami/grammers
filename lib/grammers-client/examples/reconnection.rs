@@ -2,9 +2,11 @@
 
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, ReconnectionPolicy};
+use grammers_mtsender::{Configuration, SenderPool};
 use std::ops::ControlFlow;
 use std::time::Duration;
 use tokio::runtime;
+use tokio::sync::Mutex;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -27,11 +29,19 @@ impl ReconnectionPolicy for MyPolicy {
 }
 
 async fn async_main() -> Result {
+    let (pool, handle, updates) = SenderPool::new(Configuration {
+        api_id: 1,
+        ..Default::default()
+    });
+    let _pool_task = tokio::spawn(pool.run()); // happy listening to updates forever!
+
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
         session: Session::load_file_or_create("ping.session")?,
         api_id: 1, // not actually logging in, but has to look real
         api_hash: "".to_string(),
+        handle: handle.clone(),
+        updates_stream: Mutex::new(updates),
         params: InitParams {
             reconnection_policy: &MyPolicy,
             ..Default::default()
@@ -39,7 +49,6 @@ async fn async_main() -> Result {
     })
     .await?;
 
-    /// happy listening to updates forever!!
     use grammers_client::Update;
 
     loop {
