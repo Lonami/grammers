@@ -1,7 +1,5 @@
 [workspace]
 members = [
-    "bin/scrape-docs",
-    "bin/tl-to-json",
     "lib/grammers",
     "lib/grammers-client",
     "lib/grammers-crypto",
