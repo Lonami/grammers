@@ -200,10 +200,7 @@ impl SenderPool {
             }
         }
 
-        connections
-            .into_iter()
-            .for_each(|connection| connection.abort_handle.abort());
-
+        connections.clear(); // drop all channels to cause the `run_sender` loop to stop
         connection_pool.join_all().await;
         configuration
     }
