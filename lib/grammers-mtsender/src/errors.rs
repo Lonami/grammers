@@ -173,7 +173,11 @@ pub enum InvocationError {
     Rpc(RpcError),
 
     /// The request was cancelled or dropped, and the results won't arrive.
+    /// This may mean that the [`crate::SenderPool`] is no longer running.
     Dropped,
+
+    /// The request was invoked in a DC that does not exist or is not known.
+    InvalidDc,
 
     /// The error occured while reading the response.
     Read(ReadError),
@@ -186,6 +190,7 @@ impl fmt::Display for InvocationError {
         match self {
             Self::Rpc(err) => write!(f, "request error: {err}"),
             Self::Dropped => write!(f, "request error: dropped (cancelled)"),
+            Self::InvalidDc => write!(f, "request error: invalid dc"),
             Self::Read(err) => write!(f, "request error: {err}"),
         }
     }

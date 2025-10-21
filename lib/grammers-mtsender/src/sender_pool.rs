@@ -8,13 +8,14 @@
 
 use crate::configuration::{Configuration, DcOption};
 use crate::{
-    AuthorizationError, Enqueuer, InvocationError, NoReconnect, ReadError, Sender, ServerAddr,
-    connect,
+    AuthorizationError, InvocationError, NoReconnect, ReadError, Sender, ServerAddr, connect,
 };
+use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
 use grammers_session::UpdatesLike;
 use grammers_tl_types as tl;
 use std::panic;
+use std::pin::pin;
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -29,7 +30,7 @@ enum Request {
     Invoke {
         dc_id: i32,
         body: Vec<u8>,
-        tx: oneshot::Sender<Result<InvokeResponse, Error>>,
+        tx: oneshot::Sender<Result<InvokeResponse, InvocationError>>,
     },
     Reconfigure(Configuration),
     Disconnect {
@@ -38,16 +39,15 @@ enum Request {
     Quit,
 }
 
-struct ConnectionInfo {
-    dc_id: i32,
-    enqueuer: Enqueuer,
-    abort_handle: AbortHandle,
+struct Rpc {
+    body: Vec<u8>,
+    tx: oneshot::Sender<Result<InvokeResponse, InvocationError>>,
 }
 
-pub enum Error {
-    ConnectionClosed,
-    InvalidDc,
-    Invocation(InvocationError),
+struct ConnectionInfo {
+    dc_id: i32,
+    rpc_tx: mpsc::UnboundedSender<Rpc>,
+    abort_handle: AbortHandle,
 }
 
 pub struct SenderPoolHandle(mpsc::UnboundedSender<Request>);
@@ -59,12 +59,16 @@ pub struct SenderPool {
 }
 
 impl SenderPoolHandle {
-    pub async fn invoke_in_dc(&self, dc_id: i32, body: Vec<u8>) -> Result<InvokeResponse, Error> {
+    pub async fn invoke_in_dc(
+        &self,
+        dc_id: i32,
+        body: Vec<u8>,
+    ) -> Result<InvokeResponse, InvocationError> {
         let (tx, rx) = oneshot::channel();
         self.0
             .send(Request::Invoke { dc_id, body, tx })
-            .map_err(|_| Error::ConnectionClosed)?;
-        rx.await.map_err(|_| Error::ConnectionClosed)?
+            .map_err(|_| InvocationError::Dropped)?;
+        rx.await.map_err(|_| InvocationError::Dropped)?
     }
 
     pub fn reconfigure(&self, configuration: Configuration) -> bool {
@@ -105,7 +109,7 @@ impl SenderPool {
             updates_tx,
         } = self;
         let mut connections = Vec::<ConnectionInfo>::new();
-        let mut connection_pool = JoinSet::<ReadError>::new();
+        let mut connection_pool = JoinSet::<Result<(), ReadError>>::new();
 
         while let Some(request) = request_rx.recv().await {
             while let Some(completion) = connection_pool.try_join_next() {
@@ -125,7 +129,7 @@ impl SenderPool {
                     {
                         Some(dc_option) => dc_option,
                         None => {
-                            let _ = tx.send(Err(Error::InvalidDc));
+                            let _ = tx.send(Err(InvocationError::InvalidDc));
                             continue;
                         }
                     };
@@ -136,26 +140,22 @@ impl SenderPool {
                     {
                         Some(connection) => connection,
                         None => {
-                            let (sender, enqueuer) =
-                                connect_sender(&configuration, dc_option).await.unwrap();
-                            let abort_handle =
-                                connection_pool.spawn(run_sender(sender, updates_tx.clone()));
+                            let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
+                            let sender = connect_sender(&configuration, dc_option).await.unwrap();
+                            let abort_handle = connection_pool.spawn(run_sender(
+                                sender,
+                                rpc_rx,
+                                updates_tx.clone(),
+                            ));
                             connections.push(ConnectionInfo {
                                 dc_id,
-                                enqueuer,
+                                rpc_tx,
                                 abort_handle,
                             });
                             connections.last().unwrap()
                         }
                     };
-                    let enqueued = connection.enqueuer.enqueue(body);
-
-                    tokio::spawn(async move {
-                        match enqueued.await {
-                            Ok(result) => tx.send(result.map_err(Error::Invocation)),
-                            Err(_) => tx.send(Err(Error::ConnectionClosed)),
-                        }
-                    });
+                    let _ = connection.rpc_tx.send(Rpc { body, tx });
                 }
                 Request::Reconfigure(new_configuration) => configuration = new_configuration,
                 Request::Disconnect { dc_id } => {
@@ -183,10 +183,10 @@ impl SenderPool {
 async fn connect_sender(
     configuration: &Configuration,
     dc_option: &DcOption,
-) -> Result<(Sender<transport::Full, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
 
-    let (mut sender, tx) = connect(
+    let mut sender = connect(
         transport,
         ServerAddr::Tcp {
             address: dc_option.address.clone(),
@@ -213,19 +213,34 @@ async fn connect_sender(
         })
         .await?;
 
-    Ok((sender, tx))
+    Ok(sender)
 }
 
 async fn run_sender(
     mut sender: Sender<Transport, grammers_mtproto::mtp::Encrypted>,
+    mut rpc_rx: mpsc::UnboundedReceiver<Rpc>,
     updates: mpsc::UnboundedSender<UpdatesLike>,
-) -> ReadError {
+) -> Result<(), ReadError> {
     loop {
-        match sender.step().await {
-            Ok(all_new_updates) => all_new_updates.into_iter().for_each(|new_updates| {
-                let _ = updates.send(new_updates);
-            }),
-            Err(err) => break err,
-        }
+        let rpc = {
+            let step = pin!(sender.step());
+            let rpc = pin!(rpc_rx.recv());
+
+            match select(step, rpc).await {
+                Either::Left((step, _)) => match step {
+                    Ok(all_new_updates) => {
+                        all_new_updates.into_iter().for_each(|new_updates| {
+                            let _ = updates.send(new_updates);
+                        });
+                        continue;
+                    }
+                    Err(err) => break Err(err),
+                },
+                Either::Right((Some(rpc), _)) => rpc,
+                Either::Right((None, _)) => break Ok(()),
+            }
+        };
+
+        sender.enqueue_body(rpc.body, rpc.tx);
     }
 }

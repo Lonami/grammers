@@ -28,7 +28,6 @@ use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use web_time::{Instant, SystemTime};
@@ -87,7 +86,6 @@ pub struct Sender<T: Transport, M: Mtp> {
     mtp: M,
     addr: ServerAddr,
     requests: Vec<Request>,
-    request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
     reconnection_policy: &'static dyn ReconnectionPolicy,
 
@@ -116,8 +114,6 @@ enum RequestState {
     Sent(MsgIdPair),
 }
 
-pub struct Enqueuer(mpsc::UnboundedSender<Request>);
-
 impl MsgIdPair {
     fn new(msg_id: MsgId) -> Self {
         Self {
@@ -127,73 +123,48 @@ impl MsgIdPair {
     }
 }
 
-impl Enqueuer {
-    /// Enqueue a Remote Procedure Call's bytes to be sent in future calls to `step`.
-    pub fn enqueue(&self, body: Vec<u8>) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
-        // TODO we probably want a bound here (to not enqueue more than N at once)
-        assert!(body.len() >= 4);
-        let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        debug!(
-            "enqueueing request {} to be serialized",
-            tl::name_for_id(req_id)
-        );
-
-        let (tx, rx) = oneshot::channel();
-        if let Err(err) = self.0.send(Request {
-            body,
-            state: RequestState::NotSerialized,
-            result: tx,
-        }) {
-            err.0.result.send(Err(InvocationError::Dropped)).unwrap();
-        }
-        rx
-    }
-}
-
 impl<T: Transport, M: Mtp> Sender<T, M> {
     async fn connect(
         transport: T,
         mtp: M,
         addr: ServerAddr,
         reconnection_policy: &'static dyn ReconnectionPolicy,
-    ) -> Result<(Self, Enqueuer), io::Error> {
+    ) -> Result<Self, io::Error> {
         let stream = NetStream::connect(&addr).await?;
-        let (tx, rx) = mpsc::unbounded_channel();
-        Ok((
-            Self {
-                stream,
-                transport,
-                mtp,
-                addr,
-                requests: vec![],
-                request_rx: rx,
-                next_ping: Instant::now() + PING_DELAY,
-                reconnection_policy,
+        Ok(Self {
+            stream,
+            transport,
+            mtp,
+            addr,
+            requests: vec![],
+            next_ping: Instant::now() + PING_DELAY,
+            reconnection_policy,
 
-                read_buffer: vec![0; MAXIMUM_DATA],
-                read_tail: 0,
-                write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
-                write_head: 0,
-            },
-            Enqueuer(tx),
-        ))
+            read_buffer: vec![0; MAXIMUM_DATA],
+            read_tail: 0,
+            write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
+            write_head: 0,
+        })
     }
 
     pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-        let rx = self.enqueue_body(request.to_bytes());
+        let (tx, rx) = oneshot::channel();
+        self.enqueue_body(request.to_bytes(), tx);
         self.step_until_receive(rx).await
     }
 
     /// Like `invoke` but raw data.
     async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
-        let rx = self.enqueue_body(body);
+        let (tx, rx) = oneshot::channel();
+        self.enqueue_body(body, tx);
         self.step_until_receive(rx).await
     }
 
-    fn enqueue_body(
+    pub(crate) fn enqueue_body(
         &mut self,
         body: Vec<u8>,
-    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        tx: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
+    ) {
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         debug!(
@@ -201,13 +172,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             tl::name_for_id(req_id)
         );
 
-        let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
             body,
             state: RequestState::NotSerialized,
             result: tx,
         });
-        rx
     }
 
     async fn step_until_receive(
@@ -247,7 +216,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         let (mut reader, mut writer) = self.stream.split();
         let sel = {
             let sleep = pin!(async { sleep_until(self.next_ping).await });
-            let recv_req = pin!(async { self.request_rx.recv().await });
+            let recv_req = pin!(async { pending().await });
             let recv_data =
                 pin!(async { reader.read(&mut self.read_buffer[self.read_tail..]).await });
             let send_data = pin!(async {
@@ -447,14 +416,14 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn on_ping_timeout(&mut self) {
         let ping_id = generate_random_id();
         debug!("enqueueing keepalive ping {}", ping_id);
-        drop(
-            self.enqueue_body(
-                tl::functions::PingDelayDisconnect {
-                    ping_id,
-                    disconnect_delay: NO_PING_DISCONNECT,
-                }
-                .to_bytes(),
-            ),
+        let (tx, _rx) = oneshot::channel();
+        self.enqueue_body(
+            tl::functions::PingDelayDisconnect {
+                ping_id,
+                disconnect_delay: NO_PING_DISCONNECT,
+            }
+            .to_bytes(),
+            tx,
         );
         self.next_ping = Instant::now() + PING_DELAY;
     }
@@ -719,15 +688,14 @@ pub async fn connect<T: Transport>(
     transport: T,
     addr: ServerAddr,
     rc_policy: &'static dyn ReconnectionPolicy,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, rc_policy).await?;
-    generate_auth_key(sender, enqueuer).await
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+    let sender = Sender::connect(transport, mtp::Plain::new(), addr, rc_policy).await?;
+    generate_auth_key(sender).await
 }
 
 pub async fn generate_auth_key<T: Transport>(
     mut sender: Sender<T, mtp::Plain>,
-    enqueuer: Enqueuer,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");
@@ -748,26 +716,22 @@ pub async fn generate_auth_key<T: Transport>(
     } = authentication::create_key(data, &response)?;
     info!("authorization key generated successfully");
 
-    Ok((
-        Sender {
-            stream: sender.stream,
-            transport: sender.transport,
-            mtp: mtp::Encrypted::build()
-                .time_offset(time_offset)
-                .first_salt(first_salt)
-                .finish(auth_key),
-            requests: sender.requests,
-            request_rx: sender.request_rx,
-            next_ping: Instant::now() + PING_DELAY,
-            read_buffer: sender.read_buffer,
-            read_tail: sender.read_tail,
-            write_buffer: sender.write_buffer,
-            write_head: sender.write_head,
-            addr: sender.addr,
-            reconnection_policy: sender.reconnection_policy,
-        },
-        enqueuer,
-    ))
+    Ok(Sender {
+        stream: sender.stream,
+        transport: sender.transport,
+        mtp: mtp::Encrypted::build()
+            .time_offset(time_offset)
+            .first_salt(first_salt)
+            .finish(auth_key),
+        requests: sender.requests,
+        next_ping: Instant::now() + PING_DELAY,
+        read_buffer: sender.read_buffer,
+        read_tail: sender.read_tail,
+        write_buffer: sender.write_buffer,
+        write_head: sender.write_head,
+        addr: sender.addr,
+        reconnection_policy: sender.reconnection_policy,
+    })
 }
 
 pub async fn connect_with_auth<T: Transport>(
@@ -775,7 +739,7 @@ pub async fn connect_with_auth<T: Transport>(
     addr: ServerAddr,
     auth_key: [u8; 256],
     rc_policy: &'static dyn ReconnectionPolicy,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
+) -> Result<Sender<T, mtp::Encrypted>, io::Error> {
     Sender::connect(
         transport,
         mtp::Encrypted::build().finish(auth_key),
