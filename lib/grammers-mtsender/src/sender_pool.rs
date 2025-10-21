@@ -52,6 +52,7 @@ struct ConnectionInfo {
     abort_handle: AbortHandle,
 }
 
+#[derive(Clone)]
 pub struct SenderPoolHandle(mpsc::UnboundedSender<Request>);
 
 pub struct SenderPool {
