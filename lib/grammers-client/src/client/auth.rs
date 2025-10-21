@@ -82,6 +82,16 @@ impl Client {
         &self,
         auth: tl::types::auth::Authorization,
     ) -> Result<User, InvocationError> {
+        let dc_options = self.0.config.handle.query_dc_options().await;
+        for dc_option in dc_options {
+            if let Some(auth_key) = dc_option.auth_key {
+                self.0
+                    .config
+                    .session
+                    .insert_dc_tcp(dc_option.id, &dc_option.address, auth_key);
+            }
+        }
+
         // In the extremely rare case where `Err` happens, there's not much we can do.
         // `message_box` will try to correct its state as updates arrive.
         let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();

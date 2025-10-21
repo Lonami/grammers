@@ -9,6 +9,7 @@
 use crate::configuration::{Configuration, DcOption};
 use crate::{
     AuthorizationError, InvocationError, NoReconnect, ReadError, Sender, ServerAddr, connect,
+    connect_with_auth,
 };
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
@@ -32,6 +33,7 @@ enum Request {
         body: Vec<u8>,
         tx: oneshot::Sender<Result<InvokeResponse, InvocationError>>,
     },
+    QueryDcOptions(oneshot::Sender<Vec<DcOption>>),
     ReconfigureDcOptions(Vec<DcOption>),
     Disconnect {
         dc_id: i32,
@@ -71,6 +73,12 @@ impl SenderPoolHandle {
         rx.await.map_err(|_| InvocationError::Dropped)?
     }
 
+    pub async fn query_dc_options(&self) -> Vec<DcOption> {
+        let (tx, rx) = oneshot::channel();
+        let _ = self.0.send(Request::QueryDcOptions(tx));
+        rx.await.unwrap_or_default()
+    }
+
     pub fn reconfigure_dc_options(&self, dc_options: Vec<DcOption>) -> bool {
         self.0
             .send(Request::ReconfigureDcOptions(dc_options))
@@ -104,7 +112,15 @@ impl SenderPool {
         )
     }
 
-    pub async fn run(self) {
+    /// Run the sender pool until [`crate::SenderPoolHandle::quit`] is called.
+    ///
+    /// Connections will be initiated on-demand whenever the first request to a DC is made.
+    ///
+    /// The most-recent configuration is returned so that any changes to the persistent
+    /// authentication keys can be persisted. However, It is recommended to persist them
+    /// earlier via a call to [`crate::SenderPoolHandle::query_dc_options`], so that the
+    /// client can sign out if it has just signed in but failed to persist them.
+    pub async fn run(self) -> Configuration {
         let Self {
             mut configuration,
             mut request_rx,
@@ -142,8 +158,15 @@ impl SenderPool {
                     {
                         Some(connection) => connection,
                         None => {
-                            let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                             let sender = connect_sender(&configuration, dc_option).await.unwrap();
+                            for dc_option in configuration.dc_options.iter_mut() {
+                                if dc_option.id == dc_id {
+                                    dc_option.auth_key = Some(sender.auth_key());
+                                    break;
+                                }
+                            }
+
+                            let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                             let abort_handle = connection_pool.spawn(run_sender(
                                 sender,
                                 rpc_rx,
@@ -158,6 +181,9 @@ impl SenderPool {
                         }
                     };
                     let _ = connection.rpc_tx.send(Rpc { body, tx });
+                }
+                Request::QueryDcOptions(tx) => {
+                    let _ = tx.send(configuration.dc_options.clone());
                 }
                 Request::ReconfigureDcOptions(dc_options) => configuration.dc_options = dc_options,
                 Request::Disconnect { dc_id } => {
@@ -179,6 +205,7 @@ impl SenderPool {
             .for_each(|connection| connection.abort_handle.abort());
 
         connection_pool.join_all().await;
+        configuration
     }
 }
 
@@ -187,15 +214,15 @@ async fn connect_sender(
     dc_option: &DcOption,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
+    let addr = ServerAddr::Tcp {
+        address: dc_option.address.clone(),
+    };
 
-    let mut sender = connect(
-        transport,
-        ServerAddr::Tcp {
-            address: dc_option.address.clone(),
-        },
-        &NoReconnect,
-    )
-    .await?;
+    let mut sender = if let Some(auth_key) = dc_option.auth_key {
+        connect_with_auth(transport, addr, auth_key, &NoReconnect).await?
+    } else {
+        connect(transport, addr, &NoReconnect).await?
+    };
 
     let _remote_config = sender
         .invoke(&tl::functions::InvokeWithLayer {
