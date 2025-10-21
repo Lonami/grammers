@@ -6,15 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unsafe_code)]
-
-mod errors;
-mod net;
-mod reconnection;
-pub mod utils;
-
-pub use crate::reconnection::*;
-pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
+use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
+use crate::net::{NetStream, ServerAddr};
+use crate::reconnection::ReconnectionPolicy;
+use crate::utils::{sleep, sleep_until};
 use futures_util::future::{Either, pending, select};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
@@ -25,8 +20,6 @@ use grammers_mtproto::{MsgId, authentication};
 use grammers_session::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
-use net::NetStream;
-pub use net::ServerAddr;
 use std::io;
 use std::io::Error;
 use std::ops::ControlFlow;
@@ -38,7 +31,6 @@ use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use utils::{sleep, sleep_until};
 use web_time::{Instant, SystemTime};
 
 /// The maximum data that we're willing to send or receive at once.
