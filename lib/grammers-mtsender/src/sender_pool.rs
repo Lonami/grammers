@@ -32,7 +32,7 @@ enum Request {
         body: Vec<u8>,
         tx: oneshot::Sender<Result<InvokeResponse, InvocationError>>,
     },
-    Reconfigure(Configuration),
+    ReconfigureDcOptions(Vec<DcOption>),
     Disconnect {
         dc_id: i32,
     },
@@ -71,8 +71,10 @@ impl SenderPoolHandle {
         rx.await.map_err(|_| InvocationError::Dropped)?
     }
 
-    pub fn reconfigure(&self, configuration: Configuration) -> bool {
-        self.0.send(Request::Reconfigure(configuration)).is_ok()
+    pub fn reconfigure_dc_options(&self, dc_options: Vec<DcOption>) -> bool {
+        self.0
+            .send(Request::ReconfigureDcOptions(dc_options))
+            .is_ok()
     }
 
     pub fn disconnect_from_dc(&self, dc_id: i32) -> bool {
@@ -157,7 +159,7 @@ impl SenderPool {
                     };
                     let _ = connection.rpc_tx.send(Rpc { body, tx });
                 }
-                Request::Reconfigure(new_configuration) => configuration = new_configuration,
+                Request::ReconfigureDcOptions(dc_options) => configuration.dc_options = dc_options,
                 Request::Disconnect { dc_id } => {
                     connections.retain(|connection| {
                         if connection.dc_id == dc_id {

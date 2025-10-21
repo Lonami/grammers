@@ -35,11 +35,9 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features
     "tl-mtproto",
 ] }
 html5ever = { version = "0.35.0", optional = true }
-locate-locale = "0.2.0"
 log = "0.4.28"
 md5 = "0.8.0"
 mime_guess = "2.0.5"
-os_info = { version = "3.12.0", default-features = false }
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.13.0", default-features = false, optional = true }
 tokio = { version = "1.47.1", default-features = false, features = [

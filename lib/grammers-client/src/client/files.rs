@@ -105,7 +105,7 @@ impl DownloadIter {
         loop {
             let result = match dc.take() {
                 None => self.client.invoke(&request).await,
-                Some(dc) => self.client.invoke_in_dc(&request, dc as i32).await,
+                Some(dc) => self.client.invoke_in_dc(dc as i32, &request).await,
             };
 
             break match result {
@@ -287,7 +287,7 @@ impl Client {
                     };
                     let res = match dc {
                         None => client.invoke(request).await,
-                        Some(dc) => client.invoke_in_dc(request, dc as i32).await,
+                        Some(dc) => client.invoke_in_dc(dc as i32, request).await,
                     };
                     match res {
                         Ok(tl::enums::upload::File::File(file)) => {

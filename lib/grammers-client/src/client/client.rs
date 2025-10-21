@@ -5,22 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_mtproto::mtp;
-use grammers_mtsender::{self as sender, ReconnectionPolicy, Sender, ServerAddr};
+use grammers_mtsender::{ReconnectionPolicy, SenderPoolHandle, ServerAddr};
 use grammers_session::{ChatHashCache, MessageBoxes, Session, State};
 use grammers_tl_types as tl;
-use sender::Enqueuer;
-use std::collections::{HashMap, VecDeque};
+use std::collections::VecDeque;
 use std::fmt;
-use std::sync::atomic::AtomicU32;
 use std::sync::{Arc, RwLock};
-use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
 use web_time::Instant;
-
-use super::net;
-
-/// When no locale is found, use this one instead.
-const DEFAULT_LOCALE: &str = "en";
 
 /// Configuration required to create a [`Client`] instance.
 ///
@@ -40,6 +31,9 @@ pub struct Config {
     /// You may obtain your own in <https://my.telegram.org/auth>.
     pub api_hash: String,
 
+    /// Handle to the sender pool that will manage the connections needed by the client.
+    pub handle: SenderPoolHandle,
+
     /// Additional initialization parameters that can have sane defaults.
     pub params: InitParams,
 }
@@ -47,11 +41,6 @@ pub struct Config {
 /// Optional initialization parameters, used when initializing a connection to Telegram's API.
 #[derive(Clone)]
 pub struct InitParams {
-    pub device_model: String,
-    pub system_version: String,
-    pub app_version: String,
-    pub system_lang_code: String,
-    pub lang_code: String,
     /// Should the client catch-up on updates sent to it while it was offline?
     ///
     /// By default, updates sent while the client was offline are ignored.
@@ -122,10 +111,7 @@ pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
     pub(crate) config: Config,
-    pub(crate) conn: Connection,
     pub(crate) state: RwLock<ClientState>,
-    // Stores per-datacenter downloader instances
-    pub(crate) downloader_map: AsyncRwLock<HashMap<i32, Arc<Connection>>>,
 }
 
 pub(crate) struct ClientState {
@@ -136,12 +122,6 @@ pub(crate) struct ClientState {
     // This is used to avoid spamming the log.
     pub(crate) last_update_limit_warn: Option<Instant>,
     pub(crate) updates: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
-}
-
-pub(crate) struct Connection {
-    pub(crate) sender: AsyncMutex<Sender<net::Transport, mtp::Encrypted>>,
-    pub(crate) request_tx: RwLock<Enqueuer>,
-    pub(crate) step_counter: AtomicU32,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -160,29 +140,7 @@ pub struct Client(pub(crate) Arc<ClientInner>);
 
 impl Default for InitParams {
     fn default() -> Self {
-        let info = os_info::get();
-
-        let mut system_lang_code = String::new();
-        let mut lang_code = String::new();
-
-        #[cfg(not(target_os = "android"))]
-        {
-            system_lang_code.push_str(&locate_locale::system());
-            lang_code.push_str(&locate_locale::user());
-        }
-        if system_lang_code.is_empty() {
-            system_lang_code.push_str(DEFAULT_LOCALE);
-        }
-        if lang_code.is_empty() {
-            lang_code.push_str(DEFAULT_LOCALE);
-        }
-
         Self {
-            device_model: format!("{} {}", info.os_type(), info.bitness()),
-            system_version: info.version().to_string(),
-            app_version: env!("CARGO_PKG_VERSION").to_string(),
-            system_lang_code,
-            lang_code,
             catch_up: false,
             server_addr: None,
             flood_sleep_threshold: 60,

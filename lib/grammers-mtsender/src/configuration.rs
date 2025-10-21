@@ -3,7 +3,7 @@ use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 const DEFAULT_LOCALE: &str = "en";
 
 /// Hardcoded known `static` options from `functions::help::GetConfig`.
-const KNOWN_DC_OPTIONS: [DcOption; 5] = [
+pub const KNOWN_DC_OPTIONS: [DcOption; 5] = [
     DcOption {
         id: 1,
         address: SocketAddr::V4(SocketAddrV4::new(Ipv4Addr::new(149, 154, 175, 53), 443)),
