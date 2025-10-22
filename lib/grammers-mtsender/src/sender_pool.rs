@@ -16,9 +16,9 @@ use grammers_mtproto::{mtp, transport};
 use grammers_session::{DcOption, Session, UpdatesLike};
 use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
-use std::panic;
 use std::pin::pin;
 use std::sync::Arc;
+use std::{io, panic};
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -172,7 +172,20 @@ impl SenderPoolRunner {
                         Some(connection) => connection,
                         None => {
                             let (sender, config) =
-                                connect_sender(&init_connection, &dc_option).await.unwrap();
+                                match connect_sender(&init_connection, &dc_option).await {
+                                    Ok(t) => t,
+                                    Err(e) => {
+                                        let _ = tx.send(Err(match e {
+                                            AuthorizationError::Gen(e) => {
+                                                InvocationError::Read(ReadError::Io(
+                                                    io::Error::new(io::ErrorKind::Other, e),
+                                                ))
+                                            }
+                                            AuthorizationError::Invoke(e) => e,
+                                        }));
+                                        continue;
+                                    }
+                                };
 
                             update_config(session.as_ref(), config);
 
