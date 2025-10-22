@@ -16,18 +16,18 @@ use tokio::runtime;
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 async fn async_main() -> Result {
-    let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create("ping.session")?);
+    let session = Arc::new(TlSession::load_file_or_create("ping.session")?);
 
     let (pool, handle, _) = SenderPool::new(Configuration {
         api_id: 1,
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         ..Default::default()
     });
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         api_id: 1, // not actually logging in, but has to look real
         api_hash: "".to_string(),
         handle: handle.clone(),

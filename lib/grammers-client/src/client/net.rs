@@ -37,14 +37,14 @@ impl Client {
     /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
-    /// let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
+    /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
     /// let (_pool, handle, _) = SenderPool::new(Configuration {
     ///     api_id: API_ID,
-    ///     session: Arc::clone(&session),
+    ///     session: Arc::clone(&session) as Arc<dyn Session>,
     ///     ..Default::default()
     /// });
     /// let client = Client::connect(Config {
-    ///     session: Arc::clone(&session),
+    ///     session: Arc::clone(&session) as Arc<dyn Session>,
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     handle: handle,

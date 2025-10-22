@@ -43,18 +43,18 @@ async fn async_main() -> Result<()> {
     let api_hash = env!("TG_HASH").to_string();
     let chat_name = env::args().nth(1).expect("chat name missing");
 
-    let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
     let (pool, handle, _) = SenderPool::new(Configuration {
         api_id,
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         ..Default::default()
     });
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
@@ -88,15 +88,13 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        client.inspect_session(
-            |session: &TlSession| match session.save_to_file(SESSION_FILE) {
-                Ok(_) => {}
-                Err(e) => {
-                    println!("NOTE: failed to save the session, will sign out when done: {e}");
-                    sign_out = true;
-                }
-            },
-        )
+        match session.save_to_file(SESSION_FILE) {
+            Ok(_) => {}
+            Err(e) => {
+                println!("NOTE: failed to save the session, will sign out when done: {e}");
+                sign_out = true;
+            }
+        }
     }
 
     let maybe_chat = client.resolve_username(chat_name.as_str()).await?;

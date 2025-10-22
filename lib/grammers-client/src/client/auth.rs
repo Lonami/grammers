@@ -12,7 +12,6 @@ use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{Peer, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
-use std::any::Any;
 use std::fmt;
 
 /// The error type which is returned when signing in fails.
@@ -438,16 +437,6 @@ impl Client {
     /// ```
     pub async fn sign_out(&self) -> Result<tl::enums::auth::LoggedOut, InvocationError> {
         self.invoke(&tl::functions::auth::LogOut {}).await
-    }
-
-    /// Grants temporary access to the session.
-    ///
-    /// You can use this save it wherever you want to.
-    ///
-    /// Panics if `S` does not match the stored session type.
-    pub fn inspect_session<S: 'static, F: FnOnce(&S) -> R, R>(&self, callback: F) -> R {
-        let any = self.0.config.session.as_ref() as &dyn Any;
-        callback(any.downcast_ref::<S>().unwrap())
     }
 
     /// Calls [`Client::sign_out`] and disconnects.

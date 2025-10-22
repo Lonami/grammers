@@ -122,18 +122,18 @@ async fn async_main() -> Result {
     let api_hash = env!("TG_HASH").to_string();
     let token = env::args().nth(1).expect("token missing");
 
-    let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
     let (pool, handle, updates) = SenderPool::new(Configuration {
         api_id,
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         ..Default::default()
     });
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Arc::clone(&session),
+        session: Arc::clone(&session) as Arc<dyn Session>,
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
@@ -145,7 +145,7 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token).await?;
-        client.inspect_session(|session: &TlSession| session.save_to_file(SESSION_FILE))?;
+        session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }
 
@@ -172,7 +172,7 @@ async fn async_main() -> Result {
     }
 
     println!("Saving session file...");
-    client.inspect_session(|session: &TlSession| session.save_to_file(SESSION_FILE))?;
+    session.save_to_file(SESSION_FILE)?;
 
     handle.quit();
     let _ = pool_task.await;

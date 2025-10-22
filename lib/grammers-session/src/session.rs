@@ -1,6 +1,6 @@
 use std::net::{SocketAddrV4, SocketAddrV6};
 
-pub trait Session: Send + Sync + std::any::Any {
+pub trait Session: Send + Sync {
     /// Datacenter that is "home" to the user authorized by this session.
     ///
     /// If not known, the ID of the closest datacenter should be returned instead.
