@@ -8,8 +8,7 @@
 
 use crate::configuration::ConnectionParams;
 use crate::{
-    AuthorizationError, InvocationError, NoReconnect, ReadError, Sender, ServerAddr, connect,
-    connect_with_auth,
+    AuthorizationError, InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth,
 };
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
@@ -239,9 +238,9 @@ async fn connect_sender(
     };
 
     let mut sender = if let Some(auth_key) = dc_option.auth_key {
-        connect_with_auth(transport(), addr(), auth_key, &NoReconnect).await?
+        connect_with_auth(transport(), addr(), auth_key).await?
     } else {
-        connect(transport(), addr(), &NoReconnect).await?
+        connect(transport(), addr()).await?
     };
 
     let enums::Config::Config(remote_config) = match sender.invoke(init_connection).await {
@@ -249,7 +248,7 @@ async fn connect_sender(
         Err(InvocationError::Read(ReadError::Transport(transport::Error::BadStatus {
             status: 404,
         }))) => {
-            sender = connect(transport(), addr(), &NoReconnect).await?;
+            sender = connect(transport(), addr()).await?;
             sender.invoke(init_connection).await?
         }
         Err(e) => return Err(dbg!(e).into()),

@@ -130,9 +130,6 @@ pub enum UpdatesLike {
     },
     AffectedMessages(tl::types::messages::AffectedMessages),
     InvitedUsers(tl::types::messages::InvitedUsers),
-    /// Not an update sent by Telegram, but still something that affects handling of updates.
-    /// The caller should getDifference and query the server for any possibly-lost updates.
-    Reconnection,
 }
 
 // Public interface around the more tightly-packed internal state.

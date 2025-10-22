@@ -12,7 +12,7 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transport;
-use grammers_mtsender::{NoReconnect, connect};
+use grammers_mtsender::connect;
 use grammers_tl_types::{LAYER, enums, functions};
 use std::str::FromStr;
 
@@ -36,7 +36,6 @@ fn test_invoke_encrypted_method() {
             grammers_mtsender::ServerAddr::Tcp {
                 address: std::net::SocketAddr::from_str(TELEGRAM_TEST_DC_2).unwrap(),
             },
-            &NoReconnect,
         )
         .await
         .unwrap();

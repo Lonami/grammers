@@ -8,8 +8,7 @@
 
 use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use crate::net::{NetStream, ServerAddr};
-use crate::reconnection::ReconnectionPolicy;
-use crate::utils::{sleep, sleep_until};
+use crate::utils::sleep_until;
 use futures_util::future::{Either, pending, select};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
@@ -21,8 +20,6 @@ use grammers_session::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use std::io;
-use std::io::Error;
-use std::ops::ControlFlow;
 use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
@@ -87,7 +84,6 @@ pub struct Sender<T: Transport, M: Mtp> {
     addr: ServerAddr,
     requests: Vec<Request>,
     next_ping: Instant,
-    reconnection_policy: &'static dyn ReconnectionPolicy,
 
     // Transport-level buffers and positions
     read_buffer: Vec<u8>,
@@ -124,12 +120,7 @@ impl MsgIdPair {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect(
-        transport: T,
-        mtp: M,
-        addr: ServerAddr,
-        reconnection_policy: &'static dyn ReconnectionPolicy,
-    ) -> Result<Self, io::Error> {
+    async fn connect(transport: T, mtp: M, addr: ServerAddr) -> Result<Self, io::Error> {
         let stream = NetStream::connect(&addr).await?;
         Ok(Self {
             stream,
@@ -138,7 +129,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             addr,
             requests: vec![],
             next_ping: Instant::now() + PING_DELAY,
-            reconnection_policy,
 
             read_buffer: vec![0; MAXIMUM_DATA],
             read_tail: 0,
@@ -258,42 +248,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         match res {
             Ok(ok) => Ok(ok),
-            Err(err) => self.on_error(err).await,
-        }
-    }
-
-    #[allow(unused_variables)]
-    async fn try_connect(&mut self) -> Result<(), Error> {
-        let mut attempts = 0;
-        loop {
-            match NetStream::connect(&self.addr).await {
-                Ok(result) => {
-                    log::info!(
-                        "auto-reconnect success after {} failed attempt(s)",
-                        attempts
-                    );
-                    self.stream = result;
-                    return Ok(());
-                }
-                Err(e) => {
-                    attempts += 1;
-                    log::warn!("auto-reconnect failed {} time(s): {}", attempts, e);
-                    sleep(Duration::from_secs(1)).await;
-
-                    match self.reconnection_policy.should_retry(attempts) {
-                        ControlFlow::Break(_) => {
-                            log::error!(
-                                "attempted more than {} times for reconnection and failed",
-                                attempts
-                            );
-                            return Err(e);
-                        }
-                        ControlFlow::Continue(duration) => {
-                            sleep(duration).await;
-                        }
-                    }
-                }
-            }
+            Err(err) => Err(self.on_error(err)),
         }
     }
 
@@ -434,7 +389,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Handle errors that occured while performing I/O.
-    async fn on_error(&mut self, error: ReadError) -> Result<Vec<UpdatesLike>, ReadError> {
+    fn on_error(&mut self, error: ReadError) -> ReadError {
         log::info!("handling error: {error}");
         self.transport.reset();
         self.mtp.reset();
@@ -450,28 +405,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.write_head = 0;
         self.write_buffer.clear();
 
-        let error = match error {
-            ReadError::Io(_)
-                if matches!(
-                    self.reconnection_policy.should_retry(0),
-                    ControlFlow::Continue(_)
-                ) =>
-            {
-                match self.try_connect().await {
-                    Ok(_) => {
-                        // Reconnect success means everything can be retried.
-                        self.requests
-                            .iter_mut()
-                            .for_each(|r| r.state = RequestState::NotSerialized);
-
-                        return Ok(vec![UpdatesLike::Reconnection]);
-                    }
-                    Err(e) => ReadError::from(e),
-                }
-            }
-            e => e,
-        };
-
         log::warn!(
             "marking all {} request(s) as failed: {}",
             self.requests.len(),
@@ -482,7 +415,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .drain(..)
             .for_each(|r| drop(r.result.send(Err(InvocationError::from(error.clone())))));
 
-        Err(error)
+        error
     }
 
     /// Process the result of deserializing an MTP buffer.
@@ -692,9 +625,8 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
 pub async fn connect<T: Transport>(
     transport: T,
     addr: ServerAddr,
-    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
-    let sender = Sender::connect(transport, mtp::Plain::new(), addr, rc_policy).await?;
+    let sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
     generate_auth_key(sender).await
 }
 
@@ -735,7 +667,6 @@ pub async fn generate_auth_key<T: Transport>(
         write_buffer: sender.write_buffer,
         write_head: sender.write_head,
         addr: sender.addr,
-        reconnection_policy: sender.reconnection_policy,
     })
 }
 
@@ -743,13 +674,6 @@ pub async fn connect_with_auth<T: Transport>(
     transport: T,
     addr: ServerAddr,
     auth_key: [u8; 256],
-    rc_policy: &'static dyn ReconnectionPolicy,
 ) -> Result<Sender<T, mtp::Encrypted>, io::Error> {
-    Sender::connect(
-        transport,
-        mtp::Encrypted::build().finish(auth_key),
-        addr,
-        rc_policy,
-    )
-    .await
+    Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
 }
