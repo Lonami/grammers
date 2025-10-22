@@ -6,15 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::configuration::{Configuration, DcOption};
+use crate::configuration::Configuration;
 use crate::{
     AuthorizationError, InvocationError, NoReconnect, ReadError, Sender, ServerAddr, connect,
     connect_with_auth,
 };
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
-use grammers_session::UpdatesLike;
+use grammers_session::{DataCenter, UpdatesLike};
 use grammers_tl_types as tl;
+use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::panic;
 use std::pin::pin;
 use tokio::task::AbortHandle;
@@ -33,8 +34,6 @@ enum Request {
         body: Vec<u8>,
         tx: oneshot::Sender<Result<InvokeResponse, InvocationError>>,
     },
-    QueryDcOptions(oneshot::Sender<Vec<DcOption>>),
-    ReconfigureDcOptions(Vec<DcOption>),
     Disconnect {
         dc_id: i32,
     },
@@ -74,18 +73,6 @@ impl SenderPoolHandle {
         rx.await.map_err(|_| InvocationError::Dropped)?
     }
 
-    pub async fn query_dc_options(&self) -> Vec<DcOption> {
-        let (tx, rx) = oneshot::channel();
-        let _ = self.0.send(Request::QueryDcOptions(tx));
-        rx.await.unwrap_or_default()
-    }
-
-    pub fn reconfigure_dc_options(&self, dc_options: Vec<DcOption>) -> bool {
-        self.0
-            .send(Request::ReconfigureDcOptions(dc_options))
-            .is_ok()
-    }
-
     pub fn disconnect_from_dc(&self, dc_id: i32) -> bool {
         self.0.send(Request::Disconnect { dc_id }).is_ok()
     }
@@ -123,7 +110,7 @@ impl SenderPool {
     /// client can sign out if it has just signed in but failed to persist them.
     pub async fn run(self) -> Configuration {
         let Self {
-            mut configuration,
+            configuration,
             mut request_rx,
             updates_tx,
         } = self;
@@ -142,11 +129,12 @@ impl SenderPool {
             match request {
                 Request::Invoke { dc_id, body, tx } => {
                     let dc_option = match configuration
-                        .dc_options
+                        .session
+                        .get_dcs()
                         .iter()
-                        .find(|dc_option| dc_option.id == dc_id)
+                        .find(|dc_option| dc_option.id() == dc_id)
                     {
-                        Some(dc_option) => dc_option,
+                        Some(dc_option) => dc_option.clone(),
                         None => {
                             let _ = tx.send(Err(InvocationError::InvalidDc));
                             continue;
@@ -159,13 +147,10 @@ impl SenderPool {
                     {
                         Some(connection) => connection,
                         None => {
-                            let sender = connect_sender(&configuration, dc_option).await.unwrap();
-                            for dc_option in configuration.dc_options.iter_mut() {
-                                if dc_option.id == dc_id {
-                                    dc_option.auth_key = Some(sender.auth_key());
-                                    break;
-                                }
-                            }
+                            let sender = connect_sender(&configuration, &dc_option).await.unwrap();
+                            configuration
+                                .session
+                                .set_dc_auth_key(dc_id, sender.auth_key());
 
                             let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                             let abort_handle = connection_pool.spawn(run_sender(
@@ -183,10 +168,6 @@ impl SenderPool {
                     };
                     let _ = connection.rpc_tx.send(Rpc { body, tx });
                 }
-                Request::QueryDcOptions(tx) => {
-                    let _ = tx.send(configuration.dc_options.clone());
-                }
-                Request::ReconfigureDcOptions(dc_options) => configuration.dc_options = dc_options,
                 Request::Disconnect { dc_id } => {
                     connections.retain(|connection| {
                         if connection.dc_id == dc_id {
@@ -209,15 +190,25 @@ impl SenderPool {
 
 async fn connect_sender(
     configuration: &Configuration,
-    dc_option: &DcOption,
+    dc_option: &DataCenter,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+    let (address, auth_key) = match dc_option {
+        DataCenter::Center(center) => (
+            SocketAddr::V4(SocketAddrV4::new(
+                Ipv4Addr::from_bits(center.ipv4.unwrap() as _),
+                center.port as _,
+            )),
+            center.auth.clone(),
+        ),
+        _ => unimplemented!(),
+    };
     let transport = transport::Full::new();
     let addr = ServerAddr::Tcp {
-        address: dc_option.address.clone(),
+        address: address.clone(),
     };
 
-    let mut sender = if let Some(auth_key) = dc_option.auth_key {
-        connect_with_auth(transport, addr, auth_key, &NoReconnect).await?
+    let mut sender = if let Some(auth_key) = auth_key {
+        connect_with_auth(transport, addr, auth_key.try_into().unwrap(), &NoReconnect).await?
     } else {
         connect(transport, addr, &NoReconnect).await?
     };

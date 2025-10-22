@@ -24,6 +24,7 @@ pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_fr
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
+use std::net::Ipv4Addr;
 use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 use std::sync::Mutex;
@@ -38,6 +39,53 @@ use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize}
 pub struct Session {
     session: Mutex<types::Session>,
 }
+
+/// Hardcoded known `static` options from `functions::help::GetConfig`.
+pub const KNOWN_DC_OPTIONS: [types::DataCenter; 5] = [
+    types::DataCenter {
+        id: 1,
+        ipv4: Some(i32::from_le_bytes(
+            Ipv4Addr::new(149, 154, 175, 53).octets(),
+        )),
+        ipv6: None,
+        port: 443,
+        auth: None,
+    },
+    types::DataCenter {
+        id: 2,
+        ipv4: Some(i32::from_le_bytes(
+            Ipv4Addr::new(149, 154, 167, 51).octets(),
+        )),
+        ipv6: None,
+        port: 443,
+        auth: None,
+    },
+    types::DataCenter {
+        id: 3,
+        ipv4: Some(i32::from_le_bytes(
+            Ipv4Addr::new(149, 154, 175, 100).octets(),
+        )),
+        ipv6: None,
+        port: 443,
+        auth: None,
+    },
+    types::DataCenter {
+        id: 4,
+        ipv4: Some(i32::from_le_bytes(
+            Ipv4Addr::new(149, 154, 167, 92).octets(),
+        )),
+        ipv6: None,
+        port: 443,
+        auth: None,
+    },
+    types::DataCenter {
+        id: 5,
+        ipv4: Some(i32::from_le_bytes(Ipv4Addr::new(91, 108, 56, 190).octets())),
+        ipv6: None,
+        port: 443,
+        auth: None,
+    },
+];
 
 #[allow(clippy::new_without_default)]
 impl Session {
@@ -119,6 +167,22 @@ impl Session {
             session.dcs.remove(pos);
         }
         session.dcs.push(new_dc);
+    }
+
+    pub fn set_dc_auth_key(&self, dc_id: i32, auth: [u8; 256]) {
+        let mut session = self.session.lock().unwrap();
+
+        for dc in session.dcs.iter_mut() {
+            if dc.id() == dc_id {
+                match dc {
+                    enums::DataCenter::Center(data_center) => data_center.auth = Some(auth.into()),
+                    enums::DataCenter::Ws(data_center_ws) => {
+                        data_center_ws.auth = Some(auth.into())
+                    }
+                }
+                break;
+            }
+        }
     }
 
     pub fn insert_dc_tcp(&self, id: i32, addr: &SocketAddr, auth: [u8; 256]) {
@@ -222,6 +286,8 @@ pub fn try_push_channel_state(update_state: &mut UpdateState, channel_id: i64, p
         }));
     true
 }
+
+pub use enums::DataCenter;
 
 #[derive(Debug)]
 pub enum Error {

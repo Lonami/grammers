@@ -9,7 +9,7 @@ use super::client::ClientState;
 use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtsender::utils::sleep;
-use grammers_mtsender::{AuthorizationError, InvocationError, KNOWN_DC_OPTIONS, RpcError};
+use grammers_mtsender::{AuthorizationError, InvocationError, RpcError};
 use grammers_session::{MessageBoxes, state_to_update_state};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
@@ -59,16 +59,6 @@ impl Client {
             .get_user()
             .map(|u| u.dc)
             .unwrap_or(DEFAULT_DC);
-        config.handle.reconfigure_dc_options(
-            KNOWN_DC_OPTIONS
-                .iter()
-                .map(|dc_option| {
-                    let mut dc_option = dc_option.clone();
-                    dc_option.auth_key = config.session.dc_auth_key(dc_option.id);
-                    dc_option
-                })
-                .collect(),
-        );
         let message_box = if config.params.catch_up {
             if let Some(state) = config.session.get_state() {
                 MessageBoxes::load(state)
