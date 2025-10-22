@@ -19,7 +19,7 @@ use std::sync::Arc;
 use std::{env, io};
 
 use grammers_client::{Client, Config, SignInError};
-use grammers_mtsender::{Configuration, SenderPool};
+use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use mime::Mime;
 use mime_guess::mime;
@@ -45,11 +45,11 @@ async fn async_main() -> Result<()> {
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
-    let (pool, handle, _) = SenderPool::new(Configuration {
+    let (pool, handle, _) = SenderPool::new(
+        Arc::clone(&session) as Arc<dyn Session>,
         api_id,
-        session: Arc::clone(&session) as Arc<dyn Session>,
-        ..Default::default()
-    });
+        Default::default(),
+    );
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");

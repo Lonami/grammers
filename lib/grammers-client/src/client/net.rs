@@ -29,7 +29,7 @@ impl Client {
     /// use std::sync::Arc;
     /// use grammers_client::{Client, Config};
     /// use grammers_session::{Session, storages::TlSession};
-    /// use grammers_mtsender::{SenderPool, Configuration};
+    /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
@@ -38,11 +38,11 @@ impl Client {
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
-    /// let (_pool, handle, _) = SenderPool::new(Configuration {
-    ///     api_id: API_ID,
-    ///     session: Arc::clone(&session) as Arc<dyn Session>,
-    ///     ..Default::default()
-    /// });
+    /// let (_pool, handle, _) = SenderPool::new(
+    ///     Arc::clone(&session) as Arc<dyn Session>,
+    ///     API_ID,
+    ///     Default::default()
+    /// );
     /// let client = Client::connect(Config {
     ///     session: Arc::clone(&session) as Arc<dyn Session>,
     ///     api_id: API_ID,

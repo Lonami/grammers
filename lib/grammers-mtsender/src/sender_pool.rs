@@ -6,17 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::configuration::Configuration;
+use crate::configuration::ConnectionParams;
 use crate::{
     AuthorizationError, InvocationError, NoReconnect, ReadError, Sender, ServerAddr, connect,
     connect_with_auth,
 };
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
-use grammers_session::{DcOption, UpdatesLike};
+use grammers_session::{DcOption, Session, UpdatesLike};
 use grammers_tl_types as tl;
 use std::panic;
 use std::pin::pin;
+use std::sync::Arc;
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -24,6 +25,12 @@ use tokio::{
 };
 
 pub(crate) type Transport = transport::Full;
+
+struct Configuration {
+    session: Arc<dyn Session>,
+    api_id: i32,
+    connection_params: ConnectionParams,
+}
 
 type InvokeResponse = Vec<u8>;
 
@@ -83,14 +90,20 @@ impl SenderPoolHandle {
 
 impl SenderPool {
     pub fn new(
-        configuration: Configuration,
+        session: Arc<dyn Session>,
+        api_id: i32,
+        connection_params: ConnectionParams,
     ) -> (Self, SenderPoolHandle, mpsc::UnboundedReceiver<UpdatesLike>) {
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         let (updates_tx, updates_rx) = mpsc::unbounded_channel();
 
         (
             Self {
-                configuration,
+                configuration: Configuration {
+                    session,
+                    api_id,
+                    connection_params,
+                },
                 request_rx,
                 updates_tx,
             },
@@ -102,12 +115,7 @@ impl SenderPool {
     /// Run the sender pool until [`crate::SenderPoolHandle::quit`] is called.
     ///
     /// Connections will be initiated on-demand whenever the first request to a DC is made.
-    ///
-    /// The most-recent configuration is returned so that any changes to the persistent
-    /// authentication keys can be persisted. However, It is recommended to persist them
-    /// earlier via a call to [`crate::SenderPoolHandle::query_dc_options`], so that the
-    /// client can sign out if it has just signed in but failed to persist them.
-    pub async fn run(self) -> Configuration {
+    pub async fn run(self) {
         let Self {
             configuration,
             mut request_rx,
@@ -174,7 +182,6 @@ impl SenderPool {
 
         connections.clear(); // drop all channels to cause the `run_sender` loop to stop
         connection_pool.join_all().await;
-        configuration
     }
 }
 
@@ -198,12 +205,12 @@ async fn connect_sender(
             layer: tl::LAYER,
             query: tl::functions::InitConnection {
                 api_id: configuration.api_id,
-                device_model: configuration.device_model.clone(),
-                system_version: configuration.system_version.clone(),
-                app_version: configuration.app_version.clone(),
-                system_lang_code: configuration.system_lang_code.clone(),
+                device_model: configuration.connection_params.device_model.clone(),
+                system_version: configuration.connection_params.system_version.clone(),
+                app_version: configuration.connection_params.app_version.clone(),
+                system_lang_code: configuration.connection_params.system_lang_code.clone(),
                 lang_pack: "".into(),
-                lang_code: configuration.lang_code.clone(),
+                lang_code: configuration.connection_params.lang_code.clone(),
                 proxy: None,
                 params: None,
                 query: tl::functions::help::GetConfig {},

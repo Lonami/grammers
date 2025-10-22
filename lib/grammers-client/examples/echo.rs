@@ -13,7 +13,7 @@
 use futures_util::future::{Either, select};
 use grammers_client::session::Session;
 use grammers_client::{Client, Config, InitParams, Update};
-use grammers_mtsender::{Configuration, SenderPool};
+use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::env;
@@ -53,11 +53,11 @@ async fn async_main() -> Result {
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
-    let (pool, handle, updates) = SenderPool::new(Configuration {
+    let (pool, handle, updates) = SenderPool::new(
+        Arc::clone(&session) as Arc<dyn Session>,
         api_id,
-        session: Arc::clone(&session) as Arc<dyn Session>,
-        ..Default::default()
-    });
+        Default::default(),
+    );
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");

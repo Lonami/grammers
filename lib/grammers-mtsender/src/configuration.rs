@@ -1,20 +1,15 @@
-use std::sync::Arc;
-
-use grammers_session::{Session, storages::TlSession};
-
 const DEFAULT_LOCALE: &str = "en";
 
-pub struct Configuration {
-    pub api_id: i32,
+/// Connection parameters used whenever a new connection is initialized.
+pub struct ConnectionParams {
     pub device_model: String,
     pub system_version: String,
     pub app_version: String,
     pub system_lang_code: String,
     pub lang_code: String,
-    pub session: Arc<dyn Session>,
 }
 
-impl Default for Configuration {
+impl Default for ConnectionParams {
     fn default() -> Self {
         let info = os_info::get();
 
@@ -34,13 +29,11 @@ impl Default for Configuration {
         }
 
         Self {
-            api_id: 0,
             device_model: format!("{} {}", info.os_type(), info.bitness()),
             system_version: info.version().to_string(),
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             system_lang_code,
             lang_code,
-            session: Arc::new(TlSession::new()),
         }
     }
 }
