@@ -6,8 +6,9 @@
 
 use std::sync::Arc;
 
+use grammers_client::Client;
+use grammers_client::client::client::Configuration;
 use grammers_client::session::Session;
-use grammers_client::{Client, Config};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use grammers_tl_types as tl;
@@ -18,22 +19,22 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 async fn async_main() -> Result {
     let session = Arc::new(TlSession::load_file_or_create("ping.session")?);
 
-    let (pool, handle, _) = SenderPool::new(
+    let pool = SenderPool::new(
         Arc::clone(&session) as Arc<dyn Session>,
         1,
         Default::default(),
     );
-    let pool_task = tokio::spawn(pool.run());
+    let client = Client::new(
+        &pool,
+        Configuration {
+            api_hash: "".to_string(),
+            params: Default::default(),
+        },
+    );
+    let SenderPool { runner, handle, .. } = pool;
+    let pool_task = tokio::spawn(runner.run());
 
     println!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Arc::clone(&session) as Arc<dyn Session>,
-        api_id: 1, // not actually logging in, but has to look real
-        api_hash: "".to_string(),
-        handle: handle.clone(),
-        params: Default::default(),
-    })
-    .await?;
     println!("Connected!");
 
     println!("Sending ping...");

@@ -26,12 +26,6 @@ use tokio::{
 
 pub(crate) type Transport = transport::Full;
 
-struct Configuration {
-    session: Arc<dyn Session>,
-    api_id: i32,
-    connection_params: ConnectionParams,
-}
-
 type InvokeResponse = Vec<u8>;
 
 enum Request {
@@ -61,7 +55,15 @@ struct ConnectionInfo {
 pub struct SenderPoolHandle(mpsc::UnboundedSender<Request>);
 
 pub struct SenderPool {
-    configuration: Configuration,
+    pub runner: SenderPoolRunner,
+    pub handle: SenderPoolHandle,
+    pub updates: mpsc::UnboundedReceiver<UpdatesLike>,
+}
+
+pub struct SenderPoolRunner {
+    pub session: Arc<dyn Session>,
+    pub api_id: i32,
+    pub connection_params: ConnectionParams,
     request_rx: mpsc::UnboundedReceiver<Request>,
     updates_tx: mpsc::UnboundedSender<UpdatesLike>,
 }
@@ -93,34 +95,52 @@ impl SenderPool {
         session: Arc<dyn Session>,
         api_id: i32,
         connection_params: ConnectionParams,
-    ) -> (Self, SenderPoolHandle, mpsc::UnboundedReceiver<UpdatesLike>) {
+    ) -> Self {
         let (request_tx, request_rx) = mpsc::unbounded_channel();
         let (updates_tx, updates_rx) = mpsc::unbounded_channel();
 
-        (
-            Self {
-                configuration: Configuration {
-                    session,
-                    api_id,
-                    connection_params,
-                },
+        Self {
+            runner: SenderPoolRunner {
+                session,
+                api_id,
+                connection_params,
                 request_rx,
                 updates_tx,
             },
-            SenderPoolHandle(request_tx),
-            updates_rx,
-        )
+            handle: SenderPoolHandle(request_tx),
+            updates: updates_rx,
+        }
     }
+}
 
+impl SenderPoolRunner {
     /// Run the sender pool until [`crate::SenderPoolHandle::quit`] is called.
     ///
     /// Connections will be initiated on-demand whenever the first request to a DC is made.
     pub async fn run(self) {
         let Self {
-            configuration,
+            session,
+            api_id,
+            connection_params,
             mut request_rx,
             updates_tx,
         } = self;
+        let init_connection = tl::functions::InvokeWithLayer {
+            layer: tl::LAYER,
+            query: tl::functions::InitConnection {
+                api_id,
+                device_model: connection_params.device_model.clone(),
+                system_version: connection_params.system_version.clone(),
+                app_version: connection_params.app_version.clone(),
+                system_lang_code: connection_params.system_lang_code.clone(),
+                lang_pack: "".into(),
+                lang_code: connection_params.lang_code.clone(),
+                proxy: None,
+                params: None,
+                query: tl::functions::help::GetConfig {},
+            },
+        };
+
         let mut connections = Vec::<ConnectionInfo>::new();
         let mut connection_pool = JoinSet::<Result<(), ReadError>>::new();
 
@@ -135,7 +155,7 @@ impl SenderPool {
 
             match request {
                 Request::Invoke { dc_id, body, tx } => {
-                    let Some(mut dc_option) = configuration.session.dc_option(dc_id) else {
+                    let Some(mut dc_option) = session.dc_option(dc_id) else {
                         let _ = tx.send(Err(InvocationError::InvalidDc));
                         continue;
                     };
@@ -146,9 +166,10 @@ impl SenderPool {
                     {
                         Some(connection) => connection,
                         None => {
-                            let sender = connect_sender(&configuration, &dc_option).await.unwrap();
+                            let sender =
+                                connect_sender(&init_connection, &dc_option).await.unwrap();
                             dc_option.auth_key = Some(sender.auth_key());
-                            configuration.session.set_dc_option(&dc_option);
+                            session.set_dc_option(&dc_option);
 
                             let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                             let abort_handle = connection_pool.spawn(run_sender(
@@ -186,7 +207,9 @@ impl SenderPool {
 }
 
 async fn connect_sender(
-    configuration: &Configuration,
+    init_connection: &tl::functions::InvokeWithLayer<
+        tl::functions::InitConnection<tl::functions::help::GetConfig>,
+    >,
     dc_option: &DcOption,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
     let transport = transport::Full::new();
@@ -200,23 +223,7 @@ async fn connect_sender(
         connect(transport, addr, &NoReconnect).await?
     };
 
-    let _remote_config = sender
-        .invoke(&tl::functions::InvokeWithLayer {
-            layer: tl::LAYER,
-            query: tl::functions::InitConnection {
-                api_id: configuration.api_id,
-                device_model: configuration.connection_params.device_model.clone(),
-                system_version: configuration.connection_params.system_version.clone(),
-                app_version: configuration.connection_params.app_version.clone(),
-                system_lang_code: configuration.connection_params.system_lang_code.clone(),
-                lang_pack: "".into(),
-                lang_code: configuration.connection_params.lang_code.clone(),
-                proxy: None,
-                params: None,
-                query: tl::functions::help::GetConfig {},
-            },
-        })
-        .await?;
+    let _remote_config = sender.invoke(init_connection).await?;
 
     Ok(sender)
 }

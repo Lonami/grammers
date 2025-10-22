@@ -6,10 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner, Config};
+use crate::client::client::Configuration;
 use crate::utils;
 use grammers_mtsender::utils::sleep;
-use grammers_mtsender::{AuthorizationError, InvocationError, RpcError};
-use grammers_session::{MessageBoxes, PeerRef, UpdateState, UpdatesState};
+use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::sync::Arc;
@@ -22,6 +22,10 @@ impl Client {
     /// will be created and the session will be saved with it.
     ///
     /// The connection will be initialized with the data from the input configuration.
+    ///
+    /// The [`SenderPoolHandle`] does not keep a reference to the [`Session`] or `api_id`,
+    /// but the [`SenderPool`] itself does, so the latter is used as input to guarantee that
+    /// the values are correctly shared between the pool and the client handles.
     ///
     /// # Examples
     ///
@@ -53,53 +57,23 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let message_box = if config.params.catch_up {
-            MessageBoxes::load(config.session.updates_state())
-        } else {
-            // If the user doesn't want to bother with catching up on previous update, start with
-            // pristine state instead.
-            MessageBoxes::new()
-        };
-
+    pub fn new(sender_pool: &SenderPool, mut config: Configuration) -> Self {
         // "Remove" the limit to avoid checking for it (and avoid warning).
         if let Some(0) = config.params.update_queue_limit {
             config.params.update_queue_limit = None;
         }
 
-        // Don't bother getting pristine update state if we're not logged in.
-        let should_get_state =
-            message_box.is_empty() && config.session.peer(PeerRef::SelfUser).is_some();
-
         // TODO Sender doesn't have a way to handle backpressure yet
-        let client = Self(Arc::new(ClientInner {
+        Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
-            config,
-        }));
-
-        if should_get_state {
-            match client.invoke(&tl::functions::updates::GetState {}).await {
-                Ok(tl::enums::updates::State::State(state)) => {
-                    client
-                        .0
-                        .config
-                        .session
-                        .set_update_state(UpdateState::All(UpdatesState {
-                            pts: state.pts,
-                            qts: state.qts,
-                            date: state.date,
-                            seq: state.seq,
-                            channels: Vec::new(),
-                        }));
-                }
-                Err(_err) => {
-                    // The account may no longer actually be logged in, or it can rarely fail.
-                    // `message_box` will try to correct its state as updates arrive.
-                }
-            }
-        }
-
-        Ok(client)
+            config: Config {
+                session: Arc::clone(&sender_pool.runner.session),
+                api_id: sender_pool.runner.api_id,
+                api_hash: config.api_hash,
+                handle: sender_pool.handle.clone(),
+                params: config.params,
+            },
+        }))
     }
 
     /// Invoke a raw API call. This directly sends the request to Telegram's servers.

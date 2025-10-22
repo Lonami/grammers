@@ -11,8 +11,9 @@
 //! ```
 
 use futures_util::future::{Either, select};
+use grammers_client::client::client::Configuration;
 use grammers_client::session::Session;
-use grammers_client::{Client, Config, InitParams, Update};
+use grammers_client::{Client, InitParams, Update};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
@@ -53,26 +54,30 @@ async fn async_main() -> Result {
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
-    let (pool, handle, updates) = SenderPool::new(
+    let pool = SenderPool::new(
         Arc::clone(&session) as Arc<dyn Session>,
         api_id,
         Default::default(),
     );
-    let pool_task = tokio::spawn(pool.run());
+    let client = Client::new(
+        &pool,
+        Configuration {
+            api_hash: api_hash.clone(),
+            params: InitParams {
+                // Fetch the updates we missed while we were offline
+                catch_up: true,
+                ..Default::default()
+            },
+        },
+    );
+    let SenderPool {
+        runner,
+        handle,
+        updates,
+    } = pool;
+    let pool_task = tokio::spawn(runner.run());
 
     println!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Arc::clone(&session) as Arc<dyn Session>,
-        api_id,
-        api_hash: api_hash.clone(),
-        handle: handle.clone(),
-        params: InitParams {
-            // Fetch the updates we missed while we were offline
-            catch_up: true,
-            ..Default::default()
-        },
-    })
-    .await?;
     println!("Connected!");
 
     if !client.is_authorized().await? {

@@ -12,6 +12,19 @@ use std::sync::Arc;
 /// Configuration required to create a [`Client`] instance.
 ///
 /// [`Client`]: struct.Client.html
+pub struct Configuration {
+    /// Developer's API hash, required to interact with Telegram's API.
+    ///
+    /// You may obtain your own in <https://my.telegram.org/auth>.
+    pub api_hash: String,
+
+    /// Additional initialization parameters that can have sane defaults.
+    pub params: InitParams,
+}
+
+/// Configuration required to create a [`Client`] instance.
+///
+/// [`Client`]: struct.Client.html
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
