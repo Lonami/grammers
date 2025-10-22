@@ -22,8 +22,8 @@ pub const KNOWN_DC_OPTIONS: [DcOption; 5] = [
     },
     DcOption {
         id: 2,
-        ipv4: ipv4(149, 154, 167, 51),
-        ipv6: ipv6(149, 154, 167, 51),
+        ipv4: ipv4(149, 154, 167, 41),
+        ipv6: ipv6(149, 154, 167, 41),
         auth_key: None,
     },
     DcOption {
@@ -40,8 +40,8 @@ pub const KNOWN_DC_OPTIONS: [DcOption; 5] = [
     },
     DcOption {
         id: 5,
-        ipv4: ipv4(91, 108, 56, 190),
-        ipv6: ipv6(91, 108, 56, 190),
+        ipv4: ipv4(91, 108, 56, 104),
+        ipv6: ipv6(91, 108, 56, 104),
         auth_key: None,
     },
 ];
