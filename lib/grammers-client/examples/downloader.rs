@@ -26,7 +26,6 @@ use mime_guess::mime;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
 
-use grammers_client::session::Session;
 use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -44,12 +43,8 @@ async fn async_main() -> Result<()> {
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
-    let pool = SenderPool::new(
-        Arc::clone(&session) as Arc<dyn Session>,
-        api_id,
-        Default::default(),
-    );
-    let client = Client::new(&pool, Default::default());
+    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(&pool);
     let SenderPool { runner, handle, .. } = pool;
     let pool_task = tokio::spawn(runner.run());
 

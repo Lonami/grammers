@@ -11,7 +11,6 @@
 //! ```
 
 use futures_util::future::{Either, select};
-use grammers_client::session::Session;
 use grammers_client::{Client, Update};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
@@ -52,12 +51,8 @@ async fn async_main() -> Result {
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
-    let pool = SenderPool::new(
-        Arc::clone(&session) as Arc<dyn Session>,
-        api_id,
-        Default::default(),
-    );
-    let client = Client::new(&pool, Default::default());
+    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(&pool);
     let SenderPool {
         runner,
         handle,

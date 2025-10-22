@@ -91,8 +91,12 @@ impl SenderPoolHandle {
 }
 
 impl SenderPool {
-    pub fn new(
-        session: Arc<dyn Session>,
+    pub fn new<S: Session + 'static>(session: Arc<S>, api_id: i32) -> Self {
+        Self::with_configuration(session, api_id, Default::default())
+    }
+
+    pub fn with_configuration<S: Session + 'static>(
+        session: Arc<S>,
         api_id: i32,
         connection_params: ConnectionParams,
     ) -> Self {
@@ -101,7 +105,7 @@ impl SenderPool {
 
         Self {
             runner: SenderPoolRunner {
-                session,
+                session: session as Arc<dyn Session>,
                 api_id,
                 connection_params,
                 request_rx,

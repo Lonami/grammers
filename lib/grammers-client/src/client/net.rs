@@ -32,7 +32,7 @@ impl Client {
     /// ```
     /// use std::sync::Arc;
     /// use grammers_client::Client;
-    /// use grammers_session::{Session, storages::TlSession};
+    /// use grammers_session::storages::TlSession;
     /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
@@ -41,16 +41,17 @@ impl Client {
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
-    /// let pool = SenderPool::new(
-    ///     Arc::clone(&session) as Arc<dyn Session>,
-    ///     API_ID,
-    ///     Default::default()
-    /// );
-    /// let client = Client::new(&pool, Default::default());
+    /// let pool = SenderPool::new(Arc::clone(&session), API_ID);
+    /// let client = Client::new(&pool);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(sender_pool: &SenderPool, configuration: Configuration) -> Self {
+    pub fn new(sender_pool: &SenderPool) -> Self {
+        Self::with_configuration(sender_pool, Default::default())
+    }
+
+    /// Like [`Self::new`] but with a custom [`Configuration`].
+    pub fn with_configuration(sender_pool: &SenderPool, configuration: Configuration) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
         Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
