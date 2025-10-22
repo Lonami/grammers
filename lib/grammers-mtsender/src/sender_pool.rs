@@ -220,18 +220,27 @@ async fn connect_sender(
     >,
     dc_option: &DcOption,
 ) -> Result<(Sender<transport::Full, mtp::Encrypted>, tl::types::Config), AuthorizationError> {
-    let transport = transport::Full::new();
-    let addr = ServerAddr::Tcp {
+    let transport = transport::Full::new;
+    let addr = || ServerAddr::Tcp {
         address: dc_option.ipv4.into(),
     };
 
     let mut sender = if let Some(auth_key) = dc_option.auth_key {
-        connect_with_auth(transport, addr, auth_key, &NoReconnect).await?
+        connect_with_auth(transport(), addr(), auth_key, &NoReconnect).await?
     } else {
-        connect(transport, addr, &NoReconnect).await?
+        connect(transport(), addr(), &NoReconnect).await?
     };
 
-    let enums::Config::Config(remote_config) = sender.invoke(init_connection).await?;
+    let enums::Config::Config(remote_config) = match sender.invoke(init_connection).await {
+        Ok(config) => config,
+        Err(InvocationError::Read(ReadError::Transport(transport::Error::BadStatus {
+            status: 404,
+        }))) => {
+            sender = connect(transport(), addr(), &NoReconnect).await?;
+            sender.invoke(init_connection).await?
+        }
+        Err(e) => return Err(dbg!(e).into()),
+    };
 
     Ok((sender, remote_config))
 }
