@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::{ChatMap, Dialog, IterBuffer};
 use grammers_mtsender::InvocationError;
-use grammers_session::PackedChat;
+use grammers_session::{PackedChat, try_push_channel_state};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 100;
@@ -83,8 +83,8 @@ impl DialogIter {
 
         let chats = ChatMap::new(users, chats);
 
-        {
-            let mut state = self.client.0.state.write().unwrap();
+        if let Some(mut state) = self.client.0.config.session.get_state() {
+            let mut mutated = false;
             self.buffer.extend(dialogs.into_iter().map(|dialog| {
                 if let tl::enums::Dialog::Dialog(tl::types::Dialog {
                     peer: tl::enums::Peer::Channel(channel),
@@ -92,12 +92,13 @@ impl DialogIter {
                     ..
                 }) = &dialog
                 {
-                    state
-                        .message_box
-                        .try_set_channel_state(channel.channel_id, *pts);
+                    mutated |= try_push_channel_state(&mut state, channel.channel_id, *pts);
                 }
                 Dialog::new(&self.client, dialog, &mut messages, &chats)
             }));
+            if mutated {
+                self.client.0.config.session.set_state(state);
+            }
         }
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.

@@ -10,6 +10,7 @@ use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::state_to_update_state;
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -98,24 +99,14 @@ impl Client {
 
         let user = User::from_raw(auth.user);
 
-        let sync_state = {
-            let mut state = self.0.state.write().unwrap();
-            self.0
-                .config
-                .session
-                .set_user(user.id(), state.dc_id, user.is_bot());
+        let state = self.0.state.read().unwrap();
+        self.0
+            .config
+            .session
+            .set_user(user.id(), state.dc_id, user.is_bot());
 
-            state.chat_hashes.set_self_user(user.pack());
-            if let Some(us) = update_state {
-                state.message_box.set_state(us);
-                true
-            } else {
-                false
-            }
-        };
-
-        if sync_state {
-            self.sync_update_state();
+        if let Some(us) = update_state {
+            self.0.config.session.set_state(state_to_update_state(us));
         }
 
         Ok(user)
@@ -453,13 +444,10 @@ impl Client {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
 
-    /// Synchronize all state to the session file and provide mutable access to it.
+    /// Grants temporary access to the session.
     ///
-    /// You can use this to temporarily access the session and save it wherever you want to.
-    ///
-    /// Panics if the type parameter does not match the actual session type.
+    /// You can use this save it wherever you want to.
     pub fn session(&self) -> &grammers_session::Session {
-        self.sync_update_state();
         &self.0.config.session
     }
 

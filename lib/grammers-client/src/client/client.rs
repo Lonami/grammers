@@ -155,13 +155,6 @@ impl Default for InitParams {
     }
 }
 
-// TODO move some stuff like drop into ClientInner?
-impl Drop for Client {
-    fn drop(&mut self) {
-        self.sync_update_state();
-    }
-}
-
 impl fmt::Debug for Client {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         // TODO show more info, like user id and session name if present

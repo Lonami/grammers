@@ -10,7 +10,7 @@ use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtsender::utils::sleep;
 use grammers_mtsender::{AuthorizationError, InvocationError, KNOWN_DC_OPTIONS, RpcError};
-use grammers_session::{ChatHashCache, MessageBoxes};
+use grammers_session::{MessageBoxes, state_to_update_state};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::collections::VecDeque;
@@ -116,10 +116,11 @@ impl Client {
         if should_get_state {
             match client.invoke(&tl::functions::updates::GetState {}).await {
                 Ok(state) => {
-                    {
-                        client.0.state.write().unwrap().message_box.set_state(state);
-                    }
-                    client.sync_update_state();
+                    client
+                        .0
+                        .config
+                        .session
+                        .set_state(state_to_update_state(state));
                 }
                 Err(_err) => {
                     // The account may no longer actually be logged in, or it can rarely fail.

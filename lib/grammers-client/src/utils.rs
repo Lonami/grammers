@@ -71,7 +71,7 @@ pub(crate) fn extract_password_parameters(
 pub(crate) fn always_find_entity(
     peer: &tl::enums::Peer,
     map: &types::ChatMap,
-    client: &crate::Client,
+    _client: &crate::Client,
 ) -> types::Chat {
     let get_packed = || {
         let (id, ty) = match peer {
@@ -79,18 +79,11 @@ pub(crate) fn always_find_entity(
             tl::enums::Peer::Chat(chat) => (chat.chat_id, PackedType::Chat),
             tl::enums::Peer::Channel(channel) => (channel.channel_id, PackedType::Broadcast),
         };
-        client
-            .0
-            .state
-            .read()
-            .unwrap()
-            .chat_hashes
-            .get(id)
-            .unwrap_or(PackedChat {
-                ty,
-                id,
-                access_hash: None,
-            })
+        PackedChat {
+            ty,
+            id,
+            access_hash: None,
+        }
     };
 
     match map.get(peer).cloned() {

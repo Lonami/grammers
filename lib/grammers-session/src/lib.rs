@@ -17,6 +17,7 @@ pub use generated::LAYER as VERSION;
 pub use generated::types::UpdateState;
 pub use generated::types::User;
 use generated::{enums, types};
+use grammers_tl_types as tl;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 pub use message_box::PrematureEndReason;
 pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
@@ -190,6 +191,36 @@ impl Session {
         file.write_all(&self.save())?;
         file.sync_data()
     }
+}
+
+pub fn state_to_update_state(
+    tl::enums::updates::State::State(state): tl::enums::updates::State,
+) -> UpdateState {
+    UpdateState {
+        pts: state.pts,
+        qts: state.qts,
+        date: state.date,
+        seq: state.seq,
+        channels: Vec::new(),
+    }
+}
+
+pub fn try_push_channel_state(update_state: &mut UpdateState, channel_id: i64, pts: i32) -> bool {
+    if update_state
+        .channels
+        .iter()
+        .any(|enums::ChannelState::State(channel_state)| channel_state.channel_id == channel_id)
+    {
+        return false;
+    }
+
+    update_state
+        .channels
+        .push(enums::ChannelState::State(types::ChannelState {
+            channel_id,
+            pts,
+        }));
+    true
 }
 
 #[derive(Debug)]
