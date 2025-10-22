@@ -81,12 +81,6 @@ impl DialogIter {
             }
         };
 
-        {
-            let mut state = self.client.0.state.write().unwrap();
-            // Telegram can return peers without hash (e.g. Users with 'min: true')
-            let _ = state.chat_hashes.extend(&users, &chats);
-        }
-
         let chats = ChatMap::new(users, chats);
 
         {

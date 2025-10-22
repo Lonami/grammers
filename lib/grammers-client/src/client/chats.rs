@@ -116,12 +116,6 @@ impl ParticipantIter {
                     tl::enums::ChatParticipants::Participants(c) => c.participants,
                 };
 
-                {
-                    let mut state = client.0.state.write().unwrap();
-                    // Telegram can return peers without hash (e.g. Users with 'min: true')
-                    let _ = state.chat_hashes.extend(&full.users, &full.chats);
-                }
-
                 // Don't actually care for the chats, just the users.
                 let mut chats = ChatMap::new(full.users, Vec::new());
                 let chats = Arc::get_mut(&mut chats).unwrap();
@@ -140,19 +134,13 @@ impl ParticipantIter {
                 use tl::enums::channels::ChannelParticipants::*;
 
                 iter.request.limit = iter.determine_limit(MAX_PARTICIPANT_LIMIT);
-                let (count, participants, chats, users) =
+                let (count, participants, _, users) =
                     match iter.client.invoke(&iter.request).await? {
                         Participants(p) => (p.count, p.participants, p.chats, p.users),
                         NotModified => {
                             panic!("API returned Dialogs::NotModified even though hash = 0")
                         }
                     };
-
-                {
-                    let mut state = iter.client.0.state.write().unwrap();
-                    // Telegram can return peers without hash (e.g. Users with 'min: true')
-                    let _ = state.chat_hashes.extend(&users, &chats);
-                }
 
                 // Telegram can return less participants than asked for but the count being higher
                 // (for example, count=4825, participants=199, users=200). The missing participant
@@ -382,12 +370,6 @@ impl Client {
             Err(err) if err.is("USERNAME_NOT_OCCUPIED") => return Ok(None),
             Err(err) => return Err(err),
         };
-
-        {
-            let mut state = self.0.state.write().unwrap();
-            // Telegram can return peers without hash (e.g. Users with 'min: true')
-            let _ = state.chat_hashes.extend(&users, &chats);
-        }
 
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users
