@@ -13,7 +13,7 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 use grammers_mtproto::transport;
 use grammers_mtsender::{NoReconnect, connect};
-use grammers_tl_types::{Deserializable, LAYER, RemoteCall, enums, functions};
+use grammers_tl_types::{LAYER, enums, functions};
 use std::str::FromStr;
 
 use simple_logger::SimpleLogger;
@@ -59,13 +59,6 @@ fn test_invoke_encrypted_method() {
             })
             .await;
 
-        match response {
-            Ok(body) => {
-                let response =
-                    <functions::help::GetNearestDc as RemoteCall>::Return::from_bytes(&body);
-                assert!(matches!(response, Ok(enums::NearestDc::Dc(_))));
-            }
-            x => panic!("did not get nearest dc, got: {x:?}"),
-        }
+        assert!(matches!(response, Ok(enums::NearestDc::Dc(_))));
     });
 }

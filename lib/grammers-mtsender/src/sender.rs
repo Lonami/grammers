@@ -147,10 +147,15 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         })
     }
 
-    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
         let (tx, rx) = oneshot::channel();
         self.enqueue_body(request.to_bytes(), tx);
-        self.step_until_receive(rx).await
+        self.step_until_receive(rx)
+            .await
+            .and_then(|vec| R::Return::from_bytes(&vec).map_err(|err| err.into()))
     }
 
     /// Like `invoke` but raw data.

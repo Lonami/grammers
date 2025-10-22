@@ -14,7 +14,8 @@ use crate::{
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
 use grammers_session::{DcOption, Session, UpdatesLike};
-use grammers_tl_types as tl;
+use grammers_tl_types::{self as tl, enums};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::panic;
 use std::pin::pin;
 use std::sync::Arc;
@@ -170,8 +171,11 @@ impl SenderPoolRunner {
                     {
                         Some(connection) => connection,
                         None => {
-                            let sender =
+                            let (sender, config) =
                                 connect_sender(&init_connection, &dc_option).await.unwrap();
+
+                            update_config(session.as_ref(), config);
+
                             dc_option.auth_key = Some(sender.auth_key());
                             session.set_dc_option(&dc_option);
 
@@ -215,7 +219,7 @@ async fn connect_sender(
         tl::functions::InitConnection<tl::functions::help::GetConfig>,
     >,
     dc_option: &DcOption,
-) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+) -> Result<(Sender<transport::Full, mtp::Encrypted>, tl::types::Config), AuthorizationError> {
     let transport = transport::Full::new();
     let addr = ServerAddr::Tcp {
         address: dc_option.ipv4.into(),
@@ -227,9 +231,52 @@ async fn connect_sender(
         connect(transport, addr, &NoReconnect).await?
     };
 
-    let _remote_config = sender.invoke(init_connection).await?;
+    let enums::Config::Config(remote_config) = sender.invoke(init_connection).await?;
 
-    Ok(sender)
+    Ok((sender, remote_config))
+}
+
+fn update_config(session: &dyn Session, config: tl::types::Config) {
+    config
+        .dc_options
+        .iter()
+        .map(|tl::enums::DcOption::Option(option)| option)
+        .filter(|option| !option.media_only && !option.tcpo_only && option.r#static)
+        .for_each(|option| {
+            let mut dc_option = session.dc_option(option.id).unwrap_or_else(|| DcOption {
+                id: option.id,
+                ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
+                ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
+                auth_key: None,
+            });
+            if option.ipv6 {
+                dc_option.ipv6 = SocketAddrV6::new(
+                    option
+                        .ip_address
+                        .parse()
+                        .expect("Telegram to return a valid IPv6 address"),
+                    option.port as _,
+                    0,
+                    0,
+                );
+            } else {
+                dc_option.ipv4 = SocketAddrV4::new(
+                    option
+                        .ip_address
+                        .parse()
+                        .expect("Telegram to return a valid IPv4 address"),
+                    option.port as _,
+                );
+                if dc_option.ipv6.ip().to_bits() == 0 {
+                    dc_option.ipv6 = SocketAddrV6::new(
+                        dc_option.ipv4.ip().to_ipv6_mapped(),
+                        dc_option.ipv4.port(),
+                        0,
+                        0,
+                    )
+                }
+            }
+        });
 }
 
 async fn run_sender(
