@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Client, ClientInner, Config};
+use super::{Client, ClientInner};
 use crate::client::client::Configuration;
 use crate::utils;
 use grammers_mtsender::utils::sleep;
@@ -31,48 +31,33 @@ impl Client {
     ///
     /// ```
     /// use std::sync::Arc;
-    /// use grammers_client::{Client, Config};
+    /// use grammers_client::Client;
     /// use grammers_session::{Session, storages::TlSession};
     /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
-    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
-    /// let (_pool, handle, _) = SenderPool::new(
+    /// let pool = SenderPool::new(
     ///     Arc::clone(&session) as Arc<dyn Session>,
     ///     API_ID,
     ///     Default::default()
     /// );
-    /// let client = Client::connect(Config {
-    ///     session: Arc::clone(&session) as Arc<dyn Session>,
-    ///     api_id: API_ID,
-    ///     api_hash: API_HASH.to_string(),
-    ///     handle: handle,
-    ///     params: Default::default(),
-    /// }).await?;
+    /// let client = Client::new(&pool, Default::default());
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(sender_pool: &SenderPool, mut config: Configuration) -> Self {
-        // "Remove" the limit to avoid checking for it (and avoid warning).
-        if let Some(0) = config.params.update_queue_limit {
-            config.params.update_queue_limit = None;
-        }
-
+    pub fn new(sender_pool: &SenderPool, configuration: Configuration) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
         Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
-            config: Config {
-                session: Arc::clone(&sender_pool.runner.session),
-                api_id: sender_pool.runner.api_id,
-                api_hash: config.api_hash,
-                handle: sender_pool.handle.clone(),
-                params: config.params,
-            },
+            session: Arc::clone(&sender_pool.runner.session),
+            api_id: sender_pool.runner.api_id,
+            handle: sender_pool.handle.clone(),
+            configuration,
         }))
     }
 
@@ -103,7 +88,7 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let dc_id = self.0.config.session.home_dc_id();
+        let dc_id = self.0.session.home_dc_id();
         self.do_invoke_in_dc(dc_id, request.to_bytes())
             .await
             .and_then(|body| R::Return::from_bytes(&body).map_err(|e| e.into()))
@@ -130,7 +115,6 @@ impl Client {
         loop {
             match self
                 .0
-                .config
                 .handle
                 .invoke_in_dc(dc_id, request_body.clone())
                 .await
@@ -141,7 +125,7 @@ impl Client {
                     code: 420,
                     value: Some(seconds),
                     ..
-                })) if !slept_flood && seconds <= self.0.config.params.flood_sleep_threshold => {
+                })) if !slept_flood && seconds <= self.0.configuration.flood_sleep_threshold => {
                     let delay = std::time::Duration::from_secs(seconds as _);
                     info!("sleeping on {} for {:?} before retrying", name, delay,);
                     sleep(delay).await;

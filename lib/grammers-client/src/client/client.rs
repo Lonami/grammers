@@ -5,60 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_mtsender::{ReconnectionPolicy, SenderPoolHandle, ServerAddr};
-use grammers_session::Session;
 use std::sync::Arc;
 
-/// Configuration required to create a [`Client`] instance.
+use grammers_mtsender::SenderPoolHandle;
+use grammers_session::Session;
+
+/// Configuration that controls the [`Client`] behaviour when making requests.
 ///
 /// [`Client`]: struct.Client.html
 pub struct Configuration {
-    /// Developer's API hash, required to interact with Telegram's API.
-    ///
-    /// You may obtain your own in <https://my.telegram.org/auth>.
-    pub api_hash: String,
-
-    /// Additional initialization parameters that can have sane defaults.
-    pub params: InitParams,
-}
-
-/// Configuration required to create a [`Client`] instance.
-///
-/// [`Client`]: struct.Client.html
-pub struct Config {
-    /// Session storage where data should persist, such as authorization key, server address,
-    /// and other required information by the client.
-    pub session: Arc<dyn Session>,
-
-    /// Developer's API ID, required to interact with the Telegram's API.
-    ///
-    /// You may obtain your own in <https://my.telegram.org/auth>.
-    pub api_id: i32,
-
-    /// Developer's API hash, required to interact with Telegram's API.
-    ///
-    /// You may obtain your own in <https://my.telegram.org/auth>.
-    pub api_hash: String,
-
-    /// Handle to the sender pool that will manage the connections needed by the client.
-    pub handle: SenderPoolHandle,
-
-    /// Additional initialization parameters that can have sane defaults.
-    pub params: InitParams,
-}
-
-/// Optional initialization parameters, used when initializing a connection to Telegram's API.
-#[derive(Clone)]
-pub struct InitParams {
-    /// Should the client catch-up on updates sent to it while it was offline?
-    ///
-    /// By default, updates sent while the client was offline are ignored.
-    pub catch_up: bool,
-    /// Server address to connect to. By default, the library will connect to the address stored
-    /// in the session file (or a default production address if no such address exists). This
-    /// field can be used to override said address, and is most commonly used to connect to one
-    /// of Telegram's test servers instead.
-    pub server_addr: Option<ServerAddr>,
     /// The threshold below which the library should automatically sleep on flood-wait and slow
     /// mode wait errors (inclusive). For instance, if an
     /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
@@ -72,6 +27,7 @@ pub struct InitParams {
     /// On flood, the library will retry *once*. If the flood error occurs a second time after
     /// sleeping, the error will be returned.
     pub flood_sleep_threshold: u32,
+
     /// How many updates may be buffered by the client at any given time.
     ///
     /// Telegram passively sends updates to the client through the open connection, so they must
@@ -92,34 +48,15 @@ pub struct InitParams {
     ///
     /// When the limit is `Some`, a buffer to hold that many updates will be pre-allocated.
     pub update_queue_limit: Option<usize>,
-    /// URL of the proxy to use. Requires the `proxy` feature to be enabled.
-    ///
-    /// The scheme must be `socks5`. Username and password are optional.
-    ///
-    /// Both a host and port must be provided. If a domain is used for the host, domain, its address will be looked up,
-    /// and the first IP address found will be used. If a different IP address should be used, consider resolving the
-    /// host manually and selecting an IP address of your choice.
-    #[cfg(feature = "proxy")]
-    pub proxy_url: Option<String>,
-
-    /// specify the reconnection policy which will be used by client to determine whether to re-connect on failure or not.
-    ///
-    ///it can be one of the 2 default implementation [`NoReconnect`] and [`FixedReconnect`];
-    ///
-    /// **OR** your own custom implementation of trait [`ReconnectionPolicy`].
-    ///
-    /// for more details refer to [`examples`](lib/grammers-client/examples/reconnection.rs)
-    ///
-    /// [`NoReconnect`]: grammers_mtsender::NoReconnect
-    /// [`FixedReconnect`]: grammers_mtsender::FixedReconnect
-    /// [`ReconnectionPolicy`]: grammers_mtsender::ReconnectionPolicy
-    pub reconnection_policy: &'static dyn ReconnectionPolicy,
 }
 
 pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
-    pub(crate) config: Config,
+    pub(crate) session: Arc<dyn Session>,
+    pub(crate) api_id: i32,
+    pub(crate) handle: SenderPoolHandle,
+    pub(crate) configuration: Configuration,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -136,16 +73,11 @@ pub(crate) struct ClientInner {
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
 
-impl Default for InitParams {
+impl Default for Configuration {
     fn default() -> Self {
         Self {
-            catch_up: false,
-            server_addr: None,
             flood_sleep_threshold: 60,
             update_queue_limit: Some(100),
-            #[cfg(feature = "proxy")]
-            proxy_url: None,
-            reconnection_policy: &grammers_mtsender::NoReconnect,
         }
     }
 }

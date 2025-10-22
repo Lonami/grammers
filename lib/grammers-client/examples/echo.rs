@@ -11,9 +11,8 @@
 //! ```
 
 use futures_util::future::{Either, select};
-use grammers_client::client::client::Configuration;
 use grammers_client::session::Session;
-use grammers_client::{Client, InitParams, Update};
+use grammers_client::{Client, Update};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
@@ -49,7 +48,6 @@ async fn async_main() -> Result {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let token = env::args().nth(1).expect("token missing");
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
@@ -59,17 +57,7 @@ async fn async_main() -> Result {
         api_id,
         Default::default(),
     );
-    let client = Client::new(
-        &pool,
-        Configuration {
-            api_hash: api_hash.clone(),
-            params: InitParams {
-                // Fetch the updates we missed while we were offline
-                catch_up: true,
-                ..Default::default()
-            },
-        },
-    );
+    let client = Client::new(&pool, Default::default());
     let SenderPool {
         runner,
         handle,
@@ -82,7 +70,7 @@ async fn async_main() -> Result {
 
     if !client.is_authorized().await? {
         println!("Signing in...");
-        client.bot_sign_in(&token).await?;
+        client.bot_sign_in(&token, env!("TG_HASH")).await?;
         session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }

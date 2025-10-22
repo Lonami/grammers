@@ -7,7 +7,6 @@
 use std::sync::Arc;
 
 use grammers_client::Client;
-use grammers_client::client::client::Configuration;
 use grammers_client::session::Session;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
@@ -24,13 +23,7 @@ async fn async_main() -> Result {
         1,
         Default::default(),
     );
-    let client = Client::new(
-        &pool,
-        Configuration {
-            api_hash: "".to_string(),
-            params: Default::default(),
-        },
-    );
+    let client = Client::new(&pool, Default::default());
     let SenderPool { runner, handle, .. } = pool;
     let pool_task = tokio::spawn(runner.run());
 

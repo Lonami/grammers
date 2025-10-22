@@ -194,7 +194,7 @@ impl UpdateStream {
         mut updates: Vec<(tl::enums::Update, State)>,
         chat_map: Arc<ChatMap>,
     ) {
-        if let Some(limit) = self.client.0.config.params.update_queue_limit {
+        if let Some(limit) = self.client.0.configuration.update_queue_limit {
             if let Some(exceeds) = (self.buffer.len() + updates.len()).checked_sub(limit + 1) {
                 let exceeds = exceeds + 1;
                 let now = Instant::now();

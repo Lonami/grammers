@@ -92,7 +92,6 @@ impl DialogIter {
             {
                 self.client
                     .0
-                    .config
                     .session
                     .set_update_state(UpdateState::Channel {
                         id: channel.channel_id,

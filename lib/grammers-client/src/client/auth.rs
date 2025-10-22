@@ -89,7 +89,7 @@ impl Client {
 
         let user = User::from_raw(auth.user);
 
-        self.0.config.session.cache_peer(&Peer::User {
+        self.0.session.cache_peer(&Peer::User {
             id: user.id(),
             hash: user.access_hash(),
             bot: Some(user.is_bot()),
@@ -97,7 +97,6 @@ impl Client {
         });
         if let Some(tl::enums::updates::State::State(state)) = update_state {
             self.0
-                .config
                 .session
                 .set_update_state(UpdateState::All(UpdatesState {
                     pts: state.pts,
@@ -123,11 +122,13 @@ impl Client {
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Note: this token is obviously fake.
+    /// // Note: these values are obviously fake.
+    /// //       Obtain your own with the developer's phone at https://my.telegram.org.
+    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     /// //       Obtain your own by talking to @BotFather via a Telegram app.
     /// const TOKEN: &str = "776609994:AAFXAy5-PawQlnYywUlZ_b_GOXgarR3ah_yq";
     ///
-    /// let user = match client.bot_sign_in(TOKEN).await {
+    /// let user = match client.bot_sign_in(TOKEN, API_HASH).await {
     ///     Ok(user) => user,
     ///     Err(err) => {
     ///         println!("Failed to sign in as a bot :(\n{}", err);
@@ -144,11 +145,15 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn bot_sign_in(&self, token: &str) -> Result<User, AuthorizationError> {
+    pub async fn bot_sign_in(
+        &self,
+        token: &str,
+        api_hash: &str,
+    ) -> Result<User, AuthorizationError> {
         let request = tl::functions::auth::ImportBotAuthorization {
             flags: 0,
-            api_id: self.0.config.api_id,
-            api_hash: self.0.config.api_hash.clone(),
+            api_id: self.0.api_id,
+            api_hash: api_hash.to_string(),
             bot_auth_token: token.to_string(),
         };
 
@@ -156,7 +161,7 @@ impl Client {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
                 let dc_id = err.value.unwrap() as i32;
-                self.0.config.session.set_home_dc_id(dc_id);
+                self.0.session.set_home_dc_id(dc_id);
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -184,23 +189,29 @@ impl Client {
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Note: this phone number is obviously fake.
+    /// // Note: these values are obviously fake.
+    /// //       Obtain your own with the developer's phone at https://my.telegram.org.
+    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     /// //       The phone used here does NOT need to be the same as the one used by the developer
     /// //       to obtain the API ID and hash.
     /// const PHONE: &str = "+1 415 555 0132";
     ///
     /// if !client.is_authorized().await? {
     ///     // We're not logged in, so request the login code.
-    ///     client.request_login_code(PHONE).await?;
+    ///     client.request_login_code(PHONE, API_HASH).await?;
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn request_login_code(&self, phone: &str) -> Result<LoginToken, AuthorizationError> {
+    pub async fn request_login_code(
+        &self,
+        phone: &str,
+        api_hash: &str,
+    ) -> Result<LoginToken, AuthorizationError> {
         let request = tl::functions::auth::SendCode {
             phone_number: phone.to_string(),
-            api_id: self.0.config.api_id,
-            api_hash: self.0.config.api_hash.clone(),
+            api_id: self.0.api_id,
+            api_hash: api_hash.to_string(),
             settings: tl::types::CodeSettings {
                 allow_flashcall: false,
                 current_number: false,
@@ -231,7 +242,7 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again.
                 let dc_id = err.value.unwrap() as i32;
-                self.0.config.session.set_home_dc_id(dc_id);
+                self.0.session.set_home_dc_id(dc_id);
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),
@@ -262,12 +273,13 @@ impl Client {
     /// # use grammers_client::SignInError;
     ///
     ///  async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
     /// fn ask_code_to_user() -> String {
     ///     unimplemented!()
     /// }
     ///
-    /// let token = client.request_login_code(PHONE).await?;
+    /// let token = client.request_login_code(PHONE, API_HASH).await?;
     /// let code = ask_code_to_user();
     ///
     /// let user = match client.sign_in(&token, &code).await {
@@ -339,12 +351,13 @@ impl Client {
     /// use grammers_client::SignInError;
     ///
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
     /// fn get_user_password(hint: &str) -> Vec<u8> {
     ///     unimplemented!()
     /// }
     ///
-    /// # let token = client.request_login_code(PHONE).await?;
+    /// # let token = client.request_login_code(PHONE, API_HASH).await?;
     /// # let code = "";
     ///
     /// // ... enter phone number, request login code ...

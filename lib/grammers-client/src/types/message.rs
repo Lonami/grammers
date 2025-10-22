@@ -253,14 +253,7 @@ impl Message {
                 let peer_id = self.peer_id();
                 if matches!(peer_id, tl::enums::Peer::User(_)) {
                     if self.outgoing() {
-                        let user_id = self
-                            .client
-                            .0
-                            .config
-                            .session
-                            .peer(PeerRef::SelfUser)
-                            .unwrap()
-                            .id();
+                        let user_id = self.client.0.session.peer(PeerRef::SelfUser).unwrap().id();
                         Some(tl::types::PeerUser { user_id }.into())
                     } else {
                         Some(peer_id.clone())

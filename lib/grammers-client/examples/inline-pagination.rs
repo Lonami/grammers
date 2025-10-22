@@ -23,7 +23,6 @@
 //! in decimal, so the numbers can't get too large).
 
 use futures_util::future::{Either, select};
-use grammers_client::client::client::Configuration;
 use grammers_client::session::Session;
 use grammers_client::{Client, InputMessage, Update, button, reply_markup};
 use grammers_mtsender::SenderPool;
@@ -120,7 +119,6 @@ async fn async_main() -> Result {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let token = env::args().nth(1).expect("token missing");
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
@@ -130,13 +128,7 @@ async fn async_main() -> Result {
         api_id,
         Default::default(),
     );
-    let client = Client::new(
-        &pool,
-        Configuration {
-            api_hash: api_hash.clone(),
-            params: Default::default(),
-        },
-    );
+    let client = Client::new(&pool, Default::default());
     let SenderPool {
         runner,
         handle,
@@ -149,7 +141,7 @@ async fn async_main() -> Result {
 
     if !client.is_authorized().await? {
         println!("Signing in...");
-        client.bot_sign_in(&token).await?;
+        client.bot_sign_in(&token, env!("TG_HASH")).await?;
         session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }

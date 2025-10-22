@@ -18,7 +18,6 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{env, io};
 
-use grammers_client::client::client::Configuration;
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
@@ -41,7 +40,6 @@ async fn async_main() -> Result<()> {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let chat_name = env::args().nth(1).expect("chat name missing");
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
@@ -51,13 +49,7 @@ async fn async_main() -> Result<()> {
         api_id,
         Default::default(),
     );
-    let client = Client::new(
-        &pool,
-        Configuration {
-            api_hash: api_hash.clone(),
-            params: Default::default(),
-        },
-    );
+    let client = Client::new(&pool, Default::default());
     let SenderPool { runner, handle, .. } = pool;
     let pool_task = tokio::spawn(runner.run());
 
@@ -70,7 +62,7 @@ async fn async_main() -> Result<()> {
     if !client.is_authorized().await? {
         println!("Signing in...");
         let phone = prompt("Enter your phone number (international format): ")?;
-        let token = client.request_login_code(&phone).await?;
+        let token = client.request_login_code(&phone, env!("TG_HASH")).await?;
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
