@@ -96,9 +96,6 @@ pub trait Transport {
     /// Subsequent calls to `unpack` should be made with the same buffer,
     /// with the data on the ranges from previous `UnpackedOffset` removed.
     fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error>;
-
-    /// Reset the state, as if a new instance was just created.
-    fn reset(&mut self);
 }
 
 /// The trait used by the obfuscated transport to get the transport tags.

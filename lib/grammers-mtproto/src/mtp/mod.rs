@@ -206,7 +206,4 @@ pub trait Mtp {
 
     /// Deserializes a single incoming message payload into zero or more responses.
     fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;
-
-    /// Reset the state, as if a new instance was just created.
-    fn reset(&mut self);
 }

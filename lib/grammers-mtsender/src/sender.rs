@@ -193,6 +193,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Step network events, writing and reading at the same time.
     ///
     /// Updates received during this step, if any, are returned.
+    ///
+    /// Once an error is returned, the connection is dead and should be recreated.
     pub async fn step(&mut self) -> Result<Vec<UpdatesLike>, ReadError> {
         enum Sel {
             Sleep,
@@ -248,7 +250,10 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         match res {
             Ok(ok) => Ok(ok),
-            Err(err) => Err(self.on_error(err)),
+            Err(err) => {
+                self.on_error(&err);
+                Err(err)
+            }
         }
     }
 
@@ -389,22 +394,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Handle errors that occured while performing I/O.
-    fn on_error(&mut self, error: ReadError) -> ReadError {
-        log::info!("handling error: {error}");
-        self.transport.reset();
-        self.mtp.reset();
-        log::info!(
-            "resetting sender state from read_buffer {}/{}, write_buffer {}/{}",
-            self.read_tail,
-            self.read_buffer.len(),
-            self.write_head,
-            self.write_buffer.len(),
-        );
-        self.read_tail = 0;
-        self.read_buffer.fill(0);
-        self.write_head = 0;
-        self.write_buffer.clear();
-
+    fn on_error(&mut self, error: &ReadError) {
         log::warn!(
             "marking all {} request(s) as failed: {}",
             self.requests.len(),
@@ -414,8 +404,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.requests
             .drain(..)
             .for_each(|r| drop(r.result.send(Err(InvocationError::from(error.clone())))));
-
-        error
     }
 
     /// Process the result of deserializing an MTP buffer.

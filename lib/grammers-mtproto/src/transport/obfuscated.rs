@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_crypto::{DequeBuffer, obfuscated::ObfuscatedCipher};
-use log::debug;
 
 use super::{Error, Tagged, Transport, UnpackedOffset};
 
@@ -98,14 +97,5 @@ impl<T: Transport + Tagged> Transport for Obfuscated<T> {
             }
             Err(e) => Err(e),
         }
-    }
-
-    fn reset(&mut self) {
-        self.inner.reset();
-        debug!("regenerating keys for obfuscated transport");
-
-        let (init, cipher) = Self::generate_keys(&mut self.inner);
-        self.head = Some(init);
-        self.cipher = cipher;
     }
 }
