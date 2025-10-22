@@ -6,21 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unsafe_code)]
-
-mod chat;
-mod generated;
-mod message_box;
-
-pub use chat::{ChatHashCache, PackedChat, PackedType};
-pub use generated::LAYER as VERSION;
-pub use generated::types::UpdateState;
-pub use generated::types::User;
-use generated::{enums, types};
+use crate::generated::{enums, types};
 use grammers_tl_types as tl;
 use grammers_tl_types::deserialize::Error as DeserializeError;
-pub use message_box::PrematureEndReason;
-pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
+use grammers_tl_types::{Deserializable, Serializable};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
@@ -29,14 +18,11 @@ use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 use std::sync::Mutex;
 
-// Needed for auto-generated definitions.
-use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};
-
 #[cfg_attr(
     feature = "impl-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
-pub struct Session {
+pub struct TlSession {
     session: Mutex<types::Session>,
 }
 
@@ -88,7 +74,7 @@ pub const KNOWN_DC_OPTIONS: [types::DataCenter; 5] = [
 ];
 
 #[allow(clippy::new_without_default)]
-impl Session {
+impl TlSession {
     pub fn new() -> Self {
         Self {
             session: Mutex::new(types::Session {
@@ -105,7 +91,7 @@ impl Session {
         let path = path.as_ref();
         if !path.exists() {
             File::create(path)?;
-            let session = Session::new();
+            let session = TlSession::new();
             session.save_to_file(path)?;
             Ok(session)
         } else {
@@ -215,11 +201,11 @@ impl Session {
     }
 
     pub fn set_user(&self, id: i64, dc: i32, bot: bool) {
-        self.session.lock().unwrap().user = Some(User { id, dc, bot }.into())
+        self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
     }
 
     /// Returns the stored user
-    pub fn get_user(&self) -> Option<User> {
+    pub fn get_user(&self) -> Option<types::User> {
         self.session
             .lock()
             .unwrap()
@@ -228,13 +214,13 @@ impl Session {
             .map(|enums::User::User(user)| user.clone())
     }
 
-    pub fn get_state(&self) -> Option<UpdateState> {
+    pub fn get_state(&self) -> Option<types::UpdateState> {
         let session = self.session.lock().unwrap();
         let enums::UpdateState::State(state) = session.state.clone()?;
         Some(state)
     }
 
-    pub fn set_state(&self, state: UpdateState) {
+    pub fn set_state(&self, state: types::UpdateState) {
         self.session.lock().unwrap().state = Some(state.into())
     }
 
@@ -259,8 +245,8 @@ impl Session {
 
 pub fn state_to_update_state(
     tl::enums::updates::State::State(state): tl::enums::updates::State,
-) -> UpdateState {
-    UpdateState {
+) -> types::UpdateState {
+    types::UpdateState {
         pts: state.pts,
         qts: state.qts,
         date: state.date,
@@ -269,7 +255,11 @@ pub fn state_to_update_state(
     }
 }
 
-pub fn try_push_channel_state(update_state: &mut UpdateState, channel_id: i64, pts: i32) -> bool {
+pub fn try_push_channel_state(
+    update_state: &mut types::UpdateState,
+    channel_id: i64,
+    pts: i32,
+) -> bool {
     if update_state
         .channels
         .iter()
@@ -286,8 +276,6 @@ pub fn try_push_channel_state(update_state: &mut UpdateState, channel_id: i64, p
         }));
     true
 }
-
-pub use enums::DataCenter;
 
 #[derive(Debug)]
 pub enum Error {
