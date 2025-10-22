@@ -10,8 +10,9 @@ use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::state_to_update_state;
+use grammers_session::{Peer, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
+use std::any::Any;
 use std::fmt;
 
 /// The error type which is returned when signing in fails.
@@ -89,14 +90,23 @@ impl Client {
 
         let user = User::from_raw(auth.user);
 
-        let state = self.0.state.read().unwrap();
-        self.0
-            .config
-            .session
-            .set_user(user.id(), state.dc_id, user.is_bot());
-
-        if let Some(us) = update_state {
-            self.0.config.session.set_state(state_to_update_state(us));
+        self.0.config.session.cache_peer(&Peer::User {
+            id: user.id(),
+            hash: user.access_hash(),
+            bot: Some(user.is_bot()),
+            is_self: true,
+        });
+        if let Some(tl::enums::updates::State::State(state)) = update_state {
+            self.0
+                .config
+                .session
+                .set_update_state(UpdateState::All(UpdatesState {
+                    pts: state.pts,
+                    qts: state.qts,
+                    date: state.date,
+                    seq: state.seq,
+                    channels: Vec::new(),
+                }));
         }
 
         Ok(user)
@@ -147,9 +157,7 @@ impl Client {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
                 let dc_id = err.value.unwrap() as i32;
-                {
-                    self.0.state.write().unwrap().dc_id = dc_id;
-                }
+                self.0.config.session.set_home_dc_id(dc_id);
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -224,9 +232,7 @@ impl Client {
                 // Just connect and generate a new authorization key with it
                 // before trying again.
                 let dc_id = err.value.unwrap() as i32;
-                {
-                    self.0.state.write().unwrap().dc_id = dc_id;
-                }
+                self.0.config.session.set_home_dc_id(dc_id);
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),
@@ -437,8 +443,11 @@ impl Client {
     /// Grants temporary access to the session.
     ///
     /// You can use this save it wherever you want to.
-    pub fn session(&self) -> &grammers_session::Session {
-        &self.0.config.session
+    ///
+    /// Panics if `S` does not match the stored session type.
+    pub fn inspect_session<S: 'static, F: FnOnce(&S) -> R, R>(&self, callback: F) -> R {
+        let any = self.0.config.session.as_ref() as &dyn Any;
+        callback(any.downcast_ref::<S>().unwrap())
     }
 
     /// Calls [`Client::sign_out`] and disconnects.

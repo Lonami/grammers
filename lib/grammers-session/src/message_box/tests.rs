@@ -11,9 +11,8 @@ use super::defs::{
     UpdateAndPeers,
 };
 use super::{PrematureEndReason, next_updates_deadline};
-use crate::generated::types::ChannelState;
 use crate::message_box::POSSIBLE_GAP_TIMEOUT;
-use crate::{UpdateState, UpdatesLike};
+use crate::{ChannelState, UpdatesLike, UpdatesState};
 use grammers_tl_types as tl;
 use std::cell::RefCell;
 use std::ops::Add;
@@ -118,14 +117,11 @@ fn get_difference(date: i32, pts: i32, qts: i32) -> tl::functions::updates::GetD
     }
 }
 
-fn get_channel_difference(
-    channel_id: i64,
-    pts: i32,
-) -> tl::functions::updates::GetChannelDifference {
+fn get_channel_difference(id: i64, pts: i32) -> tl::functions::updates::GetChannelDifference {
     tl::functions::updates::GetChannelDifference {
         force: false,
         channel: tl::enums::InputChannel::Channel(tl::types::InputChannel {
-            channel_id,
+            channel_id: id,
             access_hash: 0,
         }),
         filter: tl::enums::ChannelMessagesFilter::Empty,
@@ -137,7 +133,7 @@ fn get_channel_difference(
 #[test]
 fn test_connect_flow_empty() {
     reset_time();
-    let state = UpdateState {
+    let state = UpdatesState {
         pts: NO_PTS,
         qts: NO_PTS,
         date: NO_DATE,
@@ -155,18 +151,12 @@ fn test_connect_flow_empty() {
 #[test]
 fn test_connect_flow_with_data() {
     reset_time();
-    let state = UpdateState {
+    let state = UpdatesState {
         pts: 12,
         qts: 34,
         date: 56,
         seq: 78,
-        channels: vec![
-            ChannelState {
-                channel_id: 43,
-                pts: 21,
-            }
-            .into(),
-        ],
+        channels: vec![ChannelState { id: 43, pts: 21 }],
     };
     let message_boxes = MessageBoxes::load(state.clone());
 
@@ -194,7 +184,7 @@ fn test_complete_login_flow() {
     assert_eq!(message_boxes.get_channel_difference(), None);
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
+        UpdatesState {
             pts: 12,
             qts: 34,
             date: 56,
@@ -215,19 +205,11 @@ fn test_iter_dialogs_flow() {
 
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
+        UpdatesState {
             channels: vec![
                 // Notably: sorted, and only the first set is kept.
-                ChannelState {
-                    channel_id: 54,
-                    pts: 32
-                }
-                .into(),
-                ChannelState {
-                    channel_id: 98,
-                    pts: 76
-                }
-                .into(),
+                ChannelState { id: 54, pts: 32 }.into(),
+                ChannelState { id: 98, pts: 76 }.into(),
             ],
             ..message_boxes.session_state()
         }
@@ -282,7 +264,7 @@ fn test_next_raw_update_flow_common_timeout() {
     assert_eq!(message_boxes.check_deadlines(), next_updates_deadline());
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
+        UpdatesState {
             pts: 12,
             qts: 34,
             date: 90,
@@ -320,14 +302,8 @@ fn test_next_raw_update_flow_channel_timeout() {
     assert_eq!(message_boxes.check_deadlines(), next_updates_deadline());
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
-            channels: vec![
-                ChannelState {
-                    channel_id: 12,
-                    pts: 56
-                }
-                .into()
-            ],
+        UpdatesState {
+            channels: vec![ChannelState { id: 12, pts: 56 }.into()],
             ..message_boxes.session_state()
         }
     );
@@ -347,14 +323,8 @@ fn test_next_raw_update_flow_channel_issues() {
     assert!(message_boxes.get_channel_difference().is_none());
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
-            channels: vec![
-                ChannelState {
-                    channel_id: 12,
-                    pts: 34
-                }
-                .into()
-            ],
+        UpdatesState {
+            channels: vec![ChannelState { id: 12, pts: 34 }.into()],
             ..message_boxes.session_state()
         }
     );
@@ -374,7 +344,7 @@ fn test_next_raw_update_flow_channel_ban() {
     assert!(message_boxes.get_channel_difference().is_none());
     assert_eq!(
         message_boxes.session_state(),
-        UpdateState {
+        UpdatesState {
             channels: vec![],
             ..message_boxes.session_state()
         }

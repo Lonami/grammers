@@ -13,9 +13,8 @@ use crate::{
 };
 use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
-use grammers_session::{DataCenter, UpdatesLike};
+use grammers_session::{DcOption, UpdatesLike};
 use grammers_tl_types as tl;
-use std::net::{Ipv4Addr, SocketAddr, SocketAddrV4};
 use std::panic;
 use std::pin::pin;
 use tokio::task::AbortHandle;
@@ -128,17 +127,9 @@ impl SenderPool {
 
             match request {
                 Request::Invoke { dc_id, body, tx } => {
-                    let dc_option = match configuration
-                        .session
-                        .get_dcs()
-                        .iter()
-                        .find(|dc_option| dc_option.id() == dc_id)
-                    {
-                        Some(dc_option) => dc_option.clone(),
-                        None => {
-                            let _ = tx.send(Err(InvocationError::InvalidDc));
-                            continue;
-                        }
+                    let Some(mut dc_option) = configuration.session.dc_option(dc_id) else {
+                        let _ = tx.send(Err(InvocationError::InvalidDc));
+                        continue;
                     };
 
                     let connection = match connections
@@ -148,9 +139,8 @@ impl SenderPool {
                         Some(connection) => connection,
                         None => {
                             let sender = connect_sender(&configuration, &dc_option).await.unwrap();
-                            configuration
-                                .session
-                                .set_dc_auth_key(dc_id, sender.auth_key());
+                            dc_option.auth_key = Some(sender.auth_key());
+                            configuration.session.set_dc_option(&dc_option);
 
                             let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                             let abort_handle = connection_pool.spawn(run_sender(
@@ -190,25 +180,15 @@ impl SenderPool {
 
 async fn connect_sender(
     configuration: &Configuration,
-    dc_option: &DataCenter,
+    dc_option: &DcOption,
 ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
-    let (address, auth_key) = match dc_option {
-        DataCenter::Center(center) => (
-            SocketAddr::V4(SocketAddrV4::new(
-                Ipv4Addr::from_bits(center.ipv4.unwrap() as _),
-                center.port as _,
-            )),
-            center.auth.clone(),
-        ),
-        _ => unimplemented!(),
-    };
     let transport = transport::Full::new();
     let addr = ServerAddr::Tcp {
-        address: address.clone(),
+        address: dc_option.ipv4.into(),
     };
 
-    let mut sender = if let Some(auth_key) = auth_key {
-        connect_with_auth(transport, addr, auth_key.try_into().unwrap(), &NoReconnect).await?
+    let mut sender = if let Some(auth_key) = dc_option.auth_key {
+        connect_with_auth(transport, addr, auth_key, &NoReconnect).await?
     } else {
         connect(transport, addr, &NoReconnect).await?
     };

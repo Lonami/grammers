@@ -5,17 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::client::ClientState;
 use super::{Client, ClientInner, Config};
 use crate::utils;
 use grammers_mtsender::utils::sleep;
 use grammers_mtsender::{AuthorizationError, InvocationError, RpcError};
-use grammers_session::{MessageBoxes, state_to_update_state};
+use grammers_session::{MessageBoxes, PeerRef, UpdateState, UpdatesState};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::sync::{Arc, RwLock};
-
-const DEFAULT_DC: i32 = 2;
+use std::sync::Arc;
 
 /// Method implementations directly related with network connectivity.
 impl Client {
@@ -29,8 +26,9 @@ impl Client {
     /// # Examples
     ///
     /// ```
+    /// use std::sync::Arc;
     /// use grammers_client::{Client, Config};
-    /// use grammers_session::Session;
+    /// use grammers_session::{Session, storages::TlSession};
     /// use grammers_mtsender::{SenderPool, Configuration};
     ///
     /// // Note: these are example values and are not actually valid.
@@ -39,12 +37,14 @@ impl Client {
     /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
+    /// let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
     /// let (_pool, handle, _) = SenderPool::new(Configuration {
     ///     api_id: API_ID,
+    ///     session: Arc::clone(&session),
     ///     ..Default::default()
     /// });
     /// let client = Client::connect(Config {
-    ///     session: Session::load_file_or_create("hello-world.session")?,
+    ///     session: Arc::clone(&session),
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     handle: handle,
@@ -54,17 +54,8 @@ impl Client {
     /// # }
     /// ```
     pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let dc_id = config
-            .session
-            .get_user()
-            .map(|u| u.dc)
-            .unwrap_or(DEFAULT_DC);
         let message_box = if config.params.catch_up {
-            if let Some(state) = config.session.get_state() {
-                MessageBoxes::load(state)
-            } else {
-                MessageBoxes::new()
-            }
+            MessageBoxes::load(config.session.updates_state())
         } else {
             // If the user doesn't want to bother with catching up on previous update, start with
             // pristine state instead.
@@ -77,23 +68,29 @@ impl Client {
         }
 
         // Don't bother getting pristine update state if we're not logged in.
-        let should_get_state = message_box.is_empty() && config.session.signed_in();
+        let should_get_state =
+            message_box.is_empty() && config.session.peer(PeerRef::SelfUser).is_some();
 
         // TODO Sender doesn't have a way to handle backpressure yet
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             config,
-            state: RwLock::new(ClientState { dc_id }),
         }));
 
         if should_get_state {
             match client.invoke(&tl::functions::updates::GetState {}).await {
-                Ok(state) => {
+                Ok(tl::enums::updates::State::State(state)) => {
                     client
                         .0
                         .config
                         .session
-                        .set_state(state_to_update_state(state));
+                        .set_update_state(UpdateState::All(UpdatesState {
+                            pts: state.pts,
+                            qts: state.qts,
+                            date: state.date,
+                            seq: state.seq,
+                            channels: Vec::new(),
+                        }));
                 }
                 Err(_err) => {
                     // The account may no longer actually be logged in, or it can rarely fail.
@@ -132,7 +129,7 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let dc_id = { self.0.state.read().unwrap().dc_id };
+        let dc_id = self.0.config.session.home_dc_id();
         self.do_invoke_in_dc(dc_id, request.to_bytes())
             .await
             .and_then(|body| R::Return::from_bytes(&body).map_err(|e| e.into()))

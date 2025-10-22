@@ -27,9 +27,7 @@ mod defs;
 #[cfg(test)]
 mod tests;
 
-use crate::UpdateState;
-use crate::generated::enums::ChannelState as ChannelStateEnum;
-use crate::generated::types::ChannelState;
+use crate::{ChannelState, UpdatesState};
 pub use adaptor::peer_from_input_peer;
 pub(crate) use defs::Key;
 pub use defs::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
@@ -96,7 +94,7 @@ impl MessageBoxes {
     }
 
     /// Create a [`MessageBoxes`] from a previously known update state.
-    pub fn load(state: UpdateState) -> Self {
+    pub fn load(state: UpdatesState) -> Self {
         trace!("created new message box with state: {:?}", state);
         let mut entries = Vec::with_capacity(2 + state.channels.len());
         let mut getting_diff_for = Vec::with_capacity(2 + state.channels.len());
@@ -119,17 +117,12 @@ impl MessageBoxes {
                 possible_gap: None,
             });
         }
-        entries.extend(
-            state
-                .channels
-                .iter()
-                .map(|ChannelStateEnum::State(c)| LiveEntry {
-                    key: Key::Channel(c.channel_id),
-                    pts: c.pts,
-                    deadline,
-                    possible_gap: None,
-                }),
-        );
+        entries.extend(state.channels.iter().map(|c| LiveEntry {
+            key: Key::Channel(c.id),
+            pts: c.pts,
+            deadline,
+            possible_gap: None,
+        }));
         entries.sort_by_key(|entry| entry.key);
 
         getting_diff_for.extend(entries.iter().map(|entry| entry.key));
@@ -227,8 +220,8 @@ impl MessageBoxes {
     /// Return the current state in a format that sessions understand.
     ///
     /// This should be used for persisting the state.
-    pub fn session_state(&self) -> UpdateState {
-        UpdateState {
+    pub fn session_state(&self) -> UpdatesState {
+        UpdatesState {
             pts: self.entry(Key::Common).map(|s| s.pts).unwrap_or(NO_PTS),
             qts: self.entry(Key::Secondary).map(|s| s.pts).unwrap_or(NO_PTS),
             date: self.date,
@@ -237,13 +230,7 @@ impl MessageBoxes {
                 .entries
                 .iter()
                 .filter_map(|entry| match entry.key {
-                    Key::Channel(channel_id) => Some(
-                        ChannelState {
-                            channel_id,
-                            pts: entry.pts,
-                        }
-                        .into(),
-                    ),
+                    Key::Channel(id) => Some(ChannelState { id, pts: entry.pts }.into()),
                     _ => None,
                 })
                 .collect(),

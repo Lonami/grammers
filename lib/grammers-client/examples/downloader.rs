@@ -15,10 +15,12 @@
 //!
 use std::io::{BufRead, Write};
 use std::path::Path;
+use std::sync::Arc;
 use std::{env, io};
 
 use grammers_client::{Client, Config, SignInError};
 use grammers_mtsender::{Configuration, SenderPool};
+use grammers_session::storages::TlSession;
 use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
@@ -41,15 +43,18 @@ async fn async_main() -> Result<()> {
     let api_hash = env!("TG_HASH").to_string();
     let chat_name = env::args().nth(1).expect("chat name missing");
 
+    let session: Arc<dyn Session> = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+
     let (pool, handle, _) = SenderPool::new(Configuration {
         api_id,
+        session: Arc::clone(&session),
         ..Default::default()
     });
     let pool_task = tokio::spawn(pool.run());
 
     println!("Connecting to Telegram...");
     let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
+        session: Arc::clone(&session),
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
@@ -83,13 +88,15 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match client.session().save_to_file(SESSION_FILE) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("NOTE: failed to save the session, will sign out when done: {e}");
-                sign_out = true;
-            }
-        }
+        client.inspect_session(
+            |session: &TlSession| match session.save_to_file(SESSION_FILE) {
+                Ok(_) => {}
+                Err(e) => {
+                    println!("NOTE: failed to save the session, will sign out when done: {e}");
+                    sign_out = true;
+                }
+            },
+        )
     }
 
     let maybe_chat = client.resolve_username(chat_name.as_str()).await?;

@@ -6,15 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::dc_options::DEFAULT_DC;
 use crate::generated::{enums, types};
+use crate::{KNOWN_DC_OPTIONS, Session};
 use grammers_tl_types as tl;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 use grammers_tl_types::{Deserializable, Serializable};
 use std::fmt;
 use std::fs::{File, OpenOptions};
 use std::io::{self, Read, Seek, Write};
-use std::net::Ipv4Addr;
-use std::net::{SocketAddr, SocketAddrV4, SocketAddrV6};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -26,63 +27,20 @@ pub struct TlSession {
     session: Mutex<types::Session>,
 }
 
-/// Hardcoded known `static` options from `functions::help::GetConfig`.
-pub const KNOWN_DC_OPTIONS: [types::DataCenter; 5] = [
-    types::DataCenter {
-        id: 1,
-        ipv4: Some(i32::from_le_bytes(
-            Ipv4Addr::new(149, 154, 175, 53).octets(),
-        )),
-        ipv6: None,
-        port: 443,
-        auth: None,
-    },
-    types::DataCenter {
-        id: 2,
-        ipv4: Some(i32::from_le_bytes(
-            Ipv4Addr::new(149, 154, 167, 51).octets(),
-        )),
-        ipv6: None,
-        port: 443,
-        auth: None,
-    },
-    types::DataCenter {
-        id: 3,
-        ipv4: Some(i32::from_le_bytes(
-            Ipv4Addr::new(149, 154, 175, 100).octets(),
-        )),
-        ipv6: None,
-        port: 443,
-        auth: None,
-    },
-    types::DataCenter {
-        id: 4,
-        ipv4: Some(i32::from_le_bytes(
-            Ipv4Addr::new(149, 154, 167, 92).octets(),
-        )),
-        ipv6: None,
-        port: 443,
-        auth: None,
-    },
-    types::DataCenter {
-        id: 5,
-        ipv4: Some(i32::from_le_bytes(Ipv4Addr::new(91, 108, 56, 190).octets())),
-        ipv6: None,
-        port: 443,
-        auth: None,
-    },
-];
-
 #[allow(clippy::new_without_default)]
 impl TlSession {
     pub fn new() -> Self {
-        Self {
+        let this = Self {
             session: Mutex::new(types::Session {
-                dcs: Vec::new(),
+                dcs: Vec::with_capacity(KNOWN_DC_OPTIONS.len()),
                 user: None,
                 state: None,
             }),
-        }
+        };
+        KNOWN_DC_OPTIONS
+            .iter()
+            .for_each(|dc_option| this.set_dc_option(dc_option));
+        this
     }
 
     /// Load a previous session instance from a file,
@@ -120,114 +78,6 @@ impl TlSession {
         })
     }
 
-    pub fn signed_in(&self) -> bool {
-        self.session.lock().unwrap().user.is_some()
-    }
-
-    pub fn dc_auth_key(&self, dc_id: i32) -> Option<[u8; 256]> {
-        self.session
-            .lock()
-            .unwrap()
-            .dcs
-            .iter()
-            .filter_map(|dc| match dc {
-                enums::DataCenter::Center(types::DataCenter {
-                    id,
-                    auth: Some(auth),
-                    ..
-                }) if *id == dc_id => auth.clone().try_into().ok(),
-                enums::DataCenter::Ws(types::DataCenterWs {
-                    id,
-                    auth: Some(auth),
-                    ..
-                }) if *id == dc_id => auth.clone().try_into().ok(),
-                _ => None,
-            })
-            .next()
-    }
-
-    fn insert_dc(&self, new_dc: enums::DataCenter) {
-        let mut session = self.session.lock().unwrap();
-
-        if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == new_dc.id()) {
-            session.dcs.remove(pos);
-        }
-        session.dcs.push(new_dc);
-    }
-
-    pub fn set_dc_auth_key(&self, dc_id: i32, auth: [u8; 256]) {
-        let mut session = self.session.lock().unwrap();
-
-        for dc in session.dcs.iter_mut() {
-            if dc.id() == dc_id {
-                match dc {
-                    enums::DataCenter::Center(data_center) => data_center.auth = Some(auth.into()),
-                    enums::DataCenter::Ws(data_center_ws) => {
-                        data_center_ws.auth = Some(auth.into())
-                    }
-                }
-                break;
-            }
-        }
-    }
-
-    pub fn insert_dc_tcp(&self, id: i32, addr: &SocketAddr, auth: [u8; 256]) {
-        let (ip_v4, ip_v6): (Option<&SocketAddrV4>, Option<&SocketAddrV6>) = match addr {
-            SocketAddr::V4(ip_v4) => (Some(ip_v4), None),
-            SocketAddr::V6(ip_v6) => (None, Some(ip_v6)),
-        };
-
-        self.insert_dc(
-            types::DataCenter {
-                id,
-                ipv4: ip_v4.map(|addr| i32::from_le_bytes(addr.ip().octets())),
-                ipv6: ip_v6.map(|addr| addr.ip().octets()),
-                port: addr.port() as i32,
-                auth: Some(auth.into()),
-            }
-            .into(),
-        );
-    }
-
-    pub fn insert_dc_ws(&self, id: i32, url: &str, auth: [u8; 256]) {
-        self.insert_dc(
-            types::DataCenterWs {
-                id,
-                url: url.to_string(),
-                auth: Some(auth.into()),
-            }
-            .into(),
-        );
-    }
-
-    pub fn set_user(&self, id: i64, dc: i32, bot: bool) {
-        self.session.lock().unwrap().user = Some(types::User { id, dc, bot }.into())
-    }
-
-    /// Returns the stored user
-    pub fn get_user(&self) -> Option<types::User> {
-        self.session
-            .lock()
-            .unwrap()
-            .user
-            .as_ref()
-            .map(|enums::User::User(user)| user.clone())
-    }
-
-    pub fn get_state(&self) -> Option<types::UpdateState> {
-        let session = self.session.lock().unwrap();
-        let enums::UpdateState::State(state) = session.state.clone()?;
-        Some(state)
-    }
-
-    pub fn set_state(&self, state: types::UpdateState) {
-        self.session.lock().unwrap().state = Some(state.into())
-    }
-
-    pub fn get_dcs(&self) -> Vec<enums::DataCenter> {
-        self.session.lock().unwrap().dcs.to_vec()
-    }
-
     #[must_use]
     pub fn save(&self) -> Vec<u8> {
         enums::Session::Session(self.session.lock().unwrap().clone()).to_bytes()
@@ -240,6 +90,194 @@ impl TlSession {
         file.set_len(0)?;
         file.write_all(&self.save())?;
         file.sync_data()
+    }
+}
+
+impl crate::Session for TlSession {
+    fn home_dc_id(&self) -> i32 {
+        let session = self.session.lock().unwrap();
+        session
+            .user
+            .as_ref()
+            .map(|enums::User::User(user)| user.dc)
+            .unwrap_or(DEFAULT_DC)
+    }
+
+    fn set_home_dc_id(&self, dc_id: i32) {
+        let mut session = self.session.lock().unwrap();
+        if let Some(enums::User::User(user)) = &mut session.user {
+            user.dc = dc_id
+        } else {
+            session.user = Some(enums::User::User(types::User {
+                id: 0,
+                bot: false,
+                dc: dc_id,
+            }))
+        }
+    }
+
+    fn dc_option(&self, dc_id: i32) -> Option<crate::session::DcOption> {
+        let session = self.session.lock().unwrap();
+        session.dcs.iter().find_map(|dc| match dc {
+            enums::DataCenter::Center(center) if center.id == dc_id => {
+                Some(crate::session::DcOption {
+                    id: center.id,
+                    ipv4: SocketAddrV4::new(
+                        Ipv4Addr::from_bits(center.ipv4.unwrap() as _),
+                        center.port as _,
+                    ),
+                    ipv6: SocketAddrV6::new(
+                        center
+                            .ipv6
+                            .map(|ipv6| Ipv6Addr::from_bits(u128::from_le_bytes(ipv6)))
+                            .unwrap_or_else(|| {
+                                Ipv4Addr::from_bits(center.ipv4.unwrap() as _).to_ipv6_mapped()
+                            }),
+                        center.port as _,
+                        0,
+                        0,
+                    ),
+                    auth_key: center.auth.as_deref().map(|auth| auth.try_into().unwrap()),
+                })
+            }
+            _ => None,
+        })
+    }
+
+    fn set_dc_option(&self, dc_option: &crate::session::DcOption) {
+        let mut session = self.session.lock().unwrap();
+
+        if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == dc_option.id) {
+            session.dcs.remove(pos);
+        }
+        session
+            .dcs
+            .push(enums::DataCenter::Center(types::DataCenter {
+                id: dc_option.id,
+                ipv4: Some(dc_option.ipv4.ip().to_bits() as _),
+                ipv6: Some(dc_option.ipv6.ip().to_bits().to_le_bytes()),
+                port: dc_option.ipv4.port() as _,
+                auth: dc_option.auth_key.map(|auth| auth.to_vec()),
+            }));
+    }
+
+    fn peer(&self, peer: crate::session::PeerRef) -> Option<crate::session::Peer> {
+        let session = self.session.lock().unwrap();
+        match peer {
+            crate::session::PeerRef::SelfUser => {
+                session
+                    .user
+                    .as_ref()
+                    .map(|enums::User::User(user)| crate::session::Peer::User {
+                        id: user.id,
+                        hash: Some(0),
+                        bot: Some(user.bot),
+                        is_self: true,
+                    })
+            }
+            _ => None,
+        }
+    }
+
+    fn cache_peer(&self, peer: &crate::session::Peer) {
+        let mut session = self.session.lock().unwrap();
+        match peer {
+            crate::session::Peer::User {
+                id,
+                hash: _,
+                bot,
+                is_self,
+            } if *is_self => {
+                if let Some(enums::User::User(user)) = &mut session.user {
+                    user.id = *id;
+                    user.bot = bot.unwrap_or_default();
+                } else {
+                    session.user = Some(enums::User::User(types::User {
+                        id: *id,
+                        bot: bot.unwrap_or_default(),
+                        dc: DEFAULT_DC,
+                    }))
+                }
+            }
+            _ => {}
+        }
+    }
+
+    fn updates_state(&self) -> crate::session::UpdatesState {
+        let session = self.session.lock().unwrap();
+        session
+            .state
+            .as_ref()
+            .map(
+                |enums::UpdateState::State(state)| crate::session::UpdatesState {
+                    pts: state.pts,
+                    qts: state.qts,
+                    date: state.date,
+                    seq: state.seq,
+                    channels: state
+                        .channels
+                        .iter()
+                        .map(
+                            |enums::ChannelState::State(channel)| crate::session::ChannelState {
+                                id: channel.channel_id,
+                                pts: channel.pts,
+                            },
+                        )
+                        .collect(),
+                },
+            )
+            .unwrap_or_default()
+    }
+
+    fn set_update_state(&self, update: crate::session::UpdateState) {
+        match update {
+            crate::session::UpdateState::All(updates_state) => {
+                let mut session = self.session.lock().unwrap();
+                session.state = Some(
+                    types::UpdateState {
+                        pts: updates_state.pts,
+                        qts: updates_state.qts,
+                        date: updates_state.date,
+                        seq: updates_state.seq,
+                        channels: updates_state
+                            .channels
+                            .iter()
+                            .map(|channel| {
+                                types::ChannelState {
+                                    channel_id: channel.id,
+                                    pts: channel.pts,
+                                }
+                                .into()
+                            })
+                            .collect(),
+                    }
+                    .into(),
+                )
+            }
+            crate::session::UpdateState::Primary { pts, date, seq } => {
+                let mut current = self.updates_state();
+                current.pts = pts;
+                current.date = date;
+                current.seq = seq;
+                self.set_update_state(crate::session::UpdateState::All(current));
+            }
+            crate::session::UpdateState::Secondary { qts } => {
+                let mut current = self.updates_state();
+                current.qts = qts;
+                self.set_update_state(crate::session::UpdateState::All(current));
+            }
+            crate::session::UpdateState::Channel { id, pts } => {
+                let mut current = self.updates_state();
+                if let Some(pos) = current.channels.iter().position(|channel| channel.id == id) {
+                    current.channels[pos] = crate::session::ChannelState { id: id, pts }
+                } else {
+                    current
+                        .channels
+                        .push(crate::session::ChannelState { id: id, pts });
+                }
+                self.set_update_state(crate::session::UpdateState::All(current));
+            }
+        }
     }
 }
 

@@ -1,4 +1,6 @@
-use grammers_session::Session;
+use std::sync::Arc;
+
+use grammers_session::{Session, storages::TlSession};
 
 const DEFAULT_LOCALE: &str = "en";
 
@@ -9,7 +11,7 @@ pub struct Configuration {
     pub app_version: String,
     pub system_lang_code: String,
     pub lang_code: String,
-    pub session: Session,
+    pub session: Arc<dyn Session>,
 }
 
 impl Default for Configuration {
@@ -38,7 +40,7 @@ impl Default for Configuration {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             system_lang_code,
             lang_code,
-            session: Session::new(),
+            session: Arc::new(TlSession::new()),
         }
     }
 }

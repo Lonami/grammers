@@ -7,8 +7,7 @@
 // except according to those terms.
 use grammers_mtsender::{ReconnectionPolicy, SenderPoolHandle, ServerAddr};
 use grammers_session::Session;
-use std::fmt;
-use std::sync::{Arc, RwLock};
+use std::sync::Arc;
 
 /// Configuration required to create a [`Client`] instance.
 ///
@@ -16,7 +15,7 @@ use std::sync::{Arc, RwLock};
 pub struct Config {
     /// Session storage where data should persist, such as authorization key, server address,
     /// and other required information by the client.
-    pub session: Session,
+    pub session: Arc<dyn Session>,
 
     /// Developer's API ID, required to interact with the Telegram's API.
     ///
@@ -108,11 +107,6 @@ pub(crate) struct ClientInner {
     // Used to implement `PartialEq`.
     pub(crate) id: i64,
     pub(crate) config: Config,
-    pub(crate) state: RwLock<ClientState>,
-}
-
-pub(crate) struct ClientState {
-    pub(crate) dc_id: i32,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -140,15 +134,6 @@ impl Default for InitParams {
             proxy_url: None,
             reconnection_policy: &grammers_mtsender::NoReconnect,
         }
-    }
-}
-
-impl fmt::Debug for Client {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        // TODO show more info, like user id and session name if present
-        f.debug_struct("Client")
-            .field("dc_id", &self.0.state.read().unwrap().dc_id)
-            .finish()
     }
 }
 

@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::{ChatMap, Dialog, IterBuffer};
 use grammers_mtsender::InvocationError;
-use grammers_session::{PackedChat, try_push_channel_state};
+use grammers_session::{PackedChat, UpdateState};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 100;
@@ -83,23 +83,24 @@ impl DialogIter {
 
         let chats = ChatMap::new(users, chats);
 
-        if let Some(mut state) = self.client.0.config.session.get_state() {
-            let mut mutated = false;
-            self.buffer.extend(dialogs.into_iter().map(|dialog| {
-                if let tl::enums::Dialog::Dialog(tl::types::Dialog {
-                    peer: tl::enums::Peer::Channel(channel),
-                    pts: Some(pts),
-                    ..
-                }) = &dialog
-                {
-                    mutated |= try_push_channel_state(&mut state, channel.channel_id, *pts);
-                }
-                Dialog::new(&self.client, dialog, &mut messages, &chats)
-            }));
-            if mutated {
-                self.client.0.config.session.set_state(state);
+        self.buffer.extend(dialogs.into_iter().map(|dialog| {
+            if let tl::enums::Dialog::Dialog(tl::types::Dialog {
+                peer: tl::enums::Peer::Channel(channel),
+                pts: Some(pts),
+                ..
+            }) = &dialog
+            {
+                self.client
+                    .0
+                    .config
+                    .session
+                    .set_update_state(UpdateState::Channel {
+                        id: channel.channel_id,
+                        pts: *pts,
+                    });
             }
-        }
+            Dialog::new(&self.client, dialog, &mut messages, &chats)
+        }));
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {
