@@ -11,7 +11,7 @@
 //! ```
 
 use futures_util::future::{Either, select};
-use grammers_client::{Client, Update};
+use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
@@ -79,7 +79,13 @@ async fn async_main() -> Result {
     //
     // Using `tokio::select!` would be a lot cleaner but add a heavy dependency,
     // so a manual `select` is used instead by pinning async blocks by hand.
-    let mut updates = client.stream_updates(updates);
+    let mut updates = client.stream_updates(
+        updates,
+        UpdatesConfiguration {
+            catch_up: true,
+            ..Default::default()
+        },
+    );
     loop {
         let exit = pin!(async { tokio::signal::ctrl_c().await });
         let upd = pin!(async { updates.next().await });

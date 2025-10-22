@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner};
-use crate::client::client::Configuration;
+use crate::client::client::ClientConfiguration;
 use crate::utils;
 use grammers_mtsender::utils::sleep;
 use grammers_mtsender::{InvocationError, RpcError, SenderPool};
@@ -51,7 +51,10 @@ impl Client {
     }
 
     /// Like [`Self::new`] but with a custom [`Configuration`].
-    pub fn with_configuration(sender_pool: &SenderPool, configuration: Configuration) -> Self {
+    pub fn with_configuration(
+        sender_pool: &SenderPool,
+        configuration: ClientConfiguration,
+    ) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
         Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),

@@ -13,7 +13,7 @@ use grammers_session::Session;
 /// Configuration that controls the [`Client`] behaviour when making requests.
 ///
 /// [`Client`]: struct.Client.html
-pub struct Configuration {
+pub struct ClientConfiguration {
     /// The threshold below which the library should automatically sleep on flood-wait and slow
     /// mode wait errors (inclusive). For instance, if an
     /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
@@ -27,6 +27,13 @@ pub struct Configuration {
     /// On flood, the library will retry *once*. If the flood error occurs a second time after
     /// sleeping, the error will be returned.
     pub flood_sleep_threshold: u32,
+}
+
+pub struct UpdatesConfiguration {
+    /// Should the client catch-up on updates sent to it while it was offline?
+    ///
+    /// By default, updates sent while the client was offline are ignored.
+    pub catch_up: bool,
 
     /// How many updates may be buffered by the client at any given time.
     ///
@@ -56,7 +63,7 @@ pub(crate) struct ClientInner {
     pub(crate) session: Arc<dyn Session>,
     pub(crate) api_id: i32,
     pub(crate) handle: SenderPoolHandle,
-    pub(crate) configuration: Configuration,
+    pub(crate) configuration: ClientConfiguration,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.
@@ -73,10 +80,18 @@ pub(crate) struct ClientInner {
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);
 
-impl Default for Configuration {
+impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
             flood_sleep_threshold: 60,
+        }
+    }
+}
+
+impl Default for UpdatesConfiguration {
+    fn default() -> Self {
+        Self {
+            catch_up: false,
             update_queue_limit: Some(100),
         }
     }

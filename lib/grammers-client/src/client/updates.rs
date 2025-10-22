@@ -8,10 +8,10 @@
 
 //! Methods to deal with and offer access to updates.
 
-use super::Client;
+use super::{Client, UpdatesConfiguration};
 use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, State, UpdatesLike};
+use grammers_session::{ChatHashCache, MessageBoxes, PeerRef, State, UpdatesLike, UpdatesState};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -73,6 +73,8 @@ pub struct UpdateStream {
     last_update_limit_warn: Option<Instant>,
     buffer: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
     updates: mpsc::UnboundedReceiver<UpdatesLike>,
+    configuration: UpdatesConfiguration,
+    should_get_state: bool,
 }
 
 impl UpdateStream {
@@ -84,6 +86,32 @@ impl UpdateStream {
     pub async fn next_raw(
         &mut self,
     ) -> Result<(tl::enums::Update, State, Arc<ChatMap>), InvocationError> {
+        if self.should_get_state {
+            self.should_get_state = false;
+            match self
+                .client
+                .invoke(&tl::functions::updates::GetState {})
+                .await
+            {
+                Ok(tl::enums::updates::State::State(state)) => {
+                    self.client
+                        .0
+                        .session
+                        .set_update_state(UpdateState::All(UpdatesState {
+                            pts: state.pts,
+                            qts: state.qts,
+                            date: state.date,
+                            seq: state.seq,
+                            channels: Vec::new(),
+                        }));
+                }
+                Err(_err) => {
+                    // The account may no longer actually be logged in, or it can rarely fail.
+                    // `message_box` will try to correct its state as updates arrive.
+                }
+            }
+        }
+
         loop {
             let (deadline, get_diff, get_channel_diff) = {
                 if let Some(update) = self.buffer.pop_front() {
@@ -194,7 +222,7 @@ impl UpdateStream {
         mut updates: Vec<(tl::enums::Update, State)>,
         chat_map: Arc<ChatMap>,
     ) {
-        if let Some(limit) = self.client.0.configuration.update_queue_limit {
+        if let Some(limit) = self.configuration.update_queue_limit {
             if let Some(exceeds) = (self.buffer.len() + updates.len()).checked_sub(limit + 1) {
                 let exceeds = exceeds + 1;
                 let now = Instant::now();
@@ -227,7 +255,22 @@ impl Client {
     ///
     /// The updates are wrapped in [`crate::Update`] to make them more convenient to use,
     /// but their raw type is still accessible to bridge any missing functionality.
-    pub fn stream_updates(&self, updates: mpsc::UnboundedReceiver<UpdatesLike>) -> UpdateStream {
+    pub fn stream_updates(
+        &self,
+        updates: mpsc::UnboundedReceiver<UpdatesLike>,
+        configuration: UpdatesConfiguration,
+    ) -> UpdateStream {
+        let message_box = if configuration.catch_up {
+            MessageBoxes::load(self.0.session.updates_state())
+        } else {
+            // If the user doesn't want to bother with catching up on previous update, start with
+            // pristine state instead.
+            MessageBoxes::new()
+        };
+        // Don't bother getting pristine update state if we're not logged in.
+        let should_get_state =
+            message_box.is_empty() && self.0.session.peer(PeerRef::SelfUser).is_some();
+
         UpdateStream {
             client: self.clone(),
             message_box,
@@ -235,6 +278,8 @@ impl Client {
             last_update_limit_warn: None,
             buffer: VecDeque::new(),
             updates,
+            configuration,
+            should_get_state,
         }
     }
 }
