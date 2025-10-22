@@ -6,13 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::{ReconnectionPolicy, SenderPoolHandle, ServerAddr};
-use grammers_session::{ChatHashCache, MessageBoxes, Session, State, UpdatesLike};
-use grammers_tl_types as tl;
-use std::collections::VecDeque;
+use grammers_session::Session;
 use std::fmt;
 use std::sync::{Arc, RwLock};
-use tokio::sync::{Mutex, mpsc};
-use web_time::Instant;
 
 /// Configuration required to create a [`Client`] instance.
 ///
@@ -34,8 +30,6 @@ pub struct Config {
 
     /// Handle to the sender pool that will manage the connections needed by the client.
     pub handle: SenderPoolHandle,
-
-    pub updates_stream: Mutex<mpsc::UnboundedReceiver<UpdatesLike>>,
 
     /// Additional initialization parameters that can have sane defaults.
     pub params: InitParams,
@@ -119,12 +113,6 @@ pub(crate) struct ClientInner {
 
 pub(crate) struct ClientState {
     pub(crate) dc_id: i32,
-    pub(crate) message_box: MessageBoxes,
-    pub(crate) chat_hashes: ChatHashCache,
-    // When did we last warn the user that the update queue filled up?
-    // This is used to avoid spamming the log.
-    pub(crate) last_update_limit_warn: Option<Instant>,
-    pub(crate) updates: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
 }
 
 /// A client capable of connecting to Telegram and invoking requests.

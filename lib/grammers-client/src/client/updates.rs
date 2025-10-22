@@ -15,8 +15,10 @@ use grammers_session::{ChatHashCache, MessageBoxes, State, UpdatesLike};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::Duration;
+use tokio::sync::mpsc;
 use tokio::time::timeout_at;
 use web_time::Instant;
 
@@ -62,84 +64,50 @@ fn prepare_channel_difference(
     }
 }
 
-impl Client {
-    /// Returns the next update from the buffer where they are queued until used.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::Update;
-    ///
-    /// loop {
-    ///     let update = client.next_update().await?;
-    ///     // Echo incoming messages and ignore everything else
-    ///     match update {
-    ///         Update::NewMessage(mut message) if !message.outgoing() => {
-    ///             message.respond(message.text()).await?;
-    ///         }
-    ///         _ => {}
-    ///     }
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn next_update(&self) -> Result<Update, InvocationError> {
-        let (update, state, chats) = self.next_raw_update().await?;
-        Ok(Update::new(self, update, state, &chats))
+pub struct UpdateStream {
+    client: Client,
+    message_box: MessageBoxes,
+    chat_hashes: ChatHashCache,
+    // When did we last warn the user that the update queue filled up?
+    // This is used to avoid spamming the log.
+    last_update_limit_warn: Option<Instant>,
+    buffer: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
+    updates: mpsc::UnboundedReceiver<UpdatesLike>,
+}
+
+impl UpdateStream {
+    pub async fn next(&mut self) -> Result<Update, InvocationError> {
+        let (update, state, chats) = self.next_raw().await?;
+        Ok(Update::new(&self.client, update, state, &chats))
     }
 
-    /// Returns the next raw update and associated chat map from the buffer where they are queued until used.
-    ///
-    /// # Example
-    ///
-    /// ```
-    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// loop {
-    ///     let (update, state, chats) = client.next_raw_update().await?;
-    ///
-    ///     // Print all incoming updates in their raw form
-    ///     dbg!(update);
-    /// }
-    /// # Ok(())
-    /// # }
-    ///
-    /// ```
-    ///
-    /// P.S. If you don't receive updateBotInlineSend, go to [@BotFather](https://t.me/BotFather), select your bot and click "Bot Settings", then "Inline Feedback" and select probability.
-    ///
-    pub async fn next_raw_update(
-        &self,
+    pub async fn next_raw(
+        &mut self,
     ) -> Result<(tl::enums::Update, State, Arc<ChatMap>), InvocationError> {
         loop {
             let (deadline, get_diff, get_channel_diff) = {
-                let state = &mut *self.0.state.write().unwrap();
-                if let Some(update) = state.updates.pop_front() {
+                if let Some(update) = self.buffer.pop_front() {
                     return Ok(update);
                 }
                 (
-                    state.message_box.check_deadlines(), // first, as it might trigger differences
-                    state.message_box.get_difference(),
-                    state.message_box.get_channel_difference().and_then(|gd| {
-                        prepare_channel_difference(gd, &state.chat_hashes, &mut state.message_box)
+                    self.message_box.check_deadlines(), // first, as it might trigger differences
+                    self.message_box.get_difference(),
+                    self.message_box.get_channel_difference().and_then(|gd| {
+                        prepare_channel_difference(gd, &self.chat_hashes, &mut self.message_box)
                     }),
                 )
             };
 
             if let Some(request) = get_diff {
-                let response = self.invoke(&request).await?;
-                let (updates, users, chats) = {
-                    let state = &mut *self.0.state.write().unwrap();
-                    let (updates, users, chats) = state.message_box.apply_difference(response);
-                    let _ = state.chat_hashes.extend(&users, &chats);
-                    (updates, users, chats)
-                };
+                let response = self.client.invoke(&request).await?;
+                let (updates, users, chats) = self.message_box.apply_difference(response);
+                let _ = self.chat_hashes.extend(&users, &chats);
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
 
             if let Some(request) = get_channel_diff {
-                let maybe_response = self.invoke(&request).await;
+                let maybe_response = self.client.invoke(&request).await;
 
                 let response = match maybe_response {
                     Ok(r) => r,
@@ -159,11 +127,7 @@ impl Client {
                             "Getting difference for channel updates caused PersistentTimestampOutdated; ending getting difference prematurely until server issues are resolved"
                         );
                         {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
+                            self.message_box
                                 .end_channel_difference(PrematureEndReason::TemporaryServerIssues);
                         }
                         continue;
@@ -174,11 +138,7 @@ impl Client {
                             request
                         );
                         {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
+                            self.message_box
                                 .end_channel_difference(PrematureEndReason::Banned);
                         }
                         continue;
@@ -186,11 +146,7 @@ impl Client {
                     Err(InvocationError::Rpc(rpc_error)) if rpc_error.code == 500 => {
                         log::warn!("Telegram is having internal issues: {:#?}", rpc_error);
                         {
-                            self.0
-                                .state
-                                .write()
-                                .unwrap()
-                                .message_box
+                            self.message_box
                                 .end_channel_difference(PrematureEndReason::TemporaryServerIssues);
                         }
                         continue;
@@ -198,20 +154,14 @@ impl Client {
                     Err(e) => return Err(e),
                 };
 
-                let (updates, users, chats) = {
-                    let state = &mut *self.0.state.write().unwrap();
-                    let (updates, users, chats) =
-                        state.message_box.apply_channel_difference(response);
-                    let _ = state.chat_hashes.extend(&users, &chats);
-                    (updates, users, chats)
-                };
+                let (updates, users, chats) = self.message_box.apply_channel_difference(response);
+                let _ = self.chat_hashes.extend(&users, &chats);
 
                 self.extend_update_queue(updates, ChatMap::new(users, chats));
                 continue;
             }
 
-            let updates_stream = &mut *self.0.config.updates_stream.lock().await;
-            match timeout_at(deadline.into(), updates_stream.recv()).await {
+            match timeout_at(deadline.into(), self.updates.recv()).await {
                 Ok(Some(updates)) => self.process_socket_updates(updates),
                 Ok(None) => break Err(InvocationError::Dropped),
                 Err(_) => {}
@@ -219,23 +169,19 @@ impl Client {
         }
     }
 
-    pub(crate) fn process_socket_updates(&self, updates: UpdatesLike) {
+    pub(crate) fn process_socket_updates(&mut self, updates: UpdatesLike) {
         let mut result = Option::<(Vec<_>, Vec<_>, Vec<_>)>::None;
-        {
-            let state = &mut *self.0.state.write().unwrap();
-
-            match state.message_box.process_updates(updates) {
-                Ok(tup) => {
-                    if let Some(res) = result.as_mut() {
-                        res.0.extend(tup.0);
-                        res.1.extend(tup.1);
-                        res.2.extend(tup.2);
-                    } else {
-                        result = Some(tup);
-                    }
+        match self.message_box.process_updates(updates) {
+            Ok(tup) => {
+                if let Some(res) = result.as_mut() {
+                    res.0.extend(tup.0);
+                    res.1.extend(tup.1);
+                    res.2.extend(tup.2);
+                } else {
+                    result = Some(tup);
                 }
-                Err(_) => return,
             }
+            Err(_) => return,
         }
 
         if let Some((updates, users, chats)) = result {
@@ -244,17 +190,15 @@ impl Client {
     }
 
     fn extend_update_queue(
-        &self,
+        &mut self,
         mut updates: Vec<(tl::enums::Update, State)>,
         chat_map: Arc<ChatMap>,
     ) {
-        let mut state = self.0.state.write().unwrap();
-
-        if let Some(limit) = self.0.config.params.update_queue_limit {
-            if let Some(exceeds) = (state.updates.len() + updates.len()).checked_sub(limit + 1) {
+        if let Some(limit) = self.client.0.config.params.update_queue_limit {
+            if let Some(exceeds) = (self.buffer.len() + updates.len()).checked_sub(limit + 1) {
                 let exceeds = exceeds + 1;
                 let now = Instant::now();
-                let notify = match state.last_update_limit_warn {
+                let notify = match self.last_update_limit_warn {
                     None => true,
                     Some(instant) => now - instant > UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN,
                 };
@@ -267,22 +211,31 @@ impl Client {
                     );
                 }
 
-                state.last_update_limit_warn = Some(now);
+                self.last_update_limit_warn = Some(now);
             }
         }
 
-        state
-            .updates
+        self.buffer
             .extend(updates.into_iter().map(|(u, s)| (u, s, chat_map.clone())));
     }
+}
 
-    /// Synchronize the updates state to the session.
-    pub fn sync_update_state(&self) {
-        let state = self.0.state.read().unwrap();
-        self.0
-            .config
-            .session
-            .set_state(state.message_box.session_state());
+impl Client {
+    /// Returns an asynchronous stream of processed updates.
+    ///
+    /// The updates are guaranteed to be in order, and any gaps will be resolved.
+    ///
+    /// The updates are wrapped in [`crate::Update`] to make them more convenient to use,
+    /// but their raw type is still accessible to bridge any missing functionality.
+    pub fn stream_updates(&self, updates: mpsc::UnboundedReceiver<UpdatesLike>) -> UpdateStream {
+        UpdateStream {
+            client: self.clone(),
+            message_box,
+            chat_hashes: ChatHashCache::new(None),
+            last_update_limit_warn: None,
+            buffer: VecDeque::new(),
+            updates,
+        }
     }
 }
 
@@ -291,7 +244,7 @@ mod tests {
     use super::*;
     use core::future::Future;
 
-    fn get_client() -> Client {
+    fn get_update_stream() -> UpdateStream {
         panic!()
     }
 
@@ -301,7 +254,7 @@ mod tests {
         if false {
             // We just want it to type-check, not actually run.
             fn typeck(_: impl Future + Send) {}
-            typeck(get_client().next_update());
+            typeck(get_update_stream().next());
         }
     }
 }

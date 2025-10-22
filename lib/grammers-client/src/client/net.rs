@@ -13,7 +13,6 @@ use grammers_mtsender::{AuthorizationError, InvocationError, KNOWN_DC_OPTIONS, R
 use grammers_session::{MessageBoxes, state_to_update_state};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::collections::VecDeque;
 use std::sync::{Arc, RwLock};
 
 const DEFAULT_DC: i32 = 2;
@@ -40,7 +39,7 @@ impl Client {
     /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
-    /// let (_pool, handle, updates) = SenderPool::new(Configuration {
+    /// let (_pool, handle, _) = SenderPool::new(Configuration {
     ///     api_id: API_ID,
     ///     ..Default::default()
     /// });
@@ -49,7 +48,6 @@ impl Client {
     ///     api_id: API_ID,
     ///     api_hash: API_HASH.to_string(),
     ///     handle: handle,
-    ///     updates_stream: tokio::sync::Mutex::new(updates),
     ///     params: Default::default(),
     /// }).await?;
     /// # Ok(())
@@ -83,19 +81,10 @@ impl Client {
             MessageBoxes::new()
         };
 
-        // Pre-allocate the right `VecDeque` size if a limit is given.
-        let updates = if let Some(limit) = config.params.update_queue_limit {
-            VecDeque::with_capacity(limit)
-        } else {
-            VecDeque::new()
-        };
-
         // "Remove" the limit to avoid checking for it (and avoid warning).
         if let Some(0) = config.params.update_queue_limit {
             config.params.update_queue_limit = None;
         }
-
-        let self_user = config.session.get_user();
 
         // Don't bother getting pristine update state if we're not logged in.
         let should_get_state = message_box.is_empty() && config.session.signed_in();
@@ -104,13 +93,7 @@ impl Client {
         let client = Self(Arc::new(ClientInner {
             id: utils::generate_random_id(),
             config,
-            state: RwLock::new(ClientState {
-                dc_id,
-                message_box,
-                chat_hashes: ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
-                last_update_limit_warn: None,
-                updates,
-            }),
+            state: RwLock::new(ClientState { dc_id }),
         }));
 
         if should_get_state {

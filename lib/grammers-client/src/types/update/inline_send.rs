@@ -15,6 +15,8 @@ use std::fmt;
 use std::sync::Arc;
 
 /// Represents an update of user choosing the result of inline query and sending it to their chat partner.
+///
+/// To receive this update, "Inline Feedback" under "Bot Settings" must be enabled via [@BotFather](https://t.me/BotFather).
 #[derive(Clone)]
 pub struct InlineSend {
     pub raw: tl::enums::Update,

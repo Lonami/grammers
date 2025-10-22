@@ -17,7 +17,6 @@ use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use tokio::runtime;
-use tokio::sync::Mutex;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -46,7 +45,7 @@ async fn async_main() -> Result<()> {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let api_hash = env!("TG_HASH").to_string();
 
-    let (pool, handle, updates) = SenderPool::new(Configuration {
+    let (pool, handle, _) = SenderPool::new(Configuration {
         api_id,
         ..Default::default()
     });
@@ -58,7 +57,6 @@ async fn async_main() -> Result<()> {
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
-        updates_stream: Mutex::new(updates),
         params: Default::default(),
     })
     .await?;

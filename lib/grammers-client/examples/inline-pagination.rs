@@ -29,7 +29,6 @@ use grammers_mtsender::{Configuration, SenderPool};
 use simple_logger::SimpleLogger;
 use std::env;
 use std::pin::pin;
-use tokio::sync::Mutex;
 use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -133,7 +132,6 @@ async fn async_main() -> Result {
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
-        updates_stream: Mutex::new(updates),
         params: Default::default(),
     })
     .await?;
@@ -147,9 +145,10 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
+    let mut updates = client.stream_updates(updates);
     loop {
         let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { client.next_update().await });
+        let upd = pin!(async { updates.next().await });
 
         let update = match select(exit, upd).await {
             Either::Left(_) => {

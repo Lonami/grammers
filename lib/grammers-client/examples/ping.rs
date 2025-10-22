@@ -9,12 +9,11 @@ use grammers_client::{Client, Config};
 use grammers_mtsender::{Configuration, SenderPool};
 use grammers_tl_types as tl;
 use tokio::runtime;
-use tokio::sync::Mutex;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 async fn async_main() -> Result {
-    let (pool, handle, updates) = SenderPool::new(Configuration {
+    let (pool, handle, _) = SenderPool::new(Configuration {
         api_id: 1,
         ..Default::default()
     });
@@ -26,7 +25,6 @@ async fn async_main() -> Result {
         api_id: 1, // not actually logging in, but has to look real
         api_hash: "".to_string(),
         handle: handle.clone(),
-        updates_stream: Mutex::new(updates),
         params: Default::default(),
     })
     .await?;

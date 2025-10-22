@@ -26,7 +26,6 @@ use tokio::runtime;
 
 use grammers_client::session::Session;
 use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
-use tokio::sync::Mutex;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -42,7 +41,7 @@ async fn async_main() -> Result<()> {
     let api_hash = env!("TG_HASH").to_string();
     let chat_name = env::args().nth(1).expect("chat name missing");
 
-    let (pool, handle, updates) = SenderPool::new(Configuration {
+    let (pool, handle, _) = SenderPool::new(Configuration {
         api_id,
         ..Default::default()
     });
@@ -54,7 +53,6 @@ async fn async_main() -> Result<()> {
         api_id,
         api_hash: api_hash.clone(),
         handle: handle.clone(),
-        updates_stream: Mutex::new(updates),
         params: Default::default(),
     })
     .await?;

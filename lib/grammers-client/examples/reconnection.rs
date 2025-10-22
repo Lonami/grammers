@@ -6,7 +6,6 @@ use grammers_mtsender::{Configuration, SenderPool};
 use std::ops::ControlFlow;
 use std::time::Duration;
 use tokio::runtime;
-use tokio::sync::Mutex;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
@@ -41,7 +40,6 @@ async fn async_main() -> Result {
         api_id: 1, // not actually logging in, but has to look real
         api_hash: "".to_string(),
         handle: handle.clone(),
-        updates_stream: Mutex::new(updates),
         params: InitParams {
             reconnection_policy: &MyPolicy,
             ..Default::default()
@@ -50,9 +48,9 @@ async fn async_main() -> Result {
     .await?;
 
     use grammers_client::Update;
-
+    let mut updates = client.stream_updates(updates);
     loop {
-        let update = client.next_update().await?;
+        let update = updates.next().await?;
 
         match update {
             Update::NewMessage(message) if !message.outgoing() => {
