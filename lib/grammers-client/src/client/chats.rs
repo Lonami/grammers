@@ -441,7 +441,8 @@ impl Client {
 
     /// Kicks the participant from the chat.
     ///
-    /// This will fail if you do not have sufficient permissions to perform said operation.
+    /// This will fail if you do not have sufficient permissions to perform said operation,
+    /// or the target user is the logged-in account. Use [`Self::delete_dialog`] for the latter instead.
     ///
     /// The kicked user will be able to join after being kicked (they are not permanently banned).
     ///
@@ -468,21 +469,13 @@ impl Client {
     ) -> Result<(), InvocationError> {
         let chat = chat.into();
         let user = user.into();
-        if let Some(channel) = chat.try_to_input_channel() {
-            // TODO should PackedChat also know about is user self?
-            let self_id = { self.0.state.read().unwrap().chat_hashes.self_id() };
-            if user.id == self_id {
-                self.invoke(&tl::functions::channels::LeaveChannel { channel })
-                    .await
-                    .map(drop)
-            } else {
-                self.set_banned_rights(chat, user)
-                    .view_messages(false)
-                    .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
-                    .await?;
+        if chat.try_to_input_channel().is_some() {
+            self.set_banned_rights(chat, user)
+                .view_messages(false)
+                .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
+                .await?;
 
-                self.set_banned_rights(chat, user).await
-            }
+            self.set_banned_rights(chat, user).await
         } else if let Some(chat_id) = chat.try_to_chat_id() {
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id,
