@@ -7,7 +7,6 @@
 // except according to those terms.
 use super::{Client, ClientInner};
 use crate::client::client::ClientConfiguration;
-use crate::utils;
 use grammers_mtsender::utils::sleep;
 use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
@@ -57,7 +56,6 @@ impl Client {
     ) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
         Self(Arc::new(ClientInner {
-            id: utils::generate_random_id(),
             session: Arc::clone(&sender_pool.runner.session),
             api_id: sender_pool.runner.api_id,
             handle: sender_pool.handle.clone(),

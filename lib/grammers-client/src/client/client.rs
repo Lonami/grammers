@@ -58,8 +58,6 @@ pub struct UpdatesConfiguration {
 }
 
 pub(crate) struct ClientInner {
-    // Used to implement `PartialEq`.
-    pub(crate) id: i64,
     pub(crate) session: Arc<dyn Session>,
     pub(crate) api_id: i32,
     pub(crate) handle: SenderPoolHandle,
@@ -94,11 +92,5 @@ impl Default for UpdatesConfiguration {
             catch_up: false,
             update_queue_limit: Some(100),
         }
-    }
-}
-
-impl PartialEq for Client {
-    fn eq(&self, other: &Self) -> bool {
-        self.0.id == other.0.id
     }
 }
