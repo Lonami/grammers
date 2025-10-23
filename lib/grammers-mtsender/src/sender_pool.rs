@@ -16,7 +16,7 @@ use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use std::{io, panic};
+use std::{fmt, io, panic};
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -326,6 +326,29 @@ async fn run_sender(
                 Some(rpc) => sender.enqueue_body(rpc.body, rpc.tx),
                 None => break Ok(()),
             },
+        }
+    }
+}
+
+impl fmt::Debug for Request {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Invoke { dc_id, body, tx } => f
+                .debug_struct("Invoke")
+                .field("dc_id", dc_id)
+                .field(
+                    "request",
+                    &body[..4]
+                        .try_into()
+                        .map(|constructor_id| tl::name_for_id(u32::from_le_bytes(constructor_id)))
+                        .unwrap_or("?"),
+                )
+                .field("tx", tx)
+                .finish(),
+            Self::Disconnect { dc_id } => {
+                f.debug_struct("Disconnect").field("dc_id", dc_id).finish()
+            }
+            Self::Quit => write!(f, "Quit"),
         }
     }
 }
