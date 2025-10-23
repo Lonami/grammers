@@ -66,7 +66,7 @@ impl TlSession {
     }
 
     pub fn load(data: &[u8]) -> Result<Self, Error> {
-        Ok(Self {
+        let this = Self {
             session: Mutex::new(
                 enums::Session::from_bytes(data)
                     .map_err(|e| match e {
@@ -75,7 +75,13 @@ impl TlSession {
                     })?
                     .into(),
             ),
-        })
+        };
+        KNOWN_DC_OPTIONS.iter().for_each(|dc_option| {
+            if this.dc_option(dc_option.id).is_none() {
+                this.set_dc_option(dc_option);
+            }
+        });
+        Ok(this)
     }
 
     #[must_use]
