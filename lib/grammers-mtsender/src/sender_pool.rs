@@ -223,9 +223,25 @@ impl SenderPoolRunner {
         dc_option: &DcOption,
     ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
         let transport = transport::Full::new;
+
+        #[cfg(feature = "proxy")]
+        let addr = || {
+            if let Some(proxy) = self.connection_params.proxy_url.clone() {
+                ServerAddr::Proxied {
+                    address: dc_option.ipv4.into(),
+                    proxy,
+                }
+            } else {
+                ServerAddr::Tcp {
+                    address: dc_option.ipv4.into(),
+                }
+            }
+        };
+        #[cfg(not(feature = "proxy"))]
         let addr = || ServerAddr::Tcp {
             address: dc_option.ipv4.into(),
         };
+
         let init_connection = tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
             query: tl::functions::InitConnection {

@@ -7,6 +7,19 @@ pub struct ConnectionParams {
     pub app_version: String,
     pub system_lang_code: String,
     pub lang_code: String,
+    /// URL of the proxy to use. Requires the `proxy` feature to be enabled.
+    ///
+    /// The scheme must be `socks5`. Username and password are optional, e.g.:
+    /// - socks5://127.0.0.1:1234
+    /// - socks5://username:password@example.com:5678
+    ///
+    /// Both a host and port must be provided. If a domain is used for the host, its address will be looked up,
+    /// and the first IP address found will be used. If a different IP address should be used, consider resolving
+    /// the host manually and selecting an IP address of your choice.
+    #[cfg(feature = "proxy")]
+    pub proxy_url: Option<String>,
+    #[doc(hidden)]
+    __non_exhaustive: (),
 }
 
 impl Default for ConnectionParams {
@@ -34,6 +47,9 @@ impl Default for ConnectionParams {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             system_lang_code,
             lang_code,
+            #[cfg(feature = "proxy")]
+            proxy_url: None,
+            __non_exhaustive: (),
         }
     }
 }
