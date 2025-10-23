@@ -12,6 +12,7 @@ use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::sync::Arc;
+use tokio::sync::Mutex;
 
 /// Method implementations directly related with network connectivity.
 impl Client {
@@ -60,6 +61,7 @@ impl Client {
             api_id: sender_pool.runner.api_id,
             handle: sender_pool.handle.clone(),
             configuration,
+            auth_copied_to_dcs: Mutex::new(Vec::new()),
         }))
     }
 
@@ -140,6 +142,11 @@ impl Client {
     }
 
     pub(crate) async fn copy_auth_to_dc(&self, target_dc_id: i32) -> Result<(), InvocationError> {
+        let mut auth_copied_to_dcs = self.0.auth_copied_to_dcs.lock().await;
+        if auth_copied_to_dcs.contains(&target_dc_id) {
+            return Ok(());
+        }
+
         let home_dc_id = self.0.session.home_dc_id();
         if target_dc_id == home_dc_id {
             return Ok(());
@@ -159,6 +166,8 @@ impl Client {
             },
         )
         .await?;
+
+        auth_copied_to_dcs.push(target_dc_id);
 
         Ok(())
     }
