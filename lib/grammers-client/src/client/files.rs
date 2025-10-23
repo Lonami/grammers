@@ -255,6 +255,7 @@ impl Client {
         let (tx, mut rx) = unbounded_channel();
         let part_index = Arc::new(tokio::sync::Mutex::new(0));
         let mut tasks = vec![];
+        let home_dc_id = self.0.session.home_dc_id();
         for _ in 0..workers {
             let location = location.clone();
             let tx = tx.clone();
@@ -262,7 +263,7 @@ impl Client {
             let client = self.clone();
             let task = tokio::task::spawn(async move {
                 let mut retry_offset = None;
-                let mut dc = None;
+                let mut dc = home_dc_id;
                 loop {
                     // Calculate file offset
                     let offset: i64 = {
@@ -286,11 +287,7 @@ impl Client {
                         offset,
                         limit: MAX_CHUNK_SIZE,
                     };
-                    let res = match dc {
-                        None => client.invoke(request).await,
-                        Some(dc) => client.invoke_in_dc(dc as i32, request).await,
-                    };
-                    match res {
+                    match client.invoke_in_dc(dc, request).await {
                         Ok(tl::enums::upload::File::File(file)) => {
                             tx.send((offset as u64, file.bytes)).unwrap();
                         }
@@ -299,9 +296,18 @@ impl Client {
                                 "API returned File::CdnRedirect even though cdn_supported = false"
                             );
                         }
+                        Err(InvocationError::Rpc(err)) if &err.name == "AUTH_KEY_UNREGISTERED" => {
+                            match client.copy_auth_to_dc(dc).await {
+                                Ok(_) => {
+                                    retry_offset = Some(offset);
+                                    continue;
+                                }
+                                Err(e) => return Err(e),
+                            }
+                        }
                         Err(InvocationError::Rpc(err)) => {
                             if err.code == FILE_MIGRATE_ERROR {
-                                dc = err.value;
+                                dc = err.value.unwrap() as _;
                                 retry_offset = Some(offset);
                                 continue;
                             }
