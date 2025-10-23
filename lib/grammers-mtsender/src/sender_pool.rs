@@ -14,6 +14,7 @@ use grammers_mtproto::{mtp, transport};
 use grammers_session::{DcOption, Session, UpdatesLike};
 use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::{io, panic};
 use tokio::task::AbortHandle;
@@ -64,6 +65,8 @@ pub struct SenderPoolRunner {
     pub connection_params: ConnectionParams,
     request_rx: mpsc::UnboundedReceiver<Request>,
     updates_tx: mpsc::UnboundedSender<UpdatesLike>,
+    connections: Vec<ConnectionInfo>,
+    connection_pool: JoinSet<Result<(), ReadError>>,
 }
 
 impl SenderPoolHandle {
@@ -108,6 +111,8 @@ impl SenderPool {
                 connection_params,
                 request_rx,
                 updates_tx,
+                connections: Vec::new(),
+                connection_pool: JoinSet::new(),
             },
             handle: SenderPoolHandle(request_tx),
             updates: updates_rx,
@@ -119,183 +124,189 @@ impl SenderPoolRunner {
     /// Run the sender pool until [`crate::SenderPoolHandle::quit`] is called.
     ///
     /// Connections will be initiated on-demand whenever the first request to a DC is made.
-    pub async fn run(self) {
-        let Self {
-            session,
-            api_id,
-            connection_params,
-            mut request_rx,
-            updates_tx,
-        } = self;
+    pub async fn run(mut self) {
+        loop {
+            tokio::select! {
+                biased;
+                completion = self.connection_pool.join_next(), if !self.connection_pool.is_empty() => {
+                    if let Err(err) = completion.unwrap() {
+                        if let Ok(reason) = err.try_into_panic() {
+                            panic::resume_unwind(reason);
+                        }
+                    }
+                }
+                request = self.request_rx.recv() => {
+                    let flow = if let Some(request) = request {
+                        self.process_request(request).await
+                    } else {
+                        ControlFlow::Break(())
+                    };
+                    match flow {
+                        ControlFlow::Continue(_) => continue,
+                        ControlFlow::Break(_) => break,
+                    }
+                }
+            }
+        }
+
+        self.connections.clear(); // drop all channels to cause the `run_sender` loops to stop
+        self.connection_pool.join_all().await;
+    }
+
+    async fn process_request(&mut self, request: Request) -> ControlFlow<()> {
+        match request {
+            Request::Invoke { dc_id, body, tx } => {
+                let Some(mut dc_option) = self.session.dc_option(dc_id) else {
+                    let _ = tx.send(Err(InvocationError::InvalidDc));
+                    return ControlFlow::Continue(());
+                };
+
+                let connection = match self
+                    .connections
+                    .iter()
+                    .find(|connection| connection.dc_id == dc_id)
+                {
+                    Some(connection) => connection,
+                    None => {
+                        let sender = match self.connect_sender(&dc_option).await {
+                            Ok(t) => t,
+                            Err(e) => {
+                                let _ = tx.send(Err(match e {
+                                    AuthorizationError::Gen(e) => InvocationError::Read(
+                                        ReadError::Io(io::Error::new(io::ErrorKind::Other, e)),
+                                    ),
+                                    AuthorizationError::Invoke(e) => e,
+                                }));
+                                return ControlFlow::Continue(());
+                            }
+                        };
+
+                        dc_option.auth_key = Some(sender.auth_key());
+                        self.session.set_dc_option(&dc_option);
+
+                        let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
+                        let abort_handle = self.connection_pool.spawn(run_sender(
+                            sender,
+                            rpc_rx,
+                            self.updates_tx.clone(),
+                        ));
+                        self.connections.push(ConnectionInfo {
+                            dc_id,
+                            rpc_tx,
+                            abort_handle,
+                        });
+                        self.connections.last().unwrap()
+                    }
+                };
+                let _ = connection.rpc_tx.send(Rpc { body, tx });
+                ControlFlow::Continue(())
+            }
+            Request::Disconnect { dc_id } => {
+                self.connections.retain(|connection| {
+                    if connection.dc_id == dc_id {
+                        connection.abort_handle.abort();
+                        false
+                    } else {
+                        true
+                    }
+                });
+                ControlFlow::Continue(())
+            }
+            Request::Quit => ControlFlow::Break(()),
+        }
+    }
+
+    async fn connect_sender(
+        &mut self,
+        dc_option: &DcOption,
+    ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+        let transport = transport::Full::new;
+        let addr = || ServerAddr::Tcp {
+            address: dc_option.ipv4.into(),
+        };
         let init_connection = tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
             query: tl::functions::InitConnection {
-                api_id,
-                device_model: connection_params.device_model.clone(),
-                system_version: connection_params.system_version.clone(),
-                app_version: connection_params.app_version.clone(),
-                system_lang_code: connection_params.system_lang_code.clone(),
+                api_id: self.api_id,
+                device_model: self.connection_params.device_model.clone(),
+                system_version: self.connection_params.system_version.clone(),
+                app_version: self.connection_params.app_version.clone(),
+                system_lang_code: self.connection_params.system_lang_code.clone(),
                 lang_pack: "".into(),
-                lang_code: connection_params.lang_code.clone(),
+                lang_code: self.connection_params.lang_code.clone(),
                 proxy: None,
                 params: None,
                 query: tl::functions::help::GetConfig {},
             },
         };
 
-        let mut connections = Vec::<ConnectionInfo>::new();
-        let mut connection_pool = JoinSet::<Result<(), ReadError>>::new();
+        let mut sender = if let Some(auth_key) = dc_option.auth_key {
+            connect_with_auth(transport(), addr(), auth_key).await?
+        } else {
+            connect(transport(), addr()).await?
+        };
 
-        while let Some(request) = request_rx.recv().await {
-            while let Some(completion) = connection_pool.try_join_next() {
-                if let Err(err) = completion {
-                    if let Ok(reason) = err.try_into_panic() {
-                        panic::resume_unwind(reason);
+        let enums::Config::Config(remote_config) = match sender.invoke(&init_connection).await {
+            Ok(config) => config,
+            Err(InvocationError::Read(ReadError::Transport(transport::Error::BadStatus {
+                status: 404,
+            }))) => {
+                sender = connect(transport(), addr()).await?;
+                sender.invoke(&init_connection).await?
+            }
+            Err(e) => return Err(dbg!(e).into()),
+        };
+
+        self.update_config(remote_config);
+
+        Ok(sender)
+    }
+
+    fn update_config(&mut self, config: tl::types::Config) {
+        config
+            .dc_options
+            .iter()
+            .map(|tl::enums::DcOption::Option(option)| option)
+            .filter(|option| !option.media_only && !option.tcpo_only && option.r#static)
+            .for_each(|option| {
+                let mut dc_option = self
+                    .session
+                    .dc_option(option.id)
+                    .unwrap_or_else(|| DcOption {
+                        id: option.id,
+                        ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
+                        ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
+                        auth_key: None,
+                    });
+                if option.ipv6 {
+                    dc_option.ipv6 = SocketAddrV6::new(
+                        option
+                            .ip_address
+                            .parse()
+                            .expect("Telegram to return a valid IPv6 address"),
+                        option.port as _,
+                        0,
+                        0,
+                    );
+                } else {
+                    dc_option.ipv4 = SocketAddrV4::new(
+                        option
+                            .ip_address
+                            .parse()
+                            .expect("Telegram to return a valid IPv4 address"),
+                        option.port as _,
+                    );
+                    if dc_option.ipv6.ip().to_bits() == 0 {
+                        dc_option.ipv6 = SocketAddrV6::new(
+                            dc_option.ipv4.ip().to_ipv6_mapped(),
+                            dc_option.ipv4.port(),
+                            0,
+                            0,
+                        )
                     }
                 }
-            }
-
-            match request {
-                Request::Invoke { dc_id, body, tx } => {
-                    let Some(mut dc_option) = session.dc_option(dc_id) else {
-                        let _ = tx.send(Err(InvocationError::InvalidDc));
-                        continue;
-                    };
-
-                    let connection = match connections
-                        .iter()
-                        .find(|connection| connection.dc_id == dc_id)
-                    {
-                        Some(connection) => connection,
-                        None => {
-                            let (sender, config) =
-                                match connect_sender(&init_connection, &dc_option).await {
-                                    Ok(t) => t,
-                                    Err(e) => {
-                                        let _ = tx.send(Err(match e {
-                                            AuthorizationError::Gen(e) => {
-                                                InvocationError::Read(ReadError::Io(
-                                                    io::Error::new(io::ErrorKind::Other, e),
-                                                ))
-                                            }
-                                            AuthorizationError::Invoke(e) => e,
-                                        }));
-                                        continue;
-                                    }
-                                };
-
-                            update_config(session.as_ref(), config);
-
-                            dc_option.auth_key = Some(sender.auth_key());
-                            session.set_dc_option(&dc_option);
-
-                            let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
-                            let abort_handle = connection_pool.spawn(run_sender(
-                                sender,
-                                rpc_rx,
-                                updates_tx.clone(),
-                            ));
-                            connections.push(ConnectionInfo {
-                                dc_id,
-                                rpc_tx,
-                                abort_handle,
-                            });
-                            connections.last().unwrap()
-                        }
-                    };
-                    let _ = connection.rpc_tx.send(Rpc { body, tx });
-                }
-                Request::Disconnect { dc_id } => {
-                    connections.retain(|connection| {
-                        if connection.dc_id == dc_id {
-                            connection.abort_handle.abort();
-                            false
-                        } else {
-                            true
-                        }
-                    });
-                }
-                Request::Quit => break,
-            }
-        }
-
-        connections.clear(); // drop all channels to cause the `run_sender` loop to stop
-        connection_pool.join_all().await;
-    }
-}
-
-async fn connect_sender(
-    init_connection: &tl::functions::InvokeWithLayer<
-        tl::functions::InitConnection<tl::functions::help::GetConfig>,
-    >,
-    dc_option: &DcOption,
-) -> Result<(Sender<transport::Full, mtp::Encrypted>, tl::types::Config), AuthorizationError> {
-    let transport = transport::Full::new;
-    let addr = || ServerAddr::Tcp {
-        address: dc_option.ipv4.into(),
-    };
-
-    let mut sender = if let Some(auth_key) = dc_option.auth_key {
-        connect_with_auth(transport(), addr(), auth_key).await?
-    } else {
-        connect(transport(), addr()).await?
-    };
-
-    let enums::Config::Config(remote_config) = match sender.invoke(init_connection).await {
-        Ok(config) => config,
-        Err(InvocationError::Read(ReadError::Transport(transport::Error::BadStatus {
-            status: 404,
-        }))) => {
-            sender = connect(transport(), addr()).await?;
-            sender.invoke(init_connection).await?
-        }
-        Err(e) => return Err(dbg!(e).into()),
-    };
-
-    Ok((sender, remote_config))
-}
-
-fn update_config(session: &dyn Session, config: tl::types::Config) {
-    config
-        .dc_options
-        .iter()
-        .map(|tl::enums::DcOption::Option(option)| option)
-        .filter(|option| !option.media_only && !option.tcpo_only && option.r#static)
-        .for_each(|option| {
-            let mut dc_option = session.dc_option(option.id).unwrap_or_else(|| DcOption {
-                id: option.id,
-                ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
-                ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
-                auth_key: None,
             });
-            if option.ipv6 {
-                dc_option.ipv6 = SocketAddrV6::new(
-                    option
-                        .ip_address
-                        .parse()
-                        .expect("Telegram to return a valid IPv6 address"),
-                    option.port as _,
-                    0,
-                    0,
-                );
-            } else {
-                dc_option.ipv4 = SocketAddrV4::new(
-                    option
-                        .ip_address
-                        .parse()
-                        .expect("Telegram to return a valid IPv4 address"),
-                    option.port as _,
-                );
-                if dc_option.ipv6.ip().to_bits() == 0 {
-                    dc_option.ipv6 = SocketAddrV6::new(
-                        dc_option.ipv4.ip().to_ipv6_mapped(),
-                        dc_option.ipv4.port(),
-                        0,
-                        0,
-                    )
-                }
-            }
-        });
+    }
 }
 
 async fn run_sender(
