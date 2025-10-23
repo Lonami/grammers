@@ -115,8 +115,7 @@ async fn async_main() -> Result<()> {
     println!("Downloaded {counter} messages");
 
     if sign_out {
-        // TODO revisit examples and get rid of "handle references" (also, this panics)
-        drop(client.sign_out_disconnect().await);
+        drop(client.sign_out().await);
     }
 
     // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.

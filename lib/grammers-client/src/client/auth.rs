@@ -452,11 +452,8 @@ impl Client {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
 
-    /// Calls [`Client::sign_out`] and disconnects.
-    ///
-    /// The client will be disconnected even if signing out fails.
-    pub async fn sign_out_disconnect(&self) -> Result<(), InvocationError> {
-        let _res = self.invoke(&tl::functions::auth::LogOut {}).await;
-        panic!("disconnect now only works via dropping");
+    /// Signals all clients sharing the same sender pool to disconnect.
+    pub fn disconnect(&self) {
+        self.0.handle.quit();
     }
 }
