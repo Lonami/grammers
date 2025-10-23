@@ -138,4 +138,28 @@ impl Client {
             }
         }
     }
+
+    pub(crate) async fn copy_auth_to_dc(&self, target_dc_id: i32) -> Result<(), InvocationError> {
+        let home_dc_id = self.0.session.home_dc_id();
+        if target_dc_id == home_dc_id {
+            return Ok(());
+        }
+
+        let tl::enums::auth::ExportedAuthorization::Authorization(exported_auth) = self
+            .invoke(&tl::functions::auth::ExportAuthorization {
+                dc_id: target_dc_id,
+            })
+            .await?;
+
+        self.invoke_in_dc(
+            target_dc_id,
+            &tl::functions::auth::ImportAuthorization {
+                id: exported_auth.id,
+                bytes: exported_auth.bytes,
+            },
+        )
+        .await?;
+
+        Ok(())
+    }
 }

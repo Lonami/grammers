@@ -101,14 +101,9 @@ impl DownloadIter {
         use tl::enums::upload::File;
 
         // TODO handle maybe FILEREF_UPGRADE_NEEDED
-        let mut dc: Option<u32> = None;
+        let mut dc = self.client.0.session.home_dc_id();
         loop {
-            let result = match dc.take() {
-                None => self.client.invoke(&request).await,
-                Some(dc) => self.client.invoke_in_dc(dc as i32, &request).await,
-            };
-
-            break match result {
+            break match self.client.invoke_in_dc(dc, &request).await {
                 Ok(File::File(f)) => {
                     if f.bytes.len() < request.limit as usize {
                         self.done = true;
@@ -125,8 +120,14 @@ impl DownloadIter {
                 Ok(File::CdnRedirect(_)) => {
                     panic!("API returned File::CdnRedirect even though cdn_supported = false");
                 }
+                Err(InvocationError::Rpc(err)) if &err.name == "AUTH_KEY_UNREGISTERED" => {
+                    match self.client.copy_auth_to_dc(dc).await {
+                        Ok(_) => continue,
+                        Err(e) => Err(e),
+                    }
+                }
                 Err(InvocationError::Rpc(err)) if err.code == FILE_MIGRATE_ERROR => {
-                    dc = err.value;
+                    dc = err.value.unwrap() as _;
                     continue;
                 }
                 Err(e) => Err(e),
