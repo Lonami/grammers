@@ -117,7 +117,7 @@ impl MsgIdPair {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect(transport: T, mtp: M, addr: ServerAddr) -> Result<Self, io::Error> {
+    pub async fn connect(transport: T, mtp: M, addr: ServerAddr) -> Result<Self, io::Error> {
         let stream = NetStream::connect(&addr).await?;
         Ok(Self {
             stream,
@@ -146,7 +146,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     }
 
     /// Like `invoke` but raw data.
-    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
+    pub async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
         let (tx, rx) = oneshot::channel();
         self.enqueue_body(body, tx);
         self.step_until_receive(rx).await

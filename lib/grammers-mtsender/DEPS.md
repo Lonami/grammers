@@ -64,3 +64,7 @@ Used to look up the IP address of the proxy host if a domain is provided.
 ## tokio-socks
 
 SOCKS5 proxy support.
+
+## socks5-server
+
+Used to test for SOCKS5 proxy support.

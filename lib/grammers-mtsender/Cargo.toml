@@ -34,3 +34,4 @@ url = { version = "2.5.7", optional = true }
 simple_logger = { version = "5.0.0", default-features = false, features = ["colors"] }
 tokio = { version = "1.47.1", features = ["rt"] }
 toml = "0.9.8"
+socks5-server = "0.10.1"
