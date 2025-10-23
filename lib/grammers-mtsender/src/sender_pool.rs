@@ -134,6 +134,8 @@ impl SenderPoolRunner {
                             panic::resume_unwind(reason);
                         }
                     }
+                    self.connections
+                        .retain(|connection| !connection.abort_handle.is_finished());
                 }
                 request = self.request_rx.recv() => {
                     let flow = if let Some(request) = request {
