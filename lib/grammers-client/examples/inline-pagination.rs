@@ -123,14 +123,9 @@ async fn async_main() -> Result {
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
     let SenderPool {
-        runner,
-        handle,
-        updates,
+        runner, updates, ..
     } = pool;
-    let pool_task = tokio::spawn(runner.run());
-
-    println!("Connecting to Telegram...");
-    println!("Connected!");
+    let _ = tokio::spawn(runner.run());
 
     if !client.is_authorized().await? {
         println!("Signing in...");
@@ -160,9 +155,7 @@ async fn async_main() -> Result {
     println!("Saving session file...");
     session.save_to_file(SESSION_FILE)?;
 
-    handle.quit();
-    let _ = pool_task.await;
-
+    // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())
 }
 

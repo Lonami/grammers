@@ -21,14 +21,16 @@ async fn async_main() -> Result {
     let SenderPool { runner, handle, .. } = pool;
     let pool_task = tokio::spawn(runner.run());
 
-    println!("Connecting to Telegram...");
-    println!("Connected!");
-
     println!("Sending ping...");
     dbg!(client.invoke(&tl::functions::Ping { ping_id: 0 }).await?);
     println!("Ping sent successfully!");
 
-    handle.quit();
+    // Pool's `run()` won't finish until all handles are dropped or quit is called.
+    // Note that the pool's `handle` isn't dropped if it were omitted when destructuring.
+    //
+    // You don't need to explicitly close the connection, but this is a way to do it gracefully.
+    drop(handle);
+    drop(client);
     let _ = pool_task.await;
 
     Ok(())

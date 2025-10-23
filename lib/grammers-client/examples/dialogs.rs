@@ -49,11 +49,8 @@ async fn async_main() -> Result<()> {
 
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
-    let SenderPool { runner, handle, .. } = pool;
-    let pool_task = tokio::spawn(runner.run());
-
-    println!("Connecting to Telegram...");
-    println!("Connected!");
+    let SenderPool { runner, .. } = pool;
+    let _ = tokio::spawn(runner.run());
 
     // If we can't save the session, sign out once we're done.
     let mut sign_out = false;
@@ -102,9 +99,7 @@ async fn async_main() -> Result<()> {
         drop(client.sign_out_disconnect().await);
     }
 
-    handle.quit();
-    let _ = pool_task.await;
-
+    // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())
 }
 
