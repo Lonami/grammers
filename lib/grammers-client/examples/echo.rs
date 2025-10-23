@@ -10,13 +10,11 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use futures_util::future::{Either, select};
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::env;
-use std::pin::pin;
 use std::sync::Arc;
 use tokio::{runtime, task};
 
@@ -76,9 +74,6 @@ async fn async_main() -> Result {
     // save the session. You could have fancier logic to save the session if you wanted to
     // (or even save it on every update). Or you could also ignore Ctrl+C and just use
     // `let update = client.next_update().await?`.
-    //
-    // Using `tokio::select!` would be a lot cleaner but add a heavy dependency,
-    // so a manual `select` is used instead by pinning async blocks by hand.
     let mut updates = client.stream_updates(
         updates,
         UpdatesConfiguration {
@@ -87,21 +82,19 @@ async fn async_main() -> Result {
         },
     );
     loop {
-        let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { updates.next().await });
-
-        let update = match select(exit, upd).await {
-            Either::Left(_) => break,
-            Either::Right((u, _)) => u?,
-        };
-
-        let handle = client.clone();
-        task::spawn(async move {
-            match handle_update(handle, update).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Error handling updates!: {e}"),
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            update = updates.next() => {
+                let update = update?;
+                let handle = client.clone();
+                task::spawn(async move {
+                    match handle_update(handle, update).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Error handling updates!: {e}"),
+                    }
+                });
             }
-        });
+        }
     }
 
     println!("Saving session file and exiting...");

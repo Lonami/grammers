@@ -9,7 +9,6 @@
 use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use crate::net::{NetStream, ServerAddr};
 use crate::utils::sleep_until;
-use futures_util::future::{Either, pending, select};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
@@ -20,7 +19,6 @@ use grammers_session::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use std::io;
-use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::Duration;
 use tl::Serializable;
@@ -196,13 +194,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ///
     /// Once an error is returned, the connection is dead and should be recreated.
     pub async fn step(&mut self) -> Result<Vec<UpdatesLike>, ReadError> {
-        enum Sel {
-            Sleep,
-            Request(Option<Request>),
-            Read(io::Result<usize>),
-            Write(io::Result<usize>),
-        }
-
         self.try_fill_write();
         let write_len = self.write_buffer.len() - self.write_head;
         trace!(
@@ -211,38 +202,19 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         );
 
         let (mut reader, mut writer) = self.stream.split();
-        let sel = {
-            let sleep = pin!(async { sleep_until(self.next_ping).await });
-            let recv_req = pin!(async { pending().await });
-            let recv_data =
-                pin!(async { reader.read(&mut self.read_buffer[self.read_tail..]).await });
-            let send_data = pin!(async {
-                if self.write_buffer.is_empty() {
-                    pending().await
-                } else {
-                    writer.write(&self.write_buffer[self.write_head..]).await
-                }
-            });
+        let sleep = sleep_until(self.next_ping);
 
-            match select(select(sleep, recv_req), select(recv_data, send_data)).await {
-                Either::Left((Either::Left(_), _)) => Sel::Sleep,
-                Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
-                Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
-                Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
+        let res = tokio::select! {
+            n = reader.read(&mut self.read_buffer[self.read_tail..]) => {
+                n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n))
             }
-        };
-
-        let res = match sel {
-            Sel::Request(request) => {
-                self.requests.push(request.unwrap());
-                Ok(Vec::new())
+            n = writer.write(&self.write_buffer[self.write_head..]), if !self.write_buffer.is_empty() => {
+                n.map_err(ReadError::Io).map(|n| {
+                    self.on_net_write(n);
+                    Vec::new()
+                })
             }
-            Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
-            Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
-                self.on_net_write(n);
-                Vec::new()
-            }),
-            Sel::Sleep => {
+            _ = sleep => {
                 self.on_ping_timeout();
                 Ok(Vec::new())
             }

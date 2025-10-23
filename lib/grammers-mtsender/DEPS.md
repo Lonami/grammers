@@ -61,10 +61,6 @@ Used to parse the optional proxy URL.
 
 Used to look up the IP address of the proxy host if a domain is provided.
 
-## futures-util
-
-Provides useful functions for working with futures/tasks.
-
 ## tokio-socks
 
 SOCKS5 proxy support.

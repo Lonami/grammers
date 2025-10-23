@@ -5,7 +5,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use futures_util::future::Either;
 use grammers_mtsender::InvocationError;
 use grammers_mtsender::utils;
 use grammers_session::PackedChat;
@@ -122,12 +121,10 @@ impl ActionSender {
                 utils::sleep(self.repeat_delay).await;
             };
 
-            tokio::pin!(action);
-
-            match futures_util::future::select(action, &mut future).await {
-                Either::Left((_, _)) => continue,
-                Either::Right((output, _)) => break output,
-            }
+            tokio::select! {
+                _ = action => continue,
+                output = &mut future => break output,
+            };
         };
 
         (future_output, request_result)

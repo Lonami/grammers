@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use futures_util::TryFutureExt;
 use log::info;
 
 use super::ServerAddr;

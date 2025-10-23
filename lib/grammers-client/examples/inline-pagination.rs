@@ -22,13 +22,11 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
-use futures_util::future::{Either, select};
 use grammers_client::{Client, InputMessage, Update, button, reply_markup};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::env;
-use std::pin::pin;
 use std::sync::Arc;
 use tokio::{runtime, task};
 
@@ -144,23 +142,19 @@ async fn async_main() -> Result {
     println!("Waiting for messages...");
     let mut updates = client.stream_updates(updates, Default::default());
     loop {
-        let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { updates.next().await });
-
-        let update = match select(exit, upd).await {
-            Either::Left(_) => {
-                println!("Exiting...");
-                break;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            update = updates.next() => {
+                let update = update?;
+                let handle = client.clone();
+                task::spawn(async move {
+                    match handle_update(handle, update).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Error handling updates!: {e}"),
+                    }
+                });
             }
-            Either::Right((u, _)) => u?,
-        };
-
-        let handle = client.clone();
-        task::spawn(async move {
-            if let Err(e) = handle_update(handle, update).await {
-                eprintln!("Error handling updates!: {e}")
-            }
-        });
+        }
     }
 
     println!("Saving session file...");

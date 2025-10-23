@@ -41,7 +41,7 @@ mime_guess = "2.0.5"
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.13.0", default-features = false, optional = true }
 tokio = { version = "1.47.1", default-features = false, features = [
-    "rt",
+    "rt", "macros"
 ] }
 url = { version = "2.5.7", optional = true }
 web-time = "1.1.0"

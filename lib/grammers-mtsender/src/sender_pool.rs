@@ -10,12 +10,10 @@ use crate::configuration::ConnectionParams;
 use crate::{
     AuthorizationError, InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth,
 };
-use futures_util::future::{Either, select};
 use grammers_mtproto::{mtp, transport};
 use grammers_session::{DcOption, Session, UpdatesLike};
 use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
-use std::pin::pin;
 use std::sync::Arc;
 use std::{io, panic};
 use tokio::task::AbortHandle;
@@ -306,25 +304,17 @@ async fn run_sender(
     updates: mpsc::UnboundedSender<UpdatesLike>,
 ) -> Result<(), ReadError> {
     loop {
-        let rpc = {
-            let step = pin!(sender.step());
-            let rpc = pin!(rpc_rx.recv());
-
-            match select(step, rpc).await {
-                Either::Left((step, _)) => match step {
-                    Ok(all_new_updates) => {
-                        all_new_updates.into_iter().for_each(|new_updates| {
-                            let _ = updates.send(new_updates);
-                        });
-                        continue;
-                    }
-                    Err(err) => break Err(err),
-                },
-                Either::Right((Some(rpc), _)) => rpc,
-                Either::Right((None, _)) => break Ok(()),
-            }
-        };
-
-        sender.enqueue_body(rpc.body, rpc.tx);
+        tokio::select! {
+            step = sender.step() => match step {
+                Ok(all_new_updates) => all_new_updates.into_iter().for_each(|new_updates| {
+                    let _ = updates.send(new_updates);
+                }),
+                Err(err) => break Err(err),
+            },
+            rpc = rpc_rx.recv() => match rpc {
+                Some(rpc) => sender.enqueue_body(rpc.body, rpc.tx),
+                None => break Ok(()),
+            },
+        }
     }
 }
