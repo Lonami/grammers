@@ -13,7 +13,6 @@ mod errors;
 mod net;
 mod sender;
 mod sender_pool;
-pub mod utils;
 
 pub use configuration::ConnectionParams;
 pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};

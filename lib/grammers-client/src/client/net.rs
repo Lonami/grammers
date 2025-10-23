@@ -7,12 +7,11 @@
 // except according to those terms.
 use super::{Client, ClientInner};
 use crate::client::client::ClientConfiguration;
-use grammers_mtsender::utils::sleep;
 use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use std::sync::Arc;
-use tokio::sync::Mutex;
+use tokio::{sync::Mutex, time::sleep};
 
 /// Method implementations directly related with network connectivity.
 impl Client {

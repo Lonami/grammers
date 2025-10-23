@@ -36,10 +36,10 @@ use grammers_tl_types as tl;
 use log::{debug, info, trace};
 use std::cmp::Ordering;
 use std::time::Duration;
+#[cfg(not(test))]
+use std::time::Instant;
 #[cfg(test)]
 use tests::Instant;
-#[cfg(not(test))]
-use web_time::Instant;
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT

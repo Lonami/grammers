@@ -72,8 +72,3 @@ Provides useful functions for working with futures/tasks.
 ## url
 
 Used to parse certain URLs to offer features such as joining private chats via their invite link.
-
-## web-time
-
-Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
-Automatically falls back to `std::time` when we're not targeting web.

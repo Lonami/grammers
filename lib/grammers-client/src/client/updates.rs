@@ -17,10 +17,9 @@ use grammers_tl_types as tl;
 use log::{trace, warn};
 use std::collections::VecDeque;
 use std::sync::Arc;
-use std::time::Duration;
+use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::time::timeout_at;
-use web_time::Instant;
 
 /// How long to wait after warning the user that the updates limit was exceeded.
 const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
@@ -294,7 +293,6 @@ mod tests {
     }
 
     #[test]
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
     fn ensure_next_update_future_impls_send() {
         if false {
             // We just want it to type-check, not actually run.

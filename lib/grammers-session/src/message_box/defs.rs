@@ -10,7 +10,7 @@ use super::tests::Instant;
 use grammers_tl_types as tl;
 use std::time::Duration;
 #[cfg(not(test))]
-use web_time::Instant;
+use std::time::Instant;
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 pub(super) const NO_SEQ: i32 = 0;

@@ -6,12 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::InvocationError;
-use grammers_mtsender::utils;
 use grammers_session::PackedChat;
 use grammers_tl_types as tl;
 use std::future::Future;
 use std::time::Duration;
 use tl::enums::SendMessageAction;
+use tokio::time::sleep;
 
 use crate::Client;
 
@@ -118,7 +118,7 @@ impl ActionSender {
 
             let action = async {
                 request_result = self.oneshot(action().into()).await;
-                utils::sleep(self.repeat_delay).await;
+                sleep(self.repeat_delay).await;
             };
 
             tokio::select! {

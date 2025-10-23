@@ -8,7 +8,6 @@
 
 use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use crate::net::{NetStream, ServerAddr};
-use crate::utils::sleep_until;
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
@@ -20,12 +19,12 @@ use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use std::io;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use web_time::{Instant, SystemTime};
+use tokio::time::{Instant, sleep_until};
 
 /// The maximum data that we're willing to send or receive at once.
 ///

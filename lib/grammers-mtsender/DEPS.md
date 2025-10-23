@@ -64,28 +64,3 @@ Used to look up the IP address of the proxy host if a domain is provided.
 ## tokio-socks
 
 SOCKS5 proxy support.
-
-## web-time
-
-Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
-Automatically falls back to `std::time` when we're not targeting web.
-
-## web-sys
-
-Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
-call `setTimeout` and `clearTimeout` in the browser.
-
-## wasm-bindgen-futures
-
-Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
-convert a `Promise` into a `Future`.
-
-## ws_stream_wasm
-
-Only used when targeting `wasm32-unknown-unknown`. Used to create a WebSocket connection
-and get a byte stream from it.
-
-## async_io_stream
-
-Only used when targeting `wasm32-unknown-unknown`. Used to create a tokio-compatible stream
-from a WebSocket connection.
