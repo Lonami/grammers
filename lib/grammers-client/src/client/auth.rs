@@ -160,8 +160,13 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let dc_id = err.value.unwrap() as i32;
-                self.0.session.set_home_dc_id(dc_id);
+                let old_dc_id = self.0.session.home_dc_id();
+                let new_dc_id = err.value.unwrap() as i32;
+                // Disconnect from current DC to cull the now-unused connection.
+                // This also gives a chance for the new home DC to export its authorization
+                // if there's a need to connect back to the old DC after having logged in.
+                self.0.handle.disconnect_from_dc(old_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id);
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -235,14 +240,13 @@ impl Client {
                 SC::PaymentRequired(_) => todo!(),
             },
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                // Since we are not logged in (we're literally requesting for
-                // the code to login now), there's no need to export the current
-                // authorization and re-import it at a different datacenter.
-                //
-                // Just connect and generate a new authorization key with it
-                // before trying again.
-                let dc_id = err.value.unwrap() as i32;
-                self.0.session.set_home_dc_id(dc_id);
+                let old_dc_id = self.0.session.home_dc_id();
+                let new_dc_id = err.value.unwrap() as i32;
+                // Disconnect from current DC to cull the now-unused connection.
+                // This also gives a chance for the new home DC to export its authorization
+                // if there's a need to connect back to the old DC after having logged in.
+                self.0.handle.disconnect_from_dc(old_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id);
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),
