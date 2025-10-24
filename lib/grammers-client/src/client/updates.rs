@@ -245,6 +245,20 @@ impl UpdateStream {
         self.buffer
             .extend(updates.into_iter().map(|(u, s)| (u, s, chat_map.clone())));
     }
+
+    /// Synchronize the updates state to the session.
+    pub fn sync_update_state(&self) {
+        self.client
+            .0
+            .session
+            .set_update_state(UpdateState::All(self.message_box.session_state()));
+    }
+}
+
+impl Drop for UpdateStream {
+    fn drop(&mut self) {
+        self.sync_update_state();
+    }
 }
 
 impl Client {

@@ -101,6 +101,7 @@ async fn async_main() -> Result {
     }
 
     println!("Saving session file...");
+    updates.sync_update_state(); // dropping `updates` would also sync it, which you want before saving session
     session.save_to_file(SESSION_FILE)?;
 
     // Pool's `run()` won't finish until all handles are dropped or quit is called.
