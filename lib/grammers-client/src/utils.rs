@@ -8,7 +8,7 @@
 
 use crate::types;
 use chrono::{DateTime, Utc};
-use grammers_session::{PackedChat, PackedType, PeerRef};
+use grammers_session::{PackedChat, PackedType, Peer};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
@@ -76,15 +76,15 @@ pub(crate) fn always_find_entity(
     let get_packed = || {
         let (id, ty, peer_ref) = match peer {
             tl::enums::Peer::User(user) => {
-                (user.user_id, PackedType::User, PeerRef::User(user.user_id))
+                (user.user_id, PackedType::User, Peer::user(user.user_id))
             }
             tl::enums::Peer::Chat(chat) => {
-                (chat.chat_id, PackedType::Chat, PeerRef::Chat(chat.chat_id))
+                (chat.chat_id, PackedType::Chat, Peer::chat(chat.chat_id))
             }
             tl::enums::Peer::Channel(channel) => (
                 channel.channel_id,
                 PackedType::Broadcast,
-                PeerRef::Channel(channel.channel_id),
+                Peer::channel(channel.channel_id),
             ),
         };
         PackedChat {

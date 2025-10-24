@@ -11,7 +11,7 @@
 use super::{Client, UpdatesConfiguration};
 use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, PeerRef, State, UpdatesLike, UpdatesState};
+use grammers_session::{ChatHashCache, MessageBoxes, Peer, State, UpdatesLike, UpdatesState};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -282,7 +282,7 @@ impl Client {
         };
         // Don't bother getting pristine update state if we're not logged in.
         let should_get_state =
-            message_box.is_empty() && self.0.session.peer(PeerRef::SelfUser).is_some();
+            message_box.is_empty() && self.0.session.peer(Peer::self_user()).is_some();
 
         UpdateStream {
             client: self.clone(),

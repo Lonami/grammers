@@ -1,5 +1,7 @@
 use std::net::{SocketAddrV4, SocketAddrV6};
 
+use crate::peer::{Peer, PeerInfo};
+
 pub trait Session: Send + Sync {
     /// Datacenter that is "home" to the user authorized by this session.
     ///
@@ -28,17 +30,17 @@ pub trait Session: Send + Sync {
     /// Should also be used after generating permanent authentication keys to a datacenter.
     fn set_dc_option(&self, dc_option: &DcOption);
 
-    /// Query a peer by its type and ID.
+    /// Query a peer by its reference.
     ///
-    /// Querying for [`PeerRef::SelfUser`] can be used as a way to determine
+    /// Querying for [`Peer::self_user`] can be used as a way to determine
     /// whether the authentication key has a logged-in user bound (i.e. signed in).
-    fn peer(&self, peer: PeerRef) -> Option<Peer>;
+    fn peer(&self, peer: Peer) -> Option<PeerInfo>;
 
-    /// Cache a peer for [`Session::peer`] to be able to query them later.
+    /// Cache a peer's basic information for [`Session::peer`] to be able to query them later.
     ///
     /// This method may not necessarily remember the peers forever,
-    /// except for users where [`Peer::User::is_self`] is `true`.
-    fn cache_peer(&self, peer: &Peer);
+    /// except for users where [`PeerInfo::User::is_self`] is `true`.
+    fn cache_peer(&self, peer: &PeerInfo);
 
     /// Loads the entire updates state.
     fn updates_state(&self) -> UpdatesState;
@@ -64,78 +66,6 @@ pub struct DcOption {
     ///
     /// A logged-in user may or not be bound to this authentication key.
     pub auth_key: Option<[u8; 256]>,
-}
-
-/// A peer type with both their identifier and access hash,
-/// alongside other optional useful information if known.
-pub enum Peer {
-    User {
-        /// User identifier.
-        ///
-        /// Despite being `i64`, Telegram only uses strictly positive values.
-        id: i64,
-        /// Access hash bound to both the user itself and the session.
-        ///
-        /// It cannot be used by other sessions.
-        hash: Option<i64>,
-        /// Whether this user represents a bot or not.
-        bot: Option<bool>,
-        /// Whether this user represents the logged-in user authorized by this session or not.
-        is_self: bool,
-    },
-    Chat {
-        /// Chat identifier.
-        ///
-        /// Note that the HTTP Bot API negates this identifier to signal that it is a chat,
-        /// but the true value used by Telegram's API is always strictly-positive.
-        id: i64,
-    },
-    Channel {
-        /// Channel identifier.
-        ///
-        /// Note that the HTTP Bot API prefixes this identifier with `-100` to signal that it is a channel,
-        /// but the true value used by Telegram's API is always strictly-positive.
-        id: i64,
-        /// Access hash bound to both the channel itself and the session.
-        ///
-        /// It cannot be used by other sessions.
-        hash: Option<i64>,
-        /// Channel kind, useful to determine what the possible permissions on it are.
-        kind: Option<ChannelKind>,
-    },
-}
-
-impl Peer {
-    pub fn id(&self) -> i64 {
-        match self {
-            Peer::User { id, .. } => *id,
-            Peer::Chat { id } => *id,
-            Peer::Channel { id, .. } => *id,
-        }
-    }
-
-    pub fn hash(&self) -> Option<i64> {
-        match self {
-            Peer::User { hash, .. } => *hash,
-            Peer::Chat { .. } => None,
-            Peer::Channel { hash, .. } => *hash,
-        }
-    }
-}
-
-/// Additional information about a [`Peer::Channel`].
-pub enum ChannelKind {
-    Megagroup,
-    Broadcast,
-    Gigagroup,
-}
-
-/// [`Peer`] reference used to query them via [`Session::peer`].
-pub enum PeerRef {
-    SelfUser,
-    User(i64),
-    Chat(i64),
-    Channel(i64),
 }
 
 /// Full update state needed to process updates in order without gaps.

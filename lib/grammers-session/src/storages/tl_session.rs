@@ -167,33 +167,32 @@ impl crate::Session for TlSession {
             }));
     }
 
-    fn peer(&self, peer: crate::session::PeerRef) -> Option<crate::session::Peer> {
+    fn peer(&self, peer: crate::Peer) -> Option<crate::PeerInfo> {
         let session = self.session.lock().unwrap();
-        match peer {
-            crate::session::PeerRef::SelfUser => {
-                session
-                    .user
-                    .as_ref()
-                    .map(|enums::User::User(user)| crate::session::Peer::User {
-                        id: user.id,
-                        hash: Some(0),
-                        bot: Some(user.bot),
-                        is_self: true,
-                    })
-            }
-            _ => None,
+        if peer.kind() == crate::PeerKind::UserSelf {
+            session
+                .user
+                .as_ref()
+                .map(|enums::User::User(user)| crate::PeerInfo::User {
+                    id: user.id,
+                    hash: Some(0),
+                    bot: Some(user.bot),
+                    is_self: Some(true),
+                })
+        } else {
+            None
         }
     }
 
-    fn cache_peer(&self, peer: &crate::session::Peer) {
+    fn cache_peer(&self, peer: &crate::PeerInfo) {
         let mut session = self.session.lock().unwrap();
         match peer {
-            crate::session::Peer::User {
+            crate::PeerInfo::User {
                 id,
                 hash: _,
                 bot,
                 is_self,
-            } if *is_self => {
+            } if *is_self == Some(true) => {
                 if let Some(enums::User::User(user)) = &mut session.user {
                     user.id = *id;
                     user.bot = bot.unwrap_or_default();

@@ -10,7 +10,7 @@ use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{Peer, UpdateState, UpdatesState};
+use grammers_session::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -89,11 +89,11 @@ impl Client {
 
         let user = User::from_raw(auth.user);
 
-        self.0.session.cache_peer(&Peer::User {
+        self.0.session.cache_peer(&PeerInfo::User {
             id: user.id(),
             hash: user.access_hash(),
             bot: Some(user.is_bot()),
-            is_self: true,
+            is_self: Some(true),
         });
         if let Some(tl::enums::updates::State::State(state)) = update_state {
             self.0

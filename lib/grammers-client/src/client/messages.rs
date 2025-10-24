@@ -107,7 +107,7 @@ pub(crate) fn parse_mention_entities(
                         access_hash: client
                             .0
                             .session
-                            .peer(grammers_session::PeerRef::User(mention_name.user_id))
+                            .peer(grammers_session::Peer::user(mention_name.user_id))
                             .and_then(|peer| peer.hash())
                             .unwrap_or(0),
                     }),
