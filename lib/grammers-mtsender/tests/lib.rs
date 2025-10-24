@@ -32,10 +32,9 @@ use tokio::{runtime, task};
 
 #[test]
 fn test_invoke_encrypted_method() {
-    SimpleLogger::new()
+    let _ = SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
-        .init()
-        .unwrap();
+        .init();
 
     let rt = runtime::Builder::new_current_thread()
         .enable_all()
@@ -76,10 +75,9 @@ fn test_invoke_encrypted_method() {
 #[test]
 #[cfg(feature = "proxy")]
 fn test_connection_through_proxy() {
-    SimpleLogger::new()
+    let _ = SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
-        .init()
-        .unwrap();
+        .init();
 
     let rt = runtime::Builder::new_current_thread()
         .enable_all()
