@@ -6,29 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::types::{Chat, User};
+use grammers_session::{AMBIENT_AUTH, Peer};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 use std::sync::Arc;
-
-/// Hashable `Peer`.
-#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq)]
-pub enum Peer {
-    User(i64),
-    Chat(i64),
-    Channel(i64),
-}
-
-impl From<&tl::enums::Peer> for Peer {
-    fn from(peer: &tl::enums::Peer) -> Self {
-        use tl::enums::Peer::*;
-
-        match peer {
-            User(user) => Self::User(user.user_id),
-            Chat(chat) => Self::Chat(chat.chat_id),
-            Channel(channel) => Self::Channel(channel.channel_id),
-        }
-    }
-}
 
 /// Helper structure to efficiently retrieve chats via their peer.
 ///
@@ -51,7 +32,7 @@ impl ChatMap {
                 .into_iter()
                 .map(Chat::from_user)
                 .chain(chats.into_iter().map(Chat::from_raw))
-                .map(|chat| ((&chat.pack().to_peer()).into(), chat))
+                .map(|chat| (chat.peer().with_auth(AMBIENT_AUTH), chat))
                 .collect(),
         })
     }
@@ -65,23 +46,23 @@ impl ChatMap {
 
     pub fn single(chat: Chat) -> Arc<Self> {
         let mut map = HashMap::new();
-        map.insert((&chat.pack().to_peer()).into(), chat);
+        map.insert(chat.peer(), chat);
         Arc::new(Self { map })
     }
 
     /// Retrieve the full `Chat` object given its `Peer`.
     pub fn get(&self, peer: &tl::enums::Peer) -> Option<&Chat> {
-        self.map.get(&peer.into())
+        self.map.get(&peer.clone().into())
     }
 
     /// Take the full `Chat` object given its `Peer` and remove it from the map.
     pub fn remove(&mut self, peer: &tl::enums::Peer) -> Option<Chat> {
-        self.map.remove(&peer.into())
+        self.map.remove(&peer.clone().into())
     }
 
     pub(crate) fn remove_user(&mut self, user_id: i64) -> Option<User> {
         self.map
-            .remove(&Peer::User(user_id))
+            .remove(&Peer::user(user_id))
             .map(|chat| match chat {
                 Chat::User(user) => user,
                 _ => unreachable!(),

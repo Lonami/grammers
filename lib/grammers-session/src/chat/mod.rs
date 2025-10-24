@@ -6,7 +6,5 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 mod hash_cache;
-mod packed;
 
 pub use hash_cache::ChatHashCache;
-pub use packed::{PackedChat, PackedType};

@@ -1,3 +1,4 @@
+use grammers_session::{AMBIENT_AUTH, Peer};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -5,7 +6,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -69,25 +69,17 @@ impl Group {
         }
     }
 
-    /// Pack this group into a smaller representation that can be loaded later.
-    pub fn pack(&self) -> PackedChat {
+    /// Return the peer reference to this chat.
+    pub fn peer(&self) -> Peer {
         use tl::enums::Chat;
-        let (id, access_hash) = match &self.raw {
-            Chat::Empty(chat) => (chat.id, None),
-            Chat::Chat(chat) => (chat.id, None),
-            Chat::Forbidden(chat) => (chat.id, None),
-            Chat::Channel(chat) => (chat.id, chat.access_hash),
-            Chat::ChannelForbidden(chat) => (chat.id, Some(chat.access_hash)),
-        };
-
-        PackedChat {
-            ty: if self.is_megagroup() {
-                PackedType::Megagroup
-            } else {
-                PackedType::Chat
-            },
-            id,
-            access_hash,
+        match &self.raw {
+            Chat::Empty(chat) => Peer::chat(chat.id),
+            Chat::Chat(chat) => Peer::chat(chat.id),
+            Chat::Forbidden(chat) => Peer::chat(chat.id),
+            Chat::Channel(chat) => {
+                Peer::channel(chat.id).with_auth(chat.access_hash.unwrap_or(AMBIENT_AUTH))
+            }
+            Chat::ChannelForbidden(chat) => Peer::channel(chat.id).with_auth(chat.access_hash),
         }
     }
 
@@ -179,17 +171,5 @@ impl Group {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => false,
             C::Channel(_) | C::ChannelForbidden(_) => true,
         }
-    }
-}
-
-impl From<Group> for PackedChat {
-    fn from(chat: Group) -> Self {
-        chat.pack()
-    }
-}
-
-impl From<&Group> for PackedChat {
-    fn from(chat: &Group) -> Self {
-        chat.pack()
     }
 }

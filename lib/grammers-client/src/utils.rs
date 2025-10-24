@@ -8,7 +8,7 @@
 
 use crate::types;
 use chrono::{DateTime, Utc};
-use grammers_session::{PackedChat, PackedType, Peer};
+use grammers_session::{Peer, PeerInfo, PeerKind};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
@@ -73,25 +73,26 @@ pub(crate) fn always_find_entity(
     map: &types::ChatMap,
     client: &crate::Client,
 ) -> types::Chat {
-    let get_packed = || {
-        let (id, ty, peer_ref) = match peer {
-            tl::enums::Peer::User(user) => {
-                (user.user_id, PackedType::User, Peer::user(user.user_id))
-            }
-            tl::enums::Peer::Chat(chat) => {
-                (chat.chat_id, PackedType::Chat, Peer::chat(chat.chat_id))
-            }
-            tl::enums::Peer::Channel(channel) => (
-                channel.channel_id,
-                PackedType::Broadcast,
-                Peer::channel(channel.channel_id),
-            ),
-        };
-        PackedChat {
-            ty,
-            id,
-            access_hash: client.0.session.peer(peer_ref).and_then(|peer| peer.hash()),
-        }
+    let peer_info = || {
+        let peer = Peer::from(peer.clone());
+        client
+            .0
+            .session
+            .peer(peer)
+            .unwrap_or_else(|| match peer.kind() {
+                PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
+                    id: peer.id(),
+                    hash: Some(peer.auth()),
+                    bot: None,
+                    is_self: None,
+                },
+                PeerKind::Chat => PeerInfo::Chat { id: peer.id() },
+                PeerKind::Channel => PeerInfo::Channel {
+                    id: peer.id(),
+                    hash: Some(peer.auth()),
+                    kind: None,
+                },
+            })
     };
 
     match map.get(peer).cloned() {
@@ -100,15 +101,14 @@ pub(crate) fn always_find_entity(
             // version. The `min` hash is only usable to download profile photos (if the user
             // tried to pack it for later use, like sending a message, it would fail).
             if let Some((min, access_hash)) = chat.get_min_hash_ref() {
-                let packed = get_packed();
-                if let Some(ah) = packed.access_hash {
+                if let Some(ah) = peer_info().hash() {
                     *access_hash = ah;
                     *min = false;
                 }
             }
             chat
         }
-        None => types::Chat::unpack(get_packed()),
+        None => types::Chat::unpack(peer_info().into()),
     }
 }
 

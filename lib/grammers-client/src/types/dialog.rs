@@ -12,6 +12,7 @@ use crate::Client;
 use crate::utils::peer_from_message;
 
 use super::{Chat, ChatMap, Message};
+use grammers_session::Peer;
 use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]
@@ -53,5 +54,9 @@ impl Dialog {
 
     pub fn chat(&self) -> &Chat {
         &self.chat
+    }
+
+    pub fn peer(&self) -> Peer {
+        self.chat.peer()
     }
 }

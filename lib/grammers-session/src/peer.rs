@@ -5,13 +5,13 @@ use grammers_tl_types as tl;
 /// You can think of it as the object capability that lets you act upon this object with the authorization contained in it.
 ///
 /// The [`PeerInfo`] cached by the session for this `Peer` may be retrieved via [`crate::Session::peer`].
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub struct Peer {
     /// Stored in Bot API Dialog ID format for compactness.
-    packed_id: i64,
+    pub(crate) packed_id: i64,
     /// A value of `0` means either "hash not known" or "hash value is zero".
     /// Telegram sometimes ignores the hash, so any arbitrary number works to signal that it is not known.
-    hash: i64,
+    pub(crate) hash: i64,
 }
 
 /// [`Peer`]'s kind.
@@ -84,7 +84,7 @@ const SELF_USER_ID: i64 = 1 << 40;
 const EMPTY_CHAT_ID: i64 = (1 << 40) + 1;
 
 /// Ambient authentication to authorize peers only when Telegram considers it valid (i.e. user in contacts or bot accounts).
-const AMBIENT_AUTH: i64 = 0;
+pub const AMBIENT_AUTH: i64 = 0;
 
 impl Peer {
     /// Creates a peer referencing the currently-logged-in user or bot account with ambient authentication.
@@ -165,6 +165,11 @@ impl Peer {
             PeerKind::Chat => -self.packed_id,
             PeerKind::Channel => -self.packed_id - 1000000000000,
         }
+    }
+
+    /// Returns the current access hash witness. May be [`AMBIENT_AUTH`].
+    pub fn auth(&self) -> i64 {
+        self.hash
     }
 }
 
@@ -350,6 +355,19 @@ impl From<tl::types::Channel> for Peer {
 impl From<tl::types::ChannelForbidden> for Peer {
     fn from(channel: tl::types::ChannelForbidden) -> Self {
         Peer::channel(channel.id).with_auth(channel.access_hash)
+    }
+}
+
+impl From<Peer> for tl::enums::Peer {
+    fn from(peer: Peer) -> Self {
+        match peer.kind() {
+            PeerKind::User => tl::enums::Peer::User(tl::types::PeerUser { user_id: peer.id() }),
+            PeerKind::UserSelf => panic!("self-user ID not known"),
+            PeerKind::Chat => tl::enums::Peer::Chat(tl::types::PeerChat { chat_id: peer.id() }),
+            PeerKind::Channel => tl::enums::Peer::Channel(tl::types::PeerChannel {
+                channel_id: peer.id(),
+            }),
+        }
     }
 }
 

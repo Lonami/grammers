@@ -34,7 +34,7 @@ async fn handle_update(client: Client, update: Update) {
             if message.text() == "slow" {
                 sleep(Duration::from_secs(5)).await;
             }
-            if let Err(e) = client.send_message(&chat, message.text()).await {
+            if let Err(e) = client.send_message(chat.peer(), message.text()).await {
                 println!("Failed to respond! {e}");
             };
         }

@@ -5,15 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
+use crate::{Peer, PeerInfo};
+
 /// In-memory chat cache, mapping peers to their respective access hashes.
 pub struct ChatHashCache {
-    // As far as I've observed, user, chat and channel IDs cannot collide,
-    // but it will be an interesting moment if they ever do.
-    hash_map: HashMap<i64, (i64, PackedType)>,
+    hash_map: HashMap<i64, i64>,
     self_id: Option<i64>,
     self_bot: bool,
 }
@@ -36,21 +35,25 @@ impl ChatHashCache {
         self.self_bot
     }
 
-    pub fn set_self_user(&mut self, user: PackedChat) {
-        self.self_bot = match user.ty {
-            PackedType::User => false,
-            PackedType::Bot => true,
+    pub fn set_self_user(&mut self, user: PeerInfo) {
+        match user {
+            PeerInfo::User { id, bot, .. } => {
+                self.self_bot = bot.unwrap_or_default();
+                self.self_id = Some(id);
+            }
             _ => panic!("tried to set self-user without providing user type"),
-        };
-        self.self_id = Some(user.id);
+        }
     }
 
-    pub fn get(&self, id: i64) -> Option<PackedChat> {
-        self.hash_map.get(&id).map(|&(hash, ty)| PackedChat {
-            ty,
-            id,
-            access_hash: Some(hash),
-        })
+    pub fn get(&self, id: i64) -> Option<Peer> {
+        [Peer::user(id), Peer::chat(id), Peer::channel(id)]
+            .iter()
+            .find_map(|peer| {
+                self.hash_map.get(&peer.packed_id).map(|&hash| Peer {
+                    packed_id: id,
+                    hash,
+                })
+            })
     }
 
     // Returns `true` if all users and chats could be extended without issue.
@@ -66,12 +69,7 @@ impl ChatHashCache {
             U::Empty(_) => {}
             U::User(u) => match (u.min, u.access_hash) {
                 (false, Some(hash)) => {
-                    let ty = if u.bot {
-                        PackedType::Bot
-                    } else {
-                        PackedType::User
-                    };
-                    self.hash_map.insert(u.id, (hash, ty));
+                    self.hash_map.insert(Peer::user(u.id).packed_id, hash);
                 }
                 _ => success &= self.hash_map.contains_key(&u.id),
             },
@@ -81,24 +79,13 @@ impl ChatHashCache {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => {}
             C::Channel(c) => match (c.min, c.access_hash) {
                 (false, Some(hash)) => {
-                    let ty = if c.megagroup {
-                        PackedType::Megagroup
-                    } else if c.gigagroup {
-                        PackedType::Gigagroup
-                    } else {
-                        PackedType::Broadcast
-                    };
-                    self.hash_map.insert(c.id, (hash, ty));
+                    self.hash_map.insert(Peer::channel(c.id).packed_id, hash);
                 }
                 _ => success &= self.hash_map.contains_key(&c.id),
             },
             C::ChannelForbidden(c) => {
-                let ty = if c.megagroup {
-                    PackedType::Megagroup
-                } else {
-                    PackedType::Broadcast
-                };
-                self.hash_map.insert(c.id, (c.access_hash, ty));
+                self.hash_map
+                    .insert(Peer::channel(c.id).packed_id, c.access_hash);
             }
         });
 

@@ -14,7 +14,7 @@ use crate::{Client, types};
 use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
-use grammers_session::{PackedChat, Peer};
+use grammers_session::{Peer, PeerKind};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
@@ -59,7 +59,7 @@ impl Message {
         client: &Client,
         updates: tl::types::UpdateShortSentMessage,
         input: InputMessage,
-        chat: PackedChat,
+        chat: Peer,
     ) -> Self {
         Self {
             raw: tl::enums::Message::Message(tl::types::Message {
@@ -79,7 +79,7 @@ impl Message {
                 id: updates.id,
                 from_id: None, // TODO self
                 from_boosts_applied: None,
-                peer_id: chat.to_peer(),
+                peer_id: chat.into(),
                 saved_peer_id: None,
                 fwd_from: None,
                 via_bot_id: None,
@@ -470,7 +470,7 @@ impl Message {
         reactions: R,
     ) -> Result<(), InvocationError> {
         self.client
-            .send_reactions(self.chat(), self.id(), reactions)
+            .send_reactions(self.chat().peer(), self.id(), reactions)
             .await?;
         Ok(())
     }
@@ -578,7 +578,7 @@ impl Message {
         &self,
         message: M,
     ) -> Result<Self, InvocationError> {
-        self.client.send_message(&self.chat(), message).await
+        self.client.send_message(self.chat().peer(), message).await
     }
 
     /// Respond to this message by sending a album in the same chat, but without directly
@@ -589,7 +589,7 @@ impl Message {
         &self,
         medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
-        self.client.send_album(&self.chat(), medias).await
+        self.client.send_album(self.chat().peer(), medias).await
     }
 
     /// Directly reply to this message by sending a new message in the same chat that replies to
@@ -599,7 +599,7 @@ impl Message {
     pub async fn reply<M: Into<InputMessage>>(&self, message: M) -> Result<Self, InvocationError> {
         let message = message.into();
         self.client
-            .send_message(&self.chat(), message.reply_to(Some(self.id())))
+            .send_message(self.chat().peer(), message.reply_to(Some(self.id())))
             .await
     }
 
@@ -612,19 +612,19 @@ impl Message {
         mut medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.id());
-        self.client.send_album(&self.chat(), medias).await
+        self.client.send_album(self.chat().peer(), medias).await
     }
 
     /// Forward this message to another (or the same) chat.
     ///
     /// Shorthand for `Client::forward_messages`. If you need to forward multiple messages
     /// at once, consider using that method instead.
-    pub async fn forward_to<C: Into<PackedChat>>(&self, chat: C) -> Result<Self, InvocationError> {
+    pub async fn forward_to<C: Into<Peer>>(&self, chat: C) -> Result<Self, InvocationError> {
         // TODO return `Message`
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
         self.client
-            .forward_messages(chat, &[self.id()], &self.chat())
+            .forward_messages(chat, &[self.id()], self.chat().peer())
             .await
             .map(|mut msgs| msgs.pop().unwrap().unwrap())
     }
@@ -634,7 +634,7 @@ impl Message {
     /// Shorthand for `Client::edit_message`.
     pub async fn edit<M: Into<InputMessage>>(&self, new_message: M) -> Result<(), InvocationError> {
         self.client
-            .edit_message(&self.chat(), self.id(), new_message)
+            .edit_message(self.chat().peer(), self.id(), new_message)
             .await
     }
 
@@ -644,7 +644,7 @@ impl Message {
     /// at once, consider using that method instead.
     pub async fn delete(&self) -> Result<(), InvocationError> {
         self.client
-            .delete_messages(&self.chat(), &[self.id()])
+            .delete_messages(self.chat().peer(), &[self.id()])
             .await
             .map(drop)
     }
@@ -654,11 +654,11 @@ impl Message {
     /// Unlike `Client::mark_as_read`, this method only will mark the chat as read up to
     /// this message, not the entire chat.
     pub async fn mark_as_read(&self) -> Result<(), InvocationError> {
-        let chat = self.chat().pack();
-        if let Some(channel) = chat.try_to_input_channel() {
+        let chat = self.chat().peer();
+        if chat.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
-                    channel,
+                    channel: chat.into(),
                     max_id: self.id(),
                 })
                 .await
@@ -666,7 +666,7 @@ impl Message {
         } else {
             self.client
                 .invoke(&tl::functions::messages::ReadHistory {
-                    peer: chat.to_input_peer(),
+                    peer: chat.into(),
                     max_id: self.id(),
                 })
                 .await
@@ -678,14 +678,16 @@ impl Message {
     ///
     /// Shorthand for `Client::pin_message`.
     pub async fn pin(&self) -> Result<(), InvocationError> {
-        self.client.pin_message(&self.chat(), self.id()).await
+        self.client.pin_message(self.chat().peer(), self.id()).await
     }
 
     /// Unpin this message from the chat.
     ///
     /// Shorthand for `Client::unpin_message`.
     pub async fn unpin(&self) -> Result<(), InvocationError> {
-        self.client.unpin_message(&self.chat(), self.id()).await
+        self.client
+            .unpin_message(self.chat().peer(), self.id())
+            .await
     }
 
     /// Refetch this message, mutating all of its properties in-place.
@@ -697,7 +699,7 @@ impl Message {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
-            .get_messages_by_id(&self.chat(), &[self.id()])
+            .get_messages_by_id(self.chat().peer(), &[self.id()])
             .await?
             .pop()
             .unwrap()

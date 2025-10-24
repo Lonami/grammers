@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::InvocationError;
-use grammers_session::PackedChat;
+use grammers_session::Peer;
 use grammers_tl_types as tl;
 use std::future::Future;
 use std::time::Duration;
@@ -19,13 +19,13 @@ const DEFAULT_REPEAT_DELAY: Duration = Duration::from_secs(4);
 
 pub struct ActionSender {
     client: Client,
-    chat: PackedChat,
+    chat: Peer,
     topic_id: Option<i32>,
     repeat_delay: Duration,
 }
 
 impl ActionSender {
-    pub fn new<C: Into<PackedChat>>(client: &Client, chat: C) -> Self {
+    pub fn new<C: Into<Peer>>(client: &Client, chat: C) -> Self {
         Self {
             client: client.clone(),
             chat: chat.into(),
@@ -61,7 +61,7 @@ impl ActionSender {
     ) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SetTyping {
-                peer: self.chat.to_input_peer(),
+                peer: self.chat.into(),
                 top_msg_id: self.topic_id,
                 action: action.into(),
             })
@@ -77,7 +77,7 @@ impl ActionSender {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {
@@ -89,7 +89,7 @@ impl ActionSender {
     /// tokio::pin!(heavy_task);
     ///
     /// let (task_result, _) = client
-    ///     .action(&chat)
+    ///     .action(chat)
     ///     .repeat(
     ///         // most clients doesn't actually show progress of an action
     ///         || tl::types::SendMessageUploadDocumentAction { progress: 0 },

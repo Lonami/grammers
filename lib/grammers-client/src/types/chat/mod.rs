@@ -9,11 +9,10 @@ mod channel;
 mod group;
 mod user;
 
-use grammers_session::PackedType;
+use grammers_session::{Peer, PeerKind};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
-pub use grammers_session::PackedChat;
 pub use group::Group;
 pub use user::{Platform, RestrictionReason, User};
 
@@ -94,47 +93,31 @@ impl Chat {
         }
     }
 
-    /// Pack this chat into a smaller representation that can be loaded later.
-    pub fn pack(&self) -> PackedChat {
+    /// Return the peer reference to this chat.
+    pub fn peer(&self) -> Peer {
         match self {
-            Self::User(user) => user.pack(),
-            Self::Group(chat) => chat.pack(),
-            Self::Channel(channel) => channel.pack(),
+            Self::User(user) => user.peer(),
+            Self::Group(group) => group.peer(),
+            Self::Channel(channel) => channel.peer(),
         }
     }
 
-    pub(crate) fn unpack(packed: PackedChat) -> Self {
-        match packed.ty {
-            PackedType::User => Chat::User(User::empty_with_hash_and_bot(
-                packed.id,
-                packed.access_hash,
+    pub(crate) fn unpack(packed: Peer) -> Self {
+        match packed.kind() {
+            PeerKind::User | PeerKind::UserSelf => Chat::User(User::empty_with_hash_and_bot(
+                packed.id(),
+                Some(packed.auth()),
                 false,
             )),
-            PackedType::Bot => Chat::User(User::empty_with_hash_and_bot(
-                packed.id,
-                packed.access_hash,
-                true,
+            PeerKind::Chat => Chat::Group(Group::from_raw(
+                tl::types::ChatEmpty { id: packed.id() }.into(),
             )),
-            PackedType::Chat => Chat::Group(Group::from_raw(
-                tl::types::ChatEmpty { id: packed.id }.into(),
-            )),
-            PackedType::Megagroup => Chat::Group(Group::from_raw(
+            PeerKind::Channel => Chat::Channel(Channel::from_raw(
                 tl::types::ChannelForbidden {
-                    id: packed.id,
-                    broadcast: false,
-                    megagroup: true,
-                    access_hash: packed.access_hash.unwrap_or(0),
-                    title: String::new(),
-                    until_date: None,
-                }
-                .into(),
-            )),
-            PackedType::Broadcast | PackedType::Gigagroup => Chat::Channel(Channel::from_raw(
-                tl::types::ChannelForbidden {
-                    id: packed.id,
+                    id: packed.id(),
                     broadcast: true,
                     megagroup: false,
-                    access_hash: packed.access_hash.unwrap_or(0),
+                    access_hash: packed.auth(),
                     title: String::new(),
                     until_date: None,
                 }
@@ -199,7 +182,7 @@ impl Chat {
 
     // Return the profile picture or chat photo of this chat, if any.
     pub fn photo(&self, big: bool) -> Option<crate::types::ChatPhoto> {
-        let peer = self.pack().to_input_peer();
+        let peer = self.peer().into();
         match self {
             Self::User(user) => user.photo().map(|x| crate::types::ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
@@ -229,17 +212,5 @@ impl Chat {
                 ),
             }),
         }
-    }
-}
-
-impl From<Chat> for PackedChat {
-    fn from(chat: Chat) -> Self {
-        chat.pack()
-    }
-}
-
-impl From<&Chat> for PackedChat {
-    fn from(chat: &Chat) -> Self {
-        chat.pack()
     }
 }

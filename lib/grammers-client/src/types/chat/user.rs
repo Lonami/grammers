@@ -1,3 +1,4 @@
+use grammers_session::{AMBIENT_AUTH, Peer};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -5,7 +6,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -153,16 +153,12 @@ impl User {
         self.user().and_then(|u| u.access_hash)
     }
 
-    /// Pack this user into a smaller representation that can be loaded later.
-    pub fn pack(&self) -> PackedChat {
-        PackedChat {
-            ty: if self.is_bot() {
-                PackedType::Bot
-            } else {
-                PackedType::User
-            },
-            id: self.id(),
-            access_hash: self.access_hash(),
+    /// Return the peer reference to this chat.
+    pub fn peer(&self) -> Peer {
+        if self.is_self() {
+            Peer::self_user()
+        } else {
+            Peer::user(self.id()).with_auth(self.access_hash().unwrap_or(AMBIENT_AUTH))
         }
     }
 
@@ -340,17 +336,5 @@ impl User {
     /// Language code of the user, if any.
     pub fn lang_code(&self) -> Option<&str> {
         self.user().and_then(|u| u.lang_code.as_deref())
-    }
-}
-
-impl From<User> for PackedChat {
-    fn from(chat: User) -> Self {
-        chat.pack()
-    }
-}
-
-impl From<&User> for PackedChat {
-    fn from(chat: &User) -> Self {
-        chat.pack()
     }
 }

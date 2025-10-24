@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::{ChatMap, Dialog, IterBuffer};
 use grammers_mtsender::InvocationError;
-use grammers_session::{PackedChat, UpdateState};
+use grammers_session::{Peer, PeerKind, UpdateState};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 100;
@@ -113,10 +113,7 @@ impl DialogIter {
                 self.request.offset_date = last_message.date_timestamp();
                 self.request.offset_id = last_message.id();
             }
-            self.request.offset_peer = self.buffer[self.buffer.len() - 1]
-                .chat()
-                .pack()
-                .to_input_peer();
+            self.request.offset_peer = self.buffer[self.buffer.len() - 1].peer().into();
         }
 
         Ok(self.pop_item())
@@ -160,22 +157,24 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in chat!
-    /// client.delete_dialog(&chat).await?;
+    /// client.delete_dialog(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog<C: Into<PackedChat>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn delete_dialog<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
-        if let Some(channel) = chat.try_to_input_channel() {
-            self.invoke(&tl::functions::channels::LeaveChannel { channel })
-                .await
-                .map(drop)
-        } else if let Some(chat_id) = chat.try_to_chat_id() {
+        if chat.kind() == PeerKind::Channel {
+            self.invoke(&tl::functions::channels::LeaveChannel {
+                channel: chat.into(),
+            })
+            .await
+            .map(drop)
+        } else if chat.kind() == PeerKind::Chat {
             // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
-                chat_id,
+                chat_id: chat.into(),
                 user_id: tl::enums::InputUser::UserSelf,
                 revoke_history: false,
             })
@@ -186,7 +185,7 @@ impl Client {
             self.invoke(&tl::functions::messages::DeleteHistory {
                 just_clear: false,
                 revoke: false,
-                peer: chat.to_input_peer(),
+                peer: chat.into(),
                 max_id: 0,
                 min_date: None,
                 max_date: None,
@@ -204,20 +203,23 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.mark_as_read(&chat).await?;
+    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.mark_as_read(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read<C: Into<PackedChat>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn mark_as_read<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
-        if let Some(channel) = chat.try_to_input_channel() {
-            self.invoke(&tl::functions::channels::ReadHistory { channel, max_id: 0 })
-                .await
-                .map(drop)
+        if chat.kind() == PeerKind::Channel {
+            self.invoke(&tl::functions::channels::ReadHistory {
+                channel: chat.into(),
+                max_id: 0,
+            })
+            .await
+            .map(drop)
         } else {
             self.invoke(&tl::functions::messages::ReadHistory {
-                peer: chat.to_input_peer(),
+                peer: chat.into(),
                 max_id: 0,
             })
             .await
@@ -230,17 +232,14 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_client::types::Chat, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.clear_mentions(&chat).await?;
+    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.clear_mentions(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn clear_mentions<C: Into<PackedChat>>(
-        &self,
-        chat: C,
-    ) -> Result<(), InvocationError> {
+    pub async fn clear_mentions<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {
-            peer: chat.into().to_input_peer(),
+            peer: chat.into().into(),
             top_msg_id: None,
         })
         .await

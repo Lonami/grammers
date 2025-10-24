@@ -95,7 +95,7 @@ impl CallbackQuery {
         };
         Ok(self
             .client
-            .get_messages_by_id(self.chat(), &[msg_id])
+            .get_messages_by_id(self.chat().peer(), &[msg_id])
             .await?
             .pop()
             .unwrap()
@@ -161,7 +161,7 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
+        let chat = self.query.chat().peer();
         match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => {
                 self.query
@@ -185,7 +185,7 @@ impl<'a> Answer<'a> {
         message: M,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
+        let chat = self.query.chat().peer();
         self.query.client.send_message(chat, message).await
     }
 
@@ -199,7 +199,7 @@ impl<'a> Answer<'a> {
             _ => return Err(InvocationError::Dropped),
         };
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
+        let chat = self.query.chat().peer();
         let message = message.into();
         self.query
             .client

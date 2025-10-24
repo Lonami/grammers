@@ -1,3 +1,4 @@
+use grammers_session::{AMBIENT_AUTH, Peer};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -5,7 +6,6 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_session::{PackedChat, PackedType};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -109,17 +109,9 @@ impl Channel {
         self.raw.id
     }
 
-    /// Pack this channel into a smaller representation that can be loaded later.
-    pub fn pack(&self) -> PackedChat {
-        PackedChat {
-            ty: if self.raw.gigagroup {
-                PackedType::Gigagroup
-            } else {
-                PackedType::Broadcast
-            },
-            id: self.id(),
-            access_hash: self.raw.access_hash,
-        }
+    /// Return the peer reference to this chat.
+    pub fn peer(&self) -> Peer {
+        Peer::channel(self.id()).with_auth(self.raw.access_hash.unwrap_or(AMBIENT_AUTH))
     }
 
     /// Return the title of this channel.
@@ -189,17 +181,5 @@ impl Channel {
             }),
             None => None,
         }
-    }
-}
-
-impl From<Channel> for PackedChat {
-    fn from(chat: Channel) -> Self {
-        chat.pack()
-    }
-}
-
-impl From<&Channel> for PackedChat {
-    fn from(chat: &Channel) -> Self {
-        chat.pack()
     }
 }

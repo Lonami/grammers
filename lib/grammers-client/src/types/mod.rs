@@ -35,7 +35,7 @@ pub mod update;
 
 pub use action::ActionSender;
 pub use attributes::Attribute;
-pub use chat::{Channel, Chat, Group, PackedChat, Platform, RestrictionReason, User};
+pub use chat::{Channel, Chat, Group, Platform, RestrictionReason, User};
 pub use chat_map::ChatMap;
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;

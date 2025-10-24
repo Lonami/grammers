@@ -39,13 +39,7 @@ fn prepare_channel_difference(
     };
 
     if let Some(packed) = chat_hashes.get(id) {
-        request.channel = tl::types::InputChannel {
-            channel_id: packed.id,
-            access_hash: packed
-                .access_hash
-                .expect("chat_hashes had chat without hash"),
-        }
-        .into();
+        request.channel = packed.into();
         request.limit = if chat_hashes.is_self_bot() {
             BOT_CHANNEL_DIFF_LIMIT
         } else {

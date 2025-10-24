@@ -86,7 +86,7 @@ async fn async_main() -> Result<()> {
 
     let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {chat_name} could not be found"));
 
-    let mut messages = client.iter_messages(&chat);
+    let mut messages = client.iter_messages(chat.peer());
 
     println!(
         "Chat {} has {} total messages.",
