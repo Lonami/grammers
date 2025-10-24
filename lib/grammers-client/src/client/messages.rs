@@ -86,7 +86,7 @@ fn map_random_ids_to_messages(
 }
 
 pub(crate) fn parse_mention_entities(
-    _client: &Client,
+    client: &Client,
     mut entities: Vec<tl::enums::MessageEntity>,
 ) -> Option<Vec<tl::enums::MessageEntity>> {
     if entities.is_empty() {
@@ -104,7 +104,12 @@ pub(crate) fn parse_mention_entities(
                     length: mention_name.length,
                     user_id: tl::enums::InputUser::User(tl::types::InputUser {
                         user_id: mention_name.user_id,
-                        access_hash: 0,
+                        access_hash: client
+                            .0
+                            .session
+                            .peer(grammers_session::PeerRef::User(mention_name.user_id))
+                            .and_then(|peer| peer.hash())
+                            .unwrap_or(0),
                     }),
                 }
                 .into()

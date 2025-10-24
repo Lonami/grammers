@@ -113,6 +113,14 @@ impl Peer {
             Peer::Channel { id, .. } => *id,
         }
     }
+
+    pub fn hash(&self) -> Option<i64> {
+        match self {
+            Peer::User { hash, .. } => *hash,
+            Peer::Chat { .. } => None,
+            Peer::Channel { hash, .. } => *hash,
+        }
+    }
 }
 
 /// Additional information about a [`Peer::Channel`].

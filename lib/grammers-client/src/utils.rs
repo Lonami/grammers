@@ -8,7 +8,7 @@
 
 use crate::types;
 use chrono::{DateTime, Utc};
-use grammers_session::{PackedChat, PackedType};
+use grammers_session::{PackedChat, PackedType, PeerRef};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
@@ -71,18 +71,26 @@ pub(crate) fn extract_password_parameters(
 pub(crate) fn always_find_entity(
     peer: &tl::enums::Peer,
     map: &types::ChatMap,
-    _client: &crate::Client,
+    client: &crate::Client,
 ) -> types::Chat {
     let get_packed = || {
-        let (id, ty) = match peer {
-            tl::enums::Peer::User(user) => (user.user_id, PackedType::User),
-            tl::enums::Peer::Chat(chat) => (chat.chat_id, PackedType::Chat),
-            tl::enums::Peer::Channel(channel) => (channel.channel_id, PackedType::Broadcast),
+        let (id, ty, peer_ref) = match peer {
+            tl::enums::Peer::User(user) => {
+                (user.user_id, PackedType::User, PeerRef::User(user.user_id))
+            }
+            tl::enums::Peer::Chat(chat) => {
+                (chat.chat_id, PackedType::Chat, PeerRef::Chat(chat.chat_id))
+            }
+            tl::enums::Peer::Channel(channel) => (
+                channel.channel_id,
+                PackedType::Broadcast,
+                PeerRef::Channel(channel.channel_id),
+            ),
         };
         PackedChat {
             ty,
             id,
-            access_hash: None,
+            access_hash: client.0.session.peer(peer_ref).and_then(|peer| peer.hash()),
         }
     };
 
