@@ -8,11 +8,11 @@
 
 use crate::types;
 use chrono::{DateTime, Utc};
-use grammers_session::{PackedChat, PackedType};
+use grammers_session::{PackedChat, PackedType, PeerRef};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
-use web_time::SystemTime;
+use std::time::SystemTime;
 
 // This atomic isn't for anything critical, just to generate unique IDs without locks.
 // The worst that can happen if the load and store orderings are wrong is that the IDs
@@ -74,23 +74,24 @@ pub(crate) fn always_find_entity(
     client: &crate::Client,
 ) -> types::Chat {
     let get_packed = || {
-        let (id, ty) = match peer {
-            tl::enums::Peer::User(user) => (user.user_id, PackedType::User),
-            tl::enums::Peer::Chat(chat) => (chat.chat_id, PackedType::Chat),
-            tl::enums::Peer::Channel(channel) => (channel.channel_id, PackedType::Broadcast),
+        let (id, ty, peer_ref) = match peer {
+            tl::enums::Peer::User(user) => {
+                (user.user_id, PackedType::User, PeerRef::User(user.user_id))
+            }
+            tl::enums::Peer::Chat(chat) => {
+                (chat.chat_id, PackedType::Chat, PeerRef::Chat(chat.chat_id))
+            }
+            tl::enums::Peer::Channel(channel) => (
+                channel.channel_id,
+                PackedType::Broadcast,
+                PeerRef::Channel(channel.channel_id),
+            ),
         };
-        client
-            .0
-            .state
-            .read()
-            .unwrap()
-            .chat_hashes
-            .get(id)
-            .unwrap_or(PackedChat {
-                ty,
-                id,
-                access_hash: None,
-            })
+        PackedChat {
+            ty,
+            id,
+            access_hash: client.0.session.peer(peer_ref).and_then(|peer| peer.hash()),
+        }
     };
 
     match map.get(peer).cloned() {

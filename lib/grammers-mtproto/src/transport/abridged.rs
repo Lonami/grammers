@@ -105,11 +105,6 @@ impl Transport for Abridged {
             next_offset: header_len + len,
         })
     }
-
-    fn reset(&mut self) {
-        log::info!("resetting sending of header in abridged transport");
-        self.init = false;
-    }
 }
 
 impl Tagged for Abridged {

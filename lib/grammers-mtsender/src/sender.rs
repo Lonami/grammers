@@ -8,9 +8,6 @@
 
 use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
 use crate::net::{NetStream, ServerAddr};
-use crate::reconnection::ReconnectionPolicy;
-use crate::utils::{sleep, sleep_until};
-use futures_util::future::{Either, pending, select};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
@@ -21,17 +18,13 @@ use grammers_session::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use std::io;
-use std::io::Error;
-use std::ops::ControlFlow;
-use std::pin::pin;
 use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::Duration;
+use std::time::{Duration, SystemTime};
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
-use tokio::sync::mpsc;
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
-use web_time::{Instant, SystemTime};
+use tokio::time::{Instant, sleep_until};
 
 /// The maximum data that we're willing to send or receive at once.
 ///
@@ -87,9 +80,7 @@ pub struct Sender<T: Transport, M: Mtp> {
     mtp: M,
     addr: ServerAddr,
     requests: Vec<Request>,
-    request_rx: mpsc::UnboundedReceiver<Request>,
     next_ping: Instant,
-    reconnection_policy: &'static dyn ReconnectionPolicy,
 
     // Transport-level buffers and positions
     read_buffer: Vec<u8>,
@@ -116,8 +107,6 @@ enum RequestState {
     Sent(MsgIdPair),
 }
 
-pub struct Enqueuer(mpsc::UnboundedSender<Request>);
-
 impl MsgIdPair {
     fn new(msg_id: MsgId) -> Self {
         Self {
@@ -127,77 +116,47 @@ impl MsgIdPair {
     }
 }
 
-impl Enqueuer {
-    /// Enqueue a Remote Procedure Call to be sent in future calls to `step`.
-    pub fn enqueue<R: RemoteCall>(
-        &self,
-        request: &R,
-    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
-        // TODO we probably want a bound here (to not enqueue more than N at once)
-        let body = request.to_bytes();
-        assert!(body.len() >= 4);
-        let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
-        debug!(
-            "enqueueing request {} to be serialized",
-            tl::name_for_id(req_id)
-        );
-
-        let (tx, rx) = oneshot::channel();
-        if let Err(err) = self.0.send(Request {
-            body,
-            state: RequestState::NotSerialized,
-            result: tx,
-        }) {
-            err.0.result.send(Err(InvocationError::Dropped)).unwrap();
-        }
-        rx
-    }
-}
-
 impl<T: Transport, M: Mtp> Sender<T, M> {
-    async fn connect(
-        transport: T,
-        mtp: M,
-        addr: ServerAddr,
-        reconnection_policy: &'static dyn ReconnectionPolicy,
-    ) -> Result<(Self, Enqueuer), io::Error> {
+    pub async fn connect(transport: T, mtp: M, addr: ServerAddr) -> Result<Self, io::Error> {
         let stream = NetStream::connect(&addr).await?;
-        let (tx, rx) = mpsc::unbounded_channel();
-        Ok((
-            Self {
-                stream,
-                transport,
-                mtp,
-                addr,
-                requests: vec![],
-                request_rx: rx,
-                next_ping: Instant::now() + PING_DELAY,
-                reconnection_policy,
+        Ok(Self {
+            stream,
+            transport,
+            mtp,
+            addr,
+            requests: vec![],
+            next_ping: Instant::now() + PING_DELAY,
 
-                read_buffer: vec![0; MAXIMUM_DATA],
-                read_tail: 0,
-                write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
-                write_head: 0,
-            },
-            Enqueuer(tx),
-        ))
+            read_buffer: vec![0; MAXIMUM_DATA],
+            read_tail: 0,
+            write_buffer: DequeBuffer::with_capacity(MAXIMUM_DATA, LEADING_BUFFER_SPACE),
+            write_head: 0,
+        })
     }
 
-    pub async fn invoke<R: RemoteCall>(&mut self, request: &R) -> Result<Vec<u8>, InvocationError> {
-        let rx = self.enqueue_body(request.to_bytes());
-        self.step_until_receive(rx).await
+    pub async fn invoke<R: RemoteCall>(
+        &mut self,
+        request: &R,
+    ) -> Result<R::Return, InvocationError> {
+        let (tx, rx) = oneshot::channel();
+        self.enqueue_body(request.to_bytes(), tx);
+        self.step_until_receive(rx)
+            .await
+            .and_then(|vec| R::Return::from_bytes(&vec).map_err(|err| err.into()))
     }
 
     /// Like `invoke` but raw data.
-    async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
-        let rx = self.enqueue_body(body);
+    pub async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
+        let (tx, rx) = oneshot::channel();
+        self.enqueue_body(body, tx);
         self.step_until_receive(rx).await
     }
 
-    fn enqueue_body(
+    pub(crate) fn enqueue_body(
         &mut self,
         body: Vec<u8>,
-    ) -> oneshot::Receiver<Result<Vec<u8>, InvocationError>> {
+        tx: oneshot::Sender<Result<Vec<u8>, InvocationError>>,
+    ) {
         assert!(body.len() >= 4);
         let req_id = u32::from_le_bytes([body[0], body[1], body[2], body[3]]);
         debug!(
@@ -205,13 +164,11 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             tl::name_for_id(req_id)
         );
 
-        let (tx, rx) = oneshot::channel();
         self.requests.push(Request {
             body,
             state: RequestState::NotSerialized,
             result: tx,
         });
-        rx
     }
 
     async fn step_until_receive(
@@ -233,14 +190,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     /// Step network events, writing and reading at the same time.
     ///
     /// Updates received during this step, if any, are returned.
+    ///
+    /// Once an error is returned, the connection is dead and should be recreated.
     pub async fn step(&mut self) -> Result<Vec<UpdatesLike>, ReadError> {
-        enum Sel {
-            Sleep,
-            Request(Option<Request>),
-            Read(io::Result<usize>),
-            Write(io::Result<usize>),
-        }
-
         self.try_fill_write();
         let write_len = self.write_buffer.len() - self.write_head;
         trace!(
@@ -249,38 +201,19 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         );
 
         let (mut reader, mut writer) = self.stream.split();
-        let sel = {
-            let sleep = pin!(async { sleep_until(self.next_ping).await });
-            let recv_req = pin!(async { self.request_rx.recv().await });
-            let recv_data =
-                pin!(async { reader.read(&mut self.read_buffer[self.read_tail..]).await });
-            let send_data = pin!(async {
-                if self.write_buffer.is_empty() {
-                    pending().await
-                } else {
-                    writer.write(&self.write_buffer[self.write_head..]).await
-                }
-            });
+        let sleep = sleep_until(self.next_ping);
 
-            match select(select(sleep, recv_req), select(recv_data, send_data)).await {
-                Either::Left((Either::Left(_), _)) => Sel::Sleep,
-                Either::Left((Either::Right((request, _)), _)) => Sel::Request(request),
-                Either::Right((Either::Left((n, _)), _)) => Sel::Read(n),
-                Either::Right((Either::Right((n, _)), _)) => Sel::Write(n),
+        let res = tokio::select! {
+            n = reader.read(&mut self.read_buffer[self.read_tail..]) => {
+                n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n))
             }
-        };
-
-        let res = match sel {
-            Sel::Request(request) => {
-                self.requests.push(request.unwrap());
-                Ok(Vec::new())
+            n = writer.write(&self.write_buffer[self.write_head..]), if !self.write_buffer.is_empty() => {
+                n.map_err(ReadError::Io).map(|n| {
+                    self.on_net_write(n);
+                    Vec::new()
+                })
             }
-            Sel::Read(n) => n.map_err(ReadError::Io).and_then(|n| self.on_net_read(n)),
-            Sel::Write(n) => n.map_err(ReadError::Io).map(|n| {
-                self.on_net_write(n);
-                Vec::new()
-            }),
-            Sel::Sleep => {
+            _ = sleep => {
                 self.on_ping_timeout();
                 Ok(Vec::new())
             }
@@ -288,41 +221,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
 
         match res {
             Ok(ok) => Ok(ok),
-            Err(err) => self.on_error(err).await,
-        }
-    }
-
-    #[allow(unused_variables)]
-    async fn try_connect(&mut self) -> Result<(), Error> {
-        let mut attempts = 0;
-        loop {
-            match NetStream::connect(&self.addr).await {
-                Ok(result) => {
-                    log::info!(
-                        "auto-reconnect success after {} failed attempt(s)",
-                        attempts
-                    );
-                    self.stream = result;
-                    return Ok(());
-                }
-                Err(e) => {
-                    attempts += 1;
-                    log::warn!("auto-reconnect failed {} time(s): {}", attempts, e);
-                    sleep(Duration::from_secs(1)).await;
-
-                    match self.reconnection_policy.should_retry(attempts) {
-                        ControlFlow::Break(_) => {
-                            log::error!(
-                                "attempted more than {} times for reconnection and failed",
-                                attempts
-                            );
-                            return Err(e);
-                        }
-                        ControlFlow::Continue(duration) => {
-                            sleep(duration).await;
-                        }
-                    }
-                }
+            Err(err) => {
+                self.on_error(&err);
+                Err(err)
             }
         }
     }
@@ -451,57 +352,20 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn on_ping_timeout(&mut self) {
         let ping_id = generate_random_id();
         debug!("enqueueing keepalive ping {}", ping_id);
-        drop(
-            self.enqueue_body(
-                tl::functions::PingDelayDisconnect {
-                    ping_id,
-                    disconnect_delay: NO_PING_DISCONNECT,
-                }
-                .to_bytes(),
-            ),
+        let (tx, _rx) = oneshot::channel();
+        self.enqueue_body(
+            tl::functions::PingDelayDisconnect {
+                ping_id,
+                disconnect_delay: NO_PING_DISCONNECT,
+            }
+            .to_bytes(),
+            tx,
         );
         self.next_ping = Instant::now() + PING_DELAY;
     }
 
     /// Handle errors that occured while performing I/O.
-    async fn on_error(&mut self, error: ReadError) -> Result<Vec<UpdatesLike>, ReadError> {
-        log::info!("handling error: {error}");
-        self.transport.reset();
-        self.mtp.reset();
-        log::info!(
-            "resetting sender state from read_buffer {}/{}, write_buffer {}/{}",
-            self.read_tail,
-            self.read_buffer.len(),
-            self.write_head,
-            self.write_buffer.len(),
-        );
-        self.read_tail = 0;
-        self.read_buffer.fill(0);
-        self.write_head = 0;
-        self.write_buffer.clear();
-
-        let error = match error {
-            ReadError::Io(_)
-                if matches!(
-                    self.reconnection_policy.should_retry(0),
-                    ControlFlow::Continue(_)
-                ) =>
-            {
-                match self.try_connect().await {
-                    Ok(_) => {
-                        // Reconnect success means everything can be retried.
-                        self.requests
-                            .iter_mut()
-                            .for_each(|r| r.state = RequestState::NotSerialized);
-
-                        return Ok(vec![UpdatesLike::Reconnection]);
-                    }
-                    Err(e) => ReadError::from(e),
-                }
-            }
-            e => e,
-        };
-
+    fn on_error(&mut self, error: &ReadError) {
         log::warn!(
             "marking all {} request(s) as failed: {}",
             self.requests.len(),
@@ -511,8 +375,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         self.requests
             .drain(..)
             .for_each(|r| drop(r.result.send(Err(InvocationError::from(error.clone())))));
-
-        Err(error)
     }
 
     /// Process the result of deserializing an MTP buffer.
@@ -722,16 +584,14 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
 pub async fn connect<T: Transport>(
     transport: T,
     addr: ServerAddr,
-    rc_policy: &'static dyn ReconnectionPolicy,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    let (sender, enqueuer) = Sender::connect(transport, mtp::Plain::new(), addr, rc_policy).await?;
-    generate_auth_key(sender, enqueuer).await
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+    let sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
+    generate_auth_key(sender).await
 }
 
 pub async fn generate_auth_key<T: Transport>(
     mut sender: Sender<T, mtp::Plain>,
-    enqueuer: Enqueuer,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");
@@ -752,39 +612,27 @@ pub async fn generate_auth_key<T: Transport>(
     } = authentication::create_key(data, &response)?;
     info!("authorization key generated successfully");
 
-    Ok((
-        Sender {
-            stream: sender.stream,
-            transport: sender.transport,
-            mtp: mtp::Encrypted::build()
-                .time_offset(time_offset)
-                .first_salt(first_salt)
-                .finish(auth_key),
-            requests: sender.requests,
-            request_rx: sender.request_rx,
-            next_ping: Instant::now() + PING_DELAY,
-            read_buffer: sender.read_buffer,
-            read_tail: sender.read_tail,
-            write_buffer: sender.write_buffer,
-            write_head: sender.write_head,
-            addr: sender.addr,
-            reconnection_policy: sender.reconnection_policy,
-        },
-        enqueuer,
-    ))
+    Ok(Sender {
+        stream: sender.stream,
+        transport: sender.transport,
+        mtp: mtp::Encrypted::build()
+            .time_offset(time_offset)
+            .first_salt(first_salt)
+            .finish(auth_key),
+        requests: sender.requests,
+        next_ping: Instant::now() + PING_DELAY,
+        read_buffer: sender.read_buffer,
+        read_tail: sender.read_tail,
+        write_buffer: sender.write_buffer,
+        write_head: sender.write_head,
+        addr: sender.addr,
+    })
 }
 
 pub async fn connect_with_auth<T: Transport>(
     transport: T,
     addr: ServerAddr,
     auth_key: [u8; 256],
-    rc_policy: &'static dyn ReconnectionPolicy,
-) -> Result<(Sender<T, mtp::Encrypted>, Enqueuer), io::Error> {
-    Sender::connect(
-        transport,
-        mtp::Encrypted::build().finish(auth_key),
-        addr,
-        rc_policy,
-    )
-    .await
+) -> Result<Sender<T, mtp::Encrypted>, io::Error> {
+    Sender::connect(transport, mtp::Encrypted::build().finish(auth_key), addr).await
 }

@@ -97,17 +97,22 @@ pub(crate) fn parse_mention_entities(
         .iter()
         .any(|e| matches!(e, tl::enums::MessageEntity::MentionName(_)))
     {
-        let state = client.0.state.read().unwrap();
         for entity in entities.iter_mut() {
             if let tl::enums::MessageEntity::MentionName(mention_name) = entity {
-                if let Some(packed_user) = state.chat_hashes.get(mention_name.user_id) {
-                    *entity = tl::types::InputMessageEntityMentionName {
-                        offset: mention_name.offset,
-                        length: mention_name.length,
-                        user_id: packed_user.to_input_user_lossy(),
-                    }
-                    .into()
+                *entity = tl::types::InputMessageEntityMentionName {
+                    offset: mention_name.offset,
+                    length: mention_name.length,
+                    user_id: tl::enums::InputUser::User(tl::types::InputUser {
+                        user_id: mention_name.user_id,
+                        access_hash: client
+                            .0
+                            .session
+                            .peer(grammers_session::PeerRef::User(mention_name.user_id))
+                            .and_then(|peer| peer.hash())
+                            .unwrap_or(0),
+                    }),
                 }
+                .into()
             }
         }
     }
@@ -174,12 +179,6 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
                 panic!("API returned Messages::NotModified even though hash = 0")
             }
         };
-
-        {
-            let mut state = self.client.0.state.write().unwrap();
-            // Telegram can return peers without hash (e.g. Users with 'min: true')
-            let _ = state.chat_hashes.extend(&users, &chats);
-        }
 
         let chats = ChatMap::new(users, chats);
 

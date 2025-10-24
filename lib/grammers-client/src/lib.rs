@@ -49,13 +49,10 @@ pub mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
-#[cfg(all(feature = "fs", target_arch = "wasm32", target_os = "unknown"))]
-compile_error!("The `fs` feature is not supported on wasm32-unknown-unknown.");
-
-pub use client::{Client, Config, InitParams, SignInError};
+pub use client::{Client, ClientConfiguration, SignInError, UpdatesConfiguration};
 pub use types::{ChatMap, InputMedia, InputMessage, Update, button, reply_markup};
 
 pub use grammers_mtproto::transport;
-pub use grammers_mtsender::{FixedReconnect, InvocationError, NoReconnect, ReconnectionPolicy};
+pub use grammers_mtsender::InvocationError;
 pub use grammers_session as session;
 pub use grammers_tl_types;

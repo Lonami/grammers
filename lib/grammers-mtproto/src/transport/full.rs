@@ -118,12 +118,6 @@ impl Transport for Full {
             next_offset: len,
         })
     }
-
-    fn reset(&mut self) {
-        log::info!("resetting recv and send seqs in full transport");
-        self.recv_seq = 0;
-        self.send_seq = 0;
-    }
 }
 
 #[cfg(test)]

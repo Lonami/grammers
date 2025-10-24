@@ -14,7 +14,7 @@ use crate::{Client, types};
 use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
-use grammers_session::PackedChat;
+use grammers_session::{PackedChat, PeerRef};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
@@ -253,7 +253,7 @@ impl Message {
                 let peer_id = self.peer_id();
                 if matches!(peer_id, tl::enums::Peer::User(_)) {
                     if self.outgoing() {
-                        let user_id = self.client.0.state.read().unwrap().chat_hashes.self_id();
+                        let user_id = self.client.0.session.peer(PeerRef::SelfUser).unwrap().id();
                         Some(tl::types::PeerUser { user_id }.into())
                     } else {
                         Some(peer_id.clone())

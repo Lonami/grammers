@@ -23,17 +23,6 @@ It also contains the logic needed to correctly process updates.
 Used everywhere to invoke the "raw Telegram's API". It is the implementation of all the friendly
 client methods.
 
-## os_info
-
-Telegram requires clients to send some basic system information when connecting to the server,
-such as OS type or system version. If these values are not explicitly provided by the user, the
-crate is used to load the expected values.
-
-## locate-locale
-
-Similar rationale to `os_info`, Telegram expects a system language code used by the client
-(presumably for things such as localized service messages among others).
-
 ## pulldown-cmark
 
 Enables the user to use markdown text to send formatted messages.
@@ -83,8 +72,3 @@ Provides useful functions for working with futures/tasks.
 ## url
 
 Used to parse certain URLs to offer features such as joining private chats via their invite link.
-
-## web-time
-
-Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
-Automatically falls back to `std::time` when we're not targeting web.

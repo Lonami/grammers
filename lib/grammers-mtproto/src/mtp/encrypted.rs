@@ -14,7 +14,7 @@ use grammers_crypto::{AuthKey, DequeBuffer, decrypt_data_v2, encrypt_data_v2};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
 use log::info;
 use std::mem;
-use web_time::{Instant, SystemTime, UNIX_EPOCH};
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// How many future salts to fetch or have stored at a given time.
 ///
@@ -1295,20 +1295,6 @@ impl Mtp for Encrypted {
         // the processing result is stored in self. After processing is done, that temporary
         // state is cleaned and returned with `mem::take`.
         Ok(mem::take(&mut self.deserialization))
-    }
-
-    fn reset(&mut self) {
-        log::info!("resetting mtp client id and related state");
-        self.client_id = {
-            let mut buffer = [0u8; 8];
-            getrandom::fill(&mut buffer).expect("failed to generate a secure client_id");
-            i64::from_le_bytes(buffer)
-        };
-        self.sequence = 0;
-        self.last_msg_id = 0;
-        self.pending_ack.clear();
-        self.msg_count = 0;
-        self.salt_request_msg_id = None;
     }
 }
 

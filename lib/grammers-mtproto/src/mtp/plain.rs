@@ -111,8 +111,6 @@ impl Mtp for Plain {
             body: payload[20..20 + len as usize].into(),
         })])
     }
-
-    fn reset(&mut self) {}
 }
 
 #[cfg(test)]

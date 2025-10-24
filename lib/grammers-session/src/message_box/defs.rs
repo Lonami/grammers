@@ -10,7 +10,7 @@ use super::tests::Instant;
 use grammers_tl_types as tl;
 use std::time::Duration;
 #[cfg(not(test))]
-use web_time::Instant;
+use std::time::Instant;
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 pub(super) const NO_SEQ: i32 = 0;
@@ -130,9 +130,6 @@ pub enum UpdatesLike {
     },
     AffectedMessages(tl::types::messages::AffectedMessages),
     InvitedUsers(tl::types::messages::InvitedUsers),
-    /// Not an update sent by Telegram, but still something that affects handling of updates.
-    /// The caller should getDifference and query the server for any possibly-lost updates.
-    Reconnection,
 }
 
 // Public interface around the more tightly-packed internal state.

@@ -15,15 +15,17 @@
 //!
 use std::io::{BufRead, Write};
 use std::path::Path;
+use std::sync::Arc;
 use std::{env, io};
 
-use grammers_client::{Client, Config, SignInError};
+use grammers_client::{Client, SignInError};
+use grammers_mtsender::SenderPool;
+use grammers_session::storages::TlSession;
 use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
 
-use grammers_client::session::Session;
 use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
@@ -37,18 +39,14 @@ async fn async_main() -> Result<()> {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let chat_name = env::args().nth(1).expect("chat name missing");
 
-    println!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
-        api_id,
-        api_hash: api_hash.clone(),
-        params: Default::default(),
-    })
-    .await?;
-    println!("Connected!");
+    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+
+    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(&pool);
+    let SenderPool { runner, .. } = pool;
+    let _ = tokio::spawn(runner.run());
 
     // If we can't save the session, sign out once we're done.
     let mut sign_out = false;
@@ -56,7 +54,7 @@ async fn async_main() -> Result<()> {
     if !client.is_authorized().await? {
         println!("Signing in...");
         let phone = prompt("Enter your phone number (international format): ")?;
-        let token = client.request_login_code(&phone).await?;
+        let token = client.request_login_code(&phone, env!("TG_HASH")).await?;
         let code = prompt("Enter the code you received: ")?;
         let signed_in = client.sign_in(&token, &code).await;
         match signed_in {
@@ -75,7 +73,7 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match client.session().save_to_file(SESSION_FILE) {
+        match session.save_to_file(SESSION_FILE) {
             Ok(_) => {}
             Err(e) => {
                 println!("NOTE: failed to save the session, will sign out when done: {e}");
@@ -117,10 +115,10 @@ async fn async_main() -> Result<()> {
     println!("Downloaded {counter} messages");
 
     if sign_out {
-        // TODO revisit examples and get rid of "handle references" (also, this panics)
-        drop(client.sign_out_disconnect().await);
+        drop(client.sign_out().await);
     }
 
+    // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())
 }
 

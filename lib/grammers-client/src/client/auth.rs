@@ -6,11 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::Client;
-use super::net::connect_sender;
 use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_session::{Peer, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -89,24 +89,22 @@ impl Client {
 
         let user = User::from_raw(auth.user);
 
-        let sync_state = {
-            let mut state = self.0.state.write().unwrap();
+        self.0.session.cache_peer(&Peer::User {
+            id: user.id(),
+            hash: user.access_hash(),
+            bot: Some(user.is_bot()),
+            is_self: true,
+        });
+        if let Some(tl::enums::updates::State::State(state)) = update_state {
             self.0
-                .config
                 .session
-                .set_user(user.id(), state.dc_id, user.is_bot());
-
-            state.chat_hashes.set_self_user(user.pack());
-            if let Some(us) = update_state {
-                state.message_box.set_state(us);
-                true
-            } else {
-                false
-            }
-        };
-
-        if sync_state {
-            self.sync_update_state();
+                .set_update_state(UpdateState::All(UpdatesState {
+                    pts: state.pts,
+                    qts: state.qts,
+                    date: state.date,
+                    seq: state.seq,
+                    channels: Vec::new(),
+                }));
         }
 
         Ok(user)
@@ -124,11 +122,13 @@ impl Client {
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Note: this token is obviously fake.
+    /// // Note: these values are obviously fake.
+    /// //       Obtain your own with the developer's phone at https://my.telegram.org.
+    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     /// //       Obtain your own by talking to @BotFather via a Telegram app.
     /// const TOKEN: &str = "776609994:AAFXAy5-PawQlnYywUlZ_b_GOXgarR3ah_yq";
     ///
-    /// let user = match client.bot_sign_in(TOKEN).await {
+    /// let user = match client.bot_sign_in(TOKEN, API_HASH).await {
     ///     Ok(user) => user,
     ///     Err(err) => {
     ///         println!("Failed to sign in as a bot :(\n{}", err);
@@ -145,25 +145,28 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn bot_sign_in(&self, token: &str) -> Result<User, AuthorizationError> {
+    pub async fn bot_sign_in(
+        &self,
+        token: &str,
+        api_hash: &str,
+    ) -> Result<User, AuthorizationError> {
         let request = tl::functions::auth::ImportBotAuthorization {
             flags: 0,
-            api_id: self.0.config.api_id,
-            api_hash: self.0.config.api_hash.clone(),
+            api_id: self.0.api_id,
+            api_hash: api_hash.to_string(),
             bot_auth_token: token.to_string(),
         };
 
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let dc_id = err.value.unwrap() as i32;
-                let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                {
-                    *self.0.conn.sender.lock().await = sender;
-                    *self.0.conn.request_tx.write().unwrap() = request_tx;
-                    let mut state = self.0.state.write().unwrap();
-                    state.dc_id = dc_id;
-                }
+                let old_dc_id = self.0.session.home_dc_id();
+                let new_dc_id = err.value.unwrap() as i32;
+                // Disconnect from current DC to cull the now-unused connection.
+                // This also gives a chance for the new home DC to export its authorization
+                // if there's a need to connect back to the old DC after having logged in.
+                self.0.handle.disconnect_from_dc(old_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id);
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -191,23 +194,29 @@ impl Client {
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Note: this phone number is obviously fake.
+    /// // Note: these values are obviously fake.
+    /// //       Obtain your own with the developer's phone at https://my.telegram.org.
+    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     /// //       The phone used here does NOT need to be the same as the one used by the developer
     /// //       to obtain the API ID and hash.
     /// const PHONE: &str = "+1 415 555 0132";
     ///
     /// if !client.is_authorized().await? {
     ///     // We're not logged in, so request the login code.
-    ///     client.request_login_code(PHONE).await?;
+    ///     client.request_login_code(PHONE, API_HASH).await?;
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn request_login_code(&self, phone: &str) -> Result<LoginToken, AuthorizationError> {
+    pub async fn request_login_code(
+        &self,
+        phone: &str,
+        api_hash: &str,
+    ) -> Result<LoginToken, AuthorizationError> {
         let request = tl::functions::auth::SendCode {
             phone_number: phone.to_string(),
-            api_id: self.0.config.api_id,
-            api_hash: self.0.config.api_hash.clone(),
+            api_id: self.0.api_id,
+            api_hash: api_hash.to_string(),
             settings: tl::types::CodeSettings {
                 allow_flashcall: false,
                 current_number: false,
@@ -231,20 +240,13 @@ impl Client {
                 SC::PaymentRequired(_) => todo!(),
             },
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                // Since we are not logged in (we're literally requesting for
-                // the code to login now), there's no need to export the current
-                // authorization and re-import it at a different datacenter.
-                //
-                // Just connect and generate a new authorization key with it
-                // before trying again.
-                let dc_id = err.value.unwrap() as i32;
-                let (sender, request_tx) = connect_sender(dc_id, &self.0.config).await?;
-                {
-                    *self.0.conn.sender.lock().await = sender;
-                    *self.0.conn.request_tx.write().unwrap() = request_tx;
-                    let mut state = self.0.state.write().unwrap();
-                    state.dc_id = dc_id;
-                }
+                let old_dc_id = self.0.session.home_dc_id();
+                let new_dc_id = err.value.unwrap() as i32;
+                // Disconnect from current DC to cull the now-unused connection.
+                // This also gives a chance for the new home DC to export its authorization
+                // if there's a need to connect back to the old DC after having logged in.
+                self.0.handle.disconnect_from_dc(old_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id);
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),
@@ -275,12 +277,13 @@ impl Client {
     /// # use grammers_client::SignInError;
     ///
     ///  async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
     /// fn ask_code_to_user() -> String {
     ///     unimplemented!()
     /// }
     ///
-    /// let token = client.request_login_code(PHONE).await?;
+    /// let token = client.request_login_code(PHONE, API_HASH).await?;
     /// let code = ask_code_to_user();
     ///
     /// let user = match client.sign_in(&token, &code).await {
@@ -352,12 +355,13 @@ impl Client {
     /// use grammers_client::SignInError;
     ///
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # const API_HASH: &str = "";
     /// # const PHONE: &str = "";
     /// fn get_user_password(hint: &str) -> Vec<u8> {
     ///     unimplemented!()
     /// }
     ///
-    /// # let token = client.request_login_code(PHONE).await?;
+    /// # let token = client.request_login_code(PHONE, API_HASH).await?;
     /// # let code = "";
     ///
     /// // ... enter phone number, request login code ...
@@ -452,21 +456,8 @@ impl Client {
         self.invoke(&tl::functions::auth::LogOut {}).await
     }
 
-    /// Synchronize all state to the session file and provide mutable access to it.
-    ///
-    /// You can use this to temporarily access the session and save it wherever you want to.
-    ///
-    /// Panics if the type parameter does not match the actual session type.
-    pub fn session(&self) -> &grammers_session::Session {
-        self.sync_update_state();
-        &self.0.config.session
-    }
-
-    /// Calls [`Client::sign_out`] and disconnects.
-    ///
-    /// The client will be disconnected even if signing out fails.
-    pub async fn sign_out_disconnect(&self) -> Result<(), InvocationError> {
-        let _res = self.invoke(&tl::functions::auth::LogOut {}).await;
-        panic!("disconnect now only works via dropping");
+    /// Signals all clients sharing the same sender pool to disconnect.
+    pub fn disconnect(&self) {
+        self.0.handle.quit();
     }
 }

@@ -176,6 +176,7 @@ impl Client {
         }) {
             let dc_id = message_id.dc_id();
             self.invoke_in_dc(
+                dc_id,
                 &tl::functions::messages::EditInlineBotMessage {
                     id: message_id,
                     message: Some(message.text),
@@ -185,7 +186,6 @@ impl Client {
                     reply_markup: message.reply_markup,
                     invert_media: message.invert_media,
                 },
-                dc_id,
             )
             .await
         } else {

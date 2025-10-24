@@ -5,169 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::client::{ClientState, Connection};
-use super::{Client, ClientInner, Config};
-use crate::utils;
-use grammers_mtproto::mtp;
-use grammers_mtproto::transport;
-use grammers_mtsender::{
-    self as sender, AuthorizationError, InvocationError, RpcError, Sender, ServerAddr, utils::sleep,
-};
-use grammers_session::{ChatHashCache, MessageBoxes, UpdatesLike};
+use super::{Client, ClientInner};
+use crate::client::client::ClientConfiguration;
+use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
-use log::{debug, info};
-use sender::Enqueuer;
-use std::collections::{HashMap, VecDeque};
-use std::net::Ipv4Addr;
-use std::sync::atomic::{AtomicU32, Ordering};
-use std::sync::{Arc, RwLock};
-use tokio::sync::oneshot::error::TryRecvError;
-use tokio::sync::{Mutex as AsyncMutex, RwLock as AsyncRwLock};
-
-/// Socket addresses to Telegram datacenters, where the index into this array
-/// represents the data center ID.
-///
-/// The addresses were obtained from the `static` addresses through a call to
-/// `functions::help::GetConfig`.
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-const DC_ADDRESSES: [(Ipv4Addr, u16); 6] = [
-    (Ipv4Addr::new(0, 0, 0, 0), 0),
-    (Ipv4Addr::new(149, 154, 175, 53), 443),
-    (Ipv4Addr::new(149, 154, 167, 51), 443),
-    (Ipv4Addr::new(149, 154, 175, 100), 443),
-    (Ipv4Addr::new(149, 154, 167, 92), 443),
-    (Ipv4Addr::new(91, 108, 56, 190), 443),
-];
-
-/// WebSocket addresses to Telegram datacenters, where the index into this array
-/// represents the data center ID.
-///
-/// The addresses were obtained from the official docs.
-/// See [URI Format](https://core.telegram.org/mtproto/transports#uri-format).
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-const WS_ADDRESSES: [&str; 6] = [
-    "",
-    "wss://pluto.web.telegram.org/apiws",
-    "wss://venus.web.telegram.org/apiws",
-    "wss://aurora.web.telegram.org/apiws",
-    "wss://vesta.web.telegram.org/apiws",
-    "wss://flora.web.telegram.org/apiws",
-];
-
-#[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-pub(crate) type Transport = transport::Full;
-
-#[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-pub(crate) type Transport = transport::Obfuscated<transport::Intermediate>;
-
-const DEFAULT_DC: i32 = 2;
-
-pub(crate) async fn connect_sender(
-    dc_id: i32,
-    config: &Config,
-) -> Result<(Sender<Transport, mtp::Encrypted>, Enqueuer), AuthorizationError> {
-    #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-    let transport = transport::Full::new();
-
-    #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-    let transport = transport::Obfuscated::new(transport::Intermediate::new());
-
-    let addr: ServerAddr = if let Some(ref sa) = config.params.server_addr {
-        sa.clone()
-    } else {
-        #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-        let addr = {
-            let tcp_addr = DC_ADDRESSES[dc_id as usize].into();
-
-            #[cfg(not(feature = "proxy"))]
-            let addr = ServerAddr::Tcp { address: tcp_addr };
-
-            #[cfg(feature = "proxy")]
-            let addr = if let Some(proxy) = &config.params.proxy_url {
-                ServerAddr::Proxied {
-                    address: tcp_addr,
-                    proxy: proxy.to_owned(),
-                }
-            } else {
-                ServerAddr::Tcp { address: tcp_addr }
-            };
-
-            addr
-        };
-
-        #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-        let addr = ServerAddr::Ws {
-            address: WS_ADDRESSES[dc_id as usize].to_string(),
-        };
-
-        addr
-    };
-
-    let (mut sender, request_tx) = if let Some(auth_key) = config.session.dc_auth_key(dc_id) {
-        info!(
-            "creating a new sender with existing auth key to dc {} {:?}",
-            dc_id, addr
-        );
-
-        sender::connect_with_auth(transport, addr, auth_key, config.params.reconnection_policy)
-            .await?
-    } else {
-        info!(
-            "creating a new sender and auth key in dc {} {:?}",
-            dc_id, addr
-        );
-
-        let (sender, tx) =
-            sender::connect(transport, addr.clone(), config.params.reconnection_policy).await?;
-
-        match addr {
-            #[cfg(not(all(target_arch = "wasm32", target_os = "unknown")))]
-            ServerAddr::Tcp { ref address, .. } => {
-                config
-                    .session
-                    .insert_dc_tcp(dc_id, address, sender.auth_key());
-            }
-            #[cfg(all(
-                not(all(target_arch = "wasm32", target_os = "unknown")),
-                feature = "proxy"
-            ))]
-            ServerAddr::Proxied { ref address, .. } => {
-                config
-                    .session
-                    .insert_dc_tcp(dc_id, address, sender.auth_key());
-            }
-            #[cfg(all(target_arch = "wasm32", target_os = "unknown"))]
-            ServerAddr::Ws { ref address } => {
-                config
-                    .session
-                    .insert_dc_ws(dc_id, address, sender.auth_key());
-            }
-        }
-        (sender, tx)
-    };
-
-    // TODO handle -404 (we had a previously-valid authkey, but server no longer knows about it)
-    // TODO all up-to-date server addresses should be stored in the session for future initial connections
-    let _remote_config = sender
-        .invoke(&tl::functions::InvokeWithLayer {
-            layer: tl::LAYER,
-            query: tl::functions::InitConnection {
-                api_id: config.api_id,
-                device_model: config.params.device_model.clone(),
-                system_version: config.params.system_version.clone(),
-                app_version: config.params.app_version.clone(),
-                system_lang_code: config.params.system_lang_code.clone(),
-                lang_pack: "".into(),
-                lang_code: config.params.lang_code.clone(),
-                proxy: None,
-                params: None,
-                query: tl::functions::help::GetConfig {},
-            },
-        })
-        .await?;
-
-    Ok((sender, request_tx))
-}
+use log::info;
+use std::sync::Arc;
+use tokio::{sync::Mutex, time::sleep};
 
 /// Method implementations directly related with network connectivity.
 impl Client {
@@ -178,94 +22,46 @@ impl Client {
     ///
     /// The connection will be initialized with the data from the input configuration.
     ///
+    /// The [`SenderPoolHandle`] does not keep a reference to the [`Session`] or `api_id`,
+    /// but the [`SenderPool`] itself does, so the latter is used as input to guarantee that
+    /// the values are correctly shared between the pool and the client handles.
+    ///
     /// # Examples
     ///
     /// ```
-    /// use grammers_client::{Client, Config};
-    /// use grammers_session::Session;
+    /// use std::sync::Arc;
+    /// use grammers_client::Client;
+    /// use grammers_session::storages::TlSession;
+    /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
     /// //       Obtain your own with the developer's phone at https://my.telegram.org.
     /// const API_ID: i32 = 932939;
-    /// const API_HASH: &str = "514727c32270b9eb8cc16daf17e21e57";
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
-    /// let client = Client::connect(Config {
-    ///     session: Session::load_file_or_create("hello-world.session")?,
-    ///     api_id: API_ID,
-    ///     api_hash: API_HASH.to_string(),
-    ///     params: Default::default(),
-    /// }).await?;
+    /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
+    /// let pool = SenderPool::new(Arc::clone(&session), API_ID);
+    /// let client = Client::new(&pool);
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn connect(mut config: Config) -> Result<Self, AuthorizationError> {
-        let dc_id = config
-            .session
-            .get_user()
-            .map(|u| u.dc)
-            .unwrap_or(DEFAULT_DC);
-        let (sender, request_tx) = connect_sender(dc_id, &config).await?;
-        let message_box = if config.params.catch_up {
-            if let Some(state) = config.session.get_state() {
-                MessageBoxes::load(state)
-            } else {
-                MessageBoxes::new()
-            }
-        } else {
-            // If the user doesn't want to bother with catching up on previous update, start with
-            // pristine state instead.
-            MessageBoxes::new()
-        };
+    pub fn new(sender_pool: &SenderPool) -> Self {
+        Self::with_configuration(sender_pool, Default::default())
+    }
 
-        // Pre-allocate the right `VecDeque` size if a limit is given.
-        let updates = if let Some(limit) = config.params.update_queue_limit {
-            VecDeque::with_capacity(limit)
-        } else {
-            VecDeque::new()
-        };
-
-        // "Remove" the limit to avoid checking for it (and avoid warning).
-        if let Some(0) = config.params.update_queue_limit {
-            config.params.update_queue_limit = None;
-        }
-
-        let self_user = config.session.get_user();
-
-        // Don't bother getting pristine update state if we're not logged in.
-        let should_get_state = message_box.is_empty() && config.session.signed_in();
-
+    /// Like [`Self::new`] but with a custom [`Configuration`].
+    pub fn with_configuration(
+        sender_pool: &SenderPool,
+        configuration: ClientConfiguration,
+    ) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
-        let client = Self(Arc::new(ClientInner {
-            id: utils::generate_random_id(),
-            config,
-            conn: Connection::new(sender, request_tx),
-            state: RwLock::new(ClientState {
-                dc_id,
-                message_box,
-                chat_hashes: ChatHashCache::new(self_user.map(|u| (u.id, u.bot))),
-                last_update_limit_warn: None,
-                updates,
-            }),
-            downloader_map: AsyncRwLock::new(HashMap::new()),
-        }));
-
-        if should_get_state {
-            match client.invoke(&tl::functions::updates::GetState {}).await {
-                Ok(state) => {
-                    {
-                        client.0.state.write().unwrap().message_box.set_state(state);
-                    }
-                    client.sync_update_state();
-                }
-                Err(_err) => {
-                    // The account may no longer actually be logged in, or it can rarely fail.
-                    // `message_box` will try to correct its state as updates arrive.
-                }
-            }
-        }
-
-        Ok(client)
+        Self(Arc::new(ClientInner {
+            session: Arc::clone(&sender_pool.runner.session),
+            api_id: sender_pool.runner.api_id,
+            handle: sender_pool.handle.clone(),
+            configuration,
+            auth_copied_to_dcs: Mutex::new(Vec::new()),
+        }))
     }
 
     /// Invoke a raw API call. This directly sends the request to Telegram's servers.
@@ -295,187 +91,83 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        self.0
-            .conn
-            .invoke(
-                request,
-                self.0.config.params.flood_sleep_threshold,
-                |updates| self.process_socket_updates(updates),
-            )
+        let dc_id = self.0.session.home_dc_id();
+        self.do_invoke_in_dc(dc_id, request.to_bytes())
             .await
+            .and_then(|body| R::Return::from_bytes(&body).map_err(|e| e.into()))
     }
 
-    async fn export_authorization(
-        &self,
-        target_dc_id: i32,
-    ) -> Result<tl::types::auth::ExportedAuthorization, InvocationError> {
-        let request = tl::functions::auth::ExportAuthorization {
-            dc_id: target_dc_id,
-        };
-        match self.invoke(&request).await {
-            Ok(tl::enums::auth::ExportedAuthorization::Authorization(exported_auth)) => {
-                Ok(exported_auth)
-            }
-            Err(e) => Err(e),
-        }
-    }
-
-    async fn connect_sender(&self, dc_id: i32) -> Result<Arc<Connection>, InvocationError> {
-        let mut mutex = self.0.downloader_map.write().await;
-        debug!("Connecting new datacenter {}", dc_id);
-        match connect_sender(dc_id, &self.0.config).await {
-            Ok((new_sender, new_tx)) => {
-                let new_downloader = Arc::new(Connection::new(new_sender, new_tx));
-
-                // export auth
-                let authorization = self.export_authorization(dc_id).await?;
-
-                // import into new sender
-                let request = tl::functions::auth::ImportAuthorization {
-                    id: authorization.id,
-                    bytes: authorization.bytes,
-                };
-                new_downloader
-                    .invoke(&request, self.0.config.params.flood_sleep_threshold, drop)
-                    .await?;
-
-                mutex.insert(dc_id, new_downloader.clone());
-                Ok(new_downloader.clone())
-            }
-            Err(AuthorizationError::Invoke(e)) => Err(e),
-            Err(AuthorizationError::Gen(e)) => {
-                panic!("authorization key generation failed: {e}")
-            }
-        }
-    }
-
-    async fn get_downloader(&self, dc_id: i32) -> Result<Option<Arc<Connection>>, InvocationError> {
-        return Ok({
-            let guard = self.0.downloader_map.read().await;
-            guard.get(&dc_id).cloned()
-        });
-    }
-
+    /// Like [`Self::invoke`], but in the specified DC.
     pub async fn invoke_in_dc<R: tl::RemoteCall>(
         &self,
-        request: &R,
         dc_id: i32,
-    ) -> Result<R::Return, InvocationError> {
-        let downloader = match self.get_downloader(dc_id).await? {
-            None => self.connect_sender(dc_id).await?,
-            Some(fd) => fd,
-        };
-        downloader
-            .invoke(request, self.0.config.params.flood_sleep_threshold, drop)
-            .await
-    }
-
-    /// Perform a single network step.
-    ///
-    /// Most commonly, you will want to use the higher-level abstraction [`Client::next_update`]
-    /// instead.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// loop {
-    ///     // Process network events forever until we gracefully disconnect or get an error.
-    ///     client.step().await?;
-    /// }
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn step(&self) -> Result<(), sender::ReadError> {
-        let updates = self.0.conn.step().await?;
-        self.process_socket_updates(updates);
-        Ok(())
-    }
-
-    /// Run the client by repeatedly calling [`Client::step`] until a graceful disconnection
-    /// occurs, or a network error occurs. Incoming updates are ignored and simply dropped.
-    /// instead.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.run_until_disconnected().await?;
-    /// # Ok(())
-    /// # }
-    /// ```
-    pub async fn run_until_disconnected(self) -> Result<(), sender::ReadError> {
-        loop {
-            // TODO review doc comments regarding disconnects
-            self.step().await?;
-        }
-    }
-}
-
-impl Connection {
-    fn new(sender: Sender<Transport, mtp::Encrypted>, request_tx: Enqueuer) -> Self {
-        Self {
-            sender: AsyncMutex::new(sender),
-            request_tx: RwLock::new(request_tx),
-            step_counter: AtomicU32::new(0),
-        }
-    }
-
-    pub(crate) async fn invoke<R: tl::RemoteCall, F: Fn(Vec<UpdatesLike>)>(
-        &self,
         request: &R,
-        flood_sleep_threshold: u32,
-        on_updates: F,
     ) -> Result<R::Return, InvocationError> {
+        self.do_invoke_in_dc(dc_id, request.to_bytes())
+            .await
+            .and_then(|body| R::Return::from_bytes(&body).map_err(|e| e.into()))
+    }
+
+    async fn do_invoke_in_dc(
+        &self,
+        dc_id: i32,
+        request_body: Vec<u8>,
+    ) -> Result<Vec<u8>, InvocationError> {
         let mut slept_flood = false;
 
-        let mut rx = { self.request_tx.read().unwrap().enqueue(request) };
         loop {
-            match rx.try_recv() {
-                Ok(response) => match response {
-                    Ok(body) => break R::Return::from_bytes(&body).map_err(|e| e.into()),
-                    Err(InvocationError::Rpc(RpcError {
-                        name,
-                        code: 420,
-                        value: Some(seconds),
-                        ..
-                    })) if !slept_flood && seconds <= flood_sleep_threshold => {
-                        let delay = std::time::Duration::from_secs(seconds as _);
-                        info!(
-                            "sleeping on {} for {:?} before retrying {}",
-                            name,
-                            delay,
-                            std::any::type_name::<R>()
-                        );
-                        sleep(delay).await;
-                        slept_flood = true;
-                        rx = self.request_tx.read().unwrap().enqueue(request);
-                        continue;
-                    }
-                    Err(e) => break Err(e),
-                },
-                Err(TryRecvError::Empty) => {
-                    on_updates(self.step().await?);
+            match self
+                .0
+                .handle
+                .invoke_in_dc(dc_id, request_body.clone())
+                .await
+            {
+                Ok(response) => break Ok(response),
+                Err(InvocationError::Rpc(RpcError {
+                    name,
+                    code: 420,
+                    value: Some(seconds),
+                    ..
+                })) if !slept_flood && seconds <= self.0.configuration.flood_sleep_threshold => {
+                    let delay = std::time::Duration::from_secs(seconds as _);
+                    info!("sleeping on {} for {:?} before retrying", name, delay,);
+                    sleep(delay).await;
+                    slept_flood = true;
+                    continue;
                 }
-                Err(TryRecvError::Closed) => {
-                    panic!("request channel dropped before receiving a result")
-                }
+                Err(e) => break Err(e),
             }
         }
     }
 
-    async fn step(&self) -> Result<Vec<UpdatesLike>, sender::ReadError> {
-        let ticket_number = self.step_counter.load(Ordering::SeqCst);
-        let mut sender = self.sender.lock().await;
-        match self.step_counter.compare_exchange(
-            ticket_number,
-            // As long as the counter's modulo is larger than the amount of concurrent tasks, we're fine.
-            ticket_number.wrapping_add(1),
-            Ordering::SeqCst,
-            Ordering::SeqCst,
-        ) {
-            Ok(_) => sender.step().await, // We're the one to drive IO.
-            Err(_) => Ok(Vec::new()),     // A different task drove IO.
+    pub(crate) async fn copy_auth_to_dc(&self, target_dc_id: i32) -> Result<(), InvocationError> {
+        let mut auth_copied_to_dcs = self.0.auth_copied_to_dcs.lock().await;
+        if auth_copied_to_dcs.contains(&target_dc_id) {
+            return Ok(());
         }
+
+        let home_dc_id = self.0.session.home_dc_id();
+        if target_dc_id == home_dc_id {
+            return Ok(());
+        }
+
+        let tl::enums::auth::ExportedAuthorization::Authorization(exported_auth) = self
+            .invoke(&tl::functions::auth::ExportAuthorization {
+                dc_id: target_dc_id,
+            })
+            .await?;
+
+        self.invoke_in_dc(
+            target_dc_id,
+            &tl::functions::auth::ImportAuthorization {
+                id: exported_auth.id,
+                bytes: exported_auth.bytes,
+            },
+        )
+        .await?;
+
+        auth_copied_to_dcs.push(target_dc_id);
+
+        Ok(())
     }
 }

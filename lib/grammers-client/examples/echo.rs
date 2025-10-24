@@ -10,19 +10,20 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-use futures_util::future::{Either, select};
-use grammers_client::session::Session;
-use grammers_client::{Client, Config, InitParams, Update};
+use grammers_client::{Client, Update, UpdatesConfiguration};
+use grammers_mtsender::SenderPool;
+use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
-use std::env;
-use std::pin::pin;
-use tokio::{runtime, task};
+use std::sync::Arc;
+use std::{env, time::Duration};
+use tokio::task::JoinSet;
+use tokio::{runtime, time::sleep};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 const SESSION_FILE: &str = "echo.session";
 
-async fn handle_update(client: Client, update: Update) -> Result {
+async fn handle_update(client: Client, update: Update) {
     match update {
         Update::NewMessage(message) if !message.outgoing() => {
             let chat = message.chat();
@@ -30,12 +31,15 @@ async fn handle_update(client: Client, update: Update) -> Result {
                 "Responding to {}",
                 chat.name().unwrap_or(&format!("id {}", chat.id()))
             );
-            client.send_message(&chat, message.text()).await?;
+            if message.text() == "slow" {
+                sleep(Duration::from_secs(5)).await;
+            }
+            if let Err(e) = client.send_message(&chat, message.text()).await {
+                println!("Failed to respond! {e}");
+            };
         }
         _ => {}
     }
-
-    Ok(())
 }
 
 async fn async_main() -> Result {
@@ -45,59 +49,79 @@ async fn async_main() -> Result {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let token = env::args().nth(1).expect("token missing");
 
-    println!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
-        api_id,
-        api_hash: api_hash.clone(),
-        params: InitParams {
-            // Fetch the updates we missed while we were offline
-            catch_up: true,
-            ..Default::default()
-        },
-    })
-    .await?;
-    println!("Connected!");
+    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+
+    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(&pool);
+    let SenderPool {
+        runner,
+        updates,
+        handle,
+    } = pool;
+    let pool_task = tokio::spawn(runner.run());
 
     if !client.is_authorized().await? {
         println!("Signing in...");
-        client.bot_sign_in(&token).await?;
-        client.session().save_to_file(SESSION_FILE)?;
+        client.bot_sign_in(&token, env!("TG_HASH")).await?;
+        session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }
 
     println!("Waiting for messages...");
 
-    // This code uses `select` on Ctrl+C to gracefully stop the client and have a chance to
-    // save the session. You could have fancier logic to save the session if you wanted to
-    // (or even save it on every update). Or you could also ignore Ctrl+C and just use
-    // `let update = client.next_update().await?`.
-    //
-    // Using `tokio::select!` would be a lot cleaner but add a heavy dependency,
-    // so a manual `select` is used instead by pinning async blocks by hand.
+    // This example spawns a task to handle each update.
+    // To guarantee that all handlers run to completion, they're stored in this set.
+    // You can use `task::spawn` if you don't care about dropping unfinished handlers midway.
+    let mut handler_tasks = JoinSet::new();
+    let mut updates = client.stream_updates(
+        updates,
+        UpdatesConfiguration {
+            catch_up: true,
+            ..Default::default()
+        },
+    );
     loop {
-        let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { client.next_update().await });
+        // Empty finished handlers (you could look at their return value here too.)
+        while let Some(_) = handler_tasks.try_join_next() {}
 
-        let update = match select(exit, upd).await {
-            Either::Left(_) => break,
-            Either::Right((u, _)) => u?,
-        };
-
-        let handle = client.clone();
-        task::spawn(async move {
-            match handle_update(handle, update).await {
-                Ok(_) => {}
-                Err(e) => eprintln!("Error handling updates!: {e}"),
+        // This code uses `select` on Ctrl+C to gracefully stop the client and have a chance to
+        // save the session. You could have fancier logic to save the session if you wanted to
+        // (or even save it on every update). Or you could also ignore Ctrl+C and just use
+        // `let update = client.next_update().await?`.
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            update = updates.next() => {
+                let update = update?;
+                let handle = client.clone();
+                handler_tasks.spawn(handle_update(handle, update));
             }
-        });
+        }
     }
 
-    println!("Saving session file and exiting...");
-    client.session().save_to_file(SESSION_FILE)?;
+    println!("Saving session file...");
+    updates.sync_update_state(); // dropping `updates` would also sync it, which you want before saving session
+    session.save_to_file(SESSION_FILE)?;
+
+    // Pool's `run()` won't finish until all handles are dropped or quit is called.
+    // Here there are at least three handles alive: `handle`, `client` and `updates`
+    // which contains a `client`. Any ongoing `handle_update` handlers have one client too.
+    // In this case, it's easier to call `handle.quit()` to close them all.
+    //
+    // You don't need to explicitly close the connection, but this is a way to do it gracefully.
+    // This also gives a chance to the handlers to finish their work by handling the `Dropped`
+    // error from any pending method calls (RPC invocations).
+    //
+    // You can try this graceful shutdown by sending a message saying "slow" and then pressing Ctrl+C.
+    println!("Gracefully closing connection to notify all pending handlers...");
+    handle.quit();
+    let _ = pool_task.await;
+
+    // Give a chance to all on-going handlers to finish.
+    println!("Waiting for any slow handlers to finish...");
+    while let Some(_) = handler_tasks.join_next().await {}
+
     Ok(())
 }
 

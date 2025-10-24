@@ -21,6 +21,17 @@ and partial updates that depend on the request that produced them.
 
 Depending on the session means the bulk of that logic can remain separate.
 
+## os_info
+
+Telegram requires clients to send some basic system information when connecting to the server,
+such as OS type or system version. If these values are not explicitly provided by the user, the
+crate is used to load the expected values.
+
+## locate-locale
+
+Similar rationale to `os_info`, Telegram expects a system language code used by the client
+(presumably for things such as localized service messages among others).
+
 ## tokio
 
 Primarly used for its asynchronous `TcpStream`, although its channels are also used in order to
@@ -50,35 +61,10 @@ Used to parse the optional proxy URL.
 
 Used to look up the IP address of the proxy host if a domain is provided.
 
-## futures-util
-
-Provides useful functions for working with futures/tasks.
-
 ## tokio-socks
 
 SOCKS5 proxy support.
 
-## web-time
+## socks5-server
 
-Used for its web-friendly clock and timer as a replacement for `std::time` in the library.
-Automatically falls back to `std::time` when we're not targeting web.
-
-## web-sys
-
-Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
-call `setTimeout` and `clearTimeout` in the browser.
-
-## wasm-bindgen-futures
-
-Only used when targeting `wasm32-unknown-unknown`. Used by the `Timeout` implementation to
-convert a `Promise` into a `Future`.
-
-## ws_stream_wasm
-
-Only used when targeting `wasm32-unknown-unknown`. Used to create a WebSocket connection
-and get a byte stream from it.
-
-## async_io_stream
-
-Only used when targeting `wasm32-unknown-unknown`. Used to create a tokio-compatible stream
-from a WebSocket connection.
+Used to test for SOCKS5 proxy support.

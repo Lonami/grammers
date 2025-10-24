@@ -18,30 +18,20 @@ proxy = ["tokio-socks", "hickory-resolver", "url"]
 
 [dependencies]
 bytes = "1.10.1"
-futures-util = { version = "0.3.31", default-features = false, features = [
-    "alloc"
-] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 grammers-mtproto = { path = "../grammers-mtproto", version = "0.7.0" }
 grammers-session = { path = "../grammers-session", version = "0.7.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = [ "tl-mtproto" ] }
+locate-locale = "0.2.0"
+os_info = { version = "3.12.0", default-features = false }
 log = "0.4.28"
-tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time"] }
+tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time", "net", "macros"] }
 tokio-socks = { version = "0.5.2", optional = true }
 hickory-resolver = { version = "0.25.2", optional = true }
 url = { version = "2.5.7", optional = true }
-web-time = "1.1.0"
-
-[target.'cfg(not(all(target_arch = "wasm32", target_os = "unknown")))'.dependencies]
-tokio = { version = "1.47.1", default-features = false, features = ["net"] }
-
-[target.'cfg(all(target_arch = "wasm32", target_os = "unknown"))'.dependencies]
-wasm-bindgen-futures = "0.4.54"
-web-sys = {version = "0.3.81", features = ["Window"]}
-ws_stream_wasm = { version = "0.7.5", features = ["tokio_io"] }
-async_io_stream = { version = "0.3.3", features = ["tokio_io"] }
 
 [dev-dependencies]
 simple_logger = { version = "5.0.0", default-features = false, features = ["colors"] }
 tokio = { version = "1.47.1", features = ["rt"] }
 toml = "0.9.8"
+socks5-server = "0.10.1"

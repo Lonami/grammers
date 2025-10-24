@@ -22,12 +22,12 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
-use futures_util::future::{Either, select};
-use grammers_client::session::Session;
-use grammers_client::{Client, Config, InputMessage, Update, button, reply_markup};
+use grammers_client::{Client, InputMessage, Update, button, reply_markup};
+use grammers_mtsender::SenderPool;
+use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::env;
-use std::pin::pin;
+use std::sync::Arc;
 use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
@@ -116,49 +116,46 @@ async fn async_main() -> Result {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let api_hash = env!("TG_HASH").to_string();
     let token = env::args().nth(1).expect("token missing");
 
-    println!("Connecting to Telegram...");
-    let client = Client::connect(Config {
-        session: Session::load_file_or_create(SESSION_FILE)?,
-        api_id,
-        api_hash: api_hash.clone(),
-        params: Default::default(),
-    })
-    .await?;
-    println!("Connected!");
+    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+
+    let pool = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(&pool);
+    let SenderPool {
+        runner, updates, ..
+    } = pool;
+    let _ = tokio::spawn(runner.run());
 
     if !client.is_authorized().await? {
         println!("Signing in...");
-        client.bot_sign_in(&token).await?;
-        client.session().save_to_file(SESSION_FILE)?;
+        client.bot_sign_in(&token, env!("TG_HASH")).await?;
+        session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }
 
     println!("Waiting for messages...");
+    let mut updates = client.stream_updates(updates, Default::default());
     loop {
-        let exit = pin!(async { tokio::signal::ctrl_c().await });
-        let upd = pin!(async { client.next_update().await });
-
-        let update = match select(exit, upd).await {
-            Either::Left(_) => {
-                println!("Exiting...");
-                break;
+        tokio::select! {
+            _ = tokio::signal::ctrl_c() => break,
+            update = updates.next() => {
+                let update = update?;
+                let handle = client.clone();
+                task::spawn(async move {
+                    match handle_update(handle, update).await {
+                        Ok(_) => {}
+                        Err(e) => eprintln!("Error handling updates!: {e}"),
+                    }
+                });
             }
-            Either::Right((u, _)) => u?,
-        };
-
-        let handle = client.clone();
-        task::spawn(async move {
-            if let Err(e) = handle_update(handle, update).await {
-                eprintln!("Error handling updates!: {e}")
-            }
-        });
+        }
     }
 
     println!("Saving session file...");
-    client.session().save_to_file(SESSION_FILE)?;
+    session.save_to_file(SESSION_FILE)?;
+
+    // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())
 }
 
