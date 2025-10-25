@@ -1,4 +1,4 @@
-use grammers_session::{AMBIENT_AUTH, Peer};
+use grammers_session::{AMBIENT_AUTH, PeerAuth};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -77,59 +77,6 @@ impl User {
         Self { raw: user }
     }
 
-    pub(crate) fn empty_with_hash_and_bot(id: i64, access_hash: Option<i64>, bot: bool) -> Self {
-        Self {
-            raw: tl::enums::User::User(tl::types::User {
-                is_self: false,
-                contact: false,
-                mutual_contact: false,
-                deleted: false,
-                bot,
-                bot_chat_history: false,
-                bot_nochats: false,
-                verified: false,
-                restricted: false,
-                min: false, // not min because the input hash is not a min hash
-                bot_inline_geo: false,
-                support: false,
-                scam: false,
-                apply_min_photo: false,
-                fake: false,
-                bot_attach_menu: false,
-                premium: false,
-                attach_menu_enabled: false,
-                bot_can_edit: false,
-                close_friend: false,
-                stories_hidden: false,
-                stories_unavailable: true,
-                contact_require_premium: false,
-                bot_business: false,
-                bot_has_main_app: false,
-                bot_forum_view: false,
-                id,
-                access_hash,
-                first_name: None,
-                last_name: None,
-                username: None,
-                phone: None,
-                photo: None,
-                status: None,
-                bot_info_version: None,
-                restriction_reason: None,
-                bot_inline_placeholder: None,
-                lang_code: None,
-                emoji_status: None,
-                usernames: None,
-                stories_max_id: None,
-                color: None,
-                profile_color: None,
-                bot_active_users: None,
-                bot_verification_icon: None,
-                send_paid_messages_stars: None,
-            }),
-        }
-    }
-
     pub(crate) fn user(&self) -> Option<&tl::types::User> {
         match &self.raw {
             tl::enums::User::User(u) => Some(u),
@@ -145,21 +92,15 @@ impl User {
     }
 
     /// Return the unique identifier for this user.
-    pub fn id(&self) -> i64 {
+    pub fn bare_id(&self) -> i64 {
         self.raw.id()
     }
 
-    pub(crate) fn access_hash(&self) -> Option<i64> {
-        self.user().and_then(|u| u.access_hash)
-    }
-
-    /// Return the peer reference to this chat.
-    pub fn peer(&self) -> Peer {
-        if self.is_self() {
-            Peer::self_user()
-        } else {
-            Peer::user(self.id()).with_auth(self.access_hash().unwrap_or(AMBIENT_AUTH))
-        }
+    pub fn auth(&self) -> PeerAuth {
+        self.user()
+            .and_then(|u| u.access_hash)
+            .map(PeerAuth::from_hash)
+            .unwrap_or(AMBIENT_AUTH)
     }
 
     /// Return the first name of this user.

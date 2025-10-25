@@ -8,7 +8,7 @@
 
 use crate::{Client, InputMessage, types};
 use grammers_mtsender::InvocationError;
-use grammers_session::State;
+use grammers_session::{PeerId, State};
 use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;
@@ -45,20 +45,14 @@ impl CallbackQuery {
             tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
             _ => unreachable!(),
         };
-        self.chats
-            .get(&tl::types::PeerUser { user_id }.into())
-            .unwrap()
+        self.chats.get(PeerId::user(user_id)).unwrap()
     }
 
     /// The chat where the callback query occured.
     pub fn chat(&self) -> &types::Chat {
         let peer = match &self.raw {
-            tl::enums::Update::BotCallbackQuery(update) => &update.peer,
-            tl::enums::Update::InlineBotCallbackQuery(update) => {
-                &tl::enums::Peer::User(tl::types::PeerUser {
-                    user_id: update.user_id,
-                })
-            }
+            tl::enums::Update::BotCallbackQuery(update) => update.peer.clone().into(),
+            tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),
             _ => unreachable!(),
         };
         self.chats.get(peer).unwrap()
@@ -95,7 +89,7 @@ impl CallbackQuery {
         };
         Ok(self
             .client
-            .get_messages_by_id(self.chat().peer(), &[msg_id])
+            .get_messages_by_id(self.chat(), &[msg_id])
             .await?
             .pop()
             .unwrap()
@@ -161,7 +155,7 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat().peer();
+        let chat = self.query.chat();
         match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => {
                 self.query
@@ -185,7 +179,7 @@ impl<'a> Answer<'a> {
         message: M,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat().peer();
+        let chat = self.query.chat();
         self.query.client.send_message(chat, message).await
     }
 
@@ -199,7 +193,7 @@ impl<'a> Answer<'a> {
             _ => return Err(InvocationError::Dropped),
         };
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat().peer();
+        let chat = self.query.chat();
         let message = message.into();
         self.query
             .client

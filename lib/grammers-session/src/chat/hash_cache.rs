@@ -8,11 +8,11 @@
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
-use crate::{Peer, PeerInfo};
+use crate::{PeerAuth, PeerId, PeerInfo, PeerRef};
 
 /// In-memory chat cache, mapping peers to their respective access hashes.
 pub struct ChatHashCache {
-    hash_map: HashMap<i64, i64>,
+    hash_map: HashMap<PeerId, PeerAuth>,
     self_id: Option<i64>,
     self_bot: bool,
 }
@@ -45,15 +45,8 @@ impl ChatHashCache {
         }
     }
 
-    pub fn get(&self, id: i64) -> Option<Peer> {
-        [Peer::user(id), Peer::chat(id), Peer::channel(id)]
-            .iter()
-            .find_map(|peer| {
-                self.hash_map.get(&peer.packed_id).map(|&hash| Peer {
-                    packed_id: id,
-                    hash,
-                })
-            })
+    pub fn get(&self, id: PeerId) -> Option<PeerRef> {
+        self.hash_map.get(&id).map(|&auth| PeerRef { id, auth })
     }
 
     // Returns `true` if all users and chats could be extended without issue.
@@ -69,9 +62,10 @@ impl ChatHashCache {
             U::Empty(_) => {}
             U::User(u) => match (u.min, u.access_hash) {
                 (false, Some(hash)) => {
-                    self.hash_map.insert(Peer::user(u.id).packed_id, hash);
+                    self.hash_map
+                        .insert(PeerId::user(u.id), PeerAuth::from_hash(hash));
                 }
-                _ => success &= self.hash_map.contains_key(&u.id),
+                _ => success &= self.hash_map.contains_key(&PeerId::user(u.id)),
             },
         });
 
@@ -79,13 +73,14 @@ impl ChatHashCache {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => {}
             C::Channel(c) => match (c.min, c.access_hash) {
                 (false, Some(hash)) => {
-                    self.hash_map.insert(Peer::channel(c.id).packed_id, hash);
+                    self.hash_map
+                        .insert(PeerId::channel(c.id), PeerAuth::from_hash(hash));
                 }
-                _ => success &= self.hash_map.contains_key(&c.id),
+                _ => success &= self.hash_map.contains_key(&PeerId::channel(c.id)),
             },
             C::ChannelForbidden(c) => {
                 self.hash_map
-                    .insert(Peer::channel(c.id).packed_id, c.access_hash);
+                    .insert(PeerId::channel(c.id), PeerAuth::from_hash(c.access_hash));
             }
         });
 

@@ -91,7 +91,11 @@ async fn async_main() -> Result<()> {
     println!("Showing up to {} dialogs:", dialogs.total().await?);
     while let Some(dialog) = dialogs.next().await? {
         let chat = dialog.chat();
-        println!("- {: >10} {}", chat.id(), chat.name().unwrap_or_default());
+        println!(
+            "- {: >10} {}",
+            chat.id().bot_api_dialog_id(),
+            chat.name().unwrap_or_default()
+        );
     }
 
     if sign_out {

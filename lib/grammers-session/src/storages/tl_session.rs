@@ -8,7 +8,7 @@
 
 use crate::dc_options::DEFAULT_DC;
 use crate::generated::{enums, types};
-use crate::{KNOWN_DC_OPTIONS, Session};
+use crate::{AMBIENT_AUTH, KNOWN_DC_OPTIONS, Session};
 use grammers_tl_types as tl;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 use grammers_tl_types::{Deserializable, Serializable};
@@ -167,7 +167,7 @@ impl crate::Session for TlSession {
             }));
     }
 
-    fn peer(&self, peer: crate::Peer) -> Option<crate::PeerInfo> {
+    fn peer(&self, peer: crate::PeerId) -> Option<crate::PeerInfo> {
         let session = self.session.lock().unwrap();
         if peer.kind() == crate::PeerKind::UserSelf {
             session
@@ -175,7 +175,7 @@ impl crate::Session for TlSession {
                 .as_ref()
                 .map(|enums::User::User(user)| crate::PeerInfo::User {
                     id: user.id,
-                    hash: Some(0),
+                    auth: Some(AMBIENT_AUTH),
                     bot: Some(user.bot),
                     is_self: Some(true),
                 })
@@ -189,7 +189,7 @@ impl crate::Session for TlSession {
         match peer {
             crate::PeerInfo::User {
                 id,
-                hash: _,
+                auth: _,
                 bot,
                 is_self,
             } if *is_self == Some(true) => {

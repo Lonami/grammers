@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::Role;
 use grammers_mtsender::{InvocationError, RpcError};
-use grammers_session::{Peer, PeerKind};
+use grammers_session::{PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use pin_project_lite::pin_project;
 use std::{
@@ -25,7 +25,7 @@ type AdminFutGen<F> = fn(AdminRightsBuilderInner) -> F;
 
 pub(crate) struct AdminRightsBuilderInner {
     client: Client,
-    chat: Peer,
+    chat: PeerRef,
     peer: tl::enums::InputPeer,
     user: tl::enums::InputUser, // TODO redundant with `peer` (but less annoying to use)
     rights: tl::types::ChatAdminRights,
@@ -35,7 +35,7 @@ pub(crate) struct AdminRightsBuilderInner {
 impl AdminRightsBuilderInner {
     // Perform the call.
     pub(crate) async fn invoke(self) -> Result<(), InvocationError> {
-        if self.chat.kind() == PeerKind::Channel {
+        if self.chat.id.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::EditAdmin {
                     channel: self.chat.into(),
@@ -45,7 +45,7 @@ impl AdminRightsBuilderInner {
                 })
                 .await
                 .map(drop)
-        } else if self.chat.kind() == PeerKind::Chat {
+        } else if self.chat.id.kind() == PeerKind::Chat {
             let promote = self.rights.anonymous
                 || self.rights.change_info
                 || self.rights.post_messages
@@ -104,7 +104,12 @@ impl<F: Future<Output = BuilderRes>> Future for AdminRightsBuilder<F> {
 }
 
 impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
-    pub(crate) fn new(client: Client, chat: Peer, user: Peer, fut_gen: AdminFutGen<F>) -> Self {
+    pub(crate) fn new(
+        client: Client,
+        chat: PeerRef,
+        user: PeerRef,
+        fut_gen: AdminFutGen<F>,
+    ) -> Self {
         Self {
             inner: Some(AdminRightsBuilderInner {
                 client,
@@ -147,7 +152,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
     /// permissions without changing any of the previous ones.
     pub async fn load_current(mut self) -> Result<Self, InvocationError> {
         let s = self.inner_mut();
-        if s.chat.kind() == PeerKind::Channel {
+        if s.chat.id.kind() == PeerKind::Channel {
             let tl::enums::channels::ChannelParticipant::Participant(user) = s
                 .client
                 .invoke(&tl::functions::channels::GetParticipant {
@@ -166,7 +171,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
                 }
                 _ => (),
             }
-        } else if s.chat.kind() == PeerKind::Chat {
+        } else if s.chat.id.kind() == PeerKind::Chat {
             let uid = match &s.user {
                 tl::enums::InputUser::User(u) => u.user_id,
                 tl::enums::InputUser::FromMessage(u) => u.user_id,
@@ -183,7 +188,7 @@ impl<F: Future<Output = BuilderRes>> AdminRightsBuilder<F> {
             let mut participants = s.client.iter_participants(s.chat);
             while let Some(participant) = participants.next().await? {
                 if matches!(participant.role, Role::Creator(_) | Role::Admin(_))
-                    && participant.user.id() == uid
+                    && participant.user.bare_id() == uid
                 {
                     s.rights = tl::types::ChatAdminRights {
                         change_info: true,
@@ -299,7 +304,7 @@ type BannedFutGen<F> = fn(BannedRightsBuilderInner) -> F;
 
 pub(crate) struct BannedRightsBuilderInner {
     client: Client,
-    chat: Peer,
+    chat: PeerRef,
     peer: tl::enums::InputPeer,
     user: tl::enums::InputUser,
     rights: tl::types::ChatBannedRights,
@@ -308,7 +313,7 @@ pub(crate) struct BannedRightsBuilderInner {
 impl BannedRightsBuilderInner {
     // Perform the call.
     pub(crate) async fn invoke(self) -> Result<(), InvocationError> {
-        if self.chat.kind() == PeerKind::Channel {
+        if self.chat.id.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::EditBanned {
                     channel: self.chat.into(),
@@ -317,7 +322,7 @@ impl BannedRightsBuilderInner {
                 })
                 .await
                 .map(drop)
-        } else if self.chat.kind() == PeerKind::Chat {
+        } else if self.chat.id.kind() == PeerKind::Chat {
             if self.rights.view_messages {
                 self.client
                     .invoke(&tl::functions::messages::DeleteChatUser {
@@ -378,7 +383,12 @@ impl<F: Future<Output = BuilderRes>> Future for BannedRightsBuilder<F> {
 }
 
 impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
-    pub(crate) fn new(client: Client, chat: Peer, user: Peer, fut_gen: BannedFutGen<F>) -> Self {
+    pub(crate) fn new(
+        client: Client,
+        chat: PeerRef,
+        user: PeerRef,
+        fut_gen: BannedFutGen<F>,
+    ) -> Self {
         Self {
             inner: Some(BannedRightsBuilderInner {
                 client,
@@ -425,7 +435,7 @@ impl<F: Future<Output = BuilderRes>> BannedRightsBuilder<F> {
     /// permissions without changing any of the previous ones.
     pub async fn load_current(mut self) -> Result<Self, InvocationError> {
         let s = self.inner_mut();
-        if s.chat.kind() == PeerKind::Channel {
+        if s.chat.id.kind() == PeerKind::Channel {
             let tl::enums::channels::ChannelParticipant::Participant(user) = s
                 .client
                 .invoke(&tl::functions::channels::GetParticipant {

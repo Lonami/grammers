@@ -6,9 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types;
 use chrono::{DateTime, Utc};
-use grammers_session::{Peer, PeerInfo, PeerKind};
 use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
@@ -63,59 +61,10 @@ pub(crate) fn extract_password_parameters(
     (salt1, salt2, p, g)
 }
 
-/// Get a `Chat`, no matter what.
-///
-/// If necessary, `access_hash` of `0` will be returned, but *something* will be returned.
-///
-/// If the `Chat` is `min`, attempt to update its `access_hash` to the non-`min` version.
-pub(crate) fn always_find_entity(
-    peer: &tl::enums::Peer,
-    map: &types::ChatMap,
-    client: &crate::Client,
-) -> types::Chat {
-    let peer_info = || {
-        let peer = Peer::from(peer.clone());
-        client
-            .0
-            .session
-            .peer(peer)
-            .unwrap_or_else(|| match peer.kind() {
-                PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
-                    id: peer.id(),
-                    hash: Some(peer.auth()),
-                    bot: None,
-                    is_self: None,
-                },
-                PeerKind::Chat => PeerInfo::Chat { id: peer.id() },
-                PeerKind::Channel => PeerInfo::Channel {
-                    id: peer.id(),
-                    hash: Some(peer.auth()),
-                    kind: None,
-                },
-            })
-    };
-
-    match map.get(peer).cloned() {
-        Some(mut chat) => {
-            // As a best-effort, attempt to replace any `min` `access_hash` with the non-`min`
-            // version. The `min` hash is only usable to download profile photos (if the user
-            // tried to pack it for later use, like sending a message, it would fail).
-            if let Some((min, access_hash)) = chat.get_min_hash_ref() {
-                if let Some(ah) = peer_info().hash() {
-                    *access_hash = ah;
-                    *min = false;
-                }
-            }
-            chat
-        }
-        None => types::Chat::unpack(peer_info().into()),
-    }
-}
-
-pub fn peer_from_message(message: &tl::enums::Message) -> Option<&tl::enums::Peer> {
+pub fn peer_from_message(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
     match &message {
-        tl::enums::Message::Empty(message) => message.peer_id.as_ref(),
-        tl::enums::Message::Message(message) => Some(&message.peer_id),
-        tl::enums::Message::Service(message) => Some(&message.peer_id),
+        tl::enums::Message::Empty(message) => message.peer_id.clone(),
+        tl::enums::Message::Message(message) => Some(message.peer_id.clone()),
+        tl::enums::Message::Service(message) => Some(message.peer_id.clone()),
     }
 }

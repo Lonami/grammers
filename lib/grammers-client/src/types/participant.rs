@@ -8,6 +8,7 @@
 use super::{Chat, ChatMap, Permissions, Restrictions};
 use crate::utils;
 use chrono::{DateTime, Utc};
+use grammers_session::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]
@@ -165,7 +166,7 @@ impl Participant {
                 }),
             },
             P::Banned(p) => Self {
-                user: match chats.remove(&p.peer).unwrap() {
+                user: match chats.remove(PeerId::from(p.peer.clone())).unwrap() {
                     Chat::User(user) => user,
                     _ => todo!("figure out how to deal with non-user being banned"),
                 },
@@ -177,7 +178,7 @@ impl Participant {
                 }),
             },
             P::Left(p) => Self {
-                user: match chats.remove(&p.peer).unwrap() {
+                user: match chats.remove(PeerId::from(p.peer.clone())).unwrap() {
                     Chat::User(user) => user,
                     _ => todo!("figure out how to deal with non-user leaving"),
                 },

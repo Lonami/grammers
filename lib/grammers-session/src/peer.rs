@@ -1,23 +1,41 @@
+use std::fmt;
+
 use grammers_tl_types as tl;
 
-/// A compact opaque peer reference that can be converted as necessary to invoke remote procedure calls.
+/// A compact peer identifier.
 ///
-/// You can think of it as the object capability that lets you act upon this object with the authorization contained in it.
+/// The [`PeerInfo`] cached by the session for this `PeerId` may be retrieved via [`crate::Session::peer`].
 ///
-/// The [`PeerInfo`] cached by the session for this `Peer` may be retrieved via [`crate::Session::peer`].
+/// The internal representation uses the Bot API Dialog ID format to
+/// bit-pack both the peer's true identifier and type in a single integer.
+#[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
-pub struct Peer {
-    /// Stored in Bot API Dialog ID format for compactness.
-    pub(crate) packed_id: i64,
-    /// A value of `0` means either "hash not known" or "hash value is zero".
-    /// Telegram sometimes ignores the hash, so any arbitrary number works to signal that it is not known.
-    pub(crate) hash: i64,
+pub struct PeerId(i64);
+
+/// Witness to the session's authority from Telegram to interact with a peer.
+///
+/// If Telegram deems the session to already have such authority, the session may
+/// be allowed to present [`AMBIENT_AUTH`] instead of this witness. This can happen
+/// when the logged-in user is a bot account, or, for user accounts, when the peer
+/// being interacted with is one of its contacts.
+#[repr(transparent)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PeerAuth(i64);
+
+/// Ocap-style reference to a peer object, a peer object capability, bundling the identity
+/// of a peer (its [`PeerId`]) with authority over it (as [`PeerAuth`]), to allow fluent use.
+///
+/// This type implements conversion to [`tl::enums::InputPeer`] and derivatives.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub struct PeerRef {
+    pub id: PeerId,
+    pub auth: PeerAuth,
 }
 
-/// [`Peer`]'s kind.
+/// [`PeerId`]'s kind.
 ///
-/// The `Peer` bitpacks this information for size reasons.
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// The `PeerId` bitpacks this information for size reasons.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum PeerKind {
     User,
     UserSelf,
@@ -29,36 +47,32 @@ pub enum PeerKind {
 #[derive(Clone, Debug)]
 pub enum PeerInfo {
     User {
-        /// User identifier.
+        /// Bare user identifier.
         ///
         /// Despite being `i64`, Telegram only uses strictly positive values.
         id: i64,
-        /// Access hash bound to both the user itself and the session.
-        ///
-        /// It cannot be used by other sessions.
-        hash: Option<i64>,
+        /// Non-ambient authority bound to both the user itself and the session.
+        auth: Option<PeerAuth>,
         /// Whether this user represents a bot or not.
         bot: Option<bool>,
         /// Whether this user represents the logged-in user authorized by this session or not.
         is_self: Option<bool>,
     },
     Chat {
-        /// Chat identifier.
+        /// Bare chat identifier.
         ///
         /// Note that the HTTP Bot API negates this identifier to signal that it is a chat,
         /// but the true value used by Telegram's API is always strictly-positive.
         id: i64,
     },
     Channel {
-        /// Channel identifier.
+        /// Bare channel identifier.
         ///
         /// Note that the HTTP Bot API prefixes this identifier with `-100` to signal that it is a channel,
         /// but the true value used by Telegram's API is always strictly-positive.
         id: i64,
-        /// Access hash bound to both the channel itself and the session.
-        ///
-        /// It cannot be used by other sessions.
-        hash: Option<i64>,
+        /// Non-ambient authority bound to both the user itself and the session.
+        auth: Option<PeerAuth>,
         /// Channel kind, useful to determine what the possible permissions on it are.
         kind: Option<ChannelKind>,
     },
@@ -72,27 +86,37 @@ pub enum ChannelKind {
     Gigagroup,
 }
 
-// Per https://core.telegram.org/api/bots/ids:
-// > a bot API dialog ID ranges from -4000000000000 to 1099511627775
-//
-// So it is enough to pick an arbitrary value outside of that range.
-// This value is not intended to be visible or persisted, so it can be changed as needed in the future.
-const SELF_USER_ID: i64 = 1 << 40;
+/// Sentinel value used to represent the self-user when its true `PeerId` is unknown.
+///
+/// Per https://core.telegram.org/api/bots/ids:
+/// > a bot API dialog ID ranges from -4000000000000 to 1099511627775
+///
+/// This value is not intended to be visible or persisted, so it can be changed as needed in the future.
+const SELF_USER_ID: PeerId = PeerId(1 << 40);
 
-// In the API, `chat_id` parameters are the bare ID, so there's no empty constructor.
-// Mimic that behaviour by producing a non-existent chat ID instead.
-const EMPTY_CHAT_ID: i64 = (1 << 40) + 1;
+/// Sentinel value used to represent empty chats.
+///
+/// Per https://core.telegram.org/api/bots/ids:
+/// > \[…] transformed range for bot API chat dialog IDs is -999999999999 to -1 inclusively
+/// >
+/// > \[…] transformed range for bot API channel dialog IDs is -1997852516352 to -1000000000001 inclusively
+///
+/// `chat_id` parameters are in Telegram's API use the bare identifier, so there's no
+/// empty constructor, but it can be mimicked by picking the value in the correct range hole.
+/// This value is closer to "channel with ID 0" than "chat with ID 0", but there's no distinct
+/// `-0` integer, and channels have a proper constructor for empty already
+const EMPTY_CHAT_ID: i64 = -1000000000000;
 
-/// Ambient authentication to authorize peers only when Telegram considers it valid (i.e. user in contacts or bot accounts).
-pub const AMBIENT_AUTH: i64 = 0;
+/// Ambient authority to authorize peers only when Telegram considers it valid.
+///
+/// The internal representation uses `0` to signal the ambient authority,
+/// although this might happen to be the actual witness used by some peers.
+pub const AMBIENT_AUTH: PeerAuth = PeerAuth(0);
 
-impl Peer {
+impl PeerId {
     /// Creates a peer referencing the currently-logged-in user or bot account with ambient authentication.
     pub fn self_user() -> Self {
-        Self {
-            packed_id: SELF_USER_ID,
-            hash: AMBIENT_AUTH,
-        }
+        SELF_USER_ID
     }
 
     /// Creates a peer reference to a user or bot account with ambient authentication.
@@ -102,10 +126,7 @@ impl Peer {
             panic!("user ID out of range");
         }
 
-        Self {
-            packed_id: id,
-            hash: 0,
-        }
+        Self(id)
     }
 
     /// Creates a peer reference to a small group chat with ambient authentication.
@@ -115,10 +136,7 @@ impl Peer {
             panic!("chat ID out of range");
         }
 
-        Self {
-            packed_id: -id,
-            hash: 0,
-        }
+        Self(-id)
     }
 
     /// Creates a peer reference to a broadcast channel, megagroup or gigagroup with ambient authentication.
@@ -128,274 +146,326 @@ impl Peer {
             panic!("channel ID out of range");
         }
 
-        Self {
-            packed_id: -(1000000000000 + id),
-            hash: 0,
-        }
-    }
-
-    /// Replaces the ambient authentication with the given access hash witness.
-    /// Telegram will use this value in its authentication process to determine
-    /// whether this peer can be interacted with or not.
-    pub fn with_auth(mut self, hash: i64) -> Self {
-        self.hash = hash;
-        self
+        Self(-(1000000000000 + id))
     }
 
     /// Peer kind.
     pub fn kind(self) -> PeerKind {
-        if 1 <= self.packed_id && self.packed_id <= 0xffffffffff {
+        if 1 <= self.0 && self.0 <= 0xffffffffff {
             PeerKind::User
-        } else if self.packed_id == SELF_USER_ID {
+        } else if self.0 == SELF_USER_ID.0 {
             PeerKind::UserSelf
-        } else if -999999999999 <= self.packed_id && self.packed_id <= -1 {
+        } else if -999999999999 <= self.0 && self.0 <= -1 {
             PeerKind::Chat
-        } else if -1997852516352 <= self.packed_id && self.packed_id <= -1000000000001 {
+        } else if -1997852516352 <= self.0 && self.0 <= -1000000000001 {
             PeerKind::Channel
         } else {
             unreachable!()
         }
     }
 
-    /// Unpacked peer identifier. Panics if [`Self::kind`] is [`PeerKind::UserSelf`].
-    pub fn id(&self) -> i64 {
-        match self.kind() {
-            PeerKind::User => self.packed_id,
-            PeerKind::UserSelf => panic!("self-user ID not known"),
-            PeerKind::Chat => -self.packed_id,
-            PeerKind::Channel => -self.packed_id - 1000000000000,
-        }
+    /// Returns the identity using the Bot API Dialog ID format.
+    pub fn bot_api_dialog_id(&self) -> i64 {
+        self.0
     }
 
-    /// Returns the current access hash witness. May be [`AMBIENT_AUTH`].
-    pub fn auth(&self) -> i64 {
-        self.hash
+    /// Unpacked peer identifier. Panics if [`Self::kind`] is [`PeerKind::UserSelf`].
+    pub fn bare_id(&self) -> i64 {
+        match self.kind() {
+            PeerKind::User => self.0,
+            PeerKind::UserSelf => panic!("self-user ID not known"),
+            PeerKind::Chat => -self.0,
+            PeerKind::Channel => -self.0 - 1000000000000,
+        }
+    }
+}
+
+impl PeerAuth {
+    /// Construct a new peer authentication using Telegram's `access_hash` value.
+    pub fn from_hash(access_hash: i64) -> Self {
+        PeerAuth(access_hash)
+    }
+
+    /// Grants access to the internal access hash.
+    pub fn hash(&self) -> i64 {
+        self.0
     }
 }
 
 impl PeerInfo {
-    /// Convenience getter around the `id` without the need for matching.
-    pub fn id(&self) -> i64 {
+    /// Returns the `PeerId` represented by this info.
+    pub fn id(&self) -> PeerId {
         match self {
-            PeerInfo::User { id, .. } => *id,
-            PeerInfo::Chat { id } => *id,
-            PeerInfo::Channel { id, .. } => *id,
+            PeerInfo::User { id, .. } => PeerId::user(*id),
+            PeerInfo::Chat { id } => PeerId::chat(*id),
+            PeerInfo::Channel { id, .. } => PeerId::channel(*id),
         }
     }
 
-    /// Convenience getter around the `hash` without the need for matching.
-    pub fn hash(&self) -> Option<i64> {
+    /// Returns the `PeerAuth` stored in this info, or [`AMBIENT_AUTH`] if that info is not known.
+    pub fn auth(&self) -> PeerAuth {
         match self {
-            PeerInfo::User { hash, .. } => *hash,
-            PeerInfo::Chat { .. } => None,
-            PeerInfo::Channel { hash, .. } => *hash,
+            PeerInfo::User { auth, .. } => auth.unwrap_or(AMBIENT_AUTH),
+            PeerInfo::Chat { .. } => AMBIENT_AUTH,
+            PeerInfo::Channel { auth, .. } => auth.unwrap_or(AMBIENT_AUTH),
         }
     }
 }
 
-impl From<PeerInfo> for Peer {
+impl fmt::Display for PeerId {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        self.bot_api_dialog_id().fmt(f)
+    }
+}
+
+impl From<PeerInfo> for PeerRef {
     fn from(peer: PeerInfo) -> Self {
-        match peer {
-            PeerInfo::User { id, is_self, .. } => {
-                if is_self == Some(true) {
-                    Peer::self_user()
-                } else {
-                    Peer::user(id)
-                }
-            }
-            PeerInfo::Chat { id } => Peer::chat(id),
-            PeerInfo::Channel { id, .. } => Peer::channel(id),
+        PeerRef {
+            id: peer.id(),
+            auth: peer.auth(),
         }
     }
 }
 
-impl From<tl::enums::Peer> for Peer {
+impl From<tl::enums::Peer> for PeerId {
     fn from(peer: tl::enums::Peer) -> Self {
         match peer {
-            tl::enums::Peer::User(user) => Peer::from(user),
-            tl::enums::Peer::Chat(chat) => Peer::from(chat),
-            tl::enums::Peer::Channel(channel) => Peer::from(channel),
+            tl::enums::Peer::User(user) => PeerId::from(user),
+            tl::enums::Peer::Chat(chat) => PeerId::from(chat),
+            tl::enums::Peer::Channel(channel) => PeerId::from(channel),
         }
     }
 }
 
-impl From<tl::types::PeerUser> for Peer {
+impl From<tl::types::PeerUser> for PeerId {
     fn from(user: tl::types::PeerUser) -> Self {
-        Peer::user(user.user_id)
+        PeerId::user(user.user_id)
     }
 }
 
-impl From<tl::types::PeerChat> for Peer {
+impl From<tl::types::PeerChat> for PeerId {
     fn from(chat: tl::types::PeerChat) -> Self {
-        Peer::chat(chat.chat_id)
+        PeerId::chat(chat.chat_id)
     }
 }
 
-impl From<tl::types::PeerChannel> for Peer {
+impl From<tl::types::PeerChannel> for PeerId {
     fn from(channel: tl::types::PeerChannel) -> Self {
-        Peer::channel(channel.channel_id)
+        PeerId::channel(channel.channel_id)
     }
 }
 
-impl From<tl::enums::InputPeer> for Peer {
+impl From<tl::enums::InputPeer> for PeerRef {
     fn from(peer: tl::enums::InputPeer) -> Self {
         match peer {
             tl::enums::InputPeer::Empty => {
                 panic!("InputPeer::Empty cannot be converted to any Peer");
             }
-            tl::enums::InputPeer::PeerSelf => Peer::self_user(),
-            tl::enums::InputPeer::User(user) => Peer::from(user),
-            tl::enums::InputPeer::Chat(chat) => Peer::from(chat),
-            tl::enums::InputPeer::Channel(channel) => Peer::from(channel),
-            tl::enums::InputPeer::UserFromMessage(user) => Peer::from(*user),
-            tl::enums::InputPeer::ChannelFromMessage(channel) => Peer::from(*channel),
+            tl::enums::InputPeer::PeerSelf => PeerRef {
+                id: SELF_USER_ID,
+                auth: AMBIENT_AUTH,
+            },
+            tl::enums::InputPeer::User(user) => PeerRef::from(user),
+            tl::enums::InputPeer::Chat(chat) => PeerRef::from(chat),
+            tl::enums::InputPeer::Channel(channel) => PeerRef::from(channel),
+            tl::enums::InputPeer::UserFromMessage(user) => PeerRef::from(*user),
+            tl::enums::InputPeer::ChannelFromMessage(channel) => PeerRef::from(*channel),
         }
     }
 }
 
-impl From<tl::types::InputPeerSelf> for Peer {
+impl From<tl::types::InputPeerSelf> for PeerRef {
     fn from(_: tl::types::InputPeerSelf) -> Self {
-        Peer::self_user()
+        PeerRef {
+            id: SELF_USER_ID,
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::InputPeerUser> for Peer {
+impl From<tl::types::InputPeerUser> for PeerRef {
     fn from(user: tl::types::InputPeerUser) -> Self {
-        Peer::user(user.user_id).with_auth(user.access_hash)
+        PeerRef {
+            id: PeerId::user(user.user_id),
+            auth: PeerAuth::from_hash(user.access_hash),
+        }
     }
 }
 
-impl From<tl::types::InputPeerChat> for Peer {
+impl From<tl::types::InputPeerChat> for PeerRef {
     fn from(chat: tl::types::InputPeerChat) -> Self {
-        Peer::chat(chat.chat_id)
+        PeerRef {
+            id: PeerId::chat(chat.chat_id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::InputPeerChannel> for Peer {
+impl From<tl::types::InputPeerChannel> for PeerRef {
     fn from(channel: tl::types::InputPeerChannel) -> Self {
-        Peer::channel(channel.channel_id).with_auth(channel.access_hash)
+        PeerRef {
+            id: PeerId::channel(channel.channel_id),
+            auth: PeerAuth::from_hash(channel.access_hash),
+        }
     }
 }
 
-impl From<tl::types::InputPeerUserFromMessage> for Peer {
+impl From<tl::types::InputPeerUserFromMessage> for PeerRef {
     fn from(user: tl::types::InputPeerUserFromMessage) -> Self {
-        // Not currently willing to make Peer significantly larger to accomodate for this uncommon type.
-        Peer::user(user.user_id)
+        // Not currently willing to make PeerRef significantly larger to accomodate for this uncommon type.
+        PeerRef {
+            id: PeerId::user(user.user_id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::InputPeerChannelFromMessage> for Peer {
+impl From<tl::types::InputPeerChannelFromMessage> for PeerRef {
     fn from(channel: tl::types::InputPeerChannelFromMessage) -> Self {
-        // Not currently willing to make Peer significantly larger to accomodate for this uncommon type.
-        Peer::channel(channel.channel_id)
+        // Not currently willing to make PeerRef significantly larger to accomodate for this uncommon type.
+        PeerRef {
+            id: PeerId::channel(channel.channel_id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::enums::User> for Peer {
+impl From<tl::enums::User> for PeerRef {
     fn from(user: tl::enums::User) -> Self {
         match user {
-            grammers_tl_types::enums::User::Empty(user) => Peer::from(user),
-            grammers_tl_types::enums::User::User(user) => Peer::from(user),
+            grammers_tl_types::enums::User::Empty(user) => PeerRef::from(user),
+            grammers_tl_types::enums::User::User(user) => PeerRef::from(user),
         }
     }
 }
 
-impl From<tl::types::UserEmpty> for Peer {
+impl From<tl::types::UserEmpty> for PeerRef {
     fn from(user: tl::types::UserEmpty) -> Self {
-        Peer::user(user.id)
-    }
-}
-
-impl From<tl::types::User> for Peer {
-    fn from(user: tl::types::User) -> Self {
-        if user.is_self {
-            Peer::self_user()
-        } else {
-            Peer::user(user.id).with_auth(user.access_hash.unwrap_or(AMBIENT_AUTH))
+        PeerRef {
+            id: PeerId::user(user.id),
+            auth: AMBIENT_AUTH,
         }
     }
 }
 
-impl From<tl::enums::Chat> for Peer {
+impl From<tl::types::User> for PeerRef {
+    fn from(user: tl::types::User) -> Self {
+        PeerRef {
+            id: if user.is_self {
+                PeerId::self_user()
+            } else {
+                PeerId::user(user.id)
+            },
+            auth: user
+                .access_hash
+                .map(PeerAuth::from_hash)
+                .unwrap_or(AMBIENT_AUTH),
+        }
+    }
+}
+
+impl From<tl::enums::Chat> for PeerRef {
     fn from(chat: tl::enums::Chat) -> Self {
         match chat {
-            grammers_tl_types::enums::Chat::Empty(chat) => Peer::from(chat),
-            grammers_tl_types::enums::Chat::Chat(chat) => Peer::from(chat),
-            grammers_tl_types::enums::Chat::Forbidden(chat) => Peer::from(chat),
-            grammers_tl_types::enums::Chat::Channel(channel) => Peer::from(channel),
-            grammers_tl_types::enums::Chat::ChannelForbidden(channel) => Peer::from(channel),
+            grammers_tl_types::enums::Chat::Empty(chat) => PeerRef::from(chat),
+            grammers_tl_types::enums::Chat::Chat(chat) => PeerRef::from(chat),
+            grammers_tl_types::enums::Chat::Forbidden(chat) => PeerRef::from(chat),
+            grammers_tl_types::enums::Chat::Channel(channel) => PeerRef::from(channel),
+            grammers_tl_types::enums::Chat::ChannelForbidden(channel) => PeerRef::from(channel),
         }
     }
 }
 
-impl From<tl::types::ChatEmpty> for Peer {
+impl From<tl::types::ChatEmpty> for PeerRef {
     fn from(chat: tl::types::ChatEmpty) -> Self {
-        Peer::chat(chat.id)
+        PeerRef {
+            id: PeerId::chat(chat.id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::Chat> for Peer {
+impl From<tl::types::Chat> for PeerRef {
     fn from(chat: tl::types::Chat) -> Self {
-        Peer::chat(chat.id)
+        PeerRef {
+            id: PeerId::chat(chat.id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::ChatForbidden> for Peer {
+impl From<tl::types::ChatForbidden> for PeerRef {
     fn from(chat: tl::types::ChatForbidden) -> Self {
-        Peer::chat(chat.id)
+        PeerRef {
+            id: PeerId::chat(chat.id),
+            auth: AMBIENT_AUTH,
+        }
     }
 }
 
-impl From<tl::types::Channel> for Peer {
+impl From<tl::types::Channel> for PeerRef {
     fn from(channel: tl::types::Channel) -> Self {
-        Peer::channel(channel.id).with_auth(channel.access_hash.unwrap_or(AMBIENT_AUTH))
+        PeerRef {
+            id: PeerId::channel(channel.id),
+            auth: channel
+                .access_hash
+                .map(PeerAuth::from_hash)
+                .unwrap_or(AMBIENT_AUTH),
+        }
     }
 }
 
-impl From<tl::types::ChannelForbidden> for Peer {
+impl From<tl::types::ChannelForbidden> for PeerRef {
     fn from(channel: tl::types::ChannelForbidden) -> Self {
-        Peer::channel(channel.id).with_auth(channel.access_hash)
+        PeerRef {
+            id: PeerId::channel(channel.id),
+            auth: PeerAuth::from_hash(channel.access_hash),
+        }
     }
 }
 
-impl From<Peer> for tl::enums::Peer {
-    fn from(peer: Peer) -> Self {
+impl From<PeerId> for tl::enums::Peer {
+    fn from(peer: PeerId) -> Self {
         match peer.kind() {
-            PeerKind::User => tl::enums::Peer::User(tl::types::PeerUser { user_id: peer.id() }),
+            PeerKind::User => tl::enums::Peer::User(tl::types::PeerUser {
+                user_id: peer.bare_id(),
+            }),
             PeerKind::UserSelf => panic!("self-user ID not known"),
-            PeerKind::Chat => tl::enums::Peer::Chat(tl::types::PeerChat { chat_id: peer.id() }),
+            PeerKind::Chat => tl::enums::Peer::Chat(tl::types::PeerChat {
+                chat_id: peer.bare_id(),
+            }),
             PeerKind::Channel => tl::enums::Peer::Channel(tl::types::PeerChannel {
-                channel_id: peer.id(),
+                channel_id: peer.bare_id(),
             }),
         }
     }
 }
 
-impl From<Peer> for tl::enums::InputPeer {
-    fn from(peer: Peer) -> Self {
-        match peer.kind() {
+impl From<PeerRef> for tl::enums::InputPeer {
+    fn from(peer: PeerRef) -> Self {
+        match peer.id.kind() {
             PeerKind::User => tl::enums::InputPeer::User(tl::types::InputPeerUser {
-                user_id: peer.id(),
-                access_hash: peer.hash,
+                user_id: peer.id.bare_id(),
+                access_hash: peer.auth.hash(),
             }),
             PeerKind::UserSelf => tl::enums::InputPeer::PeerSelf,
-            PeerKind::Chat => {
-                tl::enums::InputPeer::Chat(tl::types::InputPeerChat { chat_id: peer.id() })
-            }
+            PeerKind::Chat => tl::enums::InputPeer::Chat(tl::types::InputPeerChat {
+                chat_id: peer.id.bare_id(),
+            }),
             PeerKind::Channel => tl::enums::InputPeer::Channel(tl::types::InputPeerChannel {
-                channel_id: peer.id(),
-                access_hash: peer.hash,
+                channel_id: peer.id.bare_id(),
+                access_hash: peer.auth.hash(),
             }),
         }
     }
 }
 
-impl From<Peer> for tl::enums::InputUser {
-    fn from(peer: Peer) -> Self {
-        match peer.kind() {
+impl From<PeerRef> for tl::enums::InputUser {
+    fn from(peer: PeerRef) -> Self {
+        match peer.id.kind() {
             PeerKind::User => tl::enums::InputUser::User(tl::types::InputUser {
-                user_id: peer.id(),
-                access_hash: peer.hash,
+                user_id: peer.id.bare_id(),
+                access_hash: peer.auth.hash(),
             }),
             PeerKind::UserSelf => tl::enums::InputUser::UserSelf,
             PeerKind::Chat => tl::enums::InputUser::Empty,
@@ -404,26 +474,26 @@ impl From<Peer> for tl::enums::InputUser {
     }
 }
 
-impl From<Peer> for i64 {
-    fn from(peer: Peer) -> Self {
-        match peer.kind() {
+impl From<PeerRef> for i64 {
+    fn from(peer: PeerRef) -> Self {
+        match peer.id.kind() {
             PeerKind::User => EMPTY_CHAT_ID,
             PeerKind::UserSelf => EMPTY_CHAT_ID,
-            PeerKind::Chat => peer.id(),
+            PeerKind::Chat => peer.id.bare_id(),
             PeerKind::Channel => EMPTY_CHAT_ID,
         }
     }
 }
 
-impl From<Peer> for tl::enums::InputChannel {
-    fn from(peer: Peer) -> Self {
-        match peer.kind() {
+impl From<PeerRef> for tl::enums::InputChannel {
+    fn from(peer: PeerRef) -> Self {
+        match peer.id.kind() {
             PeerKind::User => tl::enums::InputChannel::Empty,
             PeerKind::UserSelf => tl::enums::InputChannel::Empty,
             PeerKind::Chat => tl::enums::InputChannel::Empty,
             PeerKind::Channel => tl::enums::InputChannel::Channel(tl::types::InputChannel {
-                channel_id: -peer.packed_id - 1000000000000,
-                access_hash: peer.hash,
+                channel_id: peer.id.bare_id(),
+                access_hash: peer.auth.hash(),
             }),
         }
     }

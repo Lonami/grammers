@@ -1,4 +1,4 @@
-use grammers_session::{AMBIENT_AUTH, Peer};
+use grammers_session::{AMBIENT_AUTH, PeerAuth, PeerId};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -57,29 +57,30 @@ impl Group {
     ///
     /// Note that if this group is migrated to a megagroup, both this group and the new one will
     /// exist as separate chats, with different identifiers.
-    pub fn id(&self) -> i64 {
+    pub fn id(&self) -> PeerId {
         use tl::enums::Chat;
 
         match &self.raw {
-            Chat::Empty(chat) => chat.id,
-            Chat::Chat(chat) => chat.id,
-            Chat::Forbidden(chat) => chat.id,
-            Chat::Channel(chat) => chat.id,
-            Chat::ChannelForbidden(chat) => chat.id,
+            Chat::Empty(chat) => PeerId::chat(chat.id),
+            Chat::Chat(chat) => PeerId::chat(chat.id),
+            Chat::Forbidden(chat) => PeerId::chat(chat.id),
+            Chat::Channel(chat) => PeerId::channel(chat.id),
+            Chat::ChannelForbidden(chat) => PeerId::channel(chat.id),
         }
     }
 
-    /// Return the peer reference to this chat.
-    pub fn peer(&self) -> Peer {
+    pub fn auth(&self) -> PeerAuth {
         use tl::enums::Chat;
+
         match &self.raw {
-            Chat::Empty(chat) => Peer::chat(chat.id),
-            Chat::Chat(chat) => Peer::chat(chat.id),
-            Chat::Forbidden(chat) => Peer::chat(chat.id),
-            Chat::Channel(chat) => {
-                Peer::channel(chat.id).with_auth(chat.access_hash.unwrap_or(AMBIENT_AUTH))
-            }
-            Chat::ChannelForbidden(chat) => Peer::channel(chat.id).with_auth(chat.access_hash),
+            Chat::Empty(_) => AMBIENT_AUTH,
+            Chat::Chat(_) => AMBIENT_AUTH,
+            Chat::Forbidden(_) => AMBIENT_AUTH,
+            Chat::Channel(channel) => channel
+                .access_hash
+                .map(PeerAuth::from_hash)
+                .unwrap_or(AMBIENT_AUTH),
+            Chat::ChannelForbidden(channel) => PeerAuth::from_hash(channel.access_hash),
         }
     }
 

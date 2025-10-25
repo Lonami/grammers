@@ -15,7 +15,7 @@ use crate::types::{
 };
 use grammers_mtsender::RpcError;
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{Peer, PeerKind};
+use grammers_session::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::future::Future;
@@ -38,8 +38,8 @@ pub enum ParticipantIter {
 }
 
 impl ParticipantIter {
-    fn new(client: &Client, chat: Peer) -> Self {
-        if chat.kind() == PeerKind::Channel {
+    fn new(client: &Client, chat: PeerRef) -> Self {
+        if chat.id.kind() == PeerKind::Channel {
             Self::Channel(IterBuffer::from_request(
                 client,
                 MAX_PARTICIPANT_LIMIT,
@@ -51,7 +51,7 @@ impl ParticipantIter {
                     hash: 0,
                 },
             ))
-        } else if chat.kind() == PeerKind::Chat {
+        } else if chat.id.kind() == PeerKind::Chat {
             Self::Chat {
                 client: client.clone(),
                 chat_id: chat.into(),
@@ -219,8 +219,8 @@ pub enum ProfilePhotoIter {
 }
 
 impl ProfilePhotoIter {
-    fn new(client: &Client, chat: Peer) -> Self {
-        if matches!(chat.kind(), PeerKind::User | PeerKind::UserSelf) {
+    fn new(client: &Client, chat: PeerRef) -> Self {
+        if matches!(chat.id.kind(), PeerKind::User | PeerKind::UserSelf) {
             Self::User(IterBuffer::from_request(
                 client,
                 MAX_PHOTO_LIMIT,
@@ -375,14 +375,15 @@ impl Client {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users
                 .into_iter()
                 .map(Chat::from_user)
-                .find(|chat| chat.id() == user_id),
-            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id })
-            | tl::enums::Peer::Channel(tl::types::PeerChannel {
-                channel_id: chat_id,
-            }) => chats
+                .find(|chat| chat.id() == PeerId::user(user_id)),
+            tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => chats
                 .into_iter()
                 .map(Chat::from_raw)
-                .find(|chat| chat.id() == chat_id),
+                .find(|chat| chat.id() == PeerId::chat(chat_id)),
+            tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => chats
+                .into_iter()
+                .map(Chat::from_raw)
+                .find(|chat| chat.id() == PeerId::channel(channel_id)),
         })
     }
 
@@ -422,20 +423,20 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut participants = client.iter_participants(chat);
     ///
     /// while let Some(participant) = participants.next().await? {
     ///     println!(
     ///         "{} has role {:?}",
-    ///         participant.user.first_name().unwrap_or(&participant.user.id().to_string()),
+    ///         participant.user.first_name().unwrap_or(&participant.user.bare_id().to_string()),
     ///         participant.role
     ///     );
     /// }
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_participants<C: Into<Peer>>(&self, chat: C) -> ParticipantIter {
+    pub fn iter_participants<C: Into<PeerRef>>(&self, chat: C) -> ParticipantIter {
         ParticipantIter::new(self, chat.into())
     }
 
@@ -454,7 +455,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, user: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, user: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// match client.kick_participant(chat, user).await {
     ///     Ok(_) => println!("user is no more >:D"),
     ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
@@ -462,21 +463,21 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn kick_participant<C: Into<Peer>, U: Into<Peer>>(
+    pub async fn kick_participant<C: Into<PeerRef>, U: Into<PeerRef>>(
         &self,
         chat: C,
         user: U,
     ) -> Result<(), InvocationError> {
         let chat = chat.into();
         let user = user.into();
-        if chat.kind() == PeerKind::Channel {
+        if chat.id.kind() == PeerKind::Channel {
             self.set_banned_rights(chat, user)
                 .view_messages(false)
                 .duration(Duration::from_secs(KICK_BAN_DURATION as u64))
                 .await?;
 
             self.set_banned_rights(chat, user).await
-        } else if chat.kind() == PeerKind::Chat {
+        } else if chat.id.kind() == PeerKind::Chat {
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id: chat.into(),
                 user_id: user.into(),
@@ -508,7 +509,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, user: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, user: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This user keeps spamming pepe stickers, take the sticker permission away from them
     /// let res = client
     ///     .set_banned_rights(chat, user)
@@ -522,7 +523,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_banned_rights<C: Into<Peer>, U: Into<Peer>>(
+    pub fn set_banned_rights<C: Into<PeerRef>, U: Into<PeerRef>>(
         &self,
         channel: C,
         user: U,
@@ -555,7 +556,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, user: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, user: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let the user pin messages and ban other people
     /// let res = client.set_admin_rights(chat, user)
     ///     .load_current()
@@ -566,7 +567,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn set_admin_rights<C: Into<Peer>, U: Into<Peer>>(
+    pub fn set_admin_rights<C: Into<PeerRef>, U: Into<PeerRef>>(
         &self,
         channel: C,
         user: U,
@@ -591,7 +592,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut photos = client.iter_profile_photos(chat);
     ///
     /// while let Some(photo) = photos.next().await? {
@@ -600,7 +601,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_profile_photos<C: Into<Peer>>(&self, chat: C) -> ProfilePhotoIter {
+    pub fn iter_profile_photos<C: Into<PeerRef>>(&self, chat: C) -> ProfilePhotoIter {
         ProfilePhotoIter::new(self, chat.into())
     }
 
@@ -609,15 +610,15 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(packed_chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(packed_chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let chat = client.unpack_chat(packed_chat).await?;
     ///
     /// println!("Found chat: {}", chat.name().unwrap_or(&chat.id().to_string()));
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpack_chat(&self, packed_chat: Peer) -> Result<Chat, InvocationError> {
-        Ok(match packed_chat.kind() {
+    pub async fn unpack_chat(&self, packed_chat: PeerRef) -> Result<Chat, InvocationError> {
+        Ok(match packed_chat.id.kind() {
             PeerKind::User | PeerKind::UserSelf => {
                 let mut res = self
                     .invoke(&tl::functions::users::GetUsers {
@@ -666,19 +667,19 @@ impl Client {
     ///
     /// # Panics
     /// Panics if chat isn't channel or chat, and if user isn't user
-    pub async fn get_permissions<C: Into<Peer>, U: Into<Peer>>(
+    pub async fn get_permissions<C: Into<PeerRef>, U: Into<PeerRef>>(
         &self,
         chat: C,
         user: U,
     ) -> Result<ParticipantPermissions, InvocationError> {
         let chat = chat.into();
         let user = user.into();
-        if !matches!(user.kind(), PeerKind::User | PeerKind::UserSelf) {
+        if !matches!(user.id.kind(), PeerKind::User | PeerKind::UserSelf) {
             panic!("User parameter not user!");
         }
 
         // Get by chat
-        if chat.kind() == PeerKind::Chat {
+        if chat.id.kind() == PeerKind::Chat {
             // Get user id
             let user = user.into();
             let user_id = match user {
@@ -686,7 +687,7 @@ impl Client {
                 tl::enums::InputUser::FromMessage(user) => user.user_id,
                 tl::enums::InputUser::UserSelf => {
                     let me = self.get_me().await?;
-                    me.id()
+                    me.bare_id()
                 }
                 tl::enums::InputUser::Empty => unreachable!(),
             };
@@ -806,11 +807,14 @@ impl Client {
     ///
     /// A channel is public if it has a username.
     /// To join private chats, [`Client::accept_invite_link`](Client::accept_invite_link) should be used instead.
-    pub async fn join_chat<C: Into<Peer>>(&self, chat: C) -> Result<Option<Chat>, InvocationError> {
-        let chat: Peer = chat.into();
+    pub async fn join_chat<C: Into<PeerRef>>(
+        &self,
+        chat: C,
+    ) -> Result<Option<Chat>, InvocationError> {
+        let chat: PeerRef = chat.into();
         let channel = chat.into();
         Ok(updates_to_chat(
-            Some(chat.id()),
+            Some(chat.id.bare_id()),
             self.invoke(&tl::functions::channels::JoinChannel { channel })
                 .await?,
         ))
@@ -822,7 +826,7 @@ impl Client {
     ///
     /// **Do a one-shot pulse and let it fade away**
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types::enums::SendMessageAction;
     ///
     /// client
@@ -837,7 +841,7 @@ impl Client {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {
@@ -866,12 +870,12 @@ impl Client {
     ///
     /// **Cancel any actions**
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.action(chat).cancel().await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub fn action<C: Into<Peer>>(&self, chat: C) -> crate::types::ActionSender {
+    pub fn action<C: Into<PeerRef>>(&self, chat: C) -> crate::types::ActionSender {
         crate::types::ActionSender::new(self, chat)
     }
 }

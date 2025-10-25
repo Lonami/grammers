@@ -9,7 +9,7 @@ mod channel;
 mod group;
 mod user;
 
-use grammers_session::{Peer, PeerKind};
+use grammers_session::{PeerAuth, PeerId, PeerRef};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
@@ -70,11 +70,19 @@ impl Chat {
     /// megagroups. If this happens, both the old small group chat and the new megagroup
     /// exist as separate chats with different identifiers, but they are linked with a
     /// property.
-    pub fn id(&self) -> i64 {
+    pub fn id(&self) -> PeerId {
         match self {
-            Self::User(user) => user.id(),
+            Self::User(user) => PeerId::user(user.bare_id()),
             Self::Group(group) => group.id(),
-            Self::Channel(channel) => channel.id(),
+            Self::Channel(channel) => PeerId::channel(channel.bare_id()),
+        }
+    }
+
+    pub fn auth(&self) -> PeerAuth {
+        match self {
+            Self::User(user) => user.auth(),
+            Self::Group(group) => group.auth(),
+            Self::Channel(channel) => channel.auth(),
         }
     }
 
@@ -90,39 +98,6 @@ impl Chat {
             Self::User(user) => user.first_name(),
             Self::Group(group) => group.title(),
             Self::Channel(channel) => Some(channel.title()),
-        }
-    }
-
-    /// Return the peer reference to this chat.
-    pub fn peer(&self) -> Peer {
-        match self {
-            Self::User(user) => user.peer(),
-            Self::Group(group) => group.peer(),
-            Self::Channel(channel) => channel.peer(),
-        }
-    }
-
-    pub(crate) fn unpack(packed: Peer) -> Self {
-        match packed.kind() {
-            PeerKind::User | PeerKind::UserSelf => Chat::User(User::empty_with_hash_and_bot(
-                packed.id(),
-                Some(packed.auth()),
-                false,
-            )),
-            PeerKind::Chat => Chat::Group(Group::from_raw(
-                tl::types::ChatEmpty { id: packed.id() }.into(),
-            )),
-            PeerKind::Channel => Chat::Channel(Channel::from_raw(
-                tl::types::ChannelForbidden {
-                    id: packed.id(),
-                    broadcast: true,
-                    megagroup: false,
-                    access_hash: packed.auth(),
-                    title: String::new(),
-                    until_date: None,
-                }
-                .into(),
-            )),
         }
     }
 
@@ -154,35 +129,9 @@ impl Chat {
         }
     }
 
-    // If `Self` has `min` `access_hash`, returns a mutable reference to both `min` and `access_hash`.
-    //
-    // This serves as a way of checking "is it min?" and "update the access hash" both in one.
-    // (Obtaining the non-min hash may require locking so it's desirable to check first, and also
-    // to avoid double work to update it later, but it may not be possible to update it if the hash
-    // is missing).
-    pub(crate) fn get_min_hash_ref(&mut self) -> Option<(&mut bool, &mut i64)> {
-        match self {
-            Self::User(user) => match &mut user.raw {
-                tl::enums::User::User(raw) => match (&mut raw.min, raw.access_hash.as_mut()) {
-                    (m @ true, Some(ah)) => Some((m, ah)),
-                    _ => None,
-                },
-                tl::enums::User::Empty(_) => None,
-            },
-            // Small group chats don't have an `access_hash` to begin with.
-            Self::Group(_group) => None,
-            Self::Channel(channel) => {
-                match (&mut channel.raw.min, channel.raw.access_hash.as_mut()) {
-                    (m @ true, Some(ah)) => Some((m, ah)),
-                    _ => None,
-                }
-            }
-        }
-    }
-
     // Return the profile picture or chat photo of this chat, if any.
     pub fn photo(&self, big: bool) -> Option<crate::types::ChatPhoto> {
-        let peer = self.peer().into();
+        let peer = PeerRef::from(self).into();
         match self {
             Self::User(user) => user.photo().map(|x| crate::types::ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
@@ -211,6 +160,24 @@ impl Chat {
                     },
                 ),
             }),
+        }
+    }
+}
+
+impl From<Chat> for PeerRef {
+    fn from(chat: Chat) -> Self {
+        PeerRef {
+            id: chat.id(),
+            auth: chat.auth(),
+        }
+    }
+}
+
+impl From<&Chat> for PeerRef {
+    fn from(chat: &Chat) -> Self {
+        PeerRef {
+            id: chat.id(),
+            auth: chat.auth(),
         }
     }
 }

@@ -90,8 +90,8 @@ impl Client {
         let user = User::from_raw(auth.user);
 
         self.0.session.cache_peer(&PeerInfo::User {
-            id: user.id(),
-            hash: user.access_hash(),
+            id: user.bare_id(),
+            auth: Some(user.auth()),
             bot: Some(user.is_bot()),
             is_self: Some(true),
         });

@@ -12,7 +12,7 @@ use crate::Client;
 use crate::utils::peer_from_message;
 
 use super::{Chat, ChatMap, Message};
-use grammers_session::Peer;
+use grammers_session::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]
@@ -31,8 +31,8 @@ impl Dialog {
     ) -> Self {
         // TODO helper utils (ext trait?) to extract data from dialogs or messages
         let peer = match dialog {
-            tl::enums::Dialog::Dialog(ref dialog) => &dialog.peer,
-            tl::enums::Dialog::Folder(ref dialog) => &dialog.peer,
+            tl::enums::Dialog::Dialog(ref dialog) => dialog.peer.clone().into(),
+            tl::enums::Dialog::Folder(ref dialog) => dialog.peer.clone().into(),
         };
 
         let chat = chats
@@ -42,21 +42,18 @@ impl Dialog {
 
         let message = messages
             .iter()
-            .position(|m| peer_from_message(m).is_some_and(|p| p == peer))
+            .position(|m| peer_from_message(m).is_some_and(|p| PeerId::from(p) == peer))
             .map(|i| messages.swap_remove(i));
 
         Self {
+            last_message: message
+                .map(|m| Message::from_raw(client, m, Some((&chat).into()), chats)),
             chat,
-            last_message: message.map(|m| Message::from_raw(client, m, Some(peer.clone()), chats)),
             raw: dialog,
         }
     }
 
     pub fn chat(&self) -> &Chat {
         &self.chat
-    }
-
-    pub fn peer(&self) -> Peer {
-        self.chat.peer()
     }
 }

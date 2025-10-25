@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::InvocationError;
-use grammers_session::Peer;
+use grammers_session::PeerRef;
 use grammers_tl_types as tl;
 use std::future::Future;
 use std::time::Duration;
@@ -19,13 +19,13 @@ const DEFAULT_REPEAT_DELAY: Duration = Duration::from_secs(4);
 
 pub struct ActionSender {
     client: Client,
-    chat: Peer,
+    chat: PeerRef,
     topic_id: Option<i32>,
     repeat_delay: Duration,
 }
 
 impl ActionSender {
-    pub fn new<C: Into<Peer>>(client: &Client, chat: C) -> Self {
+    pub fn new<C: Into<PeerRef>>(client: &Client, chat: C) -> Self {
         Self {
             client: client.clone(),
             chat: chat.into(),
@@ -77,7 +77,7 @@ impl ActionSender {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {

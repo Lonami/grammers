@@ -1,4 +1,4 @@
-use grammers_session::{AMBIENT_AUTH, Peer};
+use grammers_session::{AMBIENT_AUTH, PeerAuth};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -105,13 +105,15 @@ impl Channel {
     }
 
     /// Return the unique identifier for this channel.
-    pub fn id(&self) -> i64 {
+    pub fn bare_id(&self) -> i64 {
         self.raw.id
     }
 
-    /// Return the peer reference to this chat.
-    pub fn peer(&self) -> Peer {
-        Peer::channel(self.id()).with_auth(self.raw.access_hash.unwrap_or(AMBIENT_AUTH))
+    pub fn auth(&self) -> PeerAuth {
+        self.raw
+            .access_hash
+            .map(PeerAuth::from_hash)
+            .unwrap_or(AMBIENT_AUTH)
     }
 
     /// Return the title of this channel.

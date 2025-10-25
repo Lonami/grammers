@@ -9,7 +9,7 @@
 use crate::types::{Chat, User};
 use crate::{ChatMap, Client, InputMessage};
 use grammers_mtsender::InvocationError;
-use grammers_session::State;
+use grammers_session::{PeerId, State};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
@@ -40,16 +40,7 @@ impl InlineSend {
 
     /// The user that chose the result.
     pub fn sender(&self) -> &User {
-        match self
-            .chats
-            .get(
-                &tl::types::PeerUser {
-                    user_id: self.update().user_id,
-                }
-                .into(),
-            )
-            .unwrap()
-        {
+        match self.chats.get(PeerId::user(self.update().user_id)).unwrap() {
             Chat::User(user) => user,
             _ => unreachable!(),
         }

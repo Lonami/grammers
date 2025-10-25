@@ -1,6 +1,6 @@
 use std::net::{SocketAddrV4, SocketAddrV6};
 
-use crate::peer::{Peer, PeerInfo};
+use crate::{PeerId, PeerInfo};
 
 pub trait Session: Send + Sync {
     /// Datacenter that is "home" to the user authorized by this session.
@@ -30,16 +30,16 @@ pub trait Session: Send + Sync {
     /// Should also be used after generating permanent authentication keys to a datacenter.
     fn set_dc_option(&self, dc_option: &DcOption);
 
-    /// Query a peer by its reference.
+    /// Query a peer by its identity.
     ///
-    /// Querying for [`Peer::self_user`] can be used as a way to determine
+    /// Querying for [`PeerId::self_user`] can be used as a way to determine
     /// whether the authentication key has a logged-in user bound (i.e. signed in).
-    fn peer(&self, peer: Peer) -> Option<PeerInfo>;
+    fn peer(&self, peer: PeerId) -> Option<PeerInfo>;
 
     /// Cache a peer's basic information for [`Session::peer`] to be able to query them later.
     ///
     /// This method may not necessarily remember the peers forever,
-    /// except for users where [`PeerInfo::User::is_self`] is `true`.
+    /// except for users where [`PeerInfo::User::is_self`] is `Some(true)`.
     fn cache_peer(&self, peer: &PeerInfo);
 
     /// Loads the entire updates state.

@@ -11,7 +11,7 @@
 use super::{Client, UpdatesConfiguration};
 use crate::types::{ChatMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, Peer, State, UpdatesLike, UpdatesState};
+use grammers_session::{ChatHashCache, MessageBoxes, PeerId, State, UpdatesLike, UpdatesState};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -34,7 +34,7 @@ fn prepare_channel_difference(
     message_box: &mut MessageBoxes,
 ) -> Option<tl::functions::updates::GetChannelDifference> {
     let id = match &request.channel {
-        tl::enums::InputChannel::Channel(channel) => channel.channel_id,
+        tl::enums::InputChannel::Channel(channel) => PeerId::channel(channel.channel_id),
         _ => unreachable!(),
     };
 
@@ -49,7 +49,7 @@ fn prepare_channel_difference(
         Some(request)
     } else {
         warn!(
-            "cannot getChannelDifference for {} as we're missing its hash",
+            "cannot getChannelDifference for {:?} as we're missing its hash",
             id
         );
         message_box.end_channel_difference(PrematureEndReason::Banned);
@@ -276,7 +276,7 @@ impl Client {
         };
         // Don't bother getting pristine update state if we're not logged in.
         let should_get_state =
-            message_box.is_empty() && self.0.session.peer(Peer::self_user()).is_some();
+            message_box.is_empty() && self.0.session.peer(PeerId::self_user()).is_some();
 
         UpdateStream {
             client: self.clone(),

@@ -15,7 +15,7 @@ pub use generated::enums::DataCenter;
 pub use generated::types::User;
 pub use message_box::PrematureEndReason;
 pub use message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike, peer_from_input_peer};
-pub use peer::{AMBIENT_AUTH, ChannelKind, Peer, PeerInfo, PeerKind};
+pub use peer::{AMBIENT_AUTH, ChannelKind, PeerAuth, PeerId, PeerInfo, PeerKind, PeerRef};
 pub use session::{ChannelState, DcOption, Session, UpdateState, UpdatesState};
 
 // Needed for auto-generated definitions.

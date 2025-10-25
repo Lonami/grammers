@@ -10,7 +10,7 @@ use crate::client::messages::parse_mention_entities;
 use crate::utils::generate_random_id;
 use crate::{InputMessage, types::IterBuffer};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::Peer;
+use grammers_session::PeerRef;
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 50;
@@ -26,7 +26,7 @@ pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResu
 impl InlineResult {
     /// Send this inline result to the specified chat.
     // TODO return the produced message
-    pub async fn send<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn send<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SendInlineBotResult {
                 silent: false,
@@ -69,7 +69,7 @@ impl InlineResult {
 }
 
 impl InlineResultIter {
-    fn new(client: &Client, bot: Peer, query: &str) -> Self {
+    fn new(client: &Client, bot: PeerRef, query: &str) -> Self {
         Self::from_request(
             client,
             MAX_LIMIT,
@@ -87,7 +87,7 @@ impl InlineResultIter {
     ///
     /// Some bots use this information to return different results depending on the type of the
     /// chat, and some even "need" it to give useful results.
-    pub fn chat<C: Into<Peer>>(mut self, chat: C) -> Self {
+    pub fn chat<C: Into<PeerRef>>(mut self, chat: C) -> Self {
         self.request.peer = chat.into().into();
         self
     }
@@ -140,7 +140,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(bot: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(bot: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This is equivalent to writing `@bot inline query` in a Telegram app.
     /// let mut inline_results = client.inline_query(bot, "inline query");
     ///
@@ -150,7 +150,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn inline_query<C: Into<Peer>>(&self, bot: C, query: &str) -> InlineResultIter {
+    pub fn inline_query<C: Into<PeerRef>>(&self, bot: C, query: &str) -> InlineResultIter {
         InlineResultIter::new(self, bot.into(), query)
     }
 

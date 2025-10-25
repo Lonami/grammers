@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::{ChatMap, Dialog, IterBuffer};
 use grammers_mtsender::InvocationError;
-use grammers_session::{Peer, PeerKind, UpdateState};
+use grammers_session::{PeerKind, PeerRef, UpdateState};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 100;
@@ -113,7 +113,8 @@ impl DialogIter {
                 self.request.offset_date = last_message.date_timestamp();
                 self.request.offset_id = last_message.id();
             }
-            self.request.offset_peer = self.buffer[self.buffer.len() - 1].peer().into();
+            self.request.offset_peer =
+                PeerRef::from(self.buffer[self.buffer.len() - 1].chat()).into();
         }
 
         Ok(self.pop_item())
@@ -157,21 +158,21 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in chat!
     /// client.delete_dialog(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn delete_dialog<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
-        if chat.kind() == PeerKind::Channel {
+        if chat.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::LeaveChannel {
                 channel: chat.into(),
             })
             .await
             .map(drop)
-        } else if chat.kind() == PeerKind::Chat {
+        } else if chat.id.kind() == PeerKind::Chat {
             // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id: chat.into(),
@@ -203,14 +204,14 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.mark_as_read(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn mark_as_read<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
         let chat = chat.into();
-        if chat.kind() == PeerKind::Channel {
+        if chat.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::ReadHistory {
                 channel: chat.into(),
                 max_id: 0,
@@ -232,12 +233,12 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::Peer, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.clear_mentions(chat).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn clear_mentions<C: Into<Peer>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn clear_mentions<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {
             peer: chat.into().into(),
             top_msg_id: None,

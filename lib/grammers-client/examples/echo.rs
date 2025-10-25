@@ -12,6 +12,7 @@
 
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
+use grammers_session::PeerRef;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::sync::Arc;
@@ -26,15 +27,19 @@ const SESSION_FILE: &str = "echo.session";
 async fn handle_update(client: Client, update: Update) {
     match update {
         Update::NewMessage(message) if !message.outgoing() => {
-            let chat = message.chat();
+            let chat = message.chat().unwrap();
             println!(
                 "Responding to {}",
-                chat.name().unwrap_or(&format!("id {}", chat.id()))
+                chat.name()
+                    .unwrap_or(&format!("id {}", message.chat_id().bot_api_dialog_id()))
             );
             if message.text() == "slow" {
                 sleep(Duration::from_secs(5)).await;
             }
-            if let Err(e) = client.send_message(chat.peer(), message.text()).await {
+            if let Err(e) = client
+                .send_message(PeerRef::from(chat), message.text())
+                .await
+            {
                 println!("Failed to respond! {e}");
             };
         }
