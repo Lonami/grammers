@@ -25,8 +25,7 @@ impl InputReactions {
 
     /// Add this reaction to the recent reactions list.
     ///
-    /// More about that: \
-    /// https://core.telegram.org/api/reactions#recent-reactions
+    /// [Read more about recent reactions](https://core.telegram.org/api/reactions#recent-reactions).
     pub fn add_to_recent(mut self) -> Self {
         self.add_to_recent = true;
         self

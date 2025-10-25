@@ -73,7 +73,7 @@ pub(crate) struct ClientInner {
 /// most basic methods, such as connecting, signing in, or processing network events.
 ///
 /// On drop, all state is synchronized to the session. The [`Session`] must be explicitly saved
-/// to disk with [`Session::save_to_file`] for persistence
+/// to disk with its corresponding save method for persistence.
 ///
 /// [`Session`]: grammers_session::Session
 #[derive(Clone)]

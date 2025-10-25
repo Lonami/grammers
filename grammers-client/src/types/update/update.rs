@@ -17,7 +17,7 @@ use grammers_tl_types as tl;
 /// An update that indicates some event, which may be of interest to the logged-in account, has occured.
 ///
 /// Only updates pertaining to messages are guaranteed to be delivered, and can be fetched on-demand if
-/// they occured while the client was offline by enabling [`catch_up`](crate::InitParams::catch_up).
+/// they occured while the client was offline by enabling [`catch_up`](crate::UpdatesConfiguration::catch_up).
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum Update {

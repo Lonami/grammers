@@ -114,7 +114,7 @@ impl Client {
     ///
     /// This is the method you need to call to use the client under a bot account.
     ///
-    /// It is recommended to save the [`Client::session()`] on successful login, and if saving
+    /// It is recommended to save the session on successful login, and if saving
     /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
     /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
     ///
@@ -267,7 +267,7 @@ impl Client {
     /// You must call [`Client::request_login_code`] before using this method in order to obtain
     /// necessary login token, and also have asked the user for the login code.
     ///
-    /// It is recommended to save the [`Client::session()`] on successful login, and if saving
+    /// It is recommended to save the session on successful login, and if saving
     /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
     /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
     ///

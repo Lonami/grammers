@@ -17,7 +17,7 @@
 //! that to users (anyone can login, including yourself and bots, with the developer API ID;
 //! they do *not* need to provide their own API ID).
 //!
-//! Once that's ready, create a new [`Client`] instance with its [`Client::connect`]
+//! Once that's ready, create a new [`Client`] instance with its [`Client::new`]
 //! method and start making API calls.
 //!
 //! When a method is said to be "expensive", this often means that calling it too much in a

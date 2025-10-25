@@ -22,9 +22,9 @@ impl Client {
     ///
     /// The connection will be initialized with the data from the input configuration.
     ///
-    /// The [`SenderPoolHandle`] does not keep a reference to the [`Session`] or `api_id`,
-    /// but the [`SenderPool`] itself does, so the latter is used as input to guarantee that
-    /// the values are correctly shared between the pool and the client handles.
+    /// The [`grammers_mtsender::SenderPoolHandle`] does not keep a reference to the [`grammers_session::Session`]
+    /// or `api_id`, but the [`SenderPool`] itself does, so the latter is used as input to guarantee
+    /// that the values are correctly shared between the pool and the client handles.
     ///
     /// # Examples
     ///
@@ -49,7 +49,7 @@ impl Client {
         Self::with_configuration(sender_pool, Default::default())
     }
 
-    /// Like [`Self::new`] but with a custom [`Configuration`].
+    /// Like [`Self::new`] but with a custom [`ClientConfiguration`].
     pub fn with_configuration(
         sender_pool: &SenderPool,
         configuration: ClientConfiguration,

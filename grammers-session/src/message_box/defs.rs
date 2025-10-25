@@ -135,8 +135,8 @@ pub enum UpdatesLike {
 // Public interface around the more tightly-packed internal state.
 
 /// Update state, up to and including the update it is a part of.
-/// That is, when using [`catch_up`](crate::InitParams::catch_up),
-/// all updates with a state containing a [`MessageBox`] higher than this one will be fetched.
+/// That is, when using `catch_up` with a client, all updates with a
+/// state containing a [`MessageBox`] higher than this one will be fetched.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct State {
     pub date: i32,
