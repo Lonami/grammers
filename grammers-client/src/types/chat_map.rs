@@ -11,18 +11,18 @@ use grammers_tl_types as tl;
 use std::collections::HashMap;
 use std::sync::Arc;
 
-/// Helper structure to efficiently retrieve chats via their peer.
+/// Helper structure to efficiently retrieve peers via their peer.
 ///
-/// A lot of responses include the chats related to them in the form of a list of users
-/// and chats, making it annoying to extract a specific chat. This structure lets you
+/// A lot of responses include the peers related to them in the form of a list of users
+/// and peers, making it annoying to extract a specific peer. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
-pub struct ChatMap {
+pub struct PeerMap {
     map: HashMap<PeerId, Peer>,
 }
 
-impl ChatMap {
-    /// Create a new chat set.
-    pub fn new<U, C>(users: U, chats: C) -> Arc<Self>
+impl PeerMap {
+    /// Create a new peer set.
+    pub fn new<U, C>(users: U, peers: C) -> Arc<Self>
     where
         U: IntoIterator<Item = tl::enums::User>,
         C: IntoIterator<Item = tl::enums::Chat>,
@@ -31,25 +31,25 @@ impl ChatMap {
             map: users
                 .into_iter()
                 .map(Peer::from_user)
-                .chain(chats.into_iter().map(Peer::from_raw))
-                .map(|chat| (chat.id(), chat))
+                .chain(peers.into_iter().map(Peer::from_raw))
+                .map(|peer| (peer.id(), peer))
                 .collect(),
         })
     }
 
-    /// Create a new empty chat set.
+    /// Create a new empty peer set.
     pub fn empty() -> Arc<Self> {
         Arc::new(Self {
             map: HashMap::new(),
         })
     }
 
-    /// Retrieve the full `Chat` object given its `Peer`.
+    /// Retrieve the full `Peer` object given its `PeerId`.
     pub fn get(&self, peer: PeerId) -> Option<&Peer> {
         self.map.get(&peer)
     }
 
-    /// Take the full `Chat` object given its `Peer` and remove it from the map.
+    /// Take the full `Peer` object given its `PeerId` and remove it from the map.
     pub fn remove(&mut self, peer: PeerId) -> Option<Peer> {
         self.map.remove(&peer)
     }
@@ -57,19 +57,19 @@ impl ChatMap {
     pub(crate) fn remove_user(&mut self, user_id: i64) -> Option<User> {
         self.map
             .remove(&PeerId::user(user_id))
-            .map(|chat| match chat {
+            .map(|peer| match peer {
                 Peer::User(user) => user,
                 _ => unreachable!(),
             })
     }
 
-    /// Iterate over the peers and chats in the map.
+    /// Iterate over the peers and peers in the map.
     pub fn iter(&self) -> impl Iterator<Item = (PeerId, &Peer)> {
         self.map.iter().map(|(k, v)| (*k, v))
     }
 
-    /// Iterate over the chats in the map.
-    pub fn iter_chats(&self) -> impl Iterator<Item = &Peer> {
+    /// Iterate over the peers in the map.
+    pub fn iter_peers(&self) -> impl Iterator<Item = &Peer> {
         self.map.values()
     }
 }

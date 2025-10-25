@@ -26,7 +26,7 @@ pub struct CallbackQuery {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) chats: Arc<types::ChatMap>,
+    pub(crate) peers: Arc<types::PeerMap>,
 }
 
 /// A callback query answer builder.
@@ -45,17 +45,17 @@ impl CallbackQuery {
             tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
             _ => unreachable!(),
         };
-        self.chats.get(PeerId::user(user_id)).unwrap()
+        self.peers.get(PeerId::user(user_id)).unwrap()
     }
 
-    /// The chat where the callback query occured.
-    pub fn chat(&self) -> &types::Peer {
+    /// The peer where the callback query occured.
+    pub fn peer(&self) -> &types::Peer {
         let peer = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.peer.clone().into(),
             tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),
             _ => unreachable!(),
         };
-        self.chats.get(peer).unwrap()
+        self.peers.get(peer).unwrap()
     }
 
     /// They binary payload data contained by the inline button which was pressed.
@@ -89,7 +89,7 @@ impl CallbackQuery {
         };
         Ok(self
             .client
-            .get_messages_by_id(self.chat(), &[msg_id])
+            .get_messages_by_id(self.peer(), &[msg_id])
             .await?
             .pop()
             .unwrap()
@@ -155,12 +155,12 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
+        let peer = self.query.peer();
         match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => {
                 self.query
                     .client
-                    .edit_message(chat, update.msg_id, new_message)
+                    .edit_message(peer, update.msg_id, new_message)
                     .await
             }
             tl::enums::Update::InlineBotCallbackQuery(update) => self
@@ -173,14 +173,14 @@ impl<'a> Answer<'a> {
         }
     }
 
-    /// [`Self::send`] the answer, and also respond in the chat where the button was clicked.
+    /// [`Self::send`] the answer, and also respond in the peer where the button was clicked.
     pub async fn respond<M: Into<InputMessage>>(
         self,
         message: M,
     ) -> Result<types::Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
-        self.query.client.send_message(chat, message).await
+        let peer = self.query.peer();
+        self.query.client.send_message(peer, message).await
     }
 
     /// [`Self::send`] the answer, and also reply to the message that contained the button.
@@ -193,11 +193,11 @@ impl<'a> Answer<'a> {
             _ => return Err(InvocationError::Dropped),
         };
         self.query.client.invoke(&self.request).await?;
-        let chat = self.query.chat();
+        let peer = self.query.peer();
         let message = message.into();
         self.query
             .client
-            .send_message(chat, message.reply_to(Some(msg_id)))
+            .send_message(peer, message.reply_to(Some(msg_id)))
             .await
     }
 }
@@ -207,7 +207,7 @@ impl fmt::Debug for CallbackQuery {
         f.debug_struct("CallbackQuery")
             .field("data", &self.data())
             .field("sender", &self.sender())
-            .field("chat", &self.chat())
+            .field("peer", &self.peer())
             .finish()
     }
 }

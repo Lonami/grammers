@@ -27,17 +27,17 @@ const SESSION_FILE: &str = "echo.session";
 async fn handle_update(client: Client, update: Update) {
     match update {
         Update::NewMessage(message) if !message.outgoing() => {
-            let chat = message.chat().unwrap();
+            let peer = message.peer().unwrap();
             println!(
                 "Responding to {}",
-                chat.name()
-                    .unwrap_or(&format!("id {}", message.chat_id().bot_api_dialog_id()))
+                peer.name()
+                    .unwrap_or(&format!("id {}", message.peer_id().bot_api_dialog_id()))
             );
             if message.text() == "slow" {
                 sleep(Duration::from_secs(5)).await;
             }
             if let Err(e) = client
-                .send_message(PeerRef::from(chat), message.text())
+                .send_message(PeerRef::from(peer), message.text())
                 .await
             {
                 println!("Failed to respond! {e}");

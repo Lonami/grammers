@@ -45,7 +45,7 @@ impl InputMessage {
         self
     }
 
-    /// Whether the draft in this chat, if any, should be cleared.
+    /// Whether the draft in this peer, if any, should be cleared.
     pub fn clear_draft(mut self, clear_draft: bool) -> Self {
         self.clear_draft = clear_draft;
         self

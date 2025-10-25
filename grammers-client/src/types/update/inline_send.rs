@@ -7,14 +7,14 @@
 // except according to those terms.
 
 use crate::types::{Peer, User};
-use crate::{ChatMap, Client, InputMessage};
+use crate::{Client, InputMessage, PeerMap};
 use grammers_mtsender::InvocationError;
 use grammers_session::{PeerId, State};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
 
-/// Represents an update of user choosing the result of inline query and sending it to their chat partner.
+/// Represents an update of user choosing the result of inline query and sending it to a peer.
 ///
 /// To receive this update, "Inline Feedback" under "Bot Settings" must be enabled via [@BotFather](https://t.me/BotFather).
 #[derive(Clone)]
@@ -22,7 +22,7 @@ pub struct InlineSend {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) chats: Arc<ChatMap>,
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 impl InlineSend {
@@ -40,7 +40,7 @@ impl InlineSend {
 
     /// The user that chose the result.
     pub fn sender(&self) -> &User {
-        match self.chats.get(PeerId::user(self.update().user_id)).unwrap() {
+        match self.peers.get(PeerId::user(self.update().user_id)).unwrap() {
             Peer::User(user) => user,
             _ => unreachable!(),
         }

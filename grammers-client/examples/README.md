@@ -32,8 +32,8 @@ powerful approach.
 
 ## [downloader.rs]
 
-Downloads all media from a chat, including files located in datacenters different than your own. 
-After logging in, the example iterates all messages of the supplied chat name, printing in the console 
+Downloads all media from a peer, including files located in datacenters different than your own. 
+After logging in, the example iterates all messages of the supplied peer name, printing in the console 
 the ID and the text for each one; videos, images, stickers and contacts are saved in the `target` folder. 
 
 [ping.rs]: ping.rs

@@ -35,7 +35,7 @@ pub mod update;
 
 pub use action::ActionSender;
 pub use attributes::Attribute;
-pub use chat_map::ChatMap;
+pub use chat_map::PeerMap;
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
 pub use downloadable::Downloadable;

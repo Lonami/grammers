@@ -100,11 +100,11 @@ impl ReplyMarkup for ForceReply {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, chat: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
 /// let artist = "Krewella";
-/// client.send_message(chat, InputMessage::new().text("Select song").reply_markup(&reply_markup::keyboard(vec![
+/// client.send_message(peer, InputMessage::new().text("Select song").reply_markup(&reply_markup::keyboard(vec![
 ///     vec![button::text(format!("Song by {}", artist))],
 ///     vec![button::text("Previous"), button::text("Next")],
 /// ]))).await?;
@@ -145,10 +145,10 @@ pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, chat: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
-/// client.send_message(chat, InputMessage::new().text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
+/// client.send_message(peer, InputMessage::new().text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
 ///     vec![button::text("Accept")],
 ///     vec![button::text("Cancel"), button::text("Try something else")],
 /// ]))).await?;
@@ -184,10 +184,10 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, chat: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
-/// client.send_message(chat, InputMessage::new().text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
+/// client.send_message(peer, InputMessage::new().text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -207,11 +207,11 @@ pub fn hide() -> Hide {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, chat: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
 /// let markup = reply_markup::force_reply().single_use();
-/// client.send_message(chat, InputMessage::new().text("Reply me!").reply_markup(&markup)).await?;
+/// client.send_message(peer, InputMessage::new().text("Reply me!").reply_markup(&markup)).await?;
 /// # Ok(())
 /// # }
 /// ```
@@ -237,7 +237,7 @@ impl Keyboard {
     /// Requests clients to hide the keyboard as soon as it's been used.
     ///
     /// The keyboard will still be available, but clients will automatically display the usual
-    /// letter-keyboard in the chat – the user can press a special button in the input field to
+    /// letter-keyboard in the conversation – the user can press a special button in the input field to
     /// see the custom keyboard again.
     pub fn single_use(mut self) -> Self {
         self.raw.single_use = true;
@@ -269,7 +269,7 @@ impl ForceReply {
     /// Requests clients to hide the keyboard as soon as it's been used.
     ///
     /// The keyboard will still be available, but clients will automatically display the usual
-    /// letter-keyboard in the chat – the user can press a special button in the input field to
+    /// letter-keyboard in the conversation – the user can press a special button in the input field to
     /// see the custom keyboard again.
     pub fn single_use(mut self) -> Self {
         self.raw.single_use = true;

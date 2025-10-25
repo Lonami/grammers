@@ -16,7 +16,7 @@ mod peer;
 mod session;
 pub mod storages;
 
-pub use chat::ChatHashCache;
+pub use chat::PeerAuthCache;
 pub use dc_options::{DEFAULT_DC, KNOWN_DC_OPTIONS};
 pub use generated::LAYER as VERSION;
 pub use generated::enums::DataCenter;

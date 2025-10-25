@@ -19,16 +19,16 @@ const DEFAULT_REPEAT_DELAY: Duration = Duration::from_secs(4);
 
 pub struct ActionSender {
     client: Client,
-    chat: PeerRef,
+    peer: PeerRef,
     topic_id: Option<i32>,
     repeat_delay: Duration,
 }
 
 impl ActionSender {
-    pub fn new<C: Into<PeerRef>>(client: &Client, chat: C) -> Self {
+    pub fn new<C: Into<PeerRef>>(client: &Client, peer: C) -> Self {
         Self {
             client: client.clone(),
-            chat: chat.into(),
+            peer: peer.into(),
             topic_id: None,
             repeat_delay: DEFAULT_REPEAT_DELAY,
         }
@@ -61,7 +61,7 @@ impl ActionSender {
     ) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SetTyping {
-                peer: self.chat.into(),
+                peer: self.peer.into(),
                 top_msg_id: self.topic_id,
                 action: action.into(),
             })
@@ -77,7 +77,7 @@ impl ActionSender {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {
@@ -89,7 +89,7 @@ impl ActionSender {
     /// tokio::pin!(heavy_task);
     ///
     /// let (task_result, _) = client
-    ///     .action(chat)
+    ///     .action(peer)
     ///     .repeat(
     ///         // most clients doesn't actually show progress of an action
     ///         || tl::types::SendMessageUploadDocumentAction { progress: 0 },

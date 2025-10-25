@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
 use crate::types::Message as Msg;
-use crate::{ChatMap, Client, utils};
+use crate::{Client, PeerMap, utils};
 use grammers_session::State;
 use grammers_tl_types as tl;
 
@@ -33,7 +33,7 @@ pub enum Update {
     /// Occurs whenever you sign in as a bot and a user sends an inline query
     /// such as `@bot query`.
     InlineQuery(InlineQuery),
-    /// Represents an update of user choosing the result of inline query and sending it to their chat partner.
+    /// Represents an update of user choosing the result of inline query and sending it to their peer partner.
     InlineSend(InlineSend),
     /// Raw events are not actual events.
     /// Instead, they are the raw Update object that Telegram sends. You
@@ -46,12 +46,12 @@ pub enum Update {
 }
 
 impl Update {
-    /// Create new friendly to use Update from its raw version and chat map
+    /// Create new friendly to use Update from its raw version and peer map
     pub fn new(
         client: &Client,
         update: tl::enums::Update,
         state: State,
-        chats: &Arc<ChatMap>,
+        peers: &Arc<PeerMap>,
     ) -> Self {
         match &update {
             // NewMessage
@@ -61,7 +61,7 @@ impl Update {
                 }
 
                 Self::NewMessage(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
                     raw: update,
                     state,
                 })
@@ -73,7 +73,7 @@ impl Update {
                 }
 
                 Self::NewMessage(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
                     raw: update,
                     state,
                 })
@@ -86,13 +86,13 @@ impl Update {
                 }
 
                 Self::MessageEdited(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
                     raw: update,
                     state,
                 })
             }
             tl::enums::Update::EditChannelMessage(raw) => Self::MessageEdited(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), None, chats),
+                msg: Msg::from_raw(client, raw.message.clone(), None, peers),
                 raw: update,
                 state,
             }),
@@ -110,7 +110,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                chats: Arc::clone(chats),
+                peers: Arc::clone(peers),
             }),
 
             // InlineCallbackQuery
@@ -118,7 +118,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                chats: Arc::clone(chats),
+                peers: Arc::clone(peers),
             }),
 
             // InlineQuery
@@ -126,7 +126,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                chats: Arc::clone(chats),
+                peers: Arc::clone(peers),
             }),
 
             // InlineSend
@@ -134,7 +134,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                chats: Arc::clone(chats),
+                peers: Arc::clone(peers),
             }),
 
             // Raw

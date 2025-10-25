@@ -97,7 +97,7 @@ impl User {
         self.raw.id()
     }
 
-    pub fn auth(&self) -> PeerAuth {
+    pub(crate) fn auth(&self) -> PeerAuth {
         self.user()
             .and_then(|u| u.access_hash)
             .map(PeerAuth::from_hash)
@@ -148,7 +148,7 @@ impl User {
         self.user().and_then(|u| u.username.as_deref())
     }
 
-    /// Return collectible usernames of this chat, if any.
+    /// Return collectible usernames of this user, if any.
     ///
     /// The returned usernames do not contain the "@" prefix.
     ///
@@ -186,7 +186,7 @@ impl User {
 
     /// Does this user represent the account that's currently logged in?
     pub fn is_self(&self) -> bool {
-        // TODO if is_self is false, check in chat cache if id == ourself
+        // TODO if is_self is false, check in peer cache if id == ourself
         self.user().map(|u| u.is_self).unwrap_or(false)
     }
 

@@ -110,7 +110,7 @@ impl Channel {
         self.raw.id
     }
 
-    pub fn auth(&self) -> PeerAuth {
+    pub(crate) fn auth(&self) -> PeerAuth {
         self.raw
             .access_hash
             .map(PeerAuth::from_hash)
@@ -132,7 +132,7 @@ impl Channel {
         self.raw.username.as_deref()
     }
 
-    /// Return collectible usernames of this chat, if any.
+    /// Return collectible usernames of this channel, if any.
     ///
     /// The returned usernames do not contain the "@" prefix.
     ///

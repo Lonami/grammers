@@ -9,9 +9,9 @@
 //! Methods to deal with and offer access to updates.
 
 use super::{Client, UpdatesConfiguration};
-use crate::types::{ChatMap, Update};
+use crate::types::{PeerMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{ChatHashCache, MessageBoxes, PeerId, State, UpdatesLike, UpdatesState};
+use grammers_session::{MessageBoxes, PeerAuthCache, PeerId, State, UpdatesLike, UpdatesState};
 pub use grammers_session::{PrematureEndReason, UpdateState};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -30,7 +30,7 @@ const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
 
 fn prepare_channel_difference(
     mut request: tl::functions::updates::GetChannelDifference,
-    chat_hashes: &ChatHashCache,
+    peer_auths: &PeerAuthCache,
     message_box: &mut MessageBoxes,
 ) -> Option<tl::functions::updates::GetChannelDifference> {
     let id = match &request.channel {
@@ -38,9 +38,9 @@ fn prepare_channel_difference(
         _ => unreachable!(),
     };
 
-    if let Some(packed) = chat_hashes.get(id) {
-        request.channel = packed.into();
-        request.limit = if chat_hashes.is_self_bot() {
+    if let Some(peer) = peer_auths.get(id) {
+        request.channel = peer.into();
+        request.limit = if peer_auths.is_self_bot() {
             BOT_CHANNEL_DIFF_LIMIT
         } else {
             USER_CHANNEL_DIFF_LIMIT
@@ -60,11 +60,11 @@ fn prepare_channel_difference(
 pub struct UpdateStream {
     client: Client,
     message_box: MessageBoxes,
-    chat_hashes: ChatHashCache,
+    peer_auths: PeerAuthCache,
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     last_update_limit_warn: Option<Instant>,
-    buffer: VecDeque<(tl::enums::Update, State, Arc<crate::types::ChatMap>)>,
+    buffer: VecDeque<(tl::enums::Update, State, Arc<crate::types::PeerMap>)>,
     updates: mpsc::UnboundedReceiver<UpdatesLike>,
     configuration: UpdatesConfiguration,
     should_get_state: bool,
@@ -72,13 +72,13 @@ pub struct UpdateStream {
 
 impl UpdateStream {
     pub async fn next(&mut self) -> Result<Update, InvocationError> {
-        let (update, state, chats) = self.next_raw().await?;
-        Ok(Update::new(&self.client, update, state, &chats))
+        let (update, state, peers) = self.next_raw().await?;
+        Ok(Update::new(&self.client, update, state, &peers))
     }
 
     pub async fn next_raw(
         &mut self,
-    ) -> Result<(tl::enums::Update, State, Arc<ChatMap>), InvocationError> {
+    ) -> Result<(tl::enums::Update, State, Arc<PeerMap>), InvocationError> {
         if self.should_get_state {
             self.should_get_state = false;
             match self
@@ -114,7 +114,7 @@ impl UpdateStream {
                     self.message_box.check_deadlines(), // first, as it might trigger differences
                     self.message_box.get_difference(),
                     self.message_box.get_channel_difference().and_then(|gd| {
-                        prepare_channel_difference(gd, &self.chat_hashes, &mut self.message_box)
+                        prepare_channel_difference(gd, &self.peer_auths, &mut self.message_box)
                     }),
                 )
             };
@@ -122,8 +122,8 @@ impl UpdateStream {
             if let Some(request) = get_diff {
                 let response = self.client.invoke(&request).await?;
                 let (updates, users, chats) = self.message_box.apply_difference(response);
-                let _ = self.chat_hashes.extend(&users, &chats);
-                self.extend_update_queue(updates, ChatMap::new(users, chats));
+                let _ = self.peer_auths.extend(&users, &chats);
+                self.extend_update_queue(updates, PeerMap::new(users, chats));
                 continue;
             }
 
@@ -176,9 +176,9 @@ impl UpdateStream {
                 };
 
                 let (updates, users, chats) = self.message_box.apply_channel_difference(response);
-                let _ = self.chat_hashes.extend(&users, &chats);
+                let _ = self.peer_auths.extend(&users, &chats);
 
-                self.extend_update_queue(updates, ChatMap::new(users, chats));
+                self.extend_update_queue(updates, PeerMap::new(users, chats));
                 continue;
             }
 
@@ -206,14 +206,14 @@ impl UpdateStream {
         }
 
         if let Some((updates, users, chats)) = result {
-            self.extend_update_queue(updates, ChatMap::new(users, chats));
+            self.extend_update_queue(updates, PeerMap::new(users, chats));
         }
     }
 
     fn extend_update_queue(
         &mut self,
         mut updates: Vec<(tl::enums::Update, State)>,
-        chat_map: Arc<ChatMap>,
+        peer_map: Arc<PeerMap>,
     ) {
         if let Some(limit) = self.configuration.update_queue_limit {
             if let Some(exceeds) = (self.buffer.len() + updates.len()).checked_sub(limit + 1) {
@@ -237,7 +237,7 @@ impl UpdateStream {
         }
 
         self.buffer
-            .extend(updates.into_iter().map(|(u, s)| (u, s, chat_map.clone())));
+            .extend(updates.into_iter().map(|(u, s)| (u, s, peer_map.clone())));
     }
 
     /// Synchronize the updates state to the session.
@@ -281,7 +281,7 @@ impl Client {
         UpdateStream {
             client: self.clone(),
             message_box,
-            chat_hashes: ChatHashCache::new(None),
+            peer_auths: PeerAuthCache::new(None),
             last_update_limit_warn: None,
             buffer: VecDeque::new(),
             updates,

@@ -11,13 +11,13 @@ use std::collections::HashMap;
 use crate::{PeerAuth, PeerId, PeerInfo, PeerRef};
 
 /// In-memory chat cache, mapping peers to their respective access hashes.
-pub struct ChatHashCache {
+pub struct PeerAuthCache {
     hash_map: HashMap<PeerId, PeerAuth>,
     self_id: Option<i64>,
     self_bot: bool,
 }
 
-impl ChatHashCache {
+impl PeerAuthCache {
     pub fn new(self_user: Option<(i64, bool)>) -> Self {
         Self {
             hash_map: HashMap::new(),

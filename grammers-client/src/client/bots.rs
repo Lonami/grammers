@@ -24,16 +24,16 @@ pub struct InlineResult {
 pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
 
 impl InlineResult {
-    /// Send this inline result to the specified chat.
+    /// Send this inline result to the specified peer.
     // TODO return the produced message
-    pub async fn send<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn send<C: Into<PeerRef>>(&self, peer: C) -> Result<(), InvocationError> {
         self.client
             .invoke(&tl::functions::messages::SendInlineBotResult {
                 silent: false,
                 background: false,
                 clear_draft: false,
                 hide_via: false,
-                peer: chat.into().into(),
+                peer: peer.into().into(),
                 reply_to: None,
                 random_id: generate_random_id(),
                 query_id: self.query_id,
@@ -83,12 +83,12 @@ impl InlineResultIter {
         )
     }
 
-    /// Indicate the bot the chat where this inline query will be sent to.
+    /// Indicate the bot the peer where this inline query will be sent to.
     ///
     /// Some bots use this information to return different results depending on the type of the
-    /// chat, and some even "need" it to give useful results.
-    pub fn chat<C: Into<PeerRef>>(mut self, chat: C) -> Self {
-        self.request.peer = chat.into().into();
+    /// peer, and some even "need" it to give useful results.
+    pub fn peer<C: Into<PeerRef>>(mut self, peer: C) -> Self {
+        self.request.peer = peer.into().into();
         self
     }
 
@@ -134,7 +134,7 @@ impl Client {
     ///
     /// The return value is used like any other async iterator, by repeatedly calling `next`.
     ///
-    /// Executing the query will fail if the input chat does not actually represent a bot account
+    /// Executing the query will fail if the input peer does not actually represent a bot account
     /// supporting inline mode.
     ///
     /// # Examples

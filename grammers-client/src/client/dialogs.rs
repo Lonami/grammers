@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::Client;
-use crate::types::{ChatMap, Dialog, IterBuffer};
+use crate::types::{Dialog, IterBuffer, PeerMap};
 use grammers_mtsender::InvocationError;
 use grammers_session::{PeerKind, PeerRef, UpdateState};
 use grammers_tl_types as tl;
@@ -81,7 +81,7 @@ impl DialogIter {
             }
         };
 
-        let chats = ChatMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
 
         self.buffer.extend(dialogs.into_iter().map(|dialog| {
             if let tl::enums::Dialog::Dialog(tl::types::Dialog {
@@ -98,7 +98,7 @@ impl DialogIter {
                         pts: *pts,
                     });
             }
-            Dialog::new(&self.client, dialog, &mut messages, &chats)
+            Dialog::new(&self.client, dialog, &mut messages, &peers)
         }));
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
@@ -114,7 +114,7 @@ impl DialogIter {
                 self.request.offset_id = last_message.id();
             }
             self.request.offset_peer =
-                PeerRef::from(self.buffer[self.buffer.len() - 1].chat()).into();
+                PeerRef::from(self.buffer[self.buffer.len() - 1].peer()).into();
         }
 
         Ok(self.pop_item())
@@ -126,7 +126,7 @@ impl Client {
     /// Returns a new iterator over the dialogs.
     ///
     /// While iterating, the update state for any broadcast channel or megagroup will be set if it was unknown before.
-    /// When the update state is set for these chats, the library can actively check to make sure it's not missing any
+    /// When the update state is set for these peers, the library can actively check to make sure it's not missing any
     /// updates from them (as long as the queue limit for updates is larger than zero).
     ///
     /// # Examples
@@ -136,8 +136,8 @@ impl Client {
     /// let mut dialogs = client.iter_dialogs();
     ///
     /// while let Some(dialog) = dialogs.next().await? {
-    ///     let chat = dialog.chat();
-    ///     println!("{} ({})", chat.name().unwrap_or_default(), chat.id());
+    ///     let peer = dialog.peer();
+    ///     println!("{} ({})", peer.name().unwrap_or_default(), peer.id());
     /// }
     /// # Ok(())
     /// # }
@@ -158,24 +158,24 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Consider making a backup before, you will lose access to the messages in chat!
-    /// client.delete_dialog(chat).await?;
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Consider making a backup before, you will lose access to the messages in peer!
+    /// client.delete_dialog(peer).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn delete_dialog<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
-        let chat = chat.into();
-        if chat.id.kind() == PeerKind::Channel {
+    pub async fn delete_dialog<C: Into<PeerRef>>(&self, peer: C) -> Result<(), InvocationError> {
+        let peer = peer.into();
+        if peer.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::LeaveChannel {
-                channel: chat.into(),
+                channel: peer.into(),
             })
             .await
             .map(drop)
-        } else if chat.id.kind() == PeerKind::Chat {
+        } else if peer.id.kind() == PeerKind::Chat {
             // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
-                chat_id: chat.into(),
+                chat_id: peer.into(),
                 user_id: tl::enums::InputUser::UserSelf,
                 revoke_history: false,
             })
@@ -186,7 +186,7 @@ impl Client {
             self.invoke(&tl::functions::messages::DeleteHistory {
                 just_clear: false,
                 revoke: false,
-                peer: chat.into(),
+                peer: peer.into(),
                 max_id: 0,
                 min_date: None,
                 max_date: None,
@@ -196,7 +196,7 @@ impl Client {
         }
     }
 
-    /// Mark a chat as read.
+    /// Mark a peer as read.
     ///
     /// If you want to get rid of all the mentions (for example, a voice note that you have not
     /// listened to yet), you need to also use [`Client::clear_mentions`].
@@ -204,23 +204,23 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.mark_as_read(chat).await?;
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.mark_as_read(peer).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn mark_as_read<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
-        let chat = chat.into();
-        if chat.id.kind() == PeerKind::Channel {
+    pub async fn mark_as_read<C: Into<PeerRef>>(&self, peer: C) -> Result<(), InvocationError> {
+        let peer = peer.into();
+        if peer.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::ReadHistory {
-                channel: chat.into(),
+                channel: peer.into(),
                 max_id: 0,
             })
             .await
             .map(drop)
         } else {
             self.invoke(&tl::functions::messages::ReadHistory {
-                peer: chat.into(),
+                peer: peer.into(),
                 max_id: 0,
             })
             .await
@@ -228,19 +228,19 @@ impl Client {
         }
     }
 
-    /// Clears all pending mentions from a chat, marking them as read.
+    /// Clears all pending mentions from a peer, marking them as read.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.clear_mentions(chat).await?;
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.clear_mentions(peer).await?;
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn clear_mentions<C: Into<PeerRef>>(&self, chat: C) -> Result<(), InvocationError> {
+    pub async fn clear_mentions<C: Into<PeerRef>>(&self, peer: C) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::ReadMentions {
-            peer: chat.into().into(),
+            peer: peer.into().into(),
             top_msg_id: None,
         })
         .await

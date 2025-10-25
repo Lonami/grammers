@@ -7,4 +7,4 @@
 // except according to those terms.
 mod hash_cache;
 
-pub use hash_cache::ChatHashCache;
+pub use hash_cache::PeerAuthCache;

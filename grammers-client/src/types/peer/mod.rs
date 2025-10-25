@@ -16,11 +16,11 @@ pub use channel::Channel;
 pub use group::Group;
 pub use user::{Platform, RestrictionReason, User};
 
-/// A chat.
+/// A peer.
 ///
-/// Chats represent places where you can share messages with others.
+/// Peers represent places where you can share messages with others.
 ///
-/// * Private conversations with other people are treated as the chat of the user itself.
+/// * Private conversations with other people are treated as the peer of the user itself.
 /// * Conversations in a group, whether it's private or public, are simply known as groups.
 /// * Conversations where only administrators broadcast messages are known as channels.
 #[derive(Clone, Debug)]
@@ -62,9 +62,9 @@ impl Peer {
         }
     }
 
-    /// Return the unique identifier for this chat.
+    /// Return the unique identifier for this peer.
     ///
-    /// Every account will see the same identifier for the same chat.
+    /// Every account will see the same identifier for the same peer.
     ///
     /// This identifier will never change. However, small group chats may be migrated to
     /// megagroups. If this happens, both the old small group chat and the new megagroup
@@ -78,7 +78,7 @@ impl Peer {
         }
     }
 
-    pub fn auth(&self) -> PeerAuth {
+    pub(crate) fn auth(&self) -> PeerAuth {
         match self {
             Self::User(user) => user.auth(),
             Self::Group(group) => group.auth(),
@@ -86,12 +86,12 @@ impl Peer {
         }
     }
 
-    /// Return the name of this chat.
+    /// Return the name of this peer.
     ///
     /// For private conversations (users), this is their first name. For groups and channels,
     /// this is their title.
     ///
-    /// The name will be `None` if the chat is inaccessible or if the account was deleted. It may
+    /// The name will be `None` if the peer is inaccessible or if the account was deleted. It may
     /// also be `None` if you received it previously.
     pub fn name(&self) -> Option<&str> {
         match self {
@@ -101,7 +101,7 @@ impl Peer {
         }
     }
 
-    /// Return the public @username of this chat, if any.
+    /// Return the public @username of this peer, if any.
     ///
     /// The returned username does not contain the "@" prefix.
     ///
@@ -115,7 +115,7 @@ impl Peer {
         }
     }
 
-    /// Return collectible usernames of this chat, if any.
+    /// Return collectible usernames of this peer, if any.
     ///
     /// The returned usernames do not contain the "@" prefix.
     ///
@@ -129,7 +129,7 @@ impl Peer {
         }
     }
 
-    // Return the profile picture or chat photo of this chat, if any.
+    // Return the profile picture or chat photo of this peer, if any.
     pub fn photo(&self, big: bool) -> Option<crate::types::ChatPhoto> {
         let peer = PeerRef::from(self).into();
         match self {
@@ -165,19 +165,19 @@ impl Peer {
 }
 
 impl From<Peer> for PeerRef {
-    fn from(chat: Peer) -> Self {
+    fn from(peer: Peer) -> Self {
         PeerRef {
-            id: chat.id(),
-            auth: chat.auth(),
+            id: peer.id(),
+            auth: peer.auth(),
         }
     }
 }
 
 impl From<&Peer> for PeerRef {
-    fn from(chat: &Peer) -> Self {
+    fn from(peer: &Peer) -> Self {
         PeerRef {
-            id: chat.id(),
-            auth: chat.auth(),
+            id: peer.id(),
+            auth: peer.auth(),
         }
     }
 }

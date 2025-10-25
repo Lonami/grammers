@@ -9,7 +9,7 @@
 //! Methods related to sending messages.
 use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{ChatMap, Client, InputMedia, types};
+use crate::{Client, InputMedia, PeerMap, types};
 use chrono::{DateTime, FixedOffset};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::{AMBIENT_AUTH, PeerId, PeerKind, PeerRef};
@@ -32,7 +32,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let chats = ChatMap::new(users, chats);
+            let peers = PeerMap::new(users, chats);
 
             let rnd_to_id = updates
                 .iter()
@@ -59,7 +59,7 @@ fn map_random_ids_to_messages(
                     ) => Some(message),
                     _ => None,
                 })
-                .map(|message| Message::from_raw(client, message, Some(fetched_in.clone()), &chats))
+                .map(|message| Message::from_raw(client, message, Some(fetched_in.clone()), &peers))
                 .map(|message| (message.id(), message))
                 .collect::<HashMap<_, _>>();
 
@@ -181,13 +181,13 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let chats = ChatMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
 
         let client = self.client.clone();
         self.buffer.extend(
             messages
                 .into_iter()
-                .map(|message| Message::from_raw(&client, message, peer, &chats)),
+                .map(|message| Message::from_raw(&client, message, peer, &peers)),
         );
 
         Ok(rate)
@@ -308,11 +308,11 @@ impl SearchIter {
     /// ```
     /// use chrono::DateTime;
     ///
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Search messages sent after Jan 1st, 2021
     /// let min_date = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
     ///
-    /// let mut messages = client.search_messages(chat).min_date(&min_date);
+    /// let mut messages = client.search_messages(peer).min_date(&min_date);
     ///
     /// # Ok(())
     /// # }
@@ -327,11 +327,11 @@ impl SearchIter {
     /// ```
     /// use chrono::DateTime;
     ///
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Search messages sent before Dec, 25th 2022
     /// let max_date = DateTime::parse_from_rfc3339("2022-12-25T00:00:00-00:00").unwrap();
     ///
-    /// let mut messages = client.search_messages(chat).max_date(&max_date);
+    /// let mut messages = client.search_messages(peer).max_date(&max_date);
     ///
     /// # Ok(())
     /// # }
@@ -459,7 +459,7 @@ impl GlobalSearchIter {
 
 /// Method implementations related to sending, modifying or getting messages.
 impl Client {
-    /// Sends a message to the desired chat.
+    /// Sends a message to the desired peer.
     ///
     /// This method can also be used to send media such as photos, videos, documents, polls, etc.
     ///
@@ -474,12 +474,12 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.send_message(chat, "Boring text message :-(").await?;
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.send_message(peer, "Boring text message :-(").await?;
     ///
     /// use grammers_client::InputMessage;
     ///
-    /// client.send_message(chat, InputMessage::new().text("Sneaky message").silent(true)).await?;
+    /// client.send_message(peer, InputMessage::new().text("Sneaky message").silent(true)).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -487,10 +487,10 @@ impl Client {
     /// [`InputMessage`]: crate::InputMessage
     pub async fn send_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
         &self,
-        chat: C,
+        peer: C,
         message: M,
     ) -> Result<Message, InvocationError> {
-        let chat = chat.into();
+        let peer = peer.into();
         let message = message.into();
         let random_id = generate_random_id();
         let entities = parse_mention_entities(self, message.entities.clone());
@@ -499,7 +499,7 @@ impl Client {
                 silent: message.silent,
                 background: message.background,
                 clear_draft: message.clear_draft,
-                peer: chat.into(),
+                peer: peer.into(),
                 reply_to: message.reply_to.map(|reply_to_msg_id| {
                     tl::types::InputReplyToMessage {
                         reply_to_msg_id,
@@ -536,7 +536,7 @@ impl Client {
                 silent: message.silent,
                 background: message.background,
                 clear_draft: message.clear_draft,
-                peer: chat.into(),
+                peer: peer.into(),
                 reply_to: message.reply_to.map(|reply_to_msg_id| {
                     tl::types::InputReplyToMessage {
                         reply_to_msg_id,
@@ -570,14 +570,14 @@ impl Client {
 
         Ok(match updates {
             tl::enums::Updates::UpdateShortSentMessage(updates) => {
-                let chat = if chat.id.kind() == PeerKind::UserSelf {
+                let peer = if peer.id.kind() == PeerKind::UserSelf {
                     // from_raw_short_updates needs the peer ID
-                    self.0.session.peer(chat.id).unwrap().into()
+                    self.0.session.peer(peer.id).unwrap().into()
                 } else {
-                    chat
+                    peer
                 };
 
-                Message::from_raw_short_updates(self, updates, message, chat)
+                Message::from_raw_short_updates(self, updates, message, peer)
             }
             updates => {
                 let updates_debug = if log_enabled!(Level::Warn) {
@@ -586,7 +586,7 @@ impl Client {
                     None
                 };
 
-                match map_random_ids_to_messages(self, chat, &[random_id], updates)
+                match map_random_ids_to_messages(self, peer, &[random_id], updates)
                     .pop()
                     .flatten()
                 {
@@ -602,10 +602,10 @@ impl Client {
                             self,
                             tl::enums::Message::Empty(tl::types::MessageEmpty {
                                 id: 0,
-                                peer_id: Some(chat.id.into()),
+                                peer_id: Some(peer.id.into()),
                             }),
-                            Some(chat),
-                            &ChatMap::empty(),
+                            Some(peer),
+                            &PeerMap::empty(),
                         )
                     }
                 }
@@ -613,7 +613,7 @@ impl Client {
         })
     }
 
-    /// Sends a album to the desired chat.
+    /// Sends a album to the desired peer.
     ///
     /// This method can also be used to send a bunch of media such as photos, videos, documents, polls, etc.
     ///
@@ -627,10 +627,10 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMedia;
     ///
-    /// client.send_album(chat, vec![InputMedia::new().caption("A album").photo_url("https://example.com/cat.jpg")]).await?;
+    /// client.send_album(peer, vec![InputMedia::new().caption("A album").photo_url("https://example.com/cat.jpg")]).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -638,10 +638,10 @@ impl Client {
     /// [`InputMedia`]: crate::InputMedia
     pub async fn send_album<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
         mut medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
-        let chat = chat.into();
+        let peer = peer.into();
         let random_ids = generate_random_ids(medias.len());
 
         // Upload external files
@@ -658,7 +658,7 @@ impl Client {
                 let uploaded = self
                     .invoke(&tl::functions::messages::UploadMedia {
                         business_connection_id: None,
-                        peer: chat.into(),
+                        peer: peer.into(),
                         media: raw_media,
                     })
                     .await?;
@@ -678,7 +678,7 @@ impl Client {
                 silent: false,
                 background: false,
                 clear_draft: false,
-                peer: chat.into(),
+                peer: peer.into(),
                 reply_to: first_media.reply_to.map(|reply_to_msg_id| {
                     tl::types::InputReplyToMessage {
                         reply_to_msg_id,
@@ -719,7 +719,7 @@ impl Client {
             })
             .await?;
 
-        Ok(map_random_ids_to_messages(self, chat, &random_ids, updates))
+        Ok(map_random_ids_to_messages(self, peer, &random_ids, updates))
     }
 
     /// Edits an existing message.
@@ -732,9 +732,9 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let old_message_id = 123;
-    /// client.edit_message(chat, old_message_id, "New text message").await?;
+    /// client.edit_message(peer, old_message_id, "New text message").await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -743,7 +743,7 @@ impl Client {
     // TODO don't require nasty InputPeer
     pub async fn edit_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
         &self,
-        chat: C,
+        peer: C,
         message_id: i32,
         new_message: M,
     ) -> Result<(), InvocationError> {
@@ -752,7 +752,7 @@ impl Client {
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
             invert_media: new_message.invert_media,
-            peer: chat.into().into(),
+            peer: peer.into().into(),
             id: message_id,
             message: Some(new_message.text),
             media: new_message.media,
@@ -766,12 +766,12 @@ impl Client {
         Ok(())
     }
 
-    /// Deletes up to 100 messages in a chat.
+    /// Deletes up to 100 messages in a peer.
     ///
     /// <div class="stab unstable">
     ///
-    /// **Warning**: when deleting messages from small group chats or private conversations, this
-    /// method cannot validate that the provided message IDs actually belong to the input chat due
+    /// **Warning**: when deleting messages from small group peers or private conversations, this
+    /// method cannot validate that the provided message IDs actually belong to the input peer due
     /// to the way Telegram's API works. Make sure to pass correct [`Message::id`]'s.
     ///
     /// </div>
@@ -788,24 +788,24 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// // Careful, these messages will be gone after the method succeeds!
-    /// client.delete_messages(chat, &message_ids).await?;
+    /// client.delete_messages(peer, &message_ids).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn delete_messages<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
         message_ids: &[i32],
     ) -> Result<usize, InvocationError> {
-        let chat = chat.into();
+        let peer = peer.into();
         let tl::enums::messages::AffectedMessages::Messages(affected) =
-            if chat.id.kind() == PeerKind::Channel {
+            if peer.id.kind() == PeerKind::Channel {
                 self.invoke(&tl::functions::channels::DeleteMessages {
-                    channel: chat.into(),
+                    channel: peer.into(),
                     id: message_ids.to_vec(),
                 })
                 .await
@@ -822,8 +822,8 @@ impl Client {
 
     /// Forwards up to 100 messages from `source` into `destination`.
     ///
-    /// For consistency with other methods, the chat upon which this request acts comes first
-    /// (destination), and then the source chat.
+    /// For consistency with other methods, the peer upon which this request acts comes first
+    /// (destination), and then the source peer.
     ///
     /// Returns the new forwarded messages in a list. Those messages that could not be forwarded
     /// will be `None`. The length of the resulting list is the same as the length of the input
@@ -851,7 +851,7 @@ impl Client {
         source: S,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         // TODO let user customize more options
-        let chat = destination.into();
+        let peer = destination.into();
         let request = tl::functions::messages::ForwardMessages {
             silent: false,
             background: false,
@@ -861,7 +861,7 @@ impl Client {
             from_peer: source.into().into(),
             id: message_ids.to_vec(),
             random_id: generate_random_ids(message_ids.len()),
-            to_peer: chat.into(),
+            to_peer: peer.into(),
             top_msg_id: None,
             reply_to: None,
             schedule_date: None,
@@ -876,7 +876,7 @@ impl Client {
         let result = self.invoke(&request).await?;
         Ok(map_random_ids_to_messages(
             self,
-            chat.into(),
+            peer.into(),
             &request.random_id,
             result,
         ))
@@ -903,14 +903,14 @@ impl Client {
         /// Helper method to fetch a single message by its input message.
         async fn get_message(
             client: &Client,
-            chat: PeerRef,
+            peer: PeerRef,
             id: tl::enums::InputMessage,
         ) -> Result<(tl::enums::messages::Messages, bool), InvocationError> {
-            if chat.id.kind() == PeerKind::Channel {
+            if peer.id.kind() == PeerKind::Channel {
                 client
                     .invoke(&tl::functions::channels::GetMessages {
                         id: vec![id],
-                        channel: chat.into(),
+                        channel: peer.into(),
                     })
                     .await
                     .map(|res| (res, false))
@@ -923,7 +923,7 @@ impl Client {
         }
 
         // TODO shouldn't this method take in a message id anyway?
-        let chat = message.peer_ref();
+        let peer = message.peer_ref();
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -932,13 +932,13 @@ impl Client {
         let input_id =
             tl::enums::InputMessage::ReplyTo(tl::types::InputMessageReplyTo { id: message.id() });
 
-        let (res, filter_req) = match get_message(self, chat, input_id).await {
+        let (res, filter_req) = match get_message(self, peer, input_id).await {
             Ok(tup) => tup,
             Err(_) => {
                 let input_id = tl::enums::InputMessage::Id(tl::types::InputMessageId {
                     id: reply_to_message_id,
                 });
-                get_message(self, chat, input_id).await?
+                get_message(self, peer, input_id).await?
             }
         };
 
@@ -953,22 +953,22 @@ impl Client {
             }
         };
 
-        let chats = ChatMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(chat.into()), &chats))
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
             .next()
-            .filter(|m| !filter_req || m.chat_id() == message.chat_id()))
+            .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
     }
 
-    /// Iterate over the message history of a chat, from most recent to oldest.
+    /// Iterate over the message history of a peer, from most recent to oldest.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in chat!
-    /// let mut messages = client.iter_messages(chat).limit(100);
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in peer!
+    /// let mut messages = client.iter_messages(peer).limit(100);
     ///
     /// while let Some(message) = messages.next().await? {
     ///     println!("{}", message.text());
@@ -976,20 +976,20 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn iter_messages<C: Into<PeerRef>>(&self, chat: C) -> MessageIter {
-        MessageIter::new(self, chat.into())
+    pub fn iter_messages<C: Into<PeerRef>>(&self, peer: C) -> MessageIter {
+        MessageIter::new(self, peer.into())
     }
 
     /// Iterate over the messages that match certain search criteria.
     ///
-    /// This allows you to search by text within a chat or filter by media among other things.
+    /// This allows you to search by text within a peer or filter by media among other things.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let's print all the people who think grammers is cool.
-    /// let mut messages = client.search_messages(chat).query("grammers is cool");
+    /// let mut messages = client.search_messages(peer).query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
     ///     let sender = message.sender().unwrap();
@@ -998,24 +998,24 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn search_messages<C: Into<PeerRef>>(&self, chat: C) -> SearchIter {
-        SearchIter::new(self, chat.into())
+    pub fn search_messages<C: Into<PeerRef>>(&self, peer: C) -> SearchIter {
+        SearchIter::new(self, peer.into())
     }
 
     /// Iterate over the messages that match certain search criteria, without being restricted to
-    /// searching in a specific chat. The downside is that this global search supports less filters.
+    /// searching in a specific peer. The downside is that this global search supports less filters.
     ///
-    /// This allows you to search by text within a chat or filter by media among other things.
+    /// This allows you to search by text within a peer or filter by media among other things.
     ///
     /// # Examples
     ///
     /// ```
     /// # async fn f(client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// // Let's print all the chats were people think grammers is cool.
+    /// // Let's print all the peers were people think grammers is cool.
     /// let mut messages = client.search_all_messages().query("grammers is cool");
     ///
     /// while let Some(message) = messages.next().await? {
-    ///     println!("{}", message.chat().unwrap().name().unwrap_or(&message.chat().unwrap().id().to_string()));
+    ///     println!("{}", message.peer().unwrap().name().unwrap_or(&message.peer().unwrap().id().to_string()));
     /// }
     /// # Ok(())
     /// # }
@@ -1027,17 +1027,17 @@ impl Client {
     /// Get up to 100 messages using their ID.
     ///
     /// Returns the new retrieved messages in a list. Those messages that could not be retrieved
-    /// or do not belong to the input chat will be `None`. The length of the resulting list is the
+    /// or do not belong to the input peer will be `None`. The length of the resulting list is the
     /// same as the length of the input message IDs, and the indices from the list of IDs map to
     /// the indices in the result so you can map them into the new list.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
-    /// let messages = client.get_messages_by_id(chat, &message_ids).await?;
+    /// let messages = client.get_messages_by_id(peer, &message_ids).await?;
     /// let count = messages.into_iter().filter(Option::is_some).count();
     /// println!("{} out of {} messages were deleted!", message_ids.len() - count, message_ids.len());
     /// # Ok(())
@@ -1045,18 +1045,18 @@ impl Client {
     /// ```
     pub async fn get_messages_by_id<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
         message_ids: &[i32],
     ) -> Result<Vec<Option<Message>>, InvocationError> {
-        let chat = chat.into();
+        let peer = peer.into();
         let id = message_ids
             .iter()
             .map(|&id| tl::enums::InputMessage::Id(tl::types::InputMessageId { id }))
             .collect();
 
-        let result = if chat.id.kind() == PeerKind::Channel {
+        let result = if peer.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::GetMessages {
-                channel: chat.into(),
+                channel: peer.into(),
                 id,
             })
             .await
@@ -1074,24 +1074,24 @@ impl Client {
             }
         };
 
-        let chats = ChatMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         let mut map = messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(chat.into()), &chats))
-            .filter(|m| m.chat_id() == chat.id)
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
+            .filter(|m| m.peer_id() == peer.id)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
 
         Ok(message_ids.iter().map(|id| map.remove(id)).collect())
     }
 
-    /// Get the latest pin from a chat.
+    /// Get the latest pin from a peer.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// if let Some(message) = client.get_pinned_message(chat).await? {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// if let Some(message) = client.get_pinned_message(peer).await? {
     ///     println!("There is a message pinned: {}", message.text());
     /// } else {
     ///     println!("There are no messages pinned");
@@ -1101,15 +1101,15 @@ impl Client {
     /// ```
     pub async fn get_pinned_message<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
     ) -> Result<Option<Message>, InvocationError> {
-        let chat = chat.into();
+        let peer = peer.into();
         // TODO return types::Message and print its text in the example
         let id = vec![tl::enums::InputMessage::Pinned];
 
-        let result = if chat.id.kind() == PeerKind::Channel {
+        let result = if peer.id.kind() == PeerKind::Channel {
             self.invoke(&tl::functions::channels::GetMessages {
-                channel: chat.into(),
+                channel: peer.into(),
                 id,
             })
             .await
@@ -1127,55 +1127,55 @@ impl Client {
             }
         };
 
-        let chats = ChatMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(chat.into()), &chats))
-            .find(|m| m.chat_id() == chat.id))
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
+            .find(|m| m.peer_id() == peer.id))
     }
 
-    /// Pin a message in the chat. This will not notify any users.
+    /// Pin a message in the peer. This will not notify any users.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
-    /// client.pin_message(chat, message_id).await?;
+    /// client.pin_message(peer, message_id).await?;
     /// # Ok(())
     /// # }
     /// ```
     // TODO return produced Option<service message>
     pub async fn pin_message<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
         message_id: i32,
     ) -> Result<(), InvocationError> {
-        self.update_pinned(chat.into(), message_id, true).await
+        self.update_pinned(peer.into(), message_id, true).await
     }
 
-    /// Unpin a message from the chat.
+    /// Unpin a message from the peer.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
-    /// client.unpin_message(chat, message_id).await?;
+    /// client.unpin_message(peer, message_id).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn unpin_message<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
         message_id: i32,
     ) -> Result<(), InvocationError> {
-        self.update_pinned(chat.into(), message_id, false).await
+        self.update_pinned(peer.into(), message_id, false).await
     }
 
     async fn update_pinned(
         &self,
-        chat: PeerRef,
+        peer: PeerRef,
         id: i32,
         pin: bool,
     ) -> Result<(), InvocationError> {
@@ -1183,29 +1183,29 @@ impl Client {
             silent: true,
             unpin: !pin,
             pm_oneside: false,
-            peer: chat.into(),
+            peer: peer.into(),
             id,
         })
         .await
         .map(drop)
     }
 
-    /// Unpin all currently-pinned messages from the chat.
+    /// Unpin all currently-pinned messages from the peer.
     ///
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// client.unpin_all_messages(chat).await?;
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// client.unpin_all_messages(peer).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn unpin_all_messages<C: Into<PeerRef>>(
         &self,
-        chat: C,
+        peer: C,
     ) -> Result<(), InvocationError> {
         self.invoke(&tl::functions::messages::UnpinAllMessages {
-            peer: chat.into().into(),
+            peer: peer.into().into(),
             top_msg_id: None,
             saved_peer_id: None,
         })
@@ -1220,10 +1220,10 @@ impl Client {
     /// Via emoticon
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     ///
-    /// client.send_reactions(chat, message_id, "👍").await?;
+    /// client.send_reactions(peer, message_id, "👍").await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -1231,13 +1231,13 @@ impl Client {
     /// Make animation big & Add to recent
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::types::InputReactions;
     ///
     /// let message_id = 123;
     /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
     ///
-    /// client.send_reactions(chat, message_id, reactions).await?;
+    /// client.send_reactions(peer, message_id, reactions).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -1245,18 +1245,18 @@ impl Client {
     /// Remove reactions
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::types::InputReactions;
     ///
     /// let message_id = 123;
     ///
-    /// client.send_reactions(chat, message_id, InputReactions::remove()).await?;
+    /// client.send_reactions(peer, message_id, InputReactions::remove()).await?;
     /// # Ok(())
     /// # }
     /// ```
     pub async fn send_reactions<C: Into<PeerRef>, R: Into<InputReactions>>(
         &self,
-        chat: C,
+        peer: C,
         message_id: i32,
         reactions: R,
     ) -> Result<(), InvocationError> {
@@ -1265,7 +1265,7 @@ impl Client {
         self.invoke(&tl::functions::messages::SendReaction {
             big: reactions.big,
             add_to_recent: reactions.add_to_recent,
-            peer: chat.into().into(),
+            peer: peer.into().into(),
             msg_id: message_id,
             reaction: Some(reactions.reactions),
         })

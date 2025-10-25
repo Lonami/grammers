@@ -65,9 +65,9 @@ pub fn switch_inline<T: Into<String>, Q: Into<String>>(text: T, query: Q) -> Inl
 }
 
 /// An inline button identical to [`switch_inline`], except the user will be prompted to select a
-/// different chat.
+/// different peer.
 ///
-/// Pressing the button will prompt the user to select one of their chats, open that chat and
+/// Pressing the button will prompt the user to select one of their peers, open that peer and
 /// insert the bot's username and the specified inline query in the input field.
 pub fn switch_inline_elsewhere<T: Into<String>, Q: Into<String>>(text: T, query: Q) -> Inline {
     Inline {
@@ -131,7 +131,7 @@ pub fn request_geo<T: Into<String>>(text: T) -> Keyboard {
 
 /// A keyboard button that will direct the user to create and send a poll when pressed.
 ///
-/// This is only available in direct chats with the user.
+/// This is only available in direct conversations with the user.
 pub fn request_poll<T: Into<String>>(text: T) -> Keyboard {
     Keyboard {
         raw: tl::types::KeyboardButtonRequestPoll {
@@ -144,7 +144,7 @@ pub fn request_poll<T: Into<String>>(text: T) -> Keyboard {
 
 /// A keyboard button identical to [`request_poll`], except the poll requested must be a quiz.
 ///
-/// This is only available in direct chats with the user.
+/// This is only available in direct conversations with the user.
 pub fn request_quiz<T: Into<String>>(text: T) -> Keyboard {
     Keyboard {
         raw: tl::types::KeyboardButtonRequestPoll {

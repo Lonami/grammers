@@ -11,14 +11,14 @@ use std::sync::Arc;
 use crate::Client;
 use crate::utils::peer_from_message;
 
-use super::{ChatMap, Message, Peer};
+use super::{Message, Peer, PeerMap};
 use grammers_session::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]
 pub struct Dialog {
     pub raw: tl::enums::Dialog,
-    pub chat: Peer,
+    pub peer: Peer,
     pub last_message: Option<Message>,
 }
 
@@ -27,33 +27,33 @@ impl Dialog {
         client: &Client,
         dialog: tl::enums::Dialog,
         messages: &mut Vec<tl::enums::Message>,
-        chats: &Arc<ChatMap>,
+        peers: &Arc<PeerMap>,
     ) -> Self {
         // TODO helper utils (ext trait?) to extract data from dialogs or messages
-        let peer = match dialog {
+        let peer_id = match dialog {
             tl::enums::Dialog::Dialog(ref dialog) => dialog.peer.clone().into(),
             tl::enums::Dialog::Folder(ref dialog) => dialog.peer.clone().into(),
         };
 
-        let chat = chats
-            .get(peer)
+        let peer = peers
+            .get(peer_id)
             .expect("dialogs use an unknown peer")
             .clone();
 
         let message = messages
             .iter()
-            .position(|m| peer_from_message(m).is_some_and(|p| PeerId::from(p) == peer))
+            .position(|m| peer_from_message(m).is_some_and(|p| PeerId::from(p) == peer_id))
             .map(|i| messages.swap_remove(i));
 
         Self {
             last_message: message
-                .map(|m| Message::from_raw(client, m, Some((&chat).into()), chats)),
-            chat,
+                .map(|m| Message::from_raw(client, m, Some((&peer).into()), peers)),
+            peer,
             raw: dialog,
         }
     }
 
-    pub fn chat(&self) -> &Peer {
-        &self.chat
+    pub fn peer(&self) -> &Peer {
+        &self.peer
     }
 }

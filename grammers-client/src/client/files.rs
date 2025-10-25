@@ -342,7 +342,7 @@ impl Client {
 
     /// Uploads an async stream to Telegram servers.
     ///
-    /// The file is not sent to any chat, but can be used as media when sending messages for a
+    /// The file is not sent to any peer, but can be used as media when sending messages for a
     /// certain period of time (less than a day). You can use this uploaded file multiple times.
     ///
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
@@ -364,7 +364,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client, some_vec: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client, some_vec: &[u8]) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// // In-memory `Vec<u8>` buffers can be used as async streams
@@ -372,7 +372,7 @@ impl Client {
     /// let mut stream = std::io::Cursor::new(some_vec);
     /// let uploaded_file = client.upload_stream(&mut stream, size, "sleep.jpg".to_string()).await?;
     ///
-    /// client.send_message(chat, InputMessage::new().text("Zzz...").photo(uploaded_file)).await?;
+    /// client.send_message(peer, InputMessage::new().text("Zzz...").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```
@@ -471,7 +471,7 @@ impl Client {
 
     /// Uploads a local file to Telegram servers.
     ///
-    /// The file is not sent to any chat, but can be used as media when sending messages for a
+    /// The file is not sent to any peer, but can be used as media when sending messages for a
     /// certain period of time (less than a day). You can use this uploaded file multiple times.
     ///
     /// Refer to [`InputMessage`] to learn more uses for `uploaded_file`.
@@ -482,12 +482,12 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMessage;
     ///
     /// let uploaded_file = client.upload_file("/home/username/photos/holidays.jpg").await?;
     ///
-    /// client.send_message(chat, InputMessage::new().text("Check this out!").photo(uploaded_file)).await?;
+    /// client.send_message(peer, InputMessage::new().text("Check this out!").photo(uploaded_file)).await?;
     /// # Ok(())
     /// # }
     /// ```

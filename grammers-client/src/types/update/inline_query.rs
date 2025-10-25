@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::{ChatMap, Peer, User};
+use super::super::{Peer, PeerMap, User};
 use crate::{InputMessage, client::Client, utils::generate_random_id};
 use grammers_mtsender::InvocationError;
 use grammers_session::{PeerId, State};
@@ -21,7 +21,7 @@ pub struct InlineQuery {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) chats: Arc<ChatMap>,
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 /// An inline query answer builder.
@@ -52,7 +52,7 @@ impl InlineQuery {
 
     /// User that sent the query
     pub fn sender(&self) -> &User {
-        match self.chats.get(PeerId::user(self.update().user_id)).unwrap() {
+        match self.peers.get(PeerId::user(self.update().user_id)).unwrap() {
             Peer::User(user) => user,
             _ => unreachable!(),
         }
@@ -89,7 +89,7 @@ impl InlineQuery {
         }
     }
 
-    /// Type of the chat from which the inline query was sent.
+    /// Type of the peer from which the inline query was sent.
     pub fn peer_type(&self) -> Option<tl::enums::InlineQueryPeerType> {
         self.update().peer_type.clone()
     }

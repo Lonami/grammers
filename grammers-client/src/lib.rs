@@ -50,7 +50,7 @@ pub mod types;
 pub(crate) mod utils;
 
 pub use client::{Client, ClientConfiguration, SignInError, UpdatesConfiguration};
-pub use types::{ChatMap, InputMedia, InputMessage, Update, button, reply_markup};
+pub use types::{InputMedia, InputMessage, PeerMap, Update, button, reply_markup};
 
 pub use grammers_mtsender::InvocationError;
 pub use grammers_session as session;

@@ -65,12 +65,12 @@ impl Group {
             Chat::Empty(chat) => PeerId::chat(chat.id),
             Chat::Chat(chat) => PeerId::chat(chat.id),
             Chat::Forbidden(chat) => PeerId::chat(chat.id),
-            Chat::Channel(chat) => PeerId::channel(chat.id),
-            Chat::ChannelForbidden(chat) => PeerId::channel(chat.id),
+            Chat::Channel(channel) => PeerId::channel(channel.id),
+            Chat::ChannelForbidden(channel) => PeerId::channel(channel.id),
         }
     }
 
-    pub fn auth(&self) -> PeerAuth {
+    pub(crate) fn auth(&self) -> PeerAuth {
         use tl::enums::Chat;
 
         match &self.raw {
@@ -95,8 +95,8 @@ impl Group {
             Chat::Empty(_) => None,
             Chat::Chat(chat) => Some(chat.title.as_str()),
             Chat::Forbidden(chat) => Some(chat.title.as_str()),
-            Chat::Channel(chat) => Some(chat.title.as_str()),
-            Chat::ChannelForbidden(chat) => Some(chat.title.as_str()),
+            Chat::Channel(channel) => Some(channel.title.as_str()),
+            Chat::ChannelForbidden(channel) => Some(channel.title.as_str()),
         }
     }
 
@@ -115,7 +115,7 @@ impl Group {
         }
     }
 
-    /// Return collectible usernames of this chat, if any.
+    /// Return collectible usernames of this group, if any.
     ///
     /// The returned usernames do not contain the "@" prefix.
     ///

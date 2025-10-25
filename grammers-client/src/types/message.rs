@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::ChatMap;
+use crate::PeerMap;
 #[cfg(any(feature = "markdown", feature = "html"))]
 use crate::parsers;
 use crate::types::reactions::InputReactions;
@@ -32,11 +32,11 @@ pub struct Message {
     pub raw: tl::enums::Message,
     pub(crate) fetched_in: Option<PeerRef>,
     pub(crate) client: Client,
-    // When fetching messages or receiving updates, a set of chats will be present. A single
-    // server response contains a lot of chats, and some might be related to deep layers of
+    // When fetching messages or receiving updates, a set of peers will be present. A single
+    // server response contains a lot of peers, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
-    // and moves, and saves us from worrying about picking out all the chats we care about.
-    pub(crate) chats: Arc<ChatMap>,
+    // and moves, and saves us from worrying about picking out all the peers we care about.
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 impl Message {
@@ -44,13 +44,13 @@ impl Message {
         client: &Client,
         message: tl::enums::Message,
         fetched_in: Option<PeerRef>,
-        chats: &Arc<ChatMap>,
+        peers: &Arc<PeerMap>,
     ) -> Self {
         Self {
             raw: message,
             fetched_in,
             client: client.clone(),
-            chats: Arc::clone(chats),
+            peers: Arc::clone(peers),
         }
     }
 
@@ -58,7 +58,7 @@ impl Message {
         client: &Client,
         updates: tl::types::UpdateShortSentMessage,
         input: InputMessage,
-        chat: PeerRef,
+        peer: PeerRef,
     ) -> Self {
         Self {
             raw: tl::enums::Message::Message(tl::types::Message {
@@ -78,7 +78,7 @@ impl Message {
                 id: updates.id,
                 from_id: None, // TODO self
                 from_boosts_applied: None,
-                peer_id: chat.id.into(),
+                peer_id: peer.id.into(),
                 saved_peer_id: None,
                 fwd_from: None,
                 via_bot_id: None,
@@ -123,14 +123,14 @@ impl Message {
                 paid_suggested_post_ton: false,
                 suggested_post: None,
             }),
-            fetched_in: Some(chat),
+            fetched_in: Some(peer),
             client: client.clone(),
-            chats: ChatMap::empty(),
+            peers: PeerMap::empty(),
         }
     }
 
-    /// Whether the message is outgoing (i.e. you sent this message to some other chat) or
-    /// incoming (i.e. someone else sent it to you or the chat).
+    /// Whether the message is outgoing (i.e. you sent this message to some other peer) or
+    /// incoming (i.e. someone else sent it to you or the peer).
     pub fn outgoing(&self) -> bool {
         match &self.raw {
             tl::enums::Message::Empty(_) => false,
@@ -225,7 +225,7 @@ impl Message {
     ///
     /// **You cannot use the message ID of User A when running as User B**, unless this message
     /// belongs to a megagroup or broadcast channel. Beware of this when using methods like
-    /// [`Client::delete_messages`], which **cannot** validate the chat where the message
+    /// [`Client::delete_messages`], which **cannot** validate the peer where the message
     /// should be deleted for those cases.
     pub fn id(&self) -> i32 {
         self.raw.id()
@@ -251,8 +251,8 @@ impl Message {
         from_id
             .or({
                 // Incoming messages in private conversations don't include `from_id` since
-                // layer 119, but the sender can only be the chat we're in.
-                let peer_id = self.chat_id();
+                // layer 119, but the sender can only be the peer we're in.
+                let peer_id = self.peer_id();
                 if matches!(peer_id.kind(), PeerKind::User | PeerKind::UserSelf) {
                     if self.outgoing() {
                         let user_id = self
@@ -270,19 +270,19 @@ impl Message {
                     None
                 }
             })
-            .and_then(|from| self.chats.get(from))
+            .and_then(|from| self.peers.get(from))
     }
 
-    /// The chat where this message was sent to.
+    /// The peer where this message was sent to.
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    pub fn chat(&self) -> Result<&types::Peer, PeerRef> {
+    pub fn peer(&self) -> Result<&types::Peer, PeerRef> {
         let peer = self.peer_ref();
-        self.chats.get(peer.id).ok_or(peer)
+        self.peers.get(peer.id).ok_or(peer)
     }
 
-    pub fn chat_id(&self) -> PeerId {
+    pub fn peer_id(&self) -> PeerId {
         self.peer_ref().id
     }
 
@@ -583,7 +583,7 @@ impl Message {
             .await
     }
 
-    /// Respond to this message by sending a new message in the same chat, but without directly
+    /// Respond to this message by sending a new message to the same peer, but without directly
     /// replying to it.
     ///
     /// Shorthand for `Client::send_message`.
@@ -594,7 +594,7 @@ impl Message {
         self.client.send_message(self.peer_ref(), message).await
     }
 
-    /// Respond to this message by sending a album in the same chat, but without directly
+    /// Respond to this message by sending a album in the same peer, but without directly
     /// replying to it.
     ///
     /// Shorthand for `Client::send_album`.
@@ -605,7 +605,7 @@ impl Message {
         self.client.send_album(self.peer_ref(), medias).await
     }
 
-    /// Directly reply to this message by sending a new message in the same chat that replies to
+    /// Directly reply to this message by sending a new message to the same peer that replies to
     /// it. This methods overrides the `reply_to` on the `InputMessage` to point to `self`.
     ///
     /// Shorthand for `Client::send_message`.
@@ -616,7 +616,7 @@ impl Message {
             .await
     }
 
-    /// Directly reply to this message by sending a album in the same chat that replies to
+    /// Directly reply to this message by sending a album to the same peer that replies to
     /// it. This methods overrides the `reply_to` on the first `InputMedia` to point to `self`.
     ///
     /// Shorthand for `Client::send_album`.
@@ -628,7 +628,7 @@ impl Message {
         self.client.send_album(self.peer_ref(), medias).await
     }
 
-    /// Forward this message to another (or the same) chat.
+    /// Forward this message to another (or the same) peer.
     ///
     /// Shorthand for `Client::forward_messages`. If you need to forward multiple messages
     /// at once, consider using that method instead.
@@ -664,14 +664,14 @@ impl Message {
 
     /// Mark this message and all messages above it as read.
     ///
-    /// Unlike `Client::mark_as_read`, this method only will mark the chat as read up to
-    /// this message, not the entire chat.
+    /// Unlike `Client::mark_as_read`, this method only will mark the conversation as read up to
+    /// this message, not the entire conversation.
     pub async fn mark_as_read(&self) -> Result<(), InvocationError> {
-        let chat = self.peer_ref();
-        if chat.id.kind() == PeerKind::Channel {
+        let peer = self.peer_ref();
+        if peer.id.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
-                    channel: chat.into(),
+                    channel: peer.into(),
                     max_id: self.id(),
                 })
                 .await
@@ -679,7 +679,7 @@ impl Message {
         } else {
             self.client
                 .invoke(&tl::functions::messages::ReadHistory {
-                    peer: chat.into(),
+                    peer: peer.into(),
                     max_id: self.id(),
                 })
                 .await
@@ -687,14 +687,14 @@ impl Message {
         }
     }
 
-    /// Pin this message in the chat.
+    /// Pin this message in the conversation.
     ///
     /// Shorthand for `Client::pin_message`.
     pub async fn pin(&self) -> Result<(), InvocationError> {
         self.client.pin_message(self.peer_ref(), self.id()).await
     }
 
-    /// Unpin this message from the chat.
+    /// Unpin this message from the conversation.
     ///
     /// Shorthand for `Client::unpin_message`.
     pub async fn unpin(&self) -> Result<(), InvocationError> {
@@ -750,7 +750,7 @@ impl fmt::Debug for Message {
             .field("outgoing", &self.outgoing())
             .field("date", &self.date())
             .field("text", &self.text())
-            .field("chat", &self.chat())
+            .field("peer", &self.peer())
             .field("sender", &self.sender())
             .field("reply_to_message_id", &self.reply_to_message_id())
             .field("via_bot_id", &self.via_bot_id())

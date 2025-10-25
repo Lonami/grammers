@@ -1,4 +1,4 @@
-//! Example to download all messages and media from a chat.
+//! Example to download all messages and media from a peer.
 //!
 //! The `TG_ID` and `TG_HASH` environment variables must be set (learn how to do it for
 //! [Windows](https://ss64.com/nt/set.html) or [Linux](https://ss64.com/bash/export.html))
@@ -7,7 +7,7 @@
 //! Then, run it as:
 //!
 //! ```sh
-//! cargo run --example downloader -- CHAT_NAME
+//! cargo run --example downloader -- PEER_NAME
 //! ```
 //!
 //! Messages will be printed to stdout, and media will be saved in the `target/` folder locally, named
@@ -39,7 +39,7 @@ async fn async_main() -> Result<()> {
         .unwrap();
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
-    let chat_name = env::args().nth(1).expect("chat name missing");
+    let peer_name = env::args().nth(1).expect("peer name missing");
 
     let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
 
@@ -82,15 +82,15 @@ async fn async_main() -> Result<()> {
         }
     }
 
-    let maybe_chat = client.resolve_username(chat_name.as_str()).await?;
+    let maybe_peer = client.resolve_username(peer_name.as_str()).await?;
 
-    let chat = maybe_chat.unwrap_or_else(|| panic!("Chat {chat_name} could not be found"));
+    let peer = maybe_peer.unwrap_or_else(|| panic!("Peer {peer_name} could not be found"));
 
-    let mut messages = client.iter_messages(chat);
+    let mut messages = client.iter_messages(peer);
 
     println!(
-        "Chat {} has {} total messages.",
-        chat_name,
+        "Peer {} has {} total messages.",
+        peer_name,
         messages.total().await.unwrap()
     );
 
