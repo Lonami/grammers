@@ -4,10 +4,6 @@
 
 Used for supporting logging in to accounts with 2-factor authentication enabled.
 
-## grammers-mtproto
-
-Used to configure the underlying protocol and transport used.
-
 ## grammers-mtsender
 
 Used to drive the network connection to Telegram.

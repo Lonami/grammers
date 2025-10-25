@@ -15,7 +15,6 @@ edition = "2024"
 
 [dependencies]
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0" }
-grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
 log = "0.4.28"
 serde = { version = "~1.0", optional = true }
 serde_derive = { version = "~1.0", optional = true }
