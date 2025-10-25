@@ -11,14 +11,14 @@ use std::sync::Arc;
 use crate::Client;
 use crate::utils::peer_from_message;
 
-use super::{Chat, ChatMap, Message};
+use super::{ChatMap, Message, Peer};
 use grammers_session::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]
 pub struct Dialog {
     pub raw: tl::enums::Dialog,
-    pub chat: Chat,
+    pub chat: Peer,
     pub last_message: Option<Message>,
 }
 
@@ -53,7 +53,7 @@ impl Dialog {
         }
     }
 
-    pub fn chat(&self) -> &Chat {
+    pub fn chat(&self) -> &Peer {
         &self.chat
     }
 }

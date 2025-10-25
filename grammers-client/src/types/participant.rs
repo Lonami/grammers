@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Chat, ChatMap, Permissions, Restrictions};
+use super::{ChatMap, Peer, Permissions, Restrictions};
 use crate::utils;
 use chrono::{DateTime, Utc};
 use grammers_session::PeerId;
@@ -167,7 +167,7 @@ impl Participant {
             },
             P::Banned(p) => Self {
                 user: match chats.remove(PeerId::from(p.peer.clone())).unwrap() {
-                    Chat::User(user) => user,
+                    Peer::User(user) => user,
                     _ => todo!("figure out how to deal with non-user being banned"),
                 },
                 role: Role::Banned(Banned {
@@ -179,7 +179,7 @@ impl Participant {
             },
             P::Left(p) => Self {
                 user: match chats.remove(PeerId::from(p.peer.clone())).unwrap() {
-                    Chat::User(user) => user,
+                    Peer::User(user) => user,
                     _ => todo!("figure out how to deal with non-user leaving"),
                 },
                 role: Role::Left(Left {}),

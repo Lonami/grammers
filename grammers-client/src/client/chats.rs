@@ -10,7 +10,7 @@
 
 use super::Client;
 use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, Chat, ChatMap, IterBuffer, Message, Participant,
+    AdminRightsBuilder, BannedRightsBuilder, ChatMap, IterBuffer, Message, Participant, Peer,
     Photo, User, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
 };
 use grammers_mtsender::RpcError;
@@ -323,7 +323,7 @@ impl ProfilePhotoIter {
     }
 }
 
-fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Chat> {
+fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Peer> {
     use tl::enums::Updates;
 
     let chats = match updates {
@@ -339,7 +339,7 @@ fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Chat>
         },
         None => None,
     }
-    .map(Chat::from_raw)
+    .map(Peer::from_raw)
 }
 
 /// Method implementations related to dealing with chats or other users.
@@ -358,7 +358,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn resolve_username(&self, username: &str) -> Result<Option<Chat>, InvocationError> {
+    pub async fn resolve_username(&self, username: &str) -> Result<Option<Peer>, InvocationError> {
         let tl::types::contacts::ResolvedPeer { peer, users, chats } = match self
             .invoke(&tl::functions::contacts::ResolveUsername {
                 username: username.into(),
@@ -374,15 +374,15 @@ impl Client {
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users
                 .into_iter()
-                .map(Chat::from_user)
+                .map(Peer::from_user)
                 .find(|chat| chat.id() == PeerId::user(user_id)),
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => chats
                 .into_iter()
-                .map(Chat::from_raw)
+                .map(Peer::from_raw)
                 .find(|chat| chat.id() == PeerId::chat(chat_id)),
             tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => chats
                 .into_iter()
-                .map(Chat::from_raw)
+                .map(Peer::from_raw)
                 .find(|chat| chat.id() == PeerId::channel(channel_id)),
         })
     }
@@ -617,7 +617,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub async fn unpack_chat(&self, packed_chat: PeerRef) -> Result<Chat, InvocationError> {
+    pub async fn unpack_chat(&self, packed_chat: PeerRef) -> Result<Peer, InvocationError> {
         Ok(match packed_chat.id.kind() {
             PeerKind::User | PeerKind::UserSelf => {
                 let mut res = self
@@ -628,7 +628,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one user should exactly return one user");
                 }
-                Chat::from_user(res.pop().unwrap())
+                Peer::from_user(res.pop().unwrap())
             }
             PeerKind::Chat => {
                 let mut res = match self
@@ -643,7 +643,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one chat should exactly return one chat");
                 }
-                Chat::from_raw(res.pop().unwrap())
+                Peer::from_raw(res.pop().unwrap())
             }
             PeerKind::Channel => {
                 let mut res = match self
@@ -658,7 +658,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one chat should exactly return one chat");
                 }
-                Chat::from_raw(res.pop().unwrap())
+                Peer::from_raw(res.pop().unwrap())
             }
         })
     }
@@ -783,7 +783,7 @@ impl Client {
     pub async fn accept_invite_link(
         &self,
         invite_link: &str,
-    ) -> Result<Option<Chat>, InvocationError> {
+    ) -> Result<Option<Peer>, InvocationError> {
         match Self::parse_invite_link(invite_link) {
             Some(hash) => Ok(updates_to_chat(
                 None,
@@ -810,7 +810,7 @@ impl Client {
     pub async fn join_chat<C: Into<PeerRef>>(
         &self,
         chat: C,
-    ) -> Result<Option<Chat>, InvocationError> {
+    ) -> Result<Option<Peer>, InvocationError> {
         let chat: PeerRef = chat.into();
         let channel = chat.into();
         Ok(updates_to_chat(

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::{Chat, ChatMap, User};
+use super::super::{ChatMap, Peer, User};
 use crate::{InputMessage, client::Client, utils::generate_random_id};
 use grammers_mtsender::InvocationError;
 use grammers_session::{PeerId, State};
@@ -53,7 +53,7 @@ impl InlineQuery {
     /// User that sent the query
     pub fn sender(&self) -> &User {
         match self.chats.get(PeerId::user(self.update().user_id)).unwrap() {
-            Chat::User(user) => user,
+            Peer::User(user) => user,
             _ => unreachable!(),
         }
     }

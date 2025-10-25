@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Chat, User};
+use crate::types::{Peer, User};
 use crate::{ChatMap, Client, InputMessage};
 use grammers_mtsender::InvocationError;
 use grammers_session::{PeerId, State};
@@ -41,7 +41,7 @@ impl InlineSend {
     /// The user that chose the result.
     pub fn sender(&self) -> &User {
         match self.chats.get(PeerId::user(self.update().user_id)).unwrap() {
-            Chat::User(user) => user,
+            Peer::User(user) => user,
             _ => unreachable!(),
         }
     }

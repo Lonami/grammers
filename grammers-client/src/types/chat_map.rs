@@ -5,7 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Chat, User};
+use crate::types::{Peer, User};
 use grammers_session::PeerId;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -17,7 +17,7 @@ use std::sync::Arc;
 /// and chats, making it annoying to extract a specific chat. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
 pub struct ChatMap {
-    map: HashMap<PeerId, Chat>,
+    map: HashMap<PeerId, Peer>,
 }
 
 impl ChatMap {
@@ -30,8 +30,8 @@ impl ChatMap {
         Arc::new(Self {
             map: users
                 .into_iter()
-                .map(Chat::from_user)
-                .chain(chats.into_iter().map(Chat::from_raw))
+                .map(Peer::from_user)
+                .chain(chats.into_iter().map(Peer::from_raw))
                 .map(|chat| (chat.id(), chat))
                 .collect(),
         })
@@ -45,12 +45,12 @@ impl ChatMap {
     }
 
     /// Retrieve the full `Chat` object given its `Peer`.
-    pub fn get(&self, peer: PeerId) -> Option<&Chat> {
+    pub fn get(&self, peer: PeerId) -> Option<&Peer> {
         self.map.get(&peer)
     }
 
     /// Take the full `Chat` object given its `Peer` and remove it from the map.
-    pub fn remove(&mut self, peer: PeerId) -> Option<Chat> {
+    pub fn remove(&mut self, peer: PeerId) -> Option<Peer> {
         self.map.remove(&peer)
     }
 
@@ -58,18 +58,18 @@ impl ChatMap {
         self.map
             .remove(&PeerId::user(user_id))
             .map(|chat| match chat {
-                Chat::User(user) => user,
+                Peer::User(user) => user,
                 _ => unreachable!(),
             })
     }
 
     /// Iterate over the peers and chats in the map.
-    pub fn iter(&self) -> impl Iterator<Item = (PeerId, &Chat)> {
+    pub fn iter(&self) -> impl Iterator<Item = (PeerId, &Peer)> {
         self.map.iter().map(|(k, v)| (*k, v))
     }
 
     /// Iterate over the chats in the map.
-    pub fn iter_chats(&self) -> impl Iterator<Item = &Chat> {
+    pub fn iter_chats(&self) -> impl Iterator<Item = &Peer> {
         self.map.values()
     }
 }

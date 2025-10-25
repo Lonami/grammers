@@ -39,7 +39,7 @@ pub struct Answer<'a> {
 
 impl CallbackQuery {
     /// The user who sent this callback query.
-    pub fn sender(&self) -> &types::Chat {
+    pub fn sender(&self) -> &types::Peer {
         let user_id = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.user_id,
             tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
@@ -49,7 +49,7 @@ impl CallbackQuery {
     }
 
     /// The chat where the callback query occured.
-    pub fn chat(&self) -> &types::Chat {
+    pub fn chat(&self) -> &types::Peer {
         let peer = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.peer.clone().into(),
             tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),

@@ -242,7 +242,7 @@ impl Message {
     }
 
     /// The sender of this message, if any.
-    pub fn sender(&self) -> Option<&types::Chat> {
+    pub fn sender(&self) -> Option<&types::Peer> {
         let from_id = match &self.raw {
             tl::enums::Message::Empty(_) => None,
             tl::enums::Message::Message(message) => message.from_id.clone().map(PeerId::from),
@@ -277,7 +277,7 @@ impl Message {
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    pub fn chat(&self) -> Result<&types::Chat, PeerRef> {
+    pub fn chat(&self) -> Result<&types::Peer, PeerRef> {
         let peer = self.peer_ref();
         self.chats.get(peer.id).ok_or(peer)
     }

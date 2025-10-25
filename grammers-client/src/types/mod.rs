@@ -48,7 +48,7 @@ pub use media::{ChatPhoto, Media, Photo};
 pub use message::Message;
 pub use participant::{Participant, Role};
 pub use password_token::PasswordToken;
-pub use peer::{Channel, Chat, Group, Platform, RestrictionReason, User};
+pub use peer::{Channel, Group, Peer, Platform, RestrictionReason, User};
 pub use permissions::{Permissions, Restrictions};
 pub use reactions::InputReactions;
 pub(crate) use reply_markup::ReplyMarkup;

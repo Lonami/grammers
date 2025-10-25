@@ -24,7 +24,7 @@ pub use user::{Platform, RestrictionReason, User};
 /// * Conversations in a group, whether it's private or public, are simply known as groups.
 /// * Conversations where only administrators broadcast messages are known as channels.
 #[derive(Clone, Debug)]
-pub enum Chat {
+pub enum Peer {
     /// A [`User`].
     User(User),
 
@@ -35,7 +35,7 @@ pub enum Chat {
     Channel(Channel),
 }
 
-impl Chat {
+impl Peer {
     pub(crate) fn from_user(user: tl::enums::User) -> Self {
         Self::User(User::from_raw(user))
     }
@@ -164,8 +164,8 @@ impl Chat {
     }
 }
 
-impl From<Chat> for PeerRef {
-    fn from(chat: Chat) -> Self {
+impl From<Peer> for PeerRef {
+    fn from(chat: Peer) -> Self {
         PeerRef {
             id: chat.id(),
             auth: chat.auth(),
@@ -173,8 +173,8 @@ impl From<Chat> for PeerRef {
     }
 }
 
-impl From<&Chat> for PeerRef {
-    fn from(chat: &Chat) -> Self {
+impl From<&Peer> for PeerRef {
+    fn from(chat: &Peer) -> Self {
         PeerRef {
             id: chat.id(),
             auth: chat.auth(),
