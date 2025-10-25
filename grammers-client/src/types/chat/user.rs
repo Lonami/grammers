@@ -1,4 +1,3 @@
-use grammers_session::{AMBIENT_AUTH, PeerAuth};
 // Copyright 2020 - developers of the `grammers` project.
 //
 // Licensed under the Apache License, Version 2.0 <LICENSE-APACHE or
@@ -6,6 +5,8 @@ use grammers_session::{AMBIENT_AUTH, PeerAuth};
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+use grammers_session::{AMBIENT_AUTH, PeerAuth};
 use grammers_tl_types as tl;
 use std::fmt;
 
