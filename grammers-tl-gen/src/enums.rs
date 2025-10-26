@@ -33,6 +33,12 @@ fn write_enum<W: Write>(
     metadata: &Metadata,
     config: &Config,
 ) -> io::Result<()> {
+    writeln!(
+        file,
+        "/// [Read `{name}` docs](https://core.telegram.org/type/{name}).",
+        name = rustifier::TypeNameFmt(ty),
+    )?;
+
     if config.impl_debug {
         writeln!(file, "{indent}#[derive(Debug)]")?;
     }

@@ -59,6 +59,22 @@ fn write_struct<W: Write>(
     config: &Config,
 ) -> io::Result<()> {
     // Define struct
+    writeln!(
+        file,
+        "/// [Read `{name}` docs](https://core.telegram.org/{kind}/{name}).
+///
+/// Generated from the following TL definition:
+/// ```tl
+/// {def}
+/// ```",
+        name = def.full_name(),
+        kind = match def.category {
+            Category::Types => "constructor",
+            Category::Functions => "method",
+        },
+        def = def,
+    )?;
+
     if config.impl_debug {
         writeln!(file, "{indent}#[derive(Debug)]")?;
     }

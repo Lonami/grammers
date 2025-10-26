@@ -12,12 +12,8 @@
     clippy::unreadable_literal
 )]
 
-//! This module contains all of the bare types, each
-//! represented by a `struct`. All of them implement
-//! [`Identifiable`], [`Serializable`] and [`Deserializable`].
+//! All of the bare types, each represented by a `struct`.
 //!
-//! [`Identifiable`]: ../trait.Identifiable.html
-//! [`Serializable`]: ../trait.Serializable.html
-//! [`Deserializable`]: ../trait.Deserializable.html
+//! All of them implement [`crate::Identifiable`], [`crate::Serializable`] and [`crate::Deserializable`].
 
 include!(concat!(env!("OUT_DIR"), "/generated_types.rs"));

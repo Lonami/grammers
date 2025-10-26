@@ -17,6 +17,8 @@
 //! * `item_path` for use as a qualified item path (`Vec::<u8>`).
 //! * `attr_name` for use as an attribute name (`foo_bar: ()`).
 
+use std::fmt;
+
 use grammers_tl_parser::tl::{Definition, Parameter, ParameterType, Type};
 
 /// Get the rusty type name for a certain definition, excluding namespace.
@@ -119,6 +121,17 @@ pub mod definitions {
             _ => variant,
         }
         .to_string()
+    }
+}
+
+pub struct TypeNameFmt<'t>(pub &'t Type);
+
+impl<'t> fmt::Display for TypeNameFmt<'t> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        for ns in self.0.namespace.iter() {
+            write!(f, "{}.", ns)?;
+        }
+        write!(f, "{}", self.0.name)
     }
 }
 

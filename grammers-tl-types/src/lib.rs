@@ -89,17 +89,18 @@ pub use serialize::Serializable;
 #[cfg(feature = "impl-serde")]
 use serde_derive::{Deserialize, Serialize};
 
-/// This struct represents the concrete type of a vector, that is,
-/// `vector` as opposed to the type `Vector`. This bare type is less
-/// common, so instead of creating a enum for `Vector` wrapping `vector`
-/// as Rust's `Vec` (as we would do with auto-generated code),
-/// a new-type for `vector` is used instead.
+/// Bare vector type (`vector` as opposed to the type `Vector`).
+///
+/// Because it is much less common, instead of creating a enum
+/// for `Vector` wrapping `vector` as Rust's `Vec` (as we would
+/// do with auto-generated code), a new-type for `vector` is used instead.
 #[cfg_attr(feature = "impl-serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
 pub struct RawVec<T>(pub Vec<T>);
 
-/// This struct represents an unparsed blob, which should not be deserialized
-/// as a bytes string. Used by functions returning generic objects which pass
+/// Unparsed bytes that should not be deserialized as a bytes string.
+///
+/// Used by functions returning generic objects which pass
 /// the underlying result without any modification or interpretation.
 #[cfg_attr(feature = "impl-serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq)]
@@ -111,16 +112,16 @@ impl From<Vec<u8>> for Blob {
     }
 }
 
-/// Anything implementing this trait is identifiable by both ends (client-server)
+/// Used by types identifiable by both ends (client-server)
 /// when performing Remote Procedure Calls (RPC) and transmission of objects.
 pub trait Identifiable {
     /// The unique identifier for the type.
     const CONSTRUCTOR_ID: u32;
 }
 
-/// Structures implementing this trait indicate that they are suitable for
-/// use to perform Remote Procedure Calls (RPC), and know what the type of
-/// the response will be.
+/// Used by types that are suitable for use to perform Remote Procedure Calls (RPC).
+///
+/// The [`RemoteCall::Return`] indicates what the type of the response will be.
 pub trait RemoteCall: Serializable {
     /// The type of the "return" value coming from the other end of the
     /// connection.

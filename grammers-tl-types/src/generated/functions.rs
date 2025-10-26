@@ -12,16 +12,13 @@
     clippy::unreadable_literal
 )]
 
-//! This module contains all of the functions, each
-//! represented by a `struct`. All of them implement
-//! [`Identifiable`] and [`Serializable`].
+//! All of the functions, each represented by a `struct`.
+//!
+//! All of them implement [`crate::Identifiable`] and [`crate::Serializable`]
+//! (and, when the feature is enabled, [`crate::Deserializable`]).
 //!
 //! To find out the type that Telegram will return upon
 //! invoking one of these requests, check out the associated
-//! type in the corresponding [`RemoteCall`] trait impl.
-//!
-//! [`Identifiable`]: ../trait.Identifiable.html
-//! [`Serializable`]: ../trait.Serializable.html
-//! [`RemoteCall`]: trait.RemoteCall.html
+//! type in the corresponding [`crate::RemoteCall`] trait impl.
 
 include!(concat!(env!("OUT_DIR"), "/generated_functions.rs"));

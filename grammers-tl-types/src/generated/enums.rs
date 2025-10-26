@@ -8,11 +8,8 @@
 
 #![allow(clippy::large_enum_variant)]
 
-//! This module contains all of the boxed types, each
-//! represented by a `enum`. All of them implement
-//! [`Serializable`] and [`Deserializable`].
+//! All of the boxed types, each represented by a `enum`.
 //!
-//! [`Serializable`]: /grammers_tl_types/trait.Serializable.html
-//! [`Deserializable`]: /grammers_tl_types/trait.Deserializable.html
+//! All of them implement [`crate::Serializable`] and [`crate::Deserializable`].
 
 include!(concat!(env!("OUT_DIR"), "/generated_enums.rs"));

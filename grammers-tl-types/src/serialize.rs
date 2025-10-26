@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Traits involving the serialization of the generated objects.
+
 /// This trait allows for concrete instances to be serialized into
 /// binary data as specified by the [Binary Data Serialization].
 ///

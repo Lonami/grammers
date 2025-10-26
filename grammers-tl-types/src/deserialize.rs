@@ -5,8 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! Types and traits involving the deserialization of the generated objects.
 use std::fmt;
 
+/// Errors that can be produced by [`Cursor`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     /// The end of the buffer was reached earlier than anticipated, which
@@ -43,7 +46,7 @@ impl fmt::Display for Error {
     }
 }
 
-/// Re-implement `Cursor` to only work over in-memory buffers and greatly
+/// Re-implementation of [`std::io::Cursor`] to only work over in-memory buffers and greatly
 /// narrow the possible error cases.
 pub struct Cursor<'a> {
     buf: &'a [u8],
@@ -51,6 +54,7 @@ pub struct Cursor<'a> {
 }
 
 impl<'a> Cursor<'a> {
+    /// Constructors a cursor from a slice of bytes.
     pub fn from_slice(buf: &'a [u8]) -> Self {
         Self { buf, pos: 0 }
     }
@@ -58,10 +62,12 @@ impl<'a> Cursor<'a> {
     // TODO not a fan we need to expose this (and a way to create `Cursor`),
     //      but crypto needs it because it needs to know where deserialization
     //      of some inner data ends.
+    /// Returns the cursor's position into the slice buffer.
     pub fn pos(&self) -> usize {
         self.pos
     }
 
+    /// Reads a single byte from the slice buffer.
     pub fn read_byte(&mut self) -> Result<u8> {
         if self.pos < self.buf.len() {
             let byte = self.buf[self.pos];
@@ -72,6 +78,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    /// Reads an exact amount of bytes to fill the input buffer.
     pub fn read_exact(&mut self, buf: &mut [u8]) -> Result<()> {
         if self.pos + buf.len() > self.buf.len() {
             Err(Error::UnexpectedEof)
@@ -82,6 +89,7 @@ impl<'a> Cursor<'a> {
         }
     }
 
+    /// Reads all the way to the end of the slice buffer.
     pub fn read_to_end(&mut self, buf: &mut Vec<u8>) -> Result<usize> {
         buf.extend(&self.buf[self.pos..]);
         let old = self.pos;
@@ -90,11 +98,11 @@ impl<'a> Cursor<'a> {
     }
 }
 
-/// The problem with being generic over `std::io::Read` is that it's
-/// fallible, but in practice, we're always going to serialize in-memory,
-/// so instead we just use a `[u8]` as our buffer.
+/// Alias over a mutable reference to a [`Cursor`].
 // TODO this is only public for session
 pub type Buffer<'a, 'b> = &'a mut Cursor<'b>;
+
+/// A specialized `Result` type for deserialization operations.
 pub type Result<T> = std::result::Result<T, Error>;
 
 /// This trait allows for data serialized according to the
@@ -107,7 +115,7 @@ pub trait Deserializable {
     where
         Self: std::marker::Sized;
 
-    /// Convenience function to deserialize an instance from a given buffer.
+    /// Convenience function to deserialize an instance from a slice of bytes.
     ///
     /// # Examples
     ///
