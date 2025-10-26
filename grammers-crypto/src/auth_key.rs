@@ -8,6 +8,10 @@
 use crate::sha1;
 use std::fmt;
 
+/// Telegram's [Authorization Key](https://core.telegram.org/mtproto/auth_key).
+///
+/// This library does not provide the means to generate a valid key,
+/// because doing so relies on (de-)serializing Telegram types.
 #[derive(Clone)]
 pub struct AuthKey {
     pub(crate) data: [u8; 256],
@@ -21,13 +25,6 @@ impl PartialEq for AuthKey {
     }
 }
 
-/// Represents a Telegram's [authorization key].
-///
-/// To generate a new, valid authorization key, one should use the methods
-/// provided by the [`generation`] module.
-///
-/// [authorization key]: https://core.telegram.org/mtproto/auth_key
-/// [`generation`]: generation.html
 impl AuthKey {
     /// Creates a new authorization key from the given binary data.
     pub fn from_bytes(data: [u8; 256]) -> Self {

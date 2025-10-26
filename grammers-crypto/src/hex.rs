@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Functions to convert a byte-string to and from hexadecimal form.
+
 use std::fmt::Write;
 
 /// Represent a sequence of bytes as an hexadecimal string.

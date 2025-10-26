@@ -33,7 +33,7 @@
 //! }
 //! ```
 use grammers_crypto::hex;
-use grammers_crypto::{AuthKey, factorize::factorize, rsa};
+use grammers_crypto::{AuthKey, factorize, rsa};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, RemoteCall, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::{Digest, Sha1};

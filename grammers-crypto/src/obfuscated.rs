@@ -12,8 +12,7 @@ use aes::cipher::{KeyIvInit, StreamCipher, generic_array::GenericArray};
 /// This implements the AES-256-CTR cipher used by Telegram to encrypt data
 /// when using the obfuscated transport.
 ///
-/// You're not supposed to use this directly, You're probably looking for the
-/// actual implementation in `grammers-mtproto`.
+/// It is not intended to be used directly.
 pub struct ObfuscatedCipher {
     rx: ctr::Ctr128BE<aes::Aes256>,
     tx: ctr::Ctr128BE<aes::Aes256>,

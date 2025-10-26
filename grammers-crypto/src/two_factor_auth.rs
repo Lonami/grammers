@@ -5,6 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! Functions used by Telegram's [Two-Factor Authentication](https://core.telegram.org/api/srp).
+
 use glass_pumpkin::safe_prime;
 use hmac::Hmac;
 use num_bigint::{BigInt, BigUint, Sign};
@@ -15,8 +18,8 @@ use sha2::Sha512;
 use crate::sha256 as h;
 
 /// Prepare the password for sending to telegram for verification.
-/// The method returns M1 and g_a parameters that should be sent to Telegram
-/// (without the raw password).
+/// The method returns *M1* and *g_a* parameters that should be sent to Telegram
+/// (without the raw password!).
 ///
 /// The algorithm is described in <https://core.telegram.org/api/srp>.
 pub fn calculate_2fa(
@@ -86,7 +89,7 @@ pub fn calculate_2fa(
     (m1, g_a)
 }
 
-/// Validation for parameters required for two-factor authentication
+/// Validation for parameters required for Two-Factor authentication.
 pub fn check_p_and_g(p: &[u8], g: &i32) -> bool {
     if !check_p_len(p) {
         return false;

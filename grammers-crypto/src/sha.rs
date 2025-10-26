@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+/// Calculate the SHA1 hash of zero or more expressions evaluating to a sequence of bytes.
 #[macro_export]
 macro_rules! sha1 (
     ( $( $x:expr ),* ) => ({
@@ -19,6 +20,7 @@ macro_rules! sha1 (
     })
 );
 
+/// Calculate the SHA256 hash of zero or more expressions evaluating to a sequence of bytes.
 #[macro_export]
 macro_rules! sha256 (
     ( $( $x:expr ),* ) => ({

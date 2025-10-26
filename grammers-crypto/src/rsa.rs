@@ -5,6 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! Contains the function to RSA-encrypt hashed data as expected by Telegram.
+//!
+//! Not intended as a general implementation of RSA.
+
 use num_bigint::BigUint;
 
 use crate::{aes::ige_encrypt, sha256};

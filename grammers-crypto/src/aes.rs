@@ -5,6 +5,9 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! [AES-Infinite Garble Extension](https://mgp25.com/blog/2015/06/21/AESIGE/) implementation.
+
 #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};

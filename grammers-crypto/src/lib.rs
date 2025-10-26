@@ -6,22 +6,28 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! This library contains a collection of functions that relate to
+//! encrypting and decryption values when exchanging messages with Telegram.
+
 #![deny(unsafe_code)]
 
 pub mod aes;
 mod auth_key;
-pub mod deque_buffer;
-pub mod factorize;
+mod deque_buffer;
+mod factorize;
 pub mod hex;
-pub mod obfuscated;
+mod obfuscated;
 pub mod rsa;
-pub mod sha;
+mod sha;
 pub mod two_factor_auth;
 
 pub use auth_key::AuthKey;
 pub use deque_buffer::DequeBuffer;
+pub use factorize::factorize;
+pub use obfuscated::ObfuscatedCipher;
 use std::fmt;
 
+/// The error type for [`decrypt_data_v2`].
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     /// The ciphertext is either too small or not padded correctly.
