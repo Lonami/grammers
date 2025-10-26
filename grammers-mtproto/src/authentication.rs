@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Contains the steps required to generate an authorization key.
+//! Sans-IO implementation of the process to generate an Authorization Key.
 //!
 //! # Examples
 //!
@@ -44,8 +44,7 @@ use std::time::{SystemTime, UNIX_EPOCH};
 // Should only be used for debugging purposes and generating test cases.
 const TRACE_AUTH_GEN: bool = false;
 
-/// Represents an error that occured during the generation of an
-/// authorization key.
+/// The error type for Authorization Key generation process.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Error {
     /// The response data was invalid and did not match our expectations.
@@ -64,7 +63,7 @@ pub enum Error {
     },
 
     /// The server's PQ number was not of the right size.
-    InvalidPQSize {
+    InvalidPqSize {
         /// The unexpected size that we got.
         size: usize,
     },
@@ -76,7 +75,7 @@ pub enum Error {
     },
 
     /// The server failed to send the Diffie-Hellman parameters.
-    DHParamsFail,
+    DhParamsFail,
 
     /// The server's nonce has changed during the key exchange.
     InvalidServerNonce {
@@ -107,10 +106,10 @@ pub enum Error {
     },
 
     // The generation of Diffie-Hellman parameters is to be retried.
-    DHGenRetry,
+    DhGenRetry,
 
     // The generation of Diffie-Hellman parameters failed.
-    DHGenFail,
+    DhGenFail,
 
     /// The plaintext answer hash did not match.
     InvalidAnswerHash {
@@ -140,11 +139,11 @@ impl fmt::Display for Error {
             Self::InvalidNonce { got, expected } => {
                 write!(f, "invalid nonce: got {got:?}, expected {expected:?}")
             }
-            Self::InvalidPQSize { size } => write!(f, "invalid pq size {size}"),
+            Self::InvalidPqSize { size } => write!(f, "invalid pq size {size}"),
             Self::UnknownFingerprints { fingerprints } => {
                 write!(f, "all server fingerprints are unknown: {fingerprints:?}")
             }
-            Self::DHParamsFail => write!(f, "the generation of DH parameters by the server failed"),
+            Self::DhParamsFail => write!(f, "the generation of DH parameters by the server failed"),
             Self::InvalidServerNonce { got, expected } => write!(
                 f,
                 "invalid server nonce: got {got:?}, expected {expected:?}"
@@ -160,8 +159,8 @@ impl fmt::Display for Error {
                 f,
                 "the parameter g = {value} was not in the range {low}..{high}"
             ),
-            Self::DHGenRetry => write!(f, "the generation of DH parameters should be retried"),
-            Self::DHGenFail => write!(f, "the generation of DH parameters failed"),
+            Self::DhGenRetry => write!(f, "the generation of DH parameters should be retried"),
+            Self::DhGenFail => write!(f, "the generation of DH parameters failed"),
             Self::InvalidAnswerHash { got, expected } => {
                 write!(f, "invalid answer hash: got {got:?}, expected {expected:?}")
             }
@@ -209,7 +208,7 @@ pub struct Step3 {
     time_offset: i32,
 }
 
-/// The first step of the process to generate an authorization key.
+/// The first step of the process to generate an Authorization Key.
 pub fn step1() -> Result<(Vec<u8>, Step1), Error> {
     let random_bytes = {
         let mut buffer = [0; 16];
@@ -240,7 +239,7 @@ fn do_step1(random_bytes: &[u8; 16]) -> Result<(Vec<u8>, Step1), Error> {
     ))
 }
 
-/// The second step of the process to generate an authorization key.
+/// The second step of the process to generate an Authorization Key.
 pub fn step2(data: Step1, response: &[u8]) -> Result<(Vec<u8>, Step2), Error> {
     if TRACE_AUTH_GEN {
         println!("< {}", hex::to_hex(response));
@@ -278,7 +277,7 @@ fn do_step2(
     check_nonce(&res_pq.nonce, &nonce)?;
 
     if res_pq.pq.len() != 8 {
-        return Err(Error::InvalidPQSize {
+        return Err(Error::InvalidPqSize {
             size: res_pq.pq.len(),
         });
     }
@@ -369,7 +368,7 @@ fn do_step2(
     ))
 }
 
-/// The third step of the process to generate an authorization key.
+/// The third step of the process to generate an Authorization Key.
 pub fn step3(data: Step2, response: &[u8]) -> Result<(Vec<u8>, Step3), Error> {
     if TRACE_AUTH_GEN {
         println!("< {}", hex::to_hex(response));
@@ -433,7 +432,7 @@ fn do_step3(
             };
             check_new_nonce_hash(&server_dh_params.new_nonce_hash, &new_nonce_hash)?;
 
-            return Err(Error::DHParamsFail);
+            return Err(Error::DhParamsFail);
         }
         tl::enums::ServerDhParams::Ok(x) => x,
     };
@@ -576,7 +575,7 @@ pub struct Finished {
     pub first_salt: i64,
 }
 
-/// The last step of the process to generate an authorization key.
+/// The last step of the process to generate an Authorization Key.
 pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
     if TRACE_AUTH_GEN {
         println!("< {}", hex::to_hex(response));
@@ -657,7 +656,7 @@ pub fn create_key(data: Step3, response: &[u8]) -> Result<Finished, Error> {
             first_salt,
         })
     } else {
-        Err(Error::DHGenFail)
+        Err(Error::DhGenFail)
     }
 }
 

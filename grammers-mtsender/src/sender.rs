@@ -303,9 +303,9 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             {
                 Ok(offset) => {
                     debug!("deserializing valid transport packet...");
-                    let result = self.mtp.deserialize(
-                        &self.read_buffer[next_offset..][offset.data_start..offset.data_end],
-                    )?;
+                    let result = self
+                        .mtp
+                        .deserialize(&self.read_buffer[next_offset..][offset.data_range])?;
 
                     self.process_mtp_buffer(result, &mut updates);
                     next_offset += offset.next_offset;

@@ -8,8 +8,9 @@
 use super::{Error, Tagged, Transport, UnpackedOffset};
 use grammers_crypto::DequeBuffer;
 
-/// The lightest MTProto transport protocol available. This is an
-/// implementation of the [abridged transport].
+/// The lightest MTProto transport protocol available.
+///
+/// This is an implementation of the [abridged transport].
 ///
 /// * Overhead: very small.
 /// * Minimum envelope length: 1 byte.
@@ -100,8 +101,7 @@ impl Transport for Abridged {
         let len = len as usize;
 
         Ok(UnpackedOffset {
-            data_start: header_len,
-            data_end: header_len + len,
+            data_range: header_len..header_len + len,
             next_offset: header_len + len,
         })
     }
@@ -172,7 +172,7 @@ mod tests {
         transport.pack(&mut buffer);
         let n = 1; // init byte
         let offset = transport.unpack(&mut buffer[n..][..]).unwrap();
-        assert_eq!(&buffer[n..][offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[n..][offset.data_range], &orig[..]);
     }
 
     #[test]
@@ -190,12 +190,12 @@ mod tests {
         two_buffer.extend(&buffer[..]);
 
         let offset = transport.unpack(&mut two_buffer[..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         let n = offset.next_offset;
         let offset = transport.unpack(&mut two_buffer[n..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
     }
 
     #[test]
@@ -205,7 +205,7 @@ mod tests {
         transport.pack(&mut buffer);
         let n = 1; // init byte
         let offset = transport.unpack(&mut buffer[n..]).unwrap();
-        assert_eq!(&buffer[n..][offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[n..][offset.data_range], &orig[..]);
     }
 
     #[test]

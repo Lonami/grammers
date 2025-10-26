@@ -6,7 +6,7 @@ Needed by the full transport mode.
 
 ## getrandom
 
-Needed to generate secure values, such as nonces, during the generation of an authorization key.
+Needed to generate secure values, such as nonces, during the generation of an Authorization Key.
 
 ## grammers-crypto
 
@@ -24,11 +24,11 @@ incoming messages and compressing them when it is worth it (based on some simple
 
 ## num-bigint
 
-Used during the generation of the authorization key.
+Used during the generation of the Authorization Key.
 
 ## sha1
 
-Used during the generation of the authorization key.
+Used during the generation of the Authorization Key.
 
 ## bytes
 

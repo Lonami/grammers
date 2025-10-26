@@ -9,8 +9,9 @@ use super::{Error, Transport, UnpackedOffset};
 use crc32fast::Hasher;
 use grammers_crypto::DequeBuffer;
 
-/// The basic MTProto transport protocol. This is an implementation of the
-/// [full transport].
+/// The basic MTProto transport protocol.
+///
+/// This is an implementation of the [full transport].
 ///
 /// * Overhead: medium
 /// * Minimum envelope length: 12 bytes.
@@ -113,8 +114,7 @@ impl Transport for Full {
 
         self.recv_seq += 1;
         Ok(UnpackedOffset {
-            data_start: 8,
-            data_end: len - 4,
+            data_range: 8..len - 4,
             next_offset: len,
         })
     }
@@ -191,7 +191,7 @@ mod tests {
         let orig = buffer.clone();
         transport.pack(&mut buffer);
         let offset = transport.unpack(&mut buffer[..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
     }
 
     #[test]
@@ -209,12 +209,12 @@ mod tests {
         two_buffer.extend(&buffer[..]);
 
         let offset = transport.unpack(&mut two_buffer[..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         let n = offset.next_offset;
         let offset = transport.unpack(&mut two_buffer[n..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
     }
 
     #[test]

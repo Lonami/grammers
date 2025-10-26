@@ -6,14 +6,13 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implementation of the [Mobile Transport Protocol]. This layer is
-//! responsible for converting zero or more input requests into outgoing
-//! messages, and to process the response.
+//! Implementation of the [Mobile Transport Protocol].
 //!
-//! A distinction between plain and encrypted is made for simplicity (the
-//! plain hardly requires to process any state) and to help prevent invalid
-//! states (encrypted communication cannot be made without an authorization
-//! key).
+//! This layer is responsible for converting zero or more input
+//! requests into outgoing messages, and to process the response.
+//!
+//! Separate types are used for [`Plain`] and [`Encrypted`] modes for simplicity,
+//! since the `Plain` mode hardly requires to process any state and is only used briefly.
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto/description
 mod encrypted;
@@ -30,39 +29,58 @@ use grammers_tl_types as tl;
 pub use plain::Plain;
 use std::fmt;
 
+/// Manual implementation of Telegram's `rpc_result`.
 pub struct RpcResult {
+    /// Message identifier matching that of the outgoing RPC.
     pub msg_id: MsgId,
+    /// Unprocessed response body for the associated RPC.
     pub body: Vec<u8>,
 }
 
+/// Wrapper around Telegram's `rpc_error`.
 pub struct RpcResultError {
+    /// Message identifier matching that of the outgoing RPC.
     pub msg_id: MsgId,
+    /// Raw RPC error in place of a response.
     pub error: tl::types::RpcError,
 }
 
+/// Pseudo-wrapper around Telegram's `bad_msg_notification` constructor.
 pub struct BadMessage {
+    /// Message identifier of the outgoing message that caused this notification.
     pub msg_id: MsgId,
+    /// Status code of the bad message notification.
     pub code: i32,
 }
 
+/// [`DeserializeError`] with the corresponding [`MsgId`] that caused it.
 pub struct DeserializationFailure {
+    /// Message identifier of the outgoing mesasge whose response failed to be deserialized.
     pub msg_id: MsgId,
+    /// Additional details about the deserialization failure.
     pub error: DeserializeError,
 }
 
 /// Results from the deserialization of a response.
 pub enum Deserialization {
+    /// Copy of an `rpc_result` that contained an `Updates` type.
     OwnUpdate { msg_id: MsgId, update: Vec<u8> },
+    /// `Updates` body received passively when it did not match any `mtproto` constructor.
     Update(Vec<u8>),
+    /// `rpc_result` for a previously-sent RPC.
     RpcResult(RpcResult),
+    /// `rpc_error` for a previously-sent RPC.
     RpcError(RpcResultError),
+    /// `bad_msg_notification` for a previously-sent message.
     BadMessage(BadMessage),
+    /// Generic deserialization failure of a received message.
     Failure(DeserializationFailure),
 }
 
 impl BadMessage {
+    /// Human-readable description, adapted from
+    /// [Service Messages about Messages](https://core.telegram.org/mtproto/service_messages_about_messages).
     pub fn description(&self) -> &'static str {
-        // https://core.telegram.org/mtproto/service_messages_about_messages
         match self.code {
             16 => "msg_id too low",
             17 => "msg_id too high",
@@ -81,10 +99,12 @@ impl BadMessage {
         }
     }
 
+    /// Whether sending the message that caused this error can be retried.
     pub fn retryable(&self) -> bool {
         [16, 17, 48].contains(&self.code)
     }
 
+    /// Whether the entire connection should be restarted.
     pub fn fatal(&self) -> bool {
         !self.retryable() && ![32, 33].contains(&self.code)
     }
@@ -93,7 +113,7 @@ impl BadMessage {
 /// The error type for the deserialization of server messages.
 #[derive(Clone, Debug, PartialEq)]
 pub enum DeserializeError {
-    /// The server's authorization key did not match our expectations.
+    /// The server's Authorization Key did not match our expectations.
     BadAuthKey { got: i64, expected: i64 },
 
     /// The server's message ID did not match our expectations.
@@ -179,18 +199,11 @@ pub trait Mtp {
     ///
     /// # Panics
     ///
-    /// The method panics if the body length is not padded to 4 bytes. The
-    /// serialization of requests will always be correctly padded, so adding
-    /// an error case for this rare case (impossible with the expected inputs)
-    /// would simply be unnecessary.
+    /// The method panics if the body length is not padded to 4 bytes.
+    /// The serialization of requests will always be correctly padded.
     ///
-    /// The method also panics if the body length is too large for similar
-    /// reasons. It is not reasonable to construct huge requests (although
-    /// possible) because they would likely fail with a RPC error anyway,
-    /// so we avoid another error case by simply panicking.
-    ///
-    /// The definition of "too large" is roughly 1MB, so as long as the
-    /// payload is below that mark, it's safe to call.
+    /// The method also panics if the body length exceeds roughly 1MB.
+    /// Such large requests would essentially kill the connection otherwise.
     fn push(&mut self, buffer: &mut DequeBuffer<u8>, request: &[u8]) -> Option<MsgId>;
 
     /// Finalizes the buffer of requests.

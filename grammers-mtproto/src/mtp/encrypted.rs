@@ -55,7 +55,7 @@ pub struct Builder {
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 pub struct Encrypted {
-    /// The authorization key to use to encrypt payload.
+    /// The Authorization Key to use to encrypt payload.
     auth_key: AuthKey,
 
     /// The time offset from the server's time, in seconds.
@@ -74,7 +74,7 @@ pub struct Encrypted {
     salt_request_msg_id: Option<MsgId>,
 
     /// The secure, random identifier for this instance.
-    client_id: i64,
+    session_id: i64,
 
     /// The current message sequence number.
     sequence: i32,
@@ -134,9 +134,9 @@ impl Builder {
             }],
             start_salt_time: None,
             salt_request_msg_id: None,
-            client_id: {
+            session_id: {
                 let mut buffer = [0u8; 8];
-                getrandom::fill(&mut buffer).expect("failed to generate a secure client_id");
+                getrandom::fill(&mut buffer).expect("failed to generate a secure session_id");
                 i64::from_le_bytes(buffer)
             },
             sequence: 0,
@@ -159,7 +159,7 @@ impl Encrypted {
         }
     }
 
-    /// The authorization key used for encryption and decryption.
+    /// The Authorization Key used for encryption and decryption.
     pub fn auth_key(&self) -> [u8; 256] {
         self.auth_key.to_bytes()
     }
@@ -277,7 +277,7 @@ impl Encrypted {
             let mut header = StackBuffer::<PLAIN_PACKET_HEADER_LEN>::new();
             self.get_current_salt().serialize(&mut header); // 8 bytes
 
-            self.client_id.serialize(&mut header); // 8 bytes
+            self.session_id.serialize(&mut header); // 8 bytes
             buffer.extend_front(&header.into_inner());
         }
 
@@ -542,7 +542,7 @@ impl Encrypted {
     ///
     /// Receipt of virtually all messages (with the exception of some purely
     /// service ones as well as the plain-text messages used in the protocol
-    /// for creating an authorization key) must be acknowledged.
+    /// for creating an Authorization Key) must be acknowledged.
     ///
     /// This requires the use of the following service message (not requiring
     /// an acknowledgment):
@@ -861,7 +861,7 @@ impl Encrypted {
     /// 1 and 64) future server salts together with their validity periods.
     /// Having stored them in persistent memory, the client may use them to
     /// send messages in the future even if he changes sessions (a server
-    /// salt is attached to the authorization key rather than being
+    /// salt is attached to the Authorization Key rather than being
     /// session-specific).
     ///
     /// ```tl
@@ -1177,22 +1177,37 @@ impl Encrypted {
     }
 }
 
-/// The maximum header length used by any available transport (`Full`, 4 bytes for `len` and `seq`).
+/// The maximum header length used by any available transport.
+///
+/// The largest transport is `Full`, needing 4 bytes for each of `len` and `seq`.
+///
+/// The `crc32` is appended at the end, so it is not part of the leading header.
 pub const MAX_TRANSPORT_HEADER_LEN: usize = 4 + 4;
 
-/// Data prepended after encrypting a packet, `key_id` and `msg_key`.
+/// Amount of bytes used by the [Encrypted Message](https://core.telegram.org/mtproto/description#encrypted-message).
+///
+/// This accounts for both the `auth_key_id` (8 bytes) and `msg_key` (16 bytes).
 pub const ENCRYPTED_PACKET_HEADER_LEN: usize = 8 + 16;
 
-/// The first actual message comes after `salt`, `client_id` (8 bytes each).
+/// Amount of bytes used by the [`encrypted_data`](https://core.telegram.org/mtproto/description#encrypted-message-encrypted-data).
+///
+/// This accounts for both `salt` (8 bytes) and `session_id` (8 bytes).
+///
+/// The `message_id`, `seq_no` and `message_data_length` are not included
+/// because those will have been appended at the current buffer position.
 pub const PLAIN_PACKET_HEADER_LEN: usize = 8 + 8;
 
+/// Amount of bytes used by a `msg_container`.
+///
 /// The message header for the container occupies the size of the message header
 /// (`msg_id`, `seq_no` and `size`) followed by the container header (`constructor`, `len`).
 pub const MESSAGE_CONTAINER_HEADER_LEN: usize = (8 + 4 + 4) + (4 + 4);
 
 impl Mtp for Encrypted {
-    /// Pushes a request into the internal buffer by manually serializing the messages for maximum
-    /// efficiency. If the buffer is full, returns `None`.
+    /// Pushes a request into the internal buffer.
+    ///
+    /// Multiple requests will be buffered and sent as a single container to reduce roundtrips.
+    /// If the buffer is full (request does not fit in the container), returns `None`.
     ///
     /// [MTProto 2.0 guidelines]: https://core.telegram.org/mtproto/description.
     fn push(&mut self, buffer: &mut DequeBuffer<u8>, request: &[u8]) -> Option<MsgId> {
@@ -1284,8 +1299,8 @@ impl Mtp for Encrypted {
         let mut buffer = Cursor::from_slice(&plaintext[..]);
 
         let _salt = i64::deserialize(&mut buffer)?;
-        let client_id = i64::deserialize(&mut buffer)?;
-        if client_id != self.client_id {
+        let session_id = i64::deserialize(&mut buffer)?;
+        if session_id != self.session_id {
             panic!("wrong session id");
         }
 
@@ -1302,7 +1317,7 @@ impl Mtp for Encrypted {
 mod tests {
     use super::*;
 
-    // salt + client_id
+    // salt + session_id
     const MESSAGE_PREFIX_LEN: usize = 8 + 8;
 
     // gzip_packed#3072cfa1 packed_data:string = Object;
@@ -1330,7 +1345,7 @@ mod tests {
     }
 
     #[test]
-    fn ensure_serialization_has_salt_client_id() {
+    fn ensure_serialization_has_salt_session_id() {
         let mut buffer = DequeBuffer::with_capacity(0, 0);
         let mut mtproto = Encrypted::build().finish(auth_key());
 
@@ -1340,7 +1355,7 @@ mod tests {
         // salt comes first, it's zero by default.
         assert_eq!(&buffer[0..8], [0, 0, 0, 0, 0, 0, 0, 0]);
 
-        // client_id should be random.
+        // session_id should be random.
         assert_ne!(&buffer[8..16], [0, 0, 0, 0, 0, 0, 0, 0]);
 
         // Only one message should remain.
@@ -1417,7 +1432,7 @@ mod tests {
         assert!(mtproto.push(&mut buffer, &data).is_some());
         assert!(mtproto.push(&mut buffer, &data).is_none());
 
-        // No container should be used, only the `salt` + `client_id` (16 bytes) should count.
+        // No container should be used, only the `salt` + `session_id` (16 bytes) should count.
         mtproto.finalize_plain(&mut buffer);
         let buffer = &buffer[MESSAGE_PREFIX_LEN..];
         assert_eq!(buffer.len(), 16 + data.len());

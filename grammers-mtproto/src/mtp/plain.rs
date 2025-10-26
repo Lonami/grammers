@@ -31,6 +31,7 @@ pub struct Plain;
 
 #[allow(clippy::new_without_default)]
 impl Plain {
+    /// Creates a new instance of the plain (unencrypted) MTP.
     pub fn new() -> Self {
         Self
     }
@@ -41,8 +42,8 @@ impl Mtp for Plain {
     /// [unencrypted messages]), and returns its serialized contents.
     ///
     /// Plain messages may be used for requests that don't require an
-    /// authorization key to be present, such as those needed to generate
-    /// the authorization key itself.
+    /// Authorization Key to be present, such as those needed to generate
+    /// the Authorization Key itself.
     ///
     /// [unencrypted messages]: https://core.telegram.org/mtproto/description#unencrypted-message
     fn push(&mut self, buffer: &mut DequeBuffer<u8>, request: &[u8]) -> Option<MsgId> {

@@ -6,9 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Implementation of the several [MTProto transports]. This layer is
-//! responsible for taking serialized messages from the MTP and packing them
-//! in a format that can be sent over a protocol, such as TCP, HTTP or UDP.
+//! Implementation of the several [MTProto transports].
+//!
+//! This layer is responsible for taking serialized messages from the MTP and
+//! packing them in a format that can be sent over a protocol, such as TCP, HTTP or UDP.
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
 mod abridged;
@@ -21,7 +22,7 @@ pub use full::Full;
 use grammers_crypto::DequeBuffer;
 pub use intermediate::Intermediate;
 pub use obfuscated::Obfuscated;
-use std::fmt;
+use std::{fmt, ops::Range};
 
 /// The error type reported by the different transports when something is wrong.
 ///
@@ -45,7 +46,7 @@ pub enum Error {
     /// A negative length was received, indicating a [transport-level error].
     /// The absolute value of this length behaves like an [HTTP status code]:
     ///
-    /// * 404, if the authorization key used was not found, meaning that the
+    /// * 404, if the Authorization Key used was not found, meaning that the
     ///   server is not aware of the key used by the client, so it cannot be
     ///   used to securely communicate with it.
     ///
@@ -57,10 +58,12 @@ pub enum Error {
     BadStatus { status: u32 },
 }
 
+/// Result from calling [`Transport::unpack`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct UnpackedOffset {
-    pub data_start: usize,
-    pub data_end: usize,
+    /// Range of the inner data contained within the unpacked transport message.
+    pub data_range: Range<usize>,
+    /// Offset where the next transport message will start within the buffer.
     pub next_offset: usize,
 }
 
@@ -89,12 +92,14 @@ impl fmt::Display for Error {
 pub trait Transport {
     /// Packs the input buffer in-place.
     ///
-    /// Panics if `input.len()` is not divisible by 4.
+    /// Panics if `buffer.len()` is not divisible by 4.
     fn pack(&mut self, buffer: &mut DequeBuffer<u8>);
 
     /// Unpacks the input buffer in-place.
+    ///
     /// Subsequent calls to `unpack` should be made with the same buffer,
     /// with the data on the ranges from previous `UnpackedOffset` removed.
+    /// Failing to do so will cause transports such as [`Obfuscated`] to misbehave.
     fn unpack(&mut self, buffer: &mut [u8]) -> Result<UnpackedOffset, Error>;
 }
 

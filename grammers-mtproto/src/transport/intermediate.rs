@@ -8,8 +8,9 @@
 use super::{Error, Tagged, Transport, UnpackedOffset};
 use grammers_crypto::DequeBuffer;
 
-/// A light MTProto transport protocol available that guarantees data padded
-/// to 4 bytes. This is an implementation of the [intermediate transport].
+/// A light MTProto transport protocol that guarantees data padded to 4 bytes.
+///
+/// This is an implementation of the [intermediate transport].
 ///
 /// * Overhead: small.
 /// * Minimum envelope length: 4 bytes.
@@ -74,8 +75,7 @@ impl Transport for Intermediate {
         let len = len as usize;
 
         Ok(UnpackedOffset {
-            data_start: 4,
-            data_end: 4 + len,
+            data_range: 4..4 + len,
             next_offset: 4 + len,
         })
     }
@@ -137,7 +137,7 @@ mod tests {
         transport.pack(&mut buffer);
         let n = 4; // init bytes
         let offset = transport.unpack(&mut buffer[n..]).unwrap();
-        assert_eq!(&buffer[n..][offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[n..][offset.data_range], &orig[..]);
     }
 
     #[test]
@@ -155,12 +155,12 @@ mod tests {
         two_buffer.extend(&buffer[..]);
 
         let offset = transport.unpack(&mut two_buffer[..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
         assert_eq!(offset.next_offset, single_size);
 
         let n = offset.next_offset;
         let offset = transport.unpack(&mut two_buffer[n..]).unwrap();
-        assert_eq!(&buffer[offset.data_start..offset.data_end], &orig[..]);
+        assert_eq!(&buffer[offset.data_range], &orig[..]);
     }
 
     #[test]

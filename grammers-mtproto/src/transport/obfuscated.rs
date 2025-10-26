@@ -9,19 +9,20 @@ use grammers_crypto::{DequeBuffer, ObfuscatedCipher};
 
 use super::{Error, Tagged, Transport, UnpackedOffset};
 
-/// An obfuscation protocol made by telegram to avoid ISP blocks.
-/// This is needed to connect to the Telegram servers using websockets or
-/// when conecting to MTProto proxies (not yet supported).
+/// Obfuscation layer for other MTProto transport protocols.
 ///
-/// It is simply a wrapper around another transport, which encrypts the data
-/// using AES-256-CTR with a randomly generated key that is then sent at the
-/// beginning of the connection.
+/// This was made by Telegram to avoid ISP blocks.
+/// This is needed to connect to the Telegram servers
+/// using websockets or when conecting to MTProto proxies.
+///
+/// This wrapper encrypts the data using AES-256-CTR with a randomly
+/// generated key that is then sent at the beginning of the connection.
 ///
 /// Obfuscated transport can only be used with "tagged" transports, which
 /// provide a way to get the obfuscated tag that is used in the encryption.
-/// See the linked documentation for more information.
 ///
-/// [Transport Obfuscation](https://core.telegram.org/mtproto/mtproto-transports#transport-obfuscation)
+/// See [Transport Obfuscation](https://core.telegram.org/mtproto/mtproto-transports#transport-obfuscation)
+/// for more information.
 pub struct Obfuscated<T: Transport + Tagged> {
     inner: T,
     head: Option<[u8; 64]>,
