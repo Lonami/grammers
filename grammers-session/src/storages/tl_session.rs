@@ -9,7 +9,6 @@
 use crate::dc_options::DEFAULT_DC;
 use crate::generated::{enums, types};
 use crate::{AMBIENT_AUTH, KNOWN_DC_OPTIONS, Session};
-use grammers_tl_types as tl;
 use grammers_tl_types::deserialize::Error as DeserializeError;
 use grammers_tl_types::{Deserializable, Serializable};
 use std::fmt;
@@ -284,40 +283,6 @@ impl crate::Session for TlSession {
             }
         }
     }
-}
-
-pub fn state_to_update_state(
-    tl::enums::updates::State::State(state): tl::enums::updates::State,
-) -> types::UpdateState {
-    types::UpdateState {
-        pts: state.pts,
-        qts: state.qts,
-        date: state.date,
-        seq: state.seq,
-        channels: Vec::new(),
-    }
-}
-
-pub fn try_push_channel_state(
-    update_state: &mut types::UpdateState,
-    channel_id: i64,
-    pts: i32,
-) -> bool {
-    if update_state
-        .channels
-        .iter()
-        .any(|enums::ChannelState::State(channel_state)| channel_state.channel_id == channel_id)
-    {
-        return false;
-    }
-
-    update_state
-        .channels
-        .push(enums::ChannelState::State(types::ChannelState {
-            channel_id,
-            pts,
-        }));
-    true
 }
 
 #[derive(Debug)]
