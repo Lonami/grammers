@@ -384,7 +384,7 @@ pub(super) fn adapt_channel_difference(
     }
 }
 
-pub fn peer_from_input_peer(input_peer: &tl::enums::InputPeer) -> tl::enums::Peer {
+fn peer_from_input_peer(input_peer: &tl::enums::InputPeer) -> tl::enums::Peer {
     match input_peer {
         grammers_tl_types::enums::InputPeer::Empty => tl::types::PeerUser { user_id: 0 }.into(),
         grammers_tl_types::enums::InputPeer::PeerSelf => tl::types::PeerUser { user_id: 0 }.into(), // TODO can get self from client

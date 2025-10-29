@@ -10,9 +10,11 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
+#![allow(deprecated)]
+
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
-use grammers_session::PeerRef;
+use grammers_session::defs::PeerRef;
 use grammers_session::storages::TlSession;
 use simple_logger::SimpleLogger;
 use std::sync::Arc;

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::{AMBIENT_AUTH, PeerAuth};
+use grammers_session::defs::PeerAuth;
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -101,7 +101,7 @@ impl User {
         self.user()
             .and_then(|u| u.access_hash)
             .map(PeerAuth::from_hash)
-            .unwrap_or(AMBIENT_AUTH)
+            .unwrap_or_default()
     }
 
     /// Return the first name of this user.

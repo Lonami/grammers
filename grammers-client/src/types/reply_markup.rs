@@ -100,7 +100,7 @@ impl ReplyMarkup for ForceReply {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::defs::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
 /// let artist = "Krewella";
@@ -145,7 +145,7 @@ pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::defs::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup, button};
 ///
 /// client.send_message(peer, InputMessage::new().text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
@@ -184,7 +184,7 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::defs::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
 /// client.send_message(peer, InputMessage::new().text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
@@ -207,7 +207,7 @@ pub fn hide() -> Hide {
 /// # Examples
 ///
 /// ```
-/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
+/// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::defs::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
 /// use grammers_client::{InputMessage, reply_markup};
 ///
 /// let markup = reply_markup::force_reply().single_use();

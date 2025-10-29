@@ -9,7 +9,8 @@
 use super::super::{Peer, PeerMap, User};
 use crate::{InputMessage, client::Client, utils::generate_random_id};
 use grammers_mtsender::InvocationError;
-use grammers_session::{PeerId, State};
+use grammers_session::defs::PeerId;
+use grammers_session::updates::State;
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;

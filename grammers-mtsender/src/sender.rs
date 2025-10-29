@@ -14,7 +14,7 @@ use grammers_mtproto::mtp::{
 };
 use grammers_mtproto::transport::{self, Transport};
 use grammers_mtproto::{MsgId, authentication};
-use grammers_session::UpdatesLike;
+use grammers_session::updates::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
 use std::io;

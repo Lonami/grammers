@@ -10,6 +10,8 @@
 //! cargo run --example dialogs
 //! ```
 
+#![allow(deprecated)]
+
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;

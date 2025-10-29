@@ -110,6 +110,7 @@ pub(super) struct PossibleGap {
     pub(super) updates: Vec<tl::enums::Update>,
 }
 
+/// Error when a gap has been detected during update processing.
 #[derive(Debug, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Gap;
 
@@ -121,26 +122,40 @@ pub(super) type UpdateAndPeers = (
 );
 
 /// Anything that should be treated like an update.
+///
+/// Telegram unfortunately also includes update state in types
+/// that are not part of the usual [`tl::enums::Updates`].
 #[derive(Debug)]
 pub enum UpdatesLike {
+    /// The usual variant, received passively from Telegram.
     Updates(tl::enums::Updates),
+    /// Special-case for short-sent messages,
+    /// where the request is also needed to construct a complete update.
     ShortSentMessage {
+        /// The request that triggered the short update.
         request: tl::functions::messages::SendMessage,
+        /// The incomplete update caused by the request.
         update: tl::types::UpdateShortSentMessage,
     },
+    /// Special-case for requests that affect some messages.
     AffectedMessages(tl::types::messages::AffectedMessages),
+    /// Special-case for requests that lead to users being invited.
     InvitedUsers(tl::types::messages::InvitedUsers),
 }
 
 // Public interface around the more tightly-packed internal state.
 
 /// Update state, up to and including the update it is a part of.
-/// That is, when using `catch_up` with a client, all updates with a
+///
+/// When using `catch_up` with a client, all updates with a
 /// state containing a [`MessageBox`] higher than this one will be fetched.
 #[derive(Debug, Clone, PartialEq, Eq, PartialOrd, Ord)]
 pub struct State {
+    /// Last date state assigned by Telegram, which changes somewhat arbitrarily.
     pub date: i32,
+    /// Last sequence state assigned by Telegram, which changes somewhat arbitrarily.
     pub seq: i32,
+    /// The particular message box change if the update pertains to a message-related event sequence.
     pub message_box: Option<MessageBox>,
 }
 

@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-pub mod common;
-pub mod enums;
-pub mod types;
+//! Logic and types for [Working with Updates](https://core.telegram.org/api/updates).
+
+pub use crate::message_box::PrematureEndReason;
+pub use crate::message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};

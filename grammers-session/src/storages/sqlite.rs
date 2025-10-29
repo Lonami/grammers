@@ -6,10 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{
-    AMBIENT_AUTH, ChannelKind, ChannelState, DEFAULT_DC, DcOption, KNOWN_DC_OPTIONS, PeerAuth,
-    PeerId, PeerInfo, PeerKind, Session, UpdateState, UpdatesState,
+use crate::defs::{
+    ChannelKind, ChannelState, DcOption, PeerAuth, PeerId, PeerInfo, PeerKind, UpdateState,
+    UpdatesState,
 };
+use crate::{DEFAULT_DC, KNOWN_DC_OPTIONS, Session};
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -19,6 +20,7 @@ struct Database(sqlite::Connection);
 
 struct TransactionGuard<'c>(&'c sqlite::Connection);
 
+/// SQLite-based storage. This is the recommended option.
 pub struct SqliteSession {
     database: Mutex<Database>,
 }
@@ -265,7 +267,7 @@ impl Session for SqliteSession {
                 .unwrap();
         stmt.bind((":peer_id", peer.id().bot_api_dialog_id()))
             .unwrap();
-        if peer.auth() != AMBIENT_AUTH {
+        if peer.auth() != PeerAuth::default() {
             stmt.bind((":hash", peer.auth().hash())).unwrap();
         }
         let subtype = match peer {

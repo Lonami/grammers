@@ -14,7 +14,7 @@ use crate::{Client, types};
 use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
-use grammers_session::{AMBIENT_AUTH, PeerId, PeerKind, PeerRef};
+use grammers_session::defs::{PeerAuth, PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;
@@ -235,7 +235,7 @@ impl Message {
         utils::peer_from_message(&self.raw)
             .map(|peer| PeerRef {
                 id: PeerId::from(peer),
-                auth: AMBIENT_AUTH,
+                auth: PeerAuth::default(),
             })
             .or(self.fetched_in)
             .expect("empty messages from updates should contain peer_id")

@@ -10,7 +10,7 @@ use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{PeerInfo, UpdateState, UpdatesState};
+use grammers_session::defs::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
 use std::fmt;
 

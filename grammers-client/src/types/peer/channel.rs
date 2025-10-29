@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::{AMBIENT_AUTH, PeerAuth};
+use grammers_session::defs::PeerAuth;
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -114,7 +114,7 @@ impl Channel {
         self.raw
             .access_hash
             .map(PeerAuth::from_hash)
-            .unwrap_or(AMBIENT_AUTH)
+            .unwrap_or_default()
     }
 
     /// Return the title of this channel.

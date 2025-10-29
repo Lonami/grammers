@@ -5,12 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+#![allow(deprecated)]
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
-use crate::{PeerAuth, PeerId, PeerInfo, PeerRef};
+use crate::defs::{PeerAuth, PeerId, PeerInfo, PeerRef};
 
 /// In-memory chat cache, mapping peers to their respective access hashes.
+#[deprecated(note = "Use the Session::peer instead")]
 pub struct PeerAuthCache {
     hash_map: HashMap<PeerId, PeerAuth>,
     self_id: Option<i64>,

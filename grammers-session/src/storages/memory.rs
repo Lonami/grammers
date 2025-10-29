@@ -6,14 +6,23 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::SessionData;
-use crate::{ChannelState, DcOption, PeerId, PeerInfo, Session, UpdateState, UpdatesState};
+use crate::defs::{ChannelState, DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
+use crate::{Session, SessionData};
 use std::sync::Mutex;
 
+/// In-memory session interface.
+///
+/// Does not actually offer direct ways to persist the state anywhere,
+/// so it should only be used in very few select cases.
+///
+/// Logging in has a very high cost in terms of flood wait errors,
+/// so the state really should be persisted by other means.
 #[derive(Default)]
 pub struct MemorySession(Mutex<SessionData>);
 
 impl From<SessionData> for MemorySession {
+    /// Constructs a memory session from the entirety of the session data,
+    /// unlike the blanket `From` implementation which cannot import all values
     fn from(session_data: SessionData) -> Self {
         Self(Mutex::new(session_data))
     }

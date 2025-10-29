@@ -11,7 +11,7 @@ use std::ops::{Deref, DerefMut};
 use grammers_tl_types as tl;
 
 use crate::types::Message as Msg;
-use grammers_session::State;
+use grammers_session::updates::State;
 
 #[derive(Debug, Clone)]
 pub struct Message {

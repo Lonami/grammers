@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::State;
+use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
 /// Occurs whenever a message is deleted.

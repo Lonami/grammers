@@ -8,11 +8,14 @@
 
 //! Methods to deal with and offer access to updates.
 
+#![allow(deprecated)]
+
 use super::{Client, UpdatesConfiguration};
 use crate::types::{PeerMap, Update};
 pub use grammers_mtsender::{AuthorizationError, InvocationError};
-use grammers_session::{MessageBoxes, PeerAuthCache, PeerId, State, UpdatesLike, UpdatesState};
-pub use grammers_session::{PrematureEndReason, UpdateState};
+use grammers_session::PeerAuthCache;
+use grammers_session::defs::{PeerId, UpdateState, UpdatesState};
+pub use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};
 use grammers_tl_types as tl;
 use log::{trace, warn};
 use std::collections::VecDeque;

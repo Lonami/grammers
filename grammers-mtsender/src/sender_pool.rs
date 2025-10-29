@@ -11,7 +11,9 @@ use crate::{
     AuthorizationError, InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth,
 };
 use grammers_mtproto::{mtp, transport};
-use grammers_session::{DcOption, Session, UpdatesLike};
+use grammers_session::Session;
+use grammers_session::defs::DcOption;
+use grammers_session::updates::UpdatesLike;
 use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::ops::ControlFlow;

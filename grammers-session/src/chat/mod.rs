@@ -7,4 +7,5 @@
 // except according to those terms.
 mod hash_cache;
 
+#[allow(deprecated)]
 pub use hash_cache::PeerAuthCache;

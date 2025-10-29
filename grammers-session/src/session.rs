@@ -6,10 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::net::{SocketAddrV4, SocketAddrV6};
+use crate::defs::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 
-use crate::{PeerId, PeerInfo};
-
+/// The main interface to interact with the different [`crate::storages`].
+///
+/// All methods are synchronous and currently infallible because clients
+/// are not equipped to deal with the arbitrary errors that a dynamic
+/// `Session` could produce. This may change in the future.
+///
+/// A newly-created storage should return the same values that
+/// [crate::SessionData::default] would produce.
 pub trait Session: Send + Sync {
     /// Datacenter that is "home" to the user authorized by this session.
     ///
@@ -55,49 +61,4 @@ pub trait Session: Send + Sync {
 
     /// Update the state for one or all updates.
     fn set_update_state(&self, update: UpdateState);
-}
-
-/// A datacenter option.
-///
-/// This is very similar to Telegram's own `dcOption` type, except it also
-/// contains the permanent authentication key and serves as a stable interface.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct DcOption {
-    /// Datacenter identifier.
-    ///
-    /// The primary datacenters have IDs from 1 to 5 inclusive, and are known statically by the session.
-    pub id: i32,
-    /// IPv4 address corresponding to this datacenter.
-    pub ipv4: SocketAddrV4,
-    /// IPv6 address corresponding to this datacenter. May actually be embedding the [`Self::ipv4`] address.
-    pub ipv6: SocketAddrV6,
-    /// Permanent authentication key generated for encrypted communication with this datacenter.
-    ///
-    /// A logged-in user may or not be bound to this authentication key.
-    pub auth_key: Option<[u8; 256]>,
-}
-
-/// Full update state needed to process updates in order without gaps.
-#[derive(Clone, Debug, Default, PartialEq, Eq)]
-pub struct UpdatesState {
-    pub pts: i32,
-    pub qts: i32,
-    pub date: i32,
-    pub seq: i32,
-    pub channels: Vec<ChannelState>,
-}
-
-/// Update state for a single channel.
-#[derive(Clone, Debug, PartialEq, Eq)]
-pub struct ChannelState {
-    pub id: i64,
-    pub pts: i32,
-}
-
-/// Used in [`Session::set_update_state`] to update parts of the overall [`UpdatesState`].
-pub enum UpdateState {
-    All(UpdatesState),
-    Primary { pts: i32, date: i32, seq: i32 },
-    Secondary { qts: i32 },
-    Channel { id: i64, pts: i32 },
 }

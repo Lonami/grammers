@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::{AMBIENT_AUTH, PeerAuth, PeerId};
+use grammers_session::defs::{PeerAuth, PeerId};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -74,13 +74,13 @@ impl Group {
         use tl::enums::Chat;
 
         match &self.raw {
-            Chat::Empty(_) => AMBIENT_AUTH,
-            Chat::Chat(_) => AMBIENT_AUTH,
-            Chat::Forbidden(_) => AMBIENT_AUTH,
+            Chat::Empty(_) => PeerAuth::default(),
+            Chat::Chat(_) => PeerAuth::default(),
+            Chat::Forbidden(_) => PeerAuth::default(),
             Chat::Channel(channel) => channel
                 .access_hash
                 .map(PeerAuth::from_hash)
-                .unwrap_or(AMBIENT_AUTH),
+                .unwrap_or(PeerAuth::default()),
             Chat::ChannelForbidden(channel) => PeerAuth::from_hash(channel.access_hash),
         }
     }

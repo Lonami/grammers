@@ -27,9 +27,8 @@ mod defs;
 #[cfg(test)]
 mod tests;
 
-use crate::{ChannelState, UpdatesState};
-pub use adaptor::peer_from_input_peer;
-pub(crate) use defs::Key;
+use crate::defs::{ChannelState, UpdatesState};
+use defs::Key;
 pub use defs::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
 use defs::{LiveEntry, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PossibleGap, PtsInfo};
 use grammers_tl_types as tl;
@@ -887,8 +886,18 @@ impl MessageBoxes {
     }
 }
 
+/// Reason for calling [`MessageBoxes::end_channel_difference`].
 #[derive(Debug)]
 pub enum PrematureEndReason {
+    /// The channel difference failed to be fetched for a temporary reasons.
+    ///
+    /// The channel state must be kept,
+    /// and getting its difference retried in the future.
     TemporaryServerIssues,
+    /// The logged-in account has been banned from the channel and won't
+    /// be able to fetch the difference in the future.
+    ///
+    /// The channel state will be removed,
+    /// and getting its difference should not be retried in the future.
     Banned,
 }

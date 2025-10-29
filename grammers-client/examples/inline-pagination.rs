@@ -22,6 +22,8 @@
 //! how much data a button's payload can contain, and to keep it simple, we're storing it inline
 //! in decimal, so the numbers can't get too large).
 
+#![allow(deprecated)]
+
 use grammers_client::{Client, InputMessage, Update, button, reply_markup};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::TlSession;

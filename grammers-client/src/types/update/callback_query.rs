@@ -8,7 +8,8 @@
 
 use crate::{Client, InputMessage, types};
 use grammers_mtsender::InvocationError;
-use grammers_session::{PeerId, State};
+use grammers_session::defs::PeerId;
+use grammers_session::updates::State;
 use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;

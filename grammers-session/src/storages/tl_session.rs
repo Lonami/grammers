@@ -6,9 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+#![allow(deprecated)]
+
 use crate::dc_options::DEFAULT_DC;
+use crate::defs::PeerAuth;
 use crate::generated::{enums, types};
-use crate::{AMBIENT_AUTH, KNOWN_DC_OPTIONS, Session};
+use crate::{KNOWN_DC_OPTIONS, Session};
 use grammers_tl_types::deserialize::Error as DeserializeError;
 use grammers_tl_types::{Deserializable, Serializable};
 use std::fmt;
@@ -18,10 +21,15 @@ use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::path::Path;
 use std::sync::Mutex;
 
+/// Original session storage.
+///
+/// This storage leverages Telegram's own serialization format
+/// to persist data to a file on-disk.
 #[cfg_attr(
     feature = "impl-serde",
     derive(serde_derive::Serialize, serde_derive::Deserialize)
 )]
+#[deprecated(note = "Migrate to a different storage")]
 pub struct TlSession {
     session: Mutex<types::Session>,
 }
@@ -121,11 +129,11 @@ impl crate::Session for TlSession {
         }
     }
 
-    fn dc_option(&self, dc_id: i32) -> Option<crate::session::DcOption> {
+    fn dc_option(&self, dc_id: i32) -> Option<crate::defs::DcOption> {
         let session = self.session.lock().unwrap();
         session.dcs.iter().find_map(|dc| match dc {
             enums::DataCenter::Center(center) if center.id == dc_id => {
-                Some(crate::session::DcOption {
+                Some(crate::defs::DcOption {
                     id: center.id,
                     ipv4: SocketAddrV4::new(
                         Ipv4Addr::from_bits(center.ipv4.unwrap() as _),
@@ -149,7 +157,7 @@ impl crate::Session for TlSession {
         })
     }
 
-    fn set_dc_option(&self, dc_option: &crate::session::DcOption) {
+    fn set_dc_option(&self, dc_option: &crate::defs::DcOption) {
         let mut session = self.session.lock().unwrap();
 
         if let Some(pos) = session.dcs.iter().position(|dc| dc.id() == dc_option.id) {
@@ -166,15 +174,15 @@ impl crate::Session for TlSession {
             }));
     }
 
-    fn peer(&self, peer: crate::PeerId) -> Option<crate::PeerInfo> {
+    fn peer(&self, peer: crate::defs::PeerId) -> Option<crate::defs::PeerInfo> {
         let session = self.session.lock().unwrap();
-        if peer.kind() == crate::PeerKind::UserSelf {
+        if peer.kind() == crate::defs::PeerKind::UserSelf {
             session
                 .user
                 .as_ref()
-                .map(|enums::User::User(user)| crate::PeerInfo::User {
+                .map(|enums::User::User(user)| crate::defs::PeerInfo::User {
                     id: user.id,
-                    auth: Some(AMBIENT_AUTH),
+                    auth: Some(PeerAuth::default()),
                     bot: Some(user.bot),
                     is_self: Some(true),
                 })
@@ -183,10 +191,10 @@ impl crate::Session for TlSession {
         }
     }
 
-    fn cache_peer(&self, peer: &crate::PeerInfo) {
+    fn cache_peer(&self, peer: &crate::defs::PeerInfo) {
         let mut session = self.session.lock().unwrap();
         match peer {
-            crate::PeerInfo::User {
+            crate::defs::PeerInfo::User {
                 id,
                 auth: _,
                 bot,
@@ -207,13 +215,13 @@ impl crate::Session for TlSession {
         }
     }
 
-    fn updates_state(&self) -> crate::session::UpdatesState {
+    fn updates_state(&self) -> crate::defs::UpdatesState {
         let session = self.session.lock().unwrap();
         session
             .state
             .as_ref()
             .map(
-                |enums::UpdateState::State(state)| crate::session::UpdatesState {
+                |enums::UpdateState::State(state)| crate::defs::UpdatesState {
                     pts: state.pts,
                     qts: state.qts,
                     date: state.date,
@@ -222,7 +230,7 @@ impl crate::Session for TlSession {
                         .channels
                         .iter()
                         .map(
-                            |enums::ChannelState::State(channel)| crate::session::ChannelState {
+                            |enums::ChannelState::State(channel)| crate::defs::ChannelState {
                                 id: channel.channel_id,
                                 pts: channel.pts,
                             },
@@ -233,9 +241,9 @@ impl crate::Session for TlSession {
             .unwrap_or_default()
     }
 
-    fn set_update_state(&self, update: crate::session::UpdateState) {
+    fn set_update_state(&self, update: crate::defs::UpdateState) {
         match update {
-            crate::session::UpdateState::All(updates_state) => {
+            crate::defs::UpdateState::All(updates_state) => {
                 let mut session = self.session.lock().unwrap();
                 session.state = Some(
                     types::UpdateState {
@@ -258,28 +266,28 @@ impl crate::Session for TlSession {
                     .into(),
                 )
             }
-            crate::session::UpdateState::Primary { pts, date, seq } => {
+            crate::defs::UpdateState::Primary { pts, date, seq } => {
                 let mut current = self.updates_state();
                 current.pts = pts;
                 current.date = date;
                 current.seq = seq;
-                self.set_update_state(crate::session::UpdateState::All(current));
+                self.set_update_state(crate::defs::UpdateState::All(current));
             }
-            crate::session::UpdateState::Secondary { qts } => {
+            crate::defs::UpdateState::Secondary { qts } => {
                 let mut current = self.updates_state();
                 current.qts = qts;
-                self.set_update_state(crate::session::UpdateState::All(current));
+                self.set_update_state(crate::defs::UpdateState::All(current));
             }
-            crate::session::UpdateState::Channel { id, pts } => {
+            crate::defs::UpdateState::Channel { id, pts } => {
                 let mut current = self.updates_state();
                 if let Some(pos) = current.channels.iter().position(|channel| channel.id == id) {
-                    current.channels[pos] = crate::session::ChannelState { id: id, pts }
+                    current.channels[pos] = crate::defs::ChannelState { id: id, pts }
                 } else {
                     current
                         .channels
-                        .push(crate::session::ChannelState { id: id, pts });
+                        .push(crate::defs::ChannelState { id: id, pts });
                 }
-                self.set_update_state(crate::session::UpdateState::All(current));
+                self.set_update_state(crate::defs::UpdateState::All(current));
             }
         }
     }
