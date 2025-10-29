@@ -61,6 +61,7 @@ pub trait Session: Send + Sync {
 ///
 /// This is very similar to Telegram's own `dcOption` type, except it also
 /// contains the permanent authentication key and serves as a stable interface.
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct DcOption {
     /// Datacenter identifier.
     ///
@@ -77,7 +78,7 @@ pub struct DcOption {
 }
 
 /// Full update state needed to process updates in order without gaps.
-#[derive(Clone, Debug, Default, PartialEq)]
+#[derive(Clone, Debug, Default, PartialEq, Eq)]
 pub struct UpdatesState {
     pub pts: i32,
     pub qts: i32,
@@ -87,7 +88,7 @@ pub struct UpdatesState {
 }
 
 /// Update state for a single channel.
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub struct ChannelState {
     pub id: i64,
     pub pts: i32,

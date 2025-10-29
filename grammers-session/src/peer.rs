@@ -52,7 +52,7 @@ pub enum PeerKind {
 }
 
 /// A peer reference along with any known useful information about the peer.
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq, Eq)]
 pub enum PeerInfo {
     User {
         /// Bare user identifier.
@@ -87,7 +87,7 @@ pub enum PeerInfo {
 }
 
 /// Additional information about a [`PeerInfo::Channel`].
-#[derive(Clone, Debug)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChannelKind {
     Megagroup,
     Broadcast,
@@ -202,6 +202,8 @@ impl PeerAuth {
 
 impl PeerInfo {
     /// Returns the `PeerId` represented by this info.
+    ///
+    /// The returned [`PeerId::kind()`] will never be [`PeerKind::UserSelf`].
     pub fn id(&self) -> PeerId {
         match self {
             PeerInfo::User { id, .. } => PeerId::user(*id),

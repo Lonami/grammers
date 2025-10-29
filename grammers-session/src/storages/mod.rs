@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+mod sqlite;
 mod tl_session;
 
+pub use sqlite::SqliteSession;
 pub use tl_session::TlSession;

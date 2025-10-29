@@ -35,3 +35,7 @@ Macros that auto generate serde code.
 ## serde_bytes
 
 Use better bytes encode/decode pattern in serde.
+
+## sqlite
+
+SQLite-based session storage.
