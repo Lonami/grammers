@@ -6,37 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{
-    ChannelState, DEFAULT_DC, DcOption, KNOWN_DC_OPTIONS, PeerId, PeerInfo, Session, UpdateState,
-    UpdatesState,
-};
-use std::collections::HashMap;
+use crate::storages::SessionData;
+use crate::{ChannelState, DcOption, PeerId, PeerInfo, Session, UpdateState, UpdatesState};
 use std::sync::Mutex;
-
-pub struct SessionData {
-    pub home_dc: i32,
-    pub dc_options: HashMap<i32, DcOption>,
-    pub peer_infos: HashMap<PeerId, PeerInfo>,
-    pub updates_state: UpdatesState,
-}
 
 #[derive(Default)]
 pub struct MemorySession(Mutex<SessionData>);
-
-impl Default for SessionData {
-    fn default() -> Self {
-        Self {
-            home_dc: DEFAULT_DC,
-            dc_options: KNOWN_DC_OPTIONS
-                .iter()
-                .cloned()
-                .map(|dc_option| (dc_option.id, dc_option))
-                .collect(),
-            peer_infos: HashMap::new(),
-            updates_state: UpdatesState::default(),
-        }
-    }
-}
 
 impl From<SessionData> for MemorySession {
     fn from(session_data: SessionData) -> Self {
