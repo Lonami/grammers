@@ -7,11 +7,9 @@
 // except according to those terms.
 
 mod memory;
-mod session_data;
 mod sqlite;
 mod tl_session;
 
 pub use memory::MemorySession;
-pub use session_data::SessionData;
 pub use sqlite::SqliteSession;
 pub use tl_session::TlSession;

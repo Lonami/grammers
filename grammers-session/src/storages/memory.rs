@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::storages::SessionData;
+use crate::SessionData;
 use crate::{ChannelState, DcOption, PeerId, PeerInfo, Session, UpdateState, UpdatesState};
 use std::sync::Mutex;
 
