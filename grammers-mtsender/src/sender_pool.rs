@@ -52,18 +52,40 @@ struct ConnectionInfo {
     abort_handle: AbortHandle,
 }
 
+/// Cheaply cloneable handle to interact with its [`SenderPoolRunner`].
 #[derive(Clone)]
 pub struct SenderPoolHandle(mpsc::UnboundedSender<Request>);
 
+/// Named type holding the actual runner and initial handles. The entry point.
 pub struct SenderPool {
+    /// The single mutable instance responsible for driving I/O.
+    ///
+    /// Connections are created on-demand, so any errors while the pool
+    /// is running can only be retrieved with one of the [`SenderPool::handle`]s.
     pub runner: SenderPoolRunner,
+    /// Starting handle attached to the [`SenderPool::runner`].
+    ///
+    /// This is the only way to interact with the runner once it's running.
     pub handle: SenderPoolHandle,
+    /// The single mutable channel through which updates received
+    /// from the network by the [`SenderPool::runner`] are delivered.
+    ///
+    /// Update handling must be processed in a sequential manner,
+    /// so this is a separate instance with no way to clone it.
     pub updates: mpsc::UnboundedReceiver<UpdatesLike>,
 }
 
+/// Manages and runs a pool of zero or more [`Sender`]s.
+///
+/// Use [`SenderPool::new`] to create an instance of this type and associated channels.
 pub struct SenderPoolRunner {
+    /// The session that will contain and persist the datacenter options.
     pub session: Arc<dyn Session>,
+    /// Developer's [Application Identifier](https://core.telegram.org/myapp).
+    ///
+    /// This parameter required to initialize new connections.
     pub api_id: i32,
+    /// Remaining connection parameters used to [`tl::functions::InitConnection`].
     pub connection_params: ConnectionParams,
     request_rx: mpsc::UnboundedReceiver<Request>,
     updates_tx: mpsc::UnboundedSender<UpdatesLike>,
@@ -72,6 +94,8 @@ pub struct SenderPoolRunner {
 }
 
 impl SenderPoolHandle {
+    /// Communicate with the running [`SenderPoolRunner`] instance
+    /// to invoke the serialized request body in the specified datacenter.
     pub async fn invoke_in_dc(
         &self,
         dc_id: i32,
@@ -84,20 +108,38 @@ impl SenderPoolHandle {
         rx.await.map_err(|_| InvocationError::Dropped)?
     }
 
+    /// Communicate with the running [`SenderPoolRunner`] instance
+    /// to drop any active connections to the given datacenter.
+    ///
+    /// Has no effect if there was no connection to the datacenter.
+    ///
+    /// This is useful after datacenter migrations during sign in,
+    /// when the old connection is known to not be needed anymore.
     pub fn disconnect_from_dc(&self, dc_id: i32) -> bool {
         self.0.send(Request::Disconnect { dc_id }).is_ok()
     }
 
+    /// Communicate with the running [`SenderPoolRunner`] instance
+    /// to drop all active connections and gracefully stop running.
     pub fn quit(&self) -> bool {
         self.0.send(Request::Quit).is_ok()
     }
 }
 
 impl SenderPool {
+    /// Creates a new sender pool instance with default configuration,
+    /// attached to the given session and using the provided
+    /// [Application Identifier](https://core.telegram.org/myapp)
+    /// belonging to the developer.
+    ///
+    /// Session instance **should not** be reused by multiple pools at the same time.
+    /// The session instance will only be used to query datacenter options and persist
+    /// any permanent Authorization Keys generated for previously-unconncected datacenters.
     pub fn new<S: Session + 'static>(session: Arc<S>, api_id: i32) -> Self {
         Self::with_configuration(session, api_id, Default::default())
     }
 
+    /// Creates a new sender pool with non-[`ConnectionParams::default`] configuration.
     pub fn with_configuration<S: Session + 'static>(
         session: Arc<S>,
         api_id: i32,
@@ -123,9 +165,9 @@ impl SenderPool {
 }
 
 impl SenderPoolRunner {
-    /// Run the sender pool until [`crate::SenderPoolHandle::quit`] is called.
+    /// Run the sender pool until [`SenderPoolHandle::quit`] is called or the returned future is dropped.
     ///
-    /// Connections will be initiated on-demand whenever the first request to a DC is made.
+    /// Connections will be initiated on-demand whenever the first request to a datacenter is made.
     pub async fn run(mut self) {
         loop {
             tokio::select! {

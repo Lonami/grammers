@@ -10,10 +10,14 @@ use grammers_tl_types as tl;
 use std::fmt;
 use std::io;
 
+/// This error occurs when reading from the network fails.
 #[derive(Debug)]
 pub enum ReadError {
+    /// Standard I/O error.
     Io(io::Error),
+    /// Error propagated from the underlying [`transport`].
     Transport(transport::Error),
+    /// Error propagated from attempting to deserialize a [`tl::Deserializable`].
     Deserialize(mtp::DeserializeError),
 }
 
@@ -68,15 +72,33 @@ impl From<tl::deserialize::Error> for ReadError {
 }
 
 /// The error type reported by the server when a request is misused.
+///
+/// These are returned when Telegram respond to an RPC with [`tl::types::RpcError`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct RpcError {
-    /// A numerical value similar to HTTP status codes.
+    /// A numerical value similar to [HTTP response status codes](https://developer.mozilla.org/en-US/docs/Web/HTTP/Reference/Status).
     pub code: i32,
 
     /// The ASCII error name, normally in screaming snake case.
+    ///
+    /// Digit words are removed from the name and put in the [`RpcError::value`] instead.
+    /// ```
+    /// use grammers_mtsender::RpcError;
+    /// let rpc_error = RpcError::from(grammers_tl_types::types::RpcError {
+    ///         error_code: 500, error_message: "INTERDC_2_CALL_ERROR".into() });
+    /// assert_eq!(rpc_error.name, "INTERDC_CALL_ERROR");
+    /// assert_eq!(rpc_error.value, Some(2));
+    /// ```
     pub name: String,
 
-    /// If the error contained an additional value, it will be present here.
+    /// If the error contained an additional integer value, it will be present here and removed from the [`RpcError::name`].
+    /// ```
+    /// use grammers_mtsender::RpcError;
+    /// let rpc_error = RpcError::from(grammers_tl_types::types::RpcError {
+    ///         error_code: 420, error_message: "FLOOD_WAIT_31".into() });
+    /// assert_eq!(rpc_error.name, "FLOOD_WAIT");
+    /// assert_eq!(rpc_error.value, Some(31));
+    /// ```
     pub value: Option<u32>,
 
     /// The constructor identifier of the request that triggered this error.
@@ -156,6 +178,8 @@ impl RpcError {
         }
     }
 
+    /// Attaches the [`tl::Identifiable::CONSTRUCTOR_ID`] of the
+    /// request that caused this error to the error information.
     pub fn with_caused_by(mut self, constructor_id: u32) -> Self {
         self.caused_by = Some(constructor_id);
         self
@@ -173,7 +197,7 @@ pub enum InvocationError {
     Rpc(RpcError),
 
     /// The request was cancelled or dropped, and the results won't arrive.
-    /// This may mean that the [`crate::SenderPool`] is no longer running.
+    /// This may mean that the [`crate::SenderPoolRunner`] is no longer running.
     Dropped,
 
     /// The request was invoked in a DC that does not exist or is not known.
@@ -299,32 +323,6 @@ mod tests {
                 code: 400,
                 name: "CHAT_INVALID".into(),
                 value: None,
-                caused_by: None,
-            }
-        );
-
-        assert_eq!(
-            RpcError::from(tl::types::RpcError {
-                error_code: 420,
-                error_message: "FLOOD_WAIT_31".into(),
-            }),
-            RpcError {
-                code: 420,
-                name: "FLOOD_WAIT".into(),
-                value: Some(31),
-                caused_by: None,
-            }
-        );
-
-        assert_eq!(
-            RpcError::from(tl::types::RpcError {
-                error_code: 500,
-                error_message: "INTERDC_2_CALL_ERROR".into(),
-            }),
-            RpcError {
-                code: 500,
-                name: "INTERDC_CALL_ERROR".into(),
-                value: Some(2),
                 caused_by: None,
             }
         );

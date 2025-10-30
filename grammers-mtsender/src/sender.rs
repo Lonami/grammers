@@ -117,6 +117,10 @@ impl MsgIdPair {
 }
 
 impl<T: Transport, M: Mtp> Sender<T, M> {
+    /// Create a new connection using the specified transport, MTP state and server address.
+    ///
+    /// Note that this does not attempt to invoke [`tl::functions::InitConnection`].
+    /// It will simply open a new socket connection to the provided address.
     pub async fn connect(transport: T, mtp: M, addr: ServerAddr) -> Result<Self, io::Error> {
         let stream = NetStream::connect(&addr).await?;
         Ok(Self {
@@ -134,6 +138,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
         })
     }
 
+    /// Serializes the given request, enqueues it to the internal buffer,
+    /// and repeatedly calls [`Self::step`] until a response for it is received.
     pub async fn invoke<R: RemoteCall>(
         &mut self,
         request: &R,
@@ -191,7 +197,8 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     ///
     /// Updates received during this step, if any, are returned.
     ///
-    /// Once an error is returned, the connection is dead and should be recreated.
+    /// If an error is returned, the connection should be treated
+    /// as dead and the sender instance recreated.
     pub async fn step(&mut self) -> Result<Vec<UpdatesLike>, ReadError> {
         self.try_fill_write();
         let write_len = self.write_buffer.len() - self.write_head;
@@ -581,6 +588,7 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
     }
 }
 
+/// Helper function to [`Sender::connect`] a plain transport and [`generate_auth_key`] on it.
 pub async fn connect<T: Transport>(
     transport: T,
     addr: ServerAddr,
@@ -589,6 +597,8 @@ pub async fn connect<T: Transport>(
     generate_auth_key(sender).await
 }
 
+/// Uses the input plain sender to carry the Authorization Key generation process,
+/// and returns an encrypted sender reusing the same connection, transport and buffers.
 pub async fn generate_auth_key<T: Transport>(
     mut sender: Sender<T, mtp::Plain>,
 ) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
@@ -629,6 +639,7 @@ pub async fn generate_auth_key<T: Transport>(
     })
 }
 
+/// Helper function to [`Sender::connect`] an encrypted transport with a previous Authorization Key.
 pub async fn connect_with_auth<T: Transport>(
     transport: T,
     addr: ServerAddr,

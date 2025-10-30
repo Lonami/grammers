@@ -9,11 +9,21 @@
 const DEFAULT_LOCALE: &str = "en";
 
 /// Connection parameters used whenever a new connection is initialized.
+///
+/// After creating a [`crate::SenderPool::with_configuration`], the connection of
+/// any of the [`crate::Sender`]s that it uses internally will be initialized with
+/// an instance of [`grammers_tl_types::functions::InitConnection`].
 pub struct ConnectionParams {
+    /// "Device model" according to [`initConnection`](https://core.telegram.org/method/initConnection).
     pub device_model: String,
+    /// "Operation system version" according to [`initConnection`](https://core.telegram.org/method/initConnection).
     pub system_version: String,
+    /// "Application version" according to [`initConnection`](https://core.telegram.org/method/initConnection).
     pub app_version: String,
+    /// Code for the language used on the device's OS, formatted using the ISO 639-1 standard.
     pub system_lang_code: String,
+    /// Either an ISO 639-1 language code or a language pack name obtained from
+    /// a [language pack link](https://core.telegram.org/api/links#language-pack-links).
     pub lang_code: String,
     /// URL of the proxy to use. Requires the `proxy` feature to be enabled.
     ///
