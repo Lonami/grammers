@@ -94,7 +94,7 @@ impl Database {
         Ok(())
     }
 
-    fn begin_transaction(&self) -> sqlite::Result<TransactionGuard> {
+    fn begin_transaction(&self) -> sqlite::Result<TransactionGuard<'_>> {
         self.0.execute("BEGIN TRANSACTION")?;
         Ok(TransactionGuard(&self.0))
     }
