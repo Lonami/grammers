@@ -131,14 +131,14 @@ const SELF_USER_ID: PeerId = PeerId(1 << 40);
 const EMPTY_CHAT_ID: i64 = -1000000000000;
 
 impl PeerId {
-    /// Creates a peer referencing the currently-logged-in user or bot account with ambient authentication.
+    /// Creates a peer identity for the currently-logged-in user or bot account.
     ///
     /// Internally, this will use a special sentinel value outside of any valid Bot API Dialog ID range.
     pub fn self_user() -> Self {
         SELF_USER_ID
     }
 
-    /// Creates a peer reference to a user or bot account with ambient authentication.
+    /// Creates a peer identity for a user or bot account.
     pub fn user(id: i64) -> Self {
         // https://core.telegram.org/api/bots/ids#user-ids
         if !(1 <= id && id <= 0xffffffffff) {
@@ -148,7 +148,7 @@ impl PeerId {
         Self(id)
     }
 
-    /// Creates a peer reference to a small group chat with ambient authentication.
+    /// Creates a peer identity for a small group chat.
     pub fn chat(id: i64) -> Self {
         // https://core.telegram.org/api/bots/ids#chat-ids
         if !(1 <= id && id <= 999999999999) {
@@ -158,7 +158,7 @@ impl PeerId {
         Self(-id)
     }
 
-    /// Creates a peer reference to a broadcast channel, megagroup, gigagroup or monoforum with ambient authentication.
+    /// Creates a peer identity for a broadcast channel, megagroup, gigagroup or monoforum.
     pub fn channel(id: i64) -> Self {
         // https://core.telegram.org/api/bots/ids#supergroup-channel-ids and #monoforum-ids
         if !((1 <= id && id <= 997852516352) || (1002147483649 <= id && id <= 3000000000000)) {
