@@ -30,7 +30,7 @@ mod sender;
 mod sender_pool;
 
 pub use configuration::ConnectionParams;
-pub use errors::{AuthorizationError, InvocationError, ReadError, RpcError};
+pub use errors::{InvocationError, ReadError, RpcError};
 pub use net::ServerAddr;
 pub use sender::{Sender, connect, connect_with_auth, generate_auth_key};
 pub use sender_pool::{SenderPool, SenderPoolHandle, SenderPoolRunner};

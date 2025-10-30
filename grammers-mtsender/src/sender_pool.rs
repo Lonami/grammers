@@ -7,9 +7,7 @@
 // except according to those terms.
 
 use crate::configuration::ConnectionParams;
-use crate::{
-    AuthorizationError, InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth,
-};
+use crate::{InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth};
 use grammers_mtproto::{mtp, transport};
 use grammers_session::Session;
 use grammers_session::defs::DcOption;
@@ -18,7 +16,7 @@ use grammers_tl_types::{self as tl, enums};
 use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
 use std::ops::ControlFlow;
 use std::sync::Arc;
-use std::{fmt, io, panic};
+use std::{fmt, panic};
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
@@ -217,12 +215,7 @@ impl SenderPoolRunner {
                         let sender = match self.connect_sender(&dc_option).await {
                             Ok(t) => t,
                             Err(e) => {
-                                let _ = tx.send(Err(match e {
-                                    AuthorizationError::Gen(e) => InvocationError::Read(
-                                        ReadError::Io(io::Error::new(io::ErrorKind::Other, e)),
-                                    ),
-                                    AuthorizationError::Invoke(e) => e,
-                                }));
+                                let _ = tx.send(Err(e));
                                 return ControlFlow::Continue(());
                             }
                         };
@@ -265,7 +258,7 @@ impl SenderPoolRunner {
     async fn connect_sender(
         &mut self,
         dc_option: &DcOption,
-    ) -> Result<Sender<transport::Full, mtp::Encrypted>, AuthorizationError> {
+    ) -> Result<Sender<transport::Full, mtp::Encrypted>, InvocationError> {
         let transport = transport::Full::new;
 
         #[cfg(feature = "proxy")]

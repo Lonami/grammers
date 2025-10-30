@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::errors::{AuthorizationError, InvocationError, ReadError, RpcError};
+use crate::errors::{InvocationError, ReadError, RpcError};
 use crate::net::{NetStream, ServerAddr};
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
@@ -592,7 +592,7 @@ impl<T: Transport> Sender<T, mtp::Encrypted> {
 pub async fn connect<T: Transport>(
     transport: T,
     addr: ServerAddr,
-) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>, InvocationError> {
     let sender = Sender::connect(transport, mtp::Plain::new(), addr).await?;
     generate_auth_key(sender).await
 }
@@ -601,7 +601,7 @@ pub async fn connect<T: Transport>(
 /// and returns an encrypted sender reusing the same connection, transport and buffers.
 pub async fn generate_auth_key<T: Transport>(
     mut sender: Sender<T, mtp::Plain>,
-) -> Result<Sender<T, mtp::Encrypted>, AuthorizationError> {
+) -> Result<Sender<T, mtp::Encrypted>, InvocationError> {
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");

@@ -13,8 +13,8 @@ use crate::types::{
     AdminRightsBuilder, BannedRightsBuilder, IterBuffer, Message, Participant, Peer, PeerMap,
     Photo, User, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
 };
+use grammers_mtsender::InvocationError;
 use grammers_mtsender::RpcError;
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
 use grammers_session::defs::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;

@@ -11,7 +11,7 @@ use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{Client, InputMedia, PeerMap, types};
 use chrono::{DateTime, FixedOffset};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_mtsender::InvocationError;
 use grammers_session::defs::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use log::{Level, log_enabled, warn};

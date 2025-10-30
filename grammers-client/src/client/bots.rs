@@ -9,7 +9,7 @@ use crate::Client;
 use crate::client::messages::parse_mention_entities;
 use crate::utils::generate_random_id;
 use crate::{InputMessage, types::IterBuffer};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_mtsender::InvocationError;
 use grammers_session::defs::PeerRef;
 use grammers_tl_types as tl;
 

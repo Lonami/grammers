@@ -12,7 +12,7 @@
 
 use super::{Client, UpdatesConfiguration};
 use crate::types::{PeerMap, Update};
-pub use grammers_mtsender::{AuthorizationError, InvocationError};
+use grammers_mtsender::InvocationError;
 use grammers_session::PeerAuthCache;
 use grammers_session::defs::{PeerId, UpdateState, UpdatesState};
 pub use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};

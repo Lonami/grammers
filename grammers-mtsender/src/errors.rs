@@ -205,6 +205,10 @@ pub enum InvocationError {
 
     /// The error occured while reading the response.
     Read(ReadError),
+
+    /// The request had to connect to a new datacenter to be performed,
+    /// but the Authorization Key generation process failed.
+    Authentication(authentication::Error),
 }
 
 impl std::error::Error for InvocationError {}
@@ -216,6 +220,7 @@ impl fmt::Display for InvocationError {
             Self::Dropped => write!(f, "request error: dropped (cancelled)"),
             Self::InvalidDc => write!(f, "request error: invalid dc"),
             Self::Read(err) => write!(f, "request error: {err}"),
+            Self::Authentication(err) => write!(f, "request error: {err}"),
         }
     }
 }
@@ -235,6 +240,18 @@ impl From<mtp::DeserializeError> for InvocationError {
 impl From<tl::deserialize::Error> for InvocationError {
     fn from(error: tl::deserialize::Error) -> Self {
         Self::from(ReadError::from(error))
+    }
+}
+
+impl From<io::Error> for InvocationError {
+    fn from(error: io::Error) -> Self {
+        Self::from(ReadError::from(error))
+    }
+}
+
+impl From<authentication::Error> for InvocationError {
+    fn from(error: authentication::Error) -> Self {
+        Self::Authentication(error)
     }
 }
 
@@ -264,47 +281,6 @@ impl InvocationError {
             Self::Rpc(rpc) => rpc.is(rpc_error),
             _ => false,
         }
-    }
-}
-
-/// This error occurs when the process to generate an authorization key fails.
-#[derive(Debug)]
-pub enum AuthorizationError {
-    /// The generation failed because the generation process went wrong.
-    Gen(authentication::Error),
-
-    /// The generation failed because invoking a request failed.
-    Invoke(InvocationError),
-}
-
-impl std::error::Error for AuthorizationError {}
-
-impl fmt::Display for AuthorizationError {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        match self {
-            Self::Gen(err) => write!(f, "authorization error: {err}"),
-            Self::Invoke(err) => write!(f, "authorization error: {err}"),
-        }
-    }
-}
-
-impl From<authentication::Error> for AuthorizationError {
-    fn from(error: authentication::Error) -> Self {
-        Self::Gen(error)
-    }
-}
-
-impl From<InvocationError> for AuthorizationError {
-    fn from(error: InvocationError) -> Self {
-        Self::Invoke(error)
-    }
-}
-
-impl From<io::Error> for AuthorizationError {
-    fn from(error: io::Error) -> Self {
-        // TODO not entirely happy with some of these error chains
-        // might need to "flatten" them to not depend on layers so deep
-        Self::from(InvocationError::from(ReadError::from(error)))
     }
 }
 
