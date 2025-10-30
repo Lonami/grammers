@@ -9,7 +9,7 @@
    xmlns:svg="http://www.w3.org/2000/svg">
    <style>
       rect {
-      fill: #ffffdc;
+      fill: #ddeeff;
       stroke: #000000;
       }
       path {
@@ -38,35 +38,35 @@
    <g>
       <rect width="149" height="29" x="180" y="0" />
       <text x="255" y="15">grammers-client</text>
-      <path d="M 255,30 v 15 H 75 V 180" />
-      <path d="M 255,30 v 15 H 165 V 120" />
-      <path d="M 255,30 v 15 H 255 V 60" />
-      <path d="M 255,30 v 15 H 435 V 180" />
+      <path d="M 255,30 v 5 q 0 10 -10 10 H 85 q -10 0 -10 10 V 180" />
+      <path d="M 255,30 v 5 q 0 10 -10 10 H 175 q -10 0 -10 10 V 120" />
+      <path d="M 255,30 V 60" />
+      <path d="M 255,30 v 5 q 0 10 10 10 H 425 q 10 0 10 10 V 180" />
    </g>
    <g>
       <rect width="149" height="29" x="180" y="60" />
       <text x="255" y="75">grammers-mtsender</text>
-      <path d="M 255,90 v 15 H 75 V 180" />
-      <path d="M 255,90 v 15 H 165 V 120" />
-      <path d="M 255,90 v 15 H 345 V 120" />
-      <path d="M 255,90 v 15 H 435 V 180" />
+      <path d="M 255,90 v 5 q 0 10 -10 10 H 85 q -10 0 -10 10 V 180" />
+      <path d="M 255,90 v 5 q 0 10 -10 10 H 175 q -10 0 -10 10 V 120" />
+      <path d="M 255,90 v 5 q 0 10 10 10 H 335 q 10 0 10 10 V 120" />
+      <path d="M 255,90 v 5 q 0 10 10 10 H 425 q 10 0 10 10 V 180" />
    </g>
    <g>
       <rect width="149" height="29" x="90" y="120" />
       <text x="165" y="135">grammers-session</text>
-      <path d="M 90,135 H 75 V 180" />
+      <path d="M 90,135 H 85 q -10 0 -10 10 V 180" />
    </g>
    <g>
       <rect width="149" height="29" x="270" y="120" />
       <text x="345" y="135">grammers-mtproto</text>
-      <path d="M 345,150 v 15 H 75 V 180" />
-      <path d="M 345,150 v 15 H 435 V 180" />
+      <path d="M 345,150 v 5 q 0 10 -10 10 H 85 q -10 0 -10 10 V 180" />
+      <path d="M 345,150 v 5 q 0 10 10 10 H 425 q 10 0 10 10 V 180" />
    </g>
    <g>
       <rect width="149" height="29" x="0" y="180" />
       <text x="75" y="195">grammers-tl-types</text>
-      <path d="M 75,210 v 15 H 75 V 240" />
-      <path d="M 75,210 v 15 H 255 V 240" />
+      <path d="M 75,210 V 240" />
+      <path d="M 75,210 v 5 q 0 10 10 10 H 245 q 10 0 10 10 V 240" />
    </g>
    <g>
       <rect width="149" height="29" x="360" y="180" />
