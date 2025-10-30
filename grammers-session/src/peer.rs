@@ -158,10 +158,10 @@ impl PeerId {
         Self(-id)
     }
 
-    /// Creates a peer reference to a broadcast channel, megagroup or gigagroup with ambient authentication.
+    /// Creates a peer reference to a broadcast channel, megagroup, gigagroup or monoforum with ambient authentication.
     pub fn channel(id: i64) -> Self {
-        // https://core.telegram.org/api/bots/ids#supergroup-channel-ids
-        if !(1 <= id && id <= 997852516352) {
+        // https://core.telegram.org/api/bots/ids#supergroup-channel-ids and #monoforum-ids
+        if !((1 <= id && id <= 997852516352) || (1002147483649 <= id && id <= 3000000000000)) {
             panic!("channel ID out of range");
         }
 
@@ -176,7 +176,9 @@ impl PeerId {
             PeerKind::UserSelf
         } else if -999999999999 <= self.0 && self.0 <= -1 {
             PeerKind::Chat
-        } else if -1997852516352 <= self.0 && self.0 <= -1000000000001 {
+        } else if -1997852516352 <= self.0 && self.0 <= -1000000000001
+            || (-2002147483649 <= self.0 && self.0 <= -4000000000000)
+        {
             PeerKind::Channel
         } else {
             unreachable!()
