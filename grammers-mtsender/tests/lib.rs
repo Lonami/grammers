@@ -11,27 +11,15 @@ pub const TELEGRAM_TEST_DC_2: &str = "149.154.167.40:443";
 /// The default datacenter to connect to for testing.
 pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
-use grammers_mtproto::authentication;
-use grammers_mtproto::transport;
-use grammers_mtsender::connect;
-use grammers_tl_types::{LAYER, enums, functions};
-use socks5_server::{
-    Command, Server,
-    auth::Password,
-    proto::{Address, Reply},
-};
-use std::str::FromStr;
-use std::sync::Arc;
-use tokio::io;
-use tokio::net::{TcpListener, TcpStream};
-
-use grammers_mtproto::mtp;
-use grammers_mtsender::Sender;
-use simple_logger::SimpleLogger;
-use tokio::{runtime, task};
-
 #[test]
 fn test_invoke_encrypted_method() {
+    use grammers_mtproto::transport;
+    use grammers_mtsender::connect;
+    use grammers_tl_types::{LAYER, enums, functions};
+    use simple_logger::SimpleLogger;
+    use std::str::FromStr;
+    use tokio::runtime;
+
     let _ = SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init();
@@ -75,6 +63,22 @@ fn test_invoke_encrypted_method() {
 #[test]
 #[cfg(feature = "proxy")]
 fn test_connection_through_proxy() {
+    use grammers_mtproto::authentication;
+    use grammers_mtproto::mtp;
+    use grammers_mtproto::transport;
+    use grammers_mtsender::Sender;
+    use simple_logger::SimpleLogger;
+    use socks5_server::{
+        Command, Server,
+        auth::Password,
+        proto::{Address, Reply},
+    };
+    use std::str::FromStr;
+    use std::sync::Arc;
+    use tokio::io;
+    use tokio::net::{TcpListener, TcpStream};
+    use tokio::{runtime, task};
+
     let _ = SimpleLogger::new()
         .with_level(log::LevelFilter::Debug)
         .init();
