@@ -93,7 +93,7 @@ impl DownloadIter {
                 return Ok(Some(data.clone()));
             }
             DownloadIterVariant::PreFailed(error) => {
-                return Err(InvocationError::Read(error.into()));
+                return Err(InvocationError::Io(error));
             }
             DownloadIterVariant::Empty => return Ok(None),
         };

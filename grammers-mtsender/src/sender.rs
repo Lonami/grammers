@@ -545,10 +545,7 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
     fn process_deserialize_error(&mut self, failure: DeserializationFailure) {
         if let Some(req) = self.pop_request(failure.msg_id) {
             debug!("got deserialization failure {:?}", failure.error);
-            drop(
-                req.result
-                    .send(Err(InvocationError::Read(failure.error.into()))),
-            );
+            drop(req.result.send(Err(InvocationError::from(failure.error))));
         } else {
             info!(
                 "got deserialization failure {:?} but no such request is saved",

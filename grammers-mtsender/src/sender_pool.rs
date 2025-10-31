@@ -7,7 +7,8 @@
 // except according to those terms.
 
 use crate::configuration::ConnectionParams;
-use crate::{InvocationError, ReadError, Sender, ServerAddr, connect, connect_with_auth};
+use crate::errors::ReadError;
+use crate::{InvocationError, Sender, ServerAddr, connect, connect_with_auth};
 use grammers_mtproto::{mtp, transport};
 use grammers_session::Session;
 use grammers_session::defs::DcOption;
@@ -303,9 +304,7 @@ impl SenderPoolRunner {
 
         let enums::Config::Config(remote_config) = match sender.invoke(&init_connection).await {
             Ok(config) => config,
-            Err(InvocationError::Read(ReadError::Transport(transport::Error::BadStatus {
-                status: 404,
-            }))) => {
+            Err(InvocationError::Transport(transport::Error::BadStatus { status: 404 })) => {
                 sender = connect(transport(), addr()).await?;
                 sender.invoke(&init_connection).await?
             }

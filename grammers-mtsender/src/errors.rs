@@ -17,7 +17,7 @@ pub enum ReadError {
     Io(io::Error),
     /// Error propagated from the underlying [`transport`].
     Transport(transport::Error),
-    /// Error propagated from attempting to deserialize a [`tl::Deserializable`].
+    /// Error propagated from attempting to deserialize an invalid [`tl::Deserializable`].
     Deserialize(mtp::DeserializeError),
 }
 
@@ -187,26 +187,39 @@ impl RpcError {
 }
 
 /// This error occurs when a Remote Procedure call was unsuccessful.
-///
-/// The request should be retransmited when this happens, unless the
-/// variant is `InvalidParameters`.
 #[derive(Debug)]
 pub enum InvocationError {
     /// The request invocation failed because it was invalid or the server
-    /// could not process it successfully.
+    /// could not process it successfully. If the server is suffering from
+    /// temporary issues, the request may be retried after some time.
     Rpc(RpcError),
+
+    /// Standard I/O error when reading the response.
+    ///
+    /// Telegram may kill the connection at any moment, but it is generally valid to retry
+    /// the request at least once immediately, which will be done through a new connection.
+    Io(io::Error),
+
+    /// Error propagated from attempting to deserialize an invalid [`tl::Deserializable`].
+    ///
+    /// This occurs somewhat frequently when misusing a single session more than once at a time.
+    /// Otherwise it might happen on bleeding-edge layers that have not had time to settle yet.
+    Deserialize(mtp::DeserializeError),
+
+    /// Error propagated from the underlying [`transport`].
+    ///
+    /// The most common variant is [`transport::Error::BadStatus`], which can occur when
+    /// there's no valid Authorization Key (404) or too many connections have been made (429).
+    Transport(transport::Error),
 
     /// The request was cancelled or dropped, and the results won't arrive.
     /// This may mean that the [`crate::SenderPoolRunner`] is no longer running.
     Dropped,
 
-    /// The request was invoked in a DC that does not exist or is not known.
+    /// The request was invoked in a datacenter that does not exist or is not known by the session.
     InvalidDc,
 
-    /// The error occured while reading the response.
-    Read(ReadError),
-
-    /// The request had to connect to a new datacenter to be performed,
+    /// The request caused the sender to connect to a new datacenter to be performed,
     /// but the Authorization Key generation process failed.
     Authentication(authentication::Error),
 }
@@ -217,9 +230,11 @@ impl fmt::Display for InvocationError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Rpc(err) => write!(f, "request error: {err}"),
+            Self::Io(err) => write!(f, "request error: {err}"),
+            Self::Deserialize(err) => write!(f, "request error: {err}"),
+            Self::Transport(err) => write!(f, "request error: {err}"),
             Self::Dropped => write!(f, "request error: dropped (cancelled)"),
             Self::InvalidDc => write!(f, "request error: invalid dc"),
-            Self::Read(err) => write!(f, "request error: {err}"),
             Self::Authentication(err) => write!(f, "request error: {err}"),
         }
     }
@@ -227,12 +242,22 @@ impl fmt::Display for InvocationError {
 
 impl From<ReadError> for InvocationError {
     fn from(error: ReadError) -> Self {
-        Self::Read(error)
+        match error {
+            ReadError::Io(error) => Self::from(error),
+            ReadError::Transport(error) => Self::from(error),
+            ReadError::Deserialize(error) => Self::from(error),
+        }
     }
 }
 
 impl From<mtp::DeserializeError> for InvocationError {
     fn from(error: mtp::DeserializeError) -> Self {
+        Self::from(ReadError::from(error))
+    }
+}
+
+impl From<transport::Error> for InvocationError {
+    fn from(error: transport::Error) -> Self {
         Self::from(ReadError::from(error))
     }
 }
