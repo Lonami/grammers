@@ -129,8 +129,8 @@ fn test_connection_through_proxy() {
 
         // Don't need to run the entire flow, just prove that we can send and receive data.
         let (request, data) = authentication::step1().unwrap();
-        let response = sender.send(request).await.unwrap();
-        authentication::step2(data, &response).unwrap();
+        let response = sender.invoke(&request).await.unwrap();
+        authentication::step2(data, response).unwrap();
 
         drop(sender);
         socks5_task.await.unwrap(); // also make sure proxy finished handling a single connection cleanly

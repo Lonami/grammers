@@ -151,13 +151,6 @@ impl<T: Transport, M: Mtp> Sender<T, M> {
             .and_then(|vec| R::Return::from_bytes(&vec).map_err(|err| err.into()))
     }
 
-    /// Like `invoke` but raw data.
-    pub async fn send(&mut self, body: Vec<u8>) -> Result<Vec<u8>, InvocationError> {
-        let (tx, rx) = oneshot::channel();
-        self.enqueue_body(body, tx);
-        self.step_until_receive(rx).await
-    }
-
     pub(crate) fn enqueue_body(
         &mut self,
         body: Vec<u8>,
@@ -602,21 +595,21 @@ pub async fn generate_auth_key<T: Transport>(
     info!("generating new authorization key...");
     let (request, data) = authentication::step1()?;
     debug!("gen auth key: sending step 1");
-    let response = sender.send(request).await?;
+    let response = sender.invoke(&request).await?;
     debug!("gen auth key: starting step 2");
-    let (request, data) = authentication::step2(data, &response)?;
+    let (request, data) = authentication::step2(data, response)?;
     debug!("gen auth key: sending step 2");
-    let response = sender.send(request).await?;
+    let response = sender.invoke(&request).await?;
     debug!("gen auth key: starting step 3");
-    let (request, data) = authentication::step3(data, &response)?;
+    let (request, data) = authentication::step3(data, response)?;
     debug!("gen auth key: sending step 3");
-    let response = sender.send(request).await?;
+    let response = sender.invoke(&request).await?;
     debug!("gen auth key: completing generation");
     let authentication::Finished {
         auth_key,
         time_offset,
         first_salt,
-    } = authentication::create_key(data, &response)?;
+    } = authentication::create_key(data, response)?;
     info!("authorization key generated successfully");
 
     Ok(Sender {
