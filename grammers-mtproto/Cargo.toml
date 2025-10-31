@@ -1,6 +1,6 @@
 [package]
 name = "grammers-mtproto"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -18,8 +18,8 @@ bytes = "1.10.1"
 crc32fast = "1.5.0"
 flate2 = "1.1.4"
 getrandom = "0.3.3"
-grammers-crypto = { path = "../grammers-crypto", version = "0.7.0" }
-grammers-tl-types = { path = "../grammers-tl-types", version = "0.7.0", features = ["tl-mtproto"] }
+grammers-crypto = { path = "../grammers-crypto", version = "0.8.0" }
+grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0", features = ["tl-mtproto"] }
 log = "0.4.28"
 num-bigint = "0.4.6"
 sha1 = "0.10.6"

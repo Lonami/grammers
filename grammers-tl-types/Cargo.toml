@@ -1,6 +1,6 @@
 [package]
 name = "grammers-tl-types"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -20,8 +20,8 @@ serde_derive = { version = "~1.0", optional = true }
 serde_bytes = { version = "0.11.19", optional = true }
 
 [build-dependencies]
-grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.7.0" }
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.2" }
+grammers-tl-gen = { path = "../grammers-tl-gen", version = "0.8.0" }
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.2.0" }
 
 [dev-dependencies]
 toml = "0.9.8"

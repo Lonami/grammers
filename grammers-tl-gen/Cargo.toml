@@ -1,6 +1,6 @@
 [package]
 name = "grammers-tl-gen"
-version = "0.7.0"
+version = "0.8.0"
 authors = ["Lonami Exo <totufals@hotmail.com>"]
 license = "MIT OR Apache-2.0"
 description = """
@@ -14,7 +14,7 @@ categories = []
 edition = "2024"
 
 [dependencies]
-grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.1.2" }
+grammers-tl-parser = { path = "../grammers-tl-parser", version = "1.2.0" }
 
 [dev-dependencies]
 toml = "0.9.8"

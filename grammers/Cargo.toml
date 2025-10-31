@@ -13,4 +13,4 @@ categories = []
 edition = "2024"
 
 [dependencies]
-grammers-client = "0.7.0"
+grammers-client = "0.8.0"
