@@ -25,13 +25,12 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0", features
 locate-locale = "0.2.0"
 os_info = { version = "3.12.0", default-features = false }
 log = "0.4.28"
-tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time", "net", "macros"] }
+tokio = { version = "1.47.1", default-features = false, features = ["io-util", "sync", "time", "net", "macros", "rt"] }
 tokio-socks = { version = "0.5.2", optional = true }
 hickory-resolver = { version = "0.25.2", optional = true }
 url = { version = "2.5.7", optional = true }
 
 [dev-dependencies]
 simple_logger = { version = "5.0.0", default-features = false, features = ["colors"] }
-tokio = { version = "1.47.1", features = ["rt"] }
 toml = "0.9.8"
 socks5-server = "0.10.1"
