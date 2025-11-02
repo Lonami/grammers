@@ -8,7 +8,7 @@
 
 use std::collections::HashMap;
 
-use crate::defs::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
+use crate::types::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 use crate::{DEFAULT_DC, KNOWN_DC_OPTIONS, Session};
 
 /// In-memory representation of the entire [`Session`] state.

@@ -10,7 +10,7 @@ use crate::client::messages::parse_mention_entities;
 use crate::utils::generate_random_id;
 use crate::{InputMessage, types::IterBuffer};
 use grammers_mtsender::InvocationError;
-use grammers_session::defs::PeerRef;
+use grammers_session::types::PeerRef;
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 50;
@@ -140,7 +140,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(bot: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(bot: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This is equivalent to writing `@bot inline query` in a Telegram app.
     /// let mut inline_results = client.inline_query(bot, "inline query");
     ///

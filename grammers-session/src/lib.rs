@@ -29,12 +29,12 @@
 
 mod chat;
 mod dc_options;
-pub mod defs;
 mod message_box;
 mod peer;
 mod session;
 mod session_data;
 pub mod storages;
+pub mod types;
 pub mod updates;
 
 #[allow(deprecated)]

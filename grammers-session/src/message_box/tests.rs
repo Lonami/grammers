@@ -11,9 +11,9 @@ use super::defs::{
     UpdateAndPeers,
 };
 use super::{PrematureEndReason, next_updates_deadline};
-use crate::defs::{ChannelState, UpdatesState};
 use crate::message_box::POSSIBLE_GAP_TIMEOUT;
 use crate::message_box::defs::UpdatesLike;
+use crate::types::{ChannelState, UpdatesState};
 use grammers_tl_types as tl;
 use std::cell::RefCell;
 use std::ops::Add;

@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::defs::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
+use crate::types::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 
 /// The main interface to interact with the different [`crate::storages`].
 ///

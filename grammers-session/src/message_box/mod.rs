@@ -27,7 +27,7 @@ mod defs;
 #[cfg(test)]
 mod tests;
 
-use crate::defs::{ChannelState, UpdatesState};
+use crate::types::{ChannelState, UpdatesState};
 use defs::Key;
 pub use defs::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
 use defs::{LiveEntry, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PossibleGap, PtsInfo};

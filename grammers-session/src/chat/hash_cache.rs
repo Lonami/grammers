@@ -10,7 +10,7 @@
 use grammers_tl_types as tl;
 use std::collections::HashMap;
 
-use crate::defs::{PeerAuth, PeerId, PeerInfo, PeerRef};
+use crate::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 
 /// In-memory chat cache, mapping peers to their respective access hashes.
 #[deprecated(note = "Use the Session::peer instead")]

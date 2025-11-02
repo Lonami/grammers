@@ -14,8 +14,8 @@
 
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
-use grammers_session::defs::PeerRef;
 use grammers_session::storages::SqliteSession;
+use grammers_session::types::PeerRef;
 use simple_logger::SimpleLogger;
 use std::sync::Arc;
 use std::{env, time::Duration};

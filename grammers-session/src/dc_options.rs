@@ -8,7 +8,7 @@
 
 use std::net::{Ipv4Addr, SocketAddrV4, SocketAddrV6};
 
-use crate::defs::DcOption;
+use crate::types::DcOption;
 
 pub(crate) const DEFAULT_DC: i32 = 2;
 

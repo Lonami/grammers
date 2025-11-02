@@ -7,8 +7,6 @@
 // except according to those terms.
 
 //! Session type definitions.
-//!
-//! <div class="warning">This module will be renamed to "types" in a future release.</div>
 
 use std::net::{SocketAddrV4, SocketAddrV6};
 

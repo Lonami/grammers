@@ -15,7 +15,7 @@ use crate::types::{
 };
 use grammers_mtsender::InvocationError;
 use grammers_mtsender::RpcError;
-use grammers_session::defs::{PeerId, PeerKind, PeerRef};
+use grammers_session::types::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::future::Future;
@@ -423,7 +423,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut participants = client.iter_participants(chat);
     ///
     /// while let Some(participant) = participants.next().await? {
@@ -455,7 +455,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::defs::PeerRef, user: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::types::PeerRef, user: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// match client.kick_participant(chat, user).await {
     ///     Ok(_) => println!("user is no more >:D"),
     ///     Err(_) => println!("Kick failed! Are you sure you're admin?"),
@@ -509,7 +509,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::defs::PeerRef, user: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::types::PeerRef, user: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // This user keeps spamming pepe stickers, take the sticker permission away from them
     /// let res = client
     ///     .set_banned_rights(chat, user)
@@ -556,7 +556,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(chat: grammers_session::defs::PeerRef, user: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(chat: grammers_session::types::PeerRef, user: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let the user pin messages and ban other people
     /// let res = client.set_admin_rights(chat, user)
     ///     .load_current()
@@ -592,7 +592,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let mut photos = client.iter_profile_photos(peer);
     ///
     /// while let Some(photo) = photos.next().await? {
@@ -610,7 +610,7 @@ impl Client {
     /// # Example
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let peer = client.resolve_peer(peer).await?;
     ///
     /// println!("Found peer: {}", peer.name().unwrap_or(&peer.id().to_string()));
@@ -827,7 +827,7 @@ impl Client {
     ///
     /// **Do a one-shot pulse and let it fade away**
     /// ```
-    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types::enums::SendMessageAction;
     ///
     /// client
@@ -842,7 +842,7 @@ impl Client {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {
@@ -871,7 +871,7 @@ impl Client {
     ///
     /// **Cancel any actions**
     /// ```
-    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.action(peer).cancel().await?;
     /// # Ok(())
     /// # }
