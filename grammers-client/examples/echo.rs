@@ -15,7 +15,7 @@
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
 use grammers_session::defs::PeerRef;
-use grammers_session::storages::TlSession;
+use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;
 use std::sync::Arc;
 use std::{env, time::Duration};
@@ -58,7 +58,7 @@ async fn async_main() -> Result {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let token = env::args().nth(1).expect("token missing");
 
-    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(SqliteSession::open(SESSION_FILE)?);
 
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
@@ -72,7 +72,6 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token, env!("TG_HASH")).await?;
-        session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }
 
@@ -109,7 +108,6 @@ async fn async_main() -> Result {
 
     println!("Saving session file...");
     updates.sync_update_state(); // dropping `updates` would also sync it, which you want before saving session
-    session.save_to_file(SESSION_FILE)?;
 
     // Pool's `run()` won't finish until all handles are dropped or quit is called.
     // Here there are at least three handles alive: `handle`, `client` and `updates`

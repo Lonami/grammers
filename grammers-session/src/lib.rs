@@ -30,7 +30,6 @@
 mod chat;
 mod dc_options;
 pub mod defs;
-mod generated;
 mod message_box;
 mod peer;
 mod session;
@@ -43,7 +42,3 @@ pub use chat::PeerAuthCache;
 pub(crate) use dc_options::{DEFAULT_DC, KNOWN_DC_OPTIONS};
 pub use session::Session;
 pub use session_data::SessionData;
-
-// Needed for auto-generated definitions.
-use generated::{enums, types};
-use grammers_tl_types::{Deserializable, Identifiable, Serializable, deserialize};

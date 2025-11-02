@@ -31,7 +31,7 @@ impl Client {
     /// ```
     /// use std::sync::Arc;
     /// use grammers_client::Client;
-    /// use grammers_session::storages::TlSession;
+    /// use grammers_session::storages::SqliteSession;
     /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
@@ -39,7 +39,7 @@ impl Client {
     /// const API_ID: i32 = 932939;
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
-    /// let session = Arc::new(TlSession::load_file_or_create("hello-world.session")?);
+    /// let session = Arc::new(SqliteSession::open("hello-world.session")?);
     /// let pool = SenderPool::new(Arc::clone(&session), API_ID);
     /// let client = Client::new(&pool);
     /// # Ok(())

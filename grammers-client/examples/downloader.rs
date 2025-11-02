@@ -22,7 +22,7 @@ use std::{env, io};
 
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
-use grammers_session::storages::TlSession;
+use grammers_session::storages::SqliteSession;
 use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
@@ -43,15 +43,12 @@ async fn async_main() -> Result<()> {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let peer_name = env::args().nth(1).expect("peer name missing");
 
-    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(SqliteSession::open(SESSION_FILE)?);
 
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
     let SenderPool { runner, .. } = pool;
     let _ = tokio::spawn(runner.run());
-
-    // If we can't save the session, sign out once we're done.
-    let mut sign_out = false;
 
     if !client.is_authorized().await? {
         println!("Signing in...");
@@ -75,13 +72,6 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match session.save_to_file(SESSION_FILE) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("NOTE: failed to save the session, will sign out when done: {e}");
-                sign_out = true;
-            }
-        }
     }
 
     let maybe_peer = client.resolve_username(peer_name.as_str()).await?;
@@ -115,10 +105,6 @@ async fn async_main() -> Result<()> {
     }
 
     println!("Downloaded {counter} messages");
-
-    if sign_out {
-        drop(client.sign_out().await);
-    }
 
     // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())

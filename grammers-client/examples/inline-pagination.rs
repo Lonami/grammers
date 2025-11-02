@@ -26,7 +26,7 @@
 
 use grammers_client::{Client, InputMessage, Update, button, reply_markup};
 use grammers_mtsender::SenderPool;
-use grammers_session::storages::TlSession;
+use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::sync::Arc;
@@ -120,7 +120,7 @@ async fn async_main() -> Result {
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
     let token = env::args().nth(1).expect("token missing");
 
-    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(SqliteSession::open(SESSION_FILE)?);
 
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
@@ -132,7 +132,6 @@ async fn async_main() -> Result {
     if !client.is_authorized().await? {
         println!("Signing in...");
         client.bot_sign_in(&token, env!("TG_HASH")).await?;
-        session.save_to_file(SESSION_FILE)?;
         println!("Signed in!");
     }
 
@@ -153,9 +152,6 @@ async fn async_main() -> Result {
             }
         }
     }
-
-    println!("Saving session file...");
-    session.save_to_file(SESSION_FILE)?;
 
     // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
     Ok(())

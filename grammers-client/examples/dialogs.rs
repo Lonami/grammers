@@ -14,7 +14,7 @@
 
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
-use grammers_session::storages::TlSession;
+use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
@@ -47,15 +47,12 @@ async fn async_main() -> Result<()> {
 
     let api_id = env!("TG_ID").parse().expect("TG_ID invalid");
 
-    let session = Arc::new(TlSession::load_file_or_create(SESSION_FILE)?);
+    let session = Arc::new(SqliteSession::open(SESSION_FILE)?);
 
     let pool = SenderPool::new(Arc::clone(&session), api_id);
     let client = Client::new(&pool);
     let SenderPool { runner, .. } = pool;
     let _ = tokio::spawn(runner.run());
-
-    // If we can't save the session, sign out once we're done.
-    let mut sign_out = false;
 
     if !client.is_authorized().await? {
         println!("Signing in...");
@@ -79,13 +76,6 @@ async fn async_main() -> Result<()> {
             Err(e) => panic!("{}", e),
         };
         println!("Signed in!");
-        match session.save_to_file(SESSION_FILE) {
-            Ok(_) => {}
-            Err(e) => {
-                println!("NOTE: failed to save the session, will sign out when done: {e}");
-                sign_out = true;
-            }
-        }
     }
 
     let mut dialogs = client.iter_dialogs();
@@ -98,10 +88,6 @@ async fn async_main() -> Result<()> {
             peer.id().bot_api_dialog_id(),
             peer.name().unwrap_or_default()
         );
-    }
-
-    if sign_out {
-        drop(client.sign_out().await);
     }
 
     // `runner.run()`'s task will be dropped (and disconnect occur) once the runtime exits.
