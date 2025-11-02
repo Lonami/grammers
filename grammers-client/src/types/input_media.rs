@@ -5,9 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use grammers_tl_types as tl;
+
 use super::attributes::Attribute;
 use crate::types::{Media, Uploaded};
-use grammers_tl_types as tl;
 
 /// Construct and send albums.
 #[derive(Default)]

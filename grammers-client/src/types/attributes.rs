@@ -5,8 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+use std::convert::TryInto;
+use std::time::Duration;
+
 use grammers_tl_types as tl;
-use std::{convert::TryInto, time::Duration};
 
 #[derive(Clone)]
 pub enum Attribute {

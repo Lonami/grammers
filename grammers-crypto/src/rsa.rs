@@ -12,7 +12,8 @@
 
 use num_bigint::BigUint;
 
-use crate::{aes::ige_encrypt, sha256};
+use crate::aes::ige_encrypt;
+use crate::sha256;
 
 /// RSA key.
 pub struct Key {

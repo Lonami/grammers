@@ -8,11 +8,12 @@
 
 use std::sync::Arc;
 
+use grammers_session::updates::State;
+use grammers_tl_types as tl;
+
 use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
 use crate::types::Message as Msg;
 use crate::{Client, PeerMap, utils};
-use grammers_session::updates::State;
-use grammers_tl_types as tl;
 
 /// An update that indicates some event, which may be of interest to the logged-in account, has occured.
 ///

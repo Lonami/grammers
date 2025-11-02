@@ -84,10 +84,9 @@ pub mod serialize;
 
 pub use deserialize::{Cursor, Deserializable};
 pub use generated::{LAYER, enums, functions, name_for_id, types};
-pub use serialize::Serializable;
-
 #[cfg(feature = "impl-serde")]
 use serde_derive::{Deserialize, Serialize};
+pub use serialize::Serializable;
 
 /// Bare vector type (`vector` as opposed to the type `Vector`).
 ///

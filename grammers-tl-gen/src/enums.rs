@@ -8,13 +8,13 @@
 
 //! Code to generate Rust's `enum`'s from TL definitions.
 
-use crate::grouper;
-use crate::metadata::Metadata;
-use crate::rustifier;
-use crate::{Config, ignore_type};
-use grammers_tl_parser::tl::{Definition, ParameterType, Type};
 use std::collections::HashSet;
 use std::io::{self, Write};
+
+use grammers_tl_parser::tl::{Definition, ParameterType, Type};
+
+use crate::metadata::Metadata;
+use crate::{Config, grouper, ignore_type, rustifier};
 
 /// Types that implement Copy from builtin_type
 const COPY_TYPES: [&str; 7] = ["bool", "f64", "i32", "i64", "u32", "[u8; 16]", "[u8; 32]"];

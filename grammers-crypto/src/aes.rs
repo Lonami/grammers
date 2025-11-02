@@ -8,10 +8,11 @@
 
 //! [AES-Infinite Garble Extension](https://mgp25.com/blog/2015/06/21/AESIGE/) implementation.
 
+use std::mem;
+
 #[allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
 use aes::cipher::generic_array::GenericArray;
 use aes::cipher::{BlockDecrypt, BlockEncrypt, KeyInit};
-use std::mem;
 
 /// Encrypt the input plaintext in-place using the AES-IGE mode.
 pub fn ige_encrypt(buffer: &mut [u8], key: &[u8; 32], iv: &[u8; 32]) {

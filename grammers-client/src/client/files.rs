@@ -6,19 +6,14 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::Client;
-use crate::types::{Downloadable, Uploaded};
-use crate::utils::generate_random_id;
+use std::mem;
+use std::sync::Arc;
+
 use futures_util::stream::{FuturesUnordered, StreamExt as _};
 use grammers_mtsender::InvocationError;
 use grammers_tl_types as tl;
-use std::mem;
-use std::sync::Arc;
-use tokio::{
-    io::{self, AsyncRead, AsyncReadExt},
-    sync::Mutex as AsyncMutex,
-};
-
+use tokio::io::{self, AsyncRead, AsyncReadExt};
+use tokio::sync::Mutex as AsyncMutex;
 #[cfg(feature = "fs")]
 use {
     std::{io::SeekFrom, path::Path},
@@ -28,6 +23,10 @@ use {
         sync::mpsc::unbounded_channel,
     },
 };
+
+use crate::Client;
+use crate::types::{Downloadable, Uploaded};
+use crate::utils::generate_random_id;
 
 pub const MIN_CHUNK_SIZE: i32 = 4 * 1024;
 pub const MAX_CHUNK_SIZE: i32 = 512 * 1024;

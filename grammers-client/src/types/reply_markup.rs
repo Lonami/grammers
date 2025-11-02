@@ -13,8 +13,9 @@
 //! inherent methods.
 //!
 //! The trait is used to group all types as "something that may be used as a  reply markup".
-use super::button;
 use grammers_tl_types as tl;
+
+use super::button;
 
 #[doc(hidden)]
 pub struct Markup {

@@ -5,10 +5,8 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::{
-    ops::{Index, IndexMut},
-    slice::SliceIndex,
-};
+use std::ops::{Index, IndexMut};
+use std::slice::SliceIndex;
 
 /// A growable buffer with the properties of a deque.
 ///

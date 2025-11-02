@@ -21,7 +21,7 @@ jobs:
     - name: Setup environment
       run: echo "RUSTFLAGS=-D warnings" >> $GITHUB_ENV
     - name: rustfmt
-      run: cargo fmt -- --check
+      run: cargo +nightly fmt -- --check
     - name: Build
       run: cargo build --verbose
     - name: Run tests

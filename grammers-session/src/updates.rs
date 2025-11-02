@@ -8,5 +8,6 @@
 
 //! Logic and types for [Working with Updates](https://core.telegram.org/api/updates).
 
-pub use crate::message_box::PrematureEndReason;
-pub use crate::message_box::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
+pub use crate::message_box::{
+    Gap, MessageBox, MessageBoxes, PrematureEndReason, State, UpdatesLike,
+};

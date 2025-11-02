@@ -5,11 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Peer, PeerMap, Permissions, Restrictions};
-use crate::utils;
 use chrono::{DateTime, Utc};
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
+
+use super::{Peer, PeerMap, Permissions, Restrictions};
+use crate::utils;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Normal {

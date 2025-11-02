@@ -6,9 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::Client;
-pub use grammers_mtsender::InvocationError;
 use std::collections::VecDeque;
+
+pub use grammers_mtsender::InvocationError;
+
+use crate::Client;
 
 /// Common parts to all requests that are used for creating iterators.
 ///

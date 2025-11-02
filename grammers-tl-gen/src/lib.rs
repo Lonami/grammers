@@ -17,8 +17,9 @@ mod metadata;
 mod rustifier;
 mod structs;
 
-use grammers_tl_parser::tl::{Category, Definition, Type};
 use std::io::{self, Write};
+
+use grammers_tl_parser::tl::{Category, Definition, Type};
 
 /// Writers to use as output for each generated module.
 pub struct Outputs<W: Write> {
