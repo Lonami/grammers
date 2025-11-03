@@ -13,6 +13,8 @@ const DEFAULT_LOCALE: &str = "en";
 /// After creating a [`crate::SenderPool::with_configuration`], the connection of
 /// any of the [`crate::Sender`]s that it uses internally will be initialized with
 /// an instance of [`grammers_tl_types::functions::InitConnection`].
+///
+/// Some fields are hidden to encourage using the Struct Update Syntax with a default.
 pub struct ConnectionParams {
     /// "Device model" according to [`initConnection`](https://core.telegram.org/method/initConnection).
     pub device_model: String,
@@ -37,7 +39,7 @@ pub struct ConnectionParams {
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
     #[doc(hidden)]
-    __non_exhaustive: (),
+    pub __non_exhaustive: (),
 }
 
 impl Default for ConnectionParams {
