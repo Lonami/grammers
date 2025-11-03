@@ -5,13 +5,16 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Client, ClientInner};
-use crate::client::client::ClientConfiguration;
+use std::sync::Arc;
+
 use grammers_mtsender::{InvocationError, RpcError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::sync::Arc;
-use tokio::{sync::Mutex, time::sleep};
+use tokio::sync::Mutex;
+use tokio::time::sleep;
+
+use super::{Client, ClientInner};
+use crate::client::client::ClientConfiguration;
 
 /// Method implementations directly related with network connectivity.
 impl Client {

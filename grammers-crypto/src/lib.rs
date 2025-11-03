@@ -21,11 +21,12 @@ pub mod rsa;
 mod sha;
 pub mod two_factor_auth;
 
+use std::fmt;
+
 pub use auth_key::AuthKey;
 pub use deque_buffer::DequeBuffer;
 pub use factorize::factorize;
 pub use obfuscated::ObfuscatedCipher;
-use std::fmt;
 
 /// The error type for [`decrypt_data_v2`].
 #[derive(Clone, Debug, PartialEq)]

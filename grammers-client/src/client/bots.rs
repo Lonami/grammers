@@ -5,13 +5,14 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::Client;
-use crate::client::messages::parse_mention_entities;
-use crate::utils::generate_random_id;
-use crate::{InputMessage, types::IterBuffer};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::PeerRef;
 use grammers_tl_types as tl;
+
+use crate::client::messages::parse_mention_entities;
+use crate::types::IterBuffer;
+use crate::utils::generate_random_id;
+use crate::{Client, InputMessage};
 
 const MAX_LIMIT: usize = 50;
 

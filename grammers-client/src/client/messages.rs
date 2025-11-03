@@ -7,16 +7,18 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
-use crate::types::{InputReactions, IterBuffer, Message};
-use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{Client, InputMedia, PeerMap, types};
+use std::collections::HashMap;
+
 use chrono::{DateTime, FixedOffset};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use log::{Level, log_enabled, warn};
-use std::collections::HashMap;
 use tl::enums::InputPeer;
+
+use crate::types::{InputReactions, IterBuffer, Message};
+use crate::utils::{generate_random_id, generate_random_ids};
+use crate::{Client, InputMedia, PeerMap, types};
 
 fn map_random_ids_to_messages(
     client: &Client,

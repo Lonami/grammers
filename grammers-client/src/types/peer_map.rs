@@ -5,11 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::{Peer, User};
-use grammers_session::types::PeerId;
-use grammers_tl_types as tl;
 use std::collections::HashMap;
 use std::sync::Arc;
+
+use grammers_session::types::PeerId;
+use grammers_tl_types as tl;
+
+use crate::types::{Peer, User};
 
 /// Helper structure to efficiently retrieve peers via their peer.
 ///

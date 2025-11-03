@@ -5,12 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::photo_sizes::{PhotoSize, VecExt};
-use chrono::{DateTime, Utc};
-use grammers_tl_types as tl;
 use std::fmt::Debug;
 
+use chrono::{DateTime, Utc};
+use grammers_tl_types as tl;
+
 use super::Downloadable;
+use crate::types::photo_sizes::{PhotoSize, VecExt};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
@@ -109,10 +110,8 @@ impl Photo {
     }
 
     pub fn to_raw_input_media(&self) -> tl::types::InputMediaPhoto {
-        use tl::{
-            enums::{InputPhoto as eInputPhoto, Photo},
-            types::InputPhoto,
-        };
+        use tl::enums::{InputPhoto as eInputPhoto, Photo};
+        use tl::types::InputPhoto;
 
         tl::types::InputMediaPhoto {
             spoiler: false,
@@ -215,10 +214,8 @@ impl Document {
     }
 
     pub fn to_raw_input_media(&self) -> tl::types::InputMediaDocument {
-        use tl::{
-            enums::{Document, InputDocument as eInputDocument},
-            types::InputDocument,
-        };
+        use tl::enums::{Document, InputDocument as eInputDocument};
+        use tl::types::InputDocument;
 
         tl::types::InputMediaDocument {
             spoiler: false,
@@ -591,7 +588,8 @@ impl Geo {
     }
 
     pub fn to_raw_input_geo_point(&self) -> tl::enums::InputGeoPoint {
-        use tl::{enums::InputGeoPoint as eInputGeoPoint, types::InputGeoPoint};
+        use tl::enums::InputGeoPoint as eInputGeoPoint;
+        use tl::types::InputGeoPoint;
 
         eInputGeoPoint::Point(InputGeoPoint {
             lat: self.raw.lat,

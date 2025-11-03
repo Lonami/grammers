@@ -5,14 +5,16 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::Client;
-use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
-use crate::utils;
+use std::fmt;
+
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
-use std::fmt;
+
+use super::Client;
+use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
+use crate::utils;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]

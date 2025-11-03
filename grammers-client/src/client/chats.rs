@@ -8,19 +8,21 @@
 
 //! Methods related to users, groups and channels.
 
-use super::Client;
-use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, IterBuffer, Message, Participant, Peer, PeerMap,
-    Photo, User, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
-};
-use grammers_mtsender::InvocationError;
-use grammers_mtsender::RpcError;
-use grammers_session::types::{PeerId, PeerKind, PeerRef};
-use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+
+use grammers_mtsender::{InvocationError, RpcError};
+use grammers_session::types::{PeerId, PeerKind, PeerRef};
+use grammers_tl_types as tl;
+
+use super::Client;
+use crate::types::chats::{AdminRightsBuilderInner, BannedRightsBuilderInner};
+use crate::types::{
+    AdminRightsBuilder, BannedRightsBuilder, IterBuffer, Message, Participant, Peer, PeerMap,
+    Photo, User,
+};
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;

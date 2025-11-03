@@ -6,6 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::cell::RefCell;
+use std::ops::Add;
+use std::time::Duration;
+
+use grammers_tl_types as tl;
+
 use super::defs::{
     Gap, MessageBox, MessageBoxes, NO_DATE, NO_PTS, NO_SEQ, NO_UPDATES_TIMEOUT, State,
     UpdateAndPeers,
@@ -14,10 +20,6 @@ use super::{PrematureEndReason, next_updates_deadline};
 use crate::message_box::POSSIBLE_GAP_TIMEOUT;
 use crate::message_box::defs::UpdatesLike;
 use crate::types::{ChannelState, UpdatesState};
-use grammers_tl_types as tl;
-use std::cell::RefCell;
-use std::ops::Add;
-use std::time::Duration;
 
 thread_local! {
     static NOW: RefCell<Instant> = RefCell::new(Instant(Duration::ZERO));

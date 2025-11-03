@@ -10,19 +10,21 @@
 
 #![allow(deprecated)]
 
-use super::{Client, UpdatesConfiguration};
-use crate::types::{PeerMap, Update};
+use std::collections::VecDeque;
+use std::sync::Arc;
+use std::time::{Duration, Instant};
+
 use grammers_mtsender::InvocationError;
 use grammers_session::PeerAuthCache;
 use grammers_session::types::{PeerId, UpdateState, UpdatesState};
 pub use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};
 use grammers_tl_types as tl;
 use log::{trace, warn};
-use std::collections::VecDeque;
-use std::sync::Arc;
-use std::time::{Duration, Instant};
 use tokio::sync::mpsc;
 use tokio::time::timeout_at;
+
+use super::{Client, UpdatesConfiguration};
+use crate::types::{PeerMap, Update};
 
 /// How long to wait after warning the user that the updates limit was exceeded.
 const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
@@ -296,8 +298,9 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use core::future::Future;
+
+    use super::*;
 
     fn get_update_stream() -> UpdateStream {
         panic!()

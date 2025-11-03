@@ -20,6 +20,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{env, io};
 
+use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
@@ -27,8 +28,6 @@ use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
-
-use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 

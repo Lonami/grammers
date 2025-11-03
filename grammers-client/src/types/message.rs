@@ -5,22 +5,21 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::PeerMap;
-#[cfg(any(feature = "markdown", feature = "html"))]
-use crate::parsers;
-use crate::types::reactions::InputReactions;
-use crate::types::{InputMessage, Media, Photo};
-use crate::{Client, types};
-use crate::{InputMedia, utils};
+use std::fmt;
+use std::sync::Arc;
+#[cfg(feature = "fs")]
+use std::{io, path::Path};
+
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
 
-#[cfg(feature = "fs")]
-use std::{io, path::Path};
+#[cfg(any(feature = "markdown", feature = "html"))]
+use crate::parsers;
+use crate::types::reactions::InputReactions;
+use crate::types::{InputMessage, Media, Photo};
+use crate::{Client, InputMedia, PeerMap, types, utils};
 
 /// Represents a Telegram message, which includes text messages, messages with media, and service
 /// messages.

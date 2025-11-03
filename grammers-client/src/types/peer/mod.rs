@@ -9,10 +9,9 @@ mod channel;
 mod group;
 mod user;
 
+pub use channel::Channel;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_tl_types as tl;
-
-pub use channel::Channel;
 pub use group::Group;
 pub use user::{Platform, RestrictionReason, User};
 

@@ -12,15 +12,18 @@
 
 #![allow(deprecated)]
 
+use std::env;
+use std::sync::Arc;
+use std::time::Duration;
+
 use grammers_client::{Client, Update, UpdatesConfiguration};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use grammers_session::types::PeerRef;
 use simple_logger::SimpleLogger;
-use std::sync::Arc;
-use std::{env, time::Duration};
+use tokio::runtime;
 use tokio::task::JoinSet;
-use tokio::{runtime, time::sleep};
+use tokio::time::sleep;
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 

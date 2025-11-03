@@ -8,12 +8,12 @@
 
 use std::sync::Arc;
 
-use crate::Client;
-use crate::utils::peer_from_message;
-
-use super::{Message, Peer, PeerMap};
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
+
+use super::{Message, Peer, PeerMap};
+use crate::Client;
+use crate::utils::peer_from_message;
 
 #[derive(Debug, Clone)]
 pub struct Dialog {

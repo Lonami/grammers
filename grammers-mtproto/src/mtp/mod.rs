@@ -18,16 +18,17 @@
 mod encrypted;
 mod plain;
 
-use crate::MsgId;
+use std::fmt;
+
 use crypto::DequeBuffer;
 pub use encrypted::{
     ENCRYPTED_PACKET_HEADER_LEN, Encrypted, MAX_TRANSPORT_HEADER_LEN, MESSAGE_CONTAINER_HEADER_LEN,
     PLAIN_PACKET_HEADER_LEN,
 };
-use grammers_crypto as crypto;
-use grammers_tl_types as tl;
 pub use plain::Plain;
-use std::fmt;
+use {grammers_crypto as crypto, grammers_tl_types as tl};
+
+use crate::MsgId;
 
 /// Manual implementation of Telegram's `rpc_result`.
 pub struct RpcResult {

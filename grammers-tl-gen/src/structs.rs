@@ -8,12 +8,12 @@
 
 //! Code to generate Rust's `struct`'s from TL definitions.
 
-use crate::grouper;
-use crate::metadata::Metadata;
-use crate::rustifier;
-use crate::{Config, ignore_type};
-use grammers_tl_parser::tl::{Category, Definition, ParameterType};
 use std::io::{self, Write};
+
+use grammers_tl_parser::tl::{Category, Definition, ParameterType};
+
+use crate::metadata::Metadata;
+use crate::{Config, grouper, ignore_type, rustifier};
 
 /// Get the list of generic parameters:
 ///

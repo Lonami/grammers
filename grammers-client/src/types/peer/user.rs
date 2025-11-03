@@ -6,9 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::fmt;
+
 use grammers_session::types::PeerAuth;
 use grammers_tl_types as tl;
-use std::fmt;
 
 /// Platform Identifier.
 #[non_exhaustive]

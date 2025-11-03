@@ -6,15 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{Client, InputMessage, types};
-use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerId;
-use grammers_session::updates::State;
-use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+
+use grammers_mtsender::InvocationError;
+use grammers_session::types::PeerId;
+use grammers_session::updates::State;
+use grammers_tl_types as tl;
+
+use crate::{Client, InputMessage, types};
 
 /// Represents a callback query update, which occurs when a user presses one of the bot's inline
 /// callback buttons.

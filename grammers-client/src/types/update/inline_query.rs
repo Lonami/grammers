@@ -6,14 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::{Peer, PeerMap, User};
-use crate::{InputMessage, client::Client, utils::generate_random_id};
+use std::fmt;
+use std::sync::Arc;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::types::PeerId;
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
+
+use super::super::{Peer, PeerMap, User};
+use crate::InputMessage;
+use crate::client::Client;
+use crate::utils::generate_random_id;
 
 /// Represents an inline query update, which occurs when you sign in as a bot and a user sends an
 /// inline query such as `@bot query`.

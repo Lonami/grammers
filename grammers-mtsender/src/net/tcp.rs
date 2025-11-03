@@ -43,10 +43,8 @@ impl NetStream {
         addr: &std::net::SocketAddr,
         proxy_url: &str,
     ) -> Result<NetStream, std::io::Error> {
-        use std::{
-            io::{self, ErrorKind},
-            net::{IpAddr, SocketAddr},
-        };
+        use std::io::{self, ErrorKind};
+        use std::net::{IpAddr, SocketAddr};
 
         use hickory_resolver::Resolver;
         use url::Host;

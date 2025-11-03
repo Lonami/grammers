@@ -6,14 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Peer, User};
-use crate::{Client, InputMessage, PeerMap};
+use std::fmt;
+use std::sync::Arc;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::types::PeerId;
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
+
+use crate::types::{Peer, User};
+use crate::{Client, InputMessage, PeerMap};
 
 /// Represents an update of user choosing the result of inline query and sending it to a peer.
 ///

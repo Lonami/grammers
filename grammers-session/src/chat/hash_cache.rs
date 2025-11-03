@@ -7,8 +7,9 @@
 // except according to those terms.
 
 #![allow(deprecated)]
-use grammers_tl_types as tl;
 use std::collections::HashMap;
+
+use grammers_tl_types as tl;
 
 use crate::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 
