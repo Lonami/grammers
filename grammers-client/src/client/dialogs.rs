@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::{Dialog, IterBuffer, PeerMap};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerKind, PeerRef, UpdateState};
+use grammers_session::defs::{PeerKind, PeerRef, UpdateState};
 use grammers_tl_types as tl;
 
 const MAX_LIMIT: usize = 100;
@@ -158,7 +158,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Consider making a backup before, you will lose access to the messages in peer!
     /// client.delete_dialog(peer).await?;
     /// # Ok(())
@@ -204,7 +204,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.mark_as_read(peer).await?;
     /// # Ok(())
     /// # }
@@ -233,7 +233,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.clear_mentions(peer).await?;
     /// # Ok(())
     /// # }

@@ -27,7 +27,7 @@ futures-util = { version = "0.3.31", default-features = false, features = [
     "alloc"
 ] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.8.0" }
-grammers-mtsender = { path = "../grammers-mtsender", version = "0.8.0" }
+grammers-mtsender = { path = "../grammers-mtsender", version = "0.8.1" }
 grammers-session = { path = "../grammers-session", version = "0.8.0" }
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0", features = [
     "tl-mtproto",

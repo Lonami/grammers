@@ -9,7 +9,7 @@
 use crate::types::{Peer, User};
 use crate::{Client, InputMessage, PeerMap};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerId;
+use grammers_session::defs::PeerId;
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 use std::fmt;

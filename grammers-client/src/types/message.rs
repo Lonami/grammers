@@ -14,7 +14,7 @@ use crate::{Client, types};
 use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
+use grammers_session::defs::{PeerAuth, PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use std::fmt;
 use std::sync::Arc;

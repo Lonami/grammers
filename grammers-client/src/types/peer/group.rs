@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::{PeerAuth, PeerId};
+use grammers_session::defs::{PeerAuth, PeerId};
 use grammers_tl_types as tl;
 use std::fmt;
 

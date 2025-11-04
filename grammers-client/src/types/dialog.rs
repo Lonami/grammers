@@ -12,7 +12,7 @@ use crate::Client;
 use crate::utils::peer_from_message;
 
 use super::{Message, Peer, PeerMap};
-use grammers_session::types::PeerId;
+use grammers_session::defs::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]

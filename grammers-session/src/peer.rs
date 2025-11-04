@@ -13,7 +13,7 @@ use grammers_tl_types as tl;
 /// A compact peer identifier.
 /// ```
 /// use std::mem::size_of;
-/// assert_eq!(size_of::<grammers_session::types::PeerId>(), size_of::<i64>());
+/// assert_eq!(size_of::<grammers_session::defs::PeerId>(), size_of::<i64>());
 /// ```
 /// The [`PeerInfo`] cached by the session for this `PeerId` may be retrieved via [`crate::Session::peer`].
 ///

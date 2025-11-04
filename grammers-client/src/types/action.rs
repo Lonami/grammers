@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerRef;
+use grammers_session::defs::PeerRef;
 use grammers_tl_types as tl;
 use std::future::Future;
 use std::time::Duration;
@@ -77,7 +77,7 @@ impl ActionSender {
     /// ```
     /// # use std::time::Duration;
     ///
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_tl_types as tl;
     ///
     /// let heavy_task = async {

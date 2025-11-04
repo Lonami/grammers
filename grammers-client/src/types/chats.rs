@@ -8,7 +8,7 @@
 use crate::Client;
 use crate::types::Role;
 use grammers_mtsender::{InvocationError, RpcError};
-use grammers_session::types::{PeerKind, PeerRef};
+use grammers_session::defs::{PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use pin_project_lite::pin_project;
 use std::{

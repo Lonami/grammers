@@ -9,7 +9,7 @@ mod channel;
 mod group;
 mod user;
 
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::defs::{PeerAuth, PeerId, PeerRef};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;

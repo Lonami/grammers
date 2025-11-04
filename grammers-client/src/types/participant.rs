@@ -8,7 +8,7 @@
 use super::{Peer, PeerMap, Permissions, Restrictions};
 use crate::utils;
 use chrono::{DateTime, Utc};
-use grammers_session::types::PeerId;
+use grammers_session::defs::PeerId;
 use grammers_tl_types as tl;
 
 #[derive(Clone, Debug, PartialEq)]

@@ -12,7 +12,7 @@ use crate::utils::{generate_random_id, generate_random_ids};
 use crate::{Client, InputMedia, PeerMap, types};
 use chrono::{DateTime, FixedOffset};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerId, PeerKind, PeerRef};
+use grammers_session::defs::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use log::{Level, log_enabled, warn};
 use std::collections::HashMap;
@@ -308,7 +308,7 @@ impl SearchIter {
     /// ```
     /// use chrono::DateTime;
     ///
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Search messages sent after Jan 1st, 2021
     /// let min_date = DateTime::parse_from_rfc3339("2021-01-01T00:00:00-00:00").unwrap();
     ///
@@ -327,7 +327,7 @@ impl SearchIter {
     /// ```
     /// use chrono::DateTime;
     ///
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Search messages sent before Dec, 25th 2022
     /// let max_date = DateTime::parse_from_rfc3339("2022-12-25T00:00:00-00:00").unwrap();
     ///
@@ -474,7 +474,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.send_message(peer, "Boring text message :-(").await?;
     ///
     /// use grammers_client::InputMessage;
@@ -627,7 +627,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::InputMedia;
     ///
     /// client.send_album(peer, vec![InputMedia::new().caption("A album").photo_url("https://example.com/cat.jpg")]).await?;
@@ -732,7 +732,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let old_message_id = 123;
     /// client.edit_message(peer, old_message_id, "New text message").await?;
     /// # Ok(())
@@ -788,7 +788,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// // Careful, these messages will be gone after the method succeeds!
@@ -835,7 +835,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(destination: grammers_session::types::PeerRef, source: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(destination: grammers_session::defs::PeerRef, source: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// let messages = client.forward_messages(destination, &message_ids, source).await?;
@@ -966,7 +966,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Note we're setting a reasonable limit, or we'd print out ALL the messages in peer!
     /// let mut messages = client.iter_messages(peer).limit(100);
     ///
@@ -987,7 +987,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// // Let's print all the people who think grammers is cool.
     /// let mut messages = client.search_messages(peer).query("grammers is cool");
     ///
@@ -1034,7 +1034,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_ids = [123, 456, 789];
     ///
     /// let messages = client.get_messages_by_id(peer, &message_ids).await?;
@@ -1090,7 +1090,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(message) = client.get_pinned_message(peer).await? {
     ///     println!("There is a message pinned: {}", message.text());
     /// } else {
@@ -1139,7 +1139,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     /// client.pin_message(peer, message_id).await?;
     /// # Ok(())
@@ -1159,7 +1159,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     /// client.unpin_message(peer, message_id).await?;
     /// # Ok(())
@@ -1195,7 +1195,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.unpin_all_messages(peer).await?;
     /// # Ok(())
     /// # }
@@ -1220,7 +1220,7 @@ impl Client {
     /// Via emoticon
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// let message_id = 123;
     ///
     /// client.send_reactions(peer, message_id, "👍").await?;
@@ -1231,7 +1231,7 @@ impl Client {
     /// Make animation big & Add to recent
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::types::InputReactions;
     ///
     /// let message_id = 123;
@@ -1245,7 +1245,7 @@ impl Client {
     /// Remove reactions
     ///
     /// ```
-    /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(peer: grammers_session::defs::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// use grammers_client::types::InputReactions;
     ///
     /// let message_id = 123;
