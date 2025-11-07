@@ -12,7 +12,9 @@
 //! your needs, you can also implement [`crate::Session`] yourself.
 
 mod memory;
+#[cfg(feature = "sqlite-storage")]
 mod sqlite;
 
 pub use memory::MemorySession;
+#[cfg(feature = "sqlite-storage")]
 pub use sqlite::SqliteSession;
