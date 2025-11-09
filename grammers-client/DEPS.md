@@ -27,6 +27,10 @@ Enables the user to use markdown text to send formatted messages.
 
 Enables the user to use HTML text to send formatted messages.
 
+## snafu
+
+Used to create and work with error types.
+
 ## tokio
 
 Used to coordinate the asynchronous methods of the client.
