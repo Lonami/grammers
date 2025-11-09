@@ -6,22 +6,31 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This module deals with correct handling of updates, including gaps, and knowing when the code
-//! should "get difference" (the set of updates that the client should know by now minus the set
-//! of updates that it actually knows).
+//! This module deals with correct handling of updates,
+//! including gaps,
+//! and knowing when the code should "get difference"
+//! (the set of updates that the client should know by now
+//! minus the set of updates that it actually knows).
 //!
-//! Each chat has its own [`Entry`] in the [`MessageBoxes`] (this `struct` is the "entry point").
-//! At any given time, the message box may be either getting difference for them (entry is in
-//! [`MessageBoxes::getting_diff_for`]) or not. If not getting difference, a possible gap may be
-//! found for the updates (entry is in [`MessageBoxes::possible_gaps`]). Otherwise, the entry is
-//! on its happy path.
+//! Each chat has its own [`Entry`] in the [`MessageBoxes`]
+//! (this `struct` is the "entry point").
+//! At any given time,
+//! the message box may be either getting difference for them
+//! (entry is in [`MessageBoxes::getting_diff_for`])
+//! or not.
+//! If not getting difference,
+//! a possible gap may be found for the updates
+//! (entry is in [`MessageBoxes::possible_gaps`]).
+//! Otherwise, the entry is on its happy path.
 //!
-//! Gaps are cleared when they are either resolved on their own (by waiting for a short time)
+//! Gaps are cleared when they are either
+//! resolved on their own
+//! (by waiting for a short time)
 //! or because we got the difference for the corresponding entry.
 //!
 //! While there are entries for which their difference must be fetched,
-//! [`MessageBoxes::check_deadlines`] will always return [`Instant::now`], since "now" is the time
-//! to get the difference.
+//! [`MessageBoxes::check_deadlines`] will always return [`Instant::now`],
+//! since "now" is the time to get the difference.
 mod adaptor;
 mod defs;
 #[cfg(test)]
