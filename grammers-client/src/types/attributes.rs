@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use grammers_tl_types as tl;
+use snafu::{Backtrace, ResultExt, Snafu};
 use std::{convert::TryInto, time::Duration};
 
 #[derive(Clone)]
@@ -29,35 +30,56 @@ pub enum Attribute {
     FileName(String),
 }
 
-impl From<Attribute> for tl::enums::DocumentAttribute {
-    fn from(attr: Attribute) -> Self {
+#[derive(Debug, Snafu)]
+pub enum TryIntoDocumentAttributeError {
+    AudioDurationOverflow {
+        source: <i32 as TryFrom<u64>>::Error,
+        backtrace: Backtrace,
+    },
+    VoiceDurationOverflow {
+        source: <i32 as TryFrom<u64>>::Error,
+        backtrace: Backtrace,
+    },
+}
+
+/// Fallibly converts to this type from the input type.
+impl TryFrom<Attribute> for tl::enums::DocumentAttribute {
+    type Error = TryIntoDocumentAttributeError;
+
+    fn try_from(attr: Attribute) -> Result<Self, Self::Error> {
         use Attribute::*;
         match attr {
             Audio {
                 duration,
                 title,
                 performer,
-            } => Self::Audio(tl::types::DocumentAttributeAudio {
+            } => Ok(Self::Audio(tl::types::DocumentAttributeAudio {
                 voice: false,
-                duration: duration.as_secs().try_into().unwrap(),
+                duration: duration
+                    .as_secs()
+                    .try_into()
+                    .context(AudioDurationOverflowSnafu)?,
                 title,
                 performer,
                 waveform: None,
-            }),
-            Voice { duration, waveform } => Self::Audio(tl::types::DocumentAttributeAudio {
+            })),
+            Voice { duration, waveform } => Ok(Self::Audio(tl::types::DocumentAttributeAudio {
                 voice: true,
-                duration: duration.as_secs().try_into().unwrap(),
+                duration: duration
+                    .as_secs()
+                    .try_into()
+                    .context(VoiceDurationOverflowSnafu)?,
                 title: None,
                 performer: None,
                 waveform,
-            }),
+            })),
             Video {
                 round_message,
                 supports_streaming,
                 duration,
                 w,
                 h,
-            } => Self::Video(tl::types::DocumentAttributeVideo {
+            } => Ok(Self::Video(tl::types::DocumentAttributeVideo {
                 round_message,
                 supports_streaming,
                 nosound: false,
@@ -67,10 +89,10 @@ impl From<Attribute> for tl::enums::DocumentAttribute {
                 preload_prefix_size: None,
                 video_start_ts: None,
                 video_codec: None,
-            }),
-            FileName(file_name) => {
-                Self::Filename(tl::types::DocumentAttributeFilename { file_name })
-            }
+            })),
+            FileName(file_name) => Ok(Self::Filename(tl::types::DocumentAttributeFilename {
+                file_name,
+            })),
         }
     }
 }
