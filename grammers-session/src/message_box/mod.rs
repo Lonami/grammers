@@ -12,7 +12,7 @@
 //! (the set of updates that the client should know by now
 //! minus the set of updates that it actually knows).
 //!
-//! Each chat has its own [`Entry`] in the [`MessageBoxes`]
+//! Each chat has its own [`LiveEntry`] in the [`MessageBoxes`]
 //! (this `struct` is the "entry point").
 //! At any given time,
 //! the message box may be either getting difference for them
