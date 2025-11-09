@@ -99,12 +99,18 @@ pub enum PeerInfo {
 }
 
 /// Additional information about a [`PeerInfo::Channel`].
+///
+/// A non-zero enum,
+/// to make working with `Option<ChannelKind>`
+/// and `Result<ChannelKind, ()>`
+/// slightly more performant.
+/// (See [`mod@core::option`]'s documentation about the "null pointer optimization".)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum ChannelKind {
+    /// Value used for a channel with its [`tl::types::Channel::broadcast`] flag set to `true`.
+    Broadcast = 1,
     /// Value used for a channel with its [`tl::types::Channel::megagroup`] flag set to `true`.
     Megagroup,
-    /// Value used for a channel with its [`tl::types::Channel::broadcast`] flag set to `true`.
-    Broadcast,
     /// Value used for a channel with its [`tl::types::Channel::gigagroup`] flag set to `true`.
     Gigagroup,
 }
