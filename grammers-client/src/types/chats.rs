@@ -94,9 +94,10 @@ impl<F: Future<Output = BuilderRes>> Future for AdminRightsBuilder<F> {
     fn poll(self: Pin<&mut Self>, cx: &mut Context<'_>) -> Poll<BuilderRes> {
         let mut s = self.project();
         if s.fut.is_none() {
-            // unwrap safety: s.inner is None only when s.fut is some
-            // or s.fut is resolved
-            s.fut.set(Some((s.fut_gen)(s.inner.take().unwrap())))
+            let Some(s_inner) = s.inner.take() else {
+                unreachable!("s.inner is None only when s.fut is some or s.fut is resolved")
+            };
+            s.fut.set(Some((s.fut_gen)(s_inner)))
         }
 
         s.fut.as_pin_mut().unwrap().poll(cx)

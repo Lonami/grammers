@@ -72,40 +72,43 @@ impl FromStr for Type {
     /// ```
     fn from_str(ty: &str) -> Result<Self, Self::Err> {
         // Parse `!type`
-        let (ty, generic_ref) = if let Some(ty) = ty.strip_prefix('!') {
-            (ty, true)
-        } else {
-            (ty, false)
+        let (ty, generic_ref) = match ty.strip_prefix('!') {
+            Some(ty) => (ty, true),
+            None => (ty, false),
         };
 
         // Parse `type<generic_arg>`
-        let (ty, generic_arg) = if let Some(pos) = ty.find('<') {
-            if !ty.ends_with('>') {
-                return Err(ParamParseError::InvalidGeneric);
-            }
-            (
-                &ty[..pos],
-                Some(Box::new(Type::from_str(&ty[pos + 1..ty.len() - 1])?)),
-            )
-        } else {
-            (ty, None)
+        let (name, generic_arg) = match ty.split_once('<') {
+            Some((name, generic_arg)) => match generic_arg.strip_suffix('>') {
+                Some(generic_arg) => (name, Some(Box::new(Type::from_str(generic_arg)?))),
+                None => return Err(ParamParseError::InvalidGeneric),
+            },
+            None => (ty, None),
         };
 
         // Parse `ns1.ns2.name`
-        let mut namespace: Vec<String> = ty.split('.').map(|part| part.to_string()).collect();
-        if namespace.iter().any(|part| part.is_empty()) {
+        let (namespace, name) = match name.rsplit_once('.') {
+            Some((namespace, name)) => (
+                namespace
+                    .split('.')
+                    .map(|part| part.to_owned())
+                    .collect::<Vec<_>>(),
+                name,
+            ),
+            None => (Vec::new(), name),
+        };
+        let (false, Some(first_name_char)) = (
+            namespace.iter().any(|part| part.is_empty()),
+            name.chars().next(),
+        ) else {
             return Err(ParamParseError::Empty);
-        }
+        };
 
-        // Safe to unwrap because split() will always yield at least one.
-        let name = namespace.pop().unwrap();
-
-        // Safe to unwrap because we just checked is not empty
-        let bare = name.chars().next().unwrap().is_ascii_lowercase();
+        let bare = first_name_char.is_ascii_lowercase();
 
         Ok(Self {
             namespace,
-            name,
+            name: name.to_owned(),
             bare,
             generic_ref,
             generic_arg,

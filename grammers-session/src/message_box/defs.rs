@@ -34,11 +34,15 @@ pub(super) const POSSIBLE_GAP_TIMEOUT: Duration = Duration::from_millis(500);
 
 /// After how long without updates the client will "timeout".
 ///
-/// When this timeout occurs, the client will attempt to fetch updates by itself, ignoring all the
-/// updates that arrive in the meantime. After all updates are fetched when this happens, the
-/// client will resume normal operation, and the timeout will reset.
+/// When this timeout occurs,
+/// the client will attempt to fetch updates by itself,
+/// ignoring all the updates that arrive in the meantime.
+/// After all updates are fetched when this happens,
+/// the client will resume normal operation,
+/// and the timeout will reset.
 ///
-/// Documentation recommends 15 minutes without updates (https://core.telegram.org/api/updates).
+/// Documentation recommends 15 minutes without updates
+/// (<https://core.telegram.org/api/updates>).
 pub(super) const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// A sortable [`MessageBox`] entry key.

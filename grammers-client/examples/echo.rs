@@ -33,7 +33,7 @@ async fn handle_update(client: Client, update: Update) {
             println!(
                 "Responding to {}",
                 peer.name()
-                    .unwrap_or(&format!("id {}", message.peer_id().bot_api_dialog_id()))
+                    .unwrap_or(&format!("id {}", message.peer_ref().id.bot_api_dialog_id()))
             );
             if message.text() == "slow" {
                 sleep(Duration::from_secs(5)).await;

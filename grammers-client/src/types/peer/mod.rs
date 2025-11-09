@@ -9,7 +9,7 @@ mod channel;
 mod group;
 mod user;
 
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
@@ -84,6 +84,11 @@ impl Peer {
             Self::Group(group) => group.auth(),
             Self::Channel(channel) => channel.auth(),
         }
+    }
+
+    #[inline]
+    pub fn r#ref(&self) -> PeerRef {
+        PeerRef::from(self)
     }
 
     /// Return the name of this peer.
@@ -165,19 +170,32 @@ impl Peer {
 }
 
 impl From<Peer> for PeerRef {
+    #[inline]
     fn from(peer: Peer) -> Self {
-        PeerRef {
+        <Self as From<&Peer>>::from(&peer)
+    }
+}
+impl<'a> From<&'a Peer> for PeerRef {
+    fn from(peer: &'a Peer) -> Self {
+        Self {
             id: peer.id(),
             auth: peer.auth(),
         }
     }
 }
 
-impl From<&Peer> for PeerRef {
-    fn from(peer: &Peer) -> Self {
-        PeerRef {
-            id: peer.id(),
-            auth: peer.auth(),
+impl From<Peer> for PeerInfo {
+    #[inline]
+    fn from(peer: Peer) -> Self {
+        <Self as From<&Peer>>::from(&peer)
+    }
+}
+impl<'a> From<&'a Peer> for PeerInfo {
+    fn from(peer: &'a Peer) -> Self {
+        match peer {
+            Peer::User(user) => <PeerInfo as From<&'a User>>::from(user),
+            Peer::Group(group) => <PeerInfo as From<&'a Group>>::from(group),
+            Peer::Channel(channel) => <PeerInfo as From<&'a Channel>>::from(channel),
         }
     }
 }

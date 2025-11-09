@@ -88,46 +88,43 @@ impl FromStr for Definition {
         }
 
         // Parse `(left = ty)`
-        let (left, ty) = {
-            let mut it = definition.split('=');
-            let ls = it.next().unwrap(); // split() always return at least one
-            if let Some(t) = it.next() {
-                (ls.trim(), t.trim())
-            } else {
-                return Err(ParseError::MissingType);
-            }
+        let (left, ty) = match definition.split_once('=') {
+            Some((ls, t)) => (ls.trim(), t.trim()),
+            None => return Err(ParseError::MissingType),
         };
 
         let mut ty = Type::from_str(ty).map_err(|_| ParseError::MissingType)?;
 
         // Parse `name middle`
-        let (name, middle) = {
-            if let Some(pos) = left.find(' ') {
-                (&left[..pos], left[pos..].trim())
-            } else {
-                (left.trim(), "")
-            }
+        let (name, middle) = match left.split_once(|c: char| c.is_whitespace()) {
+            Some((name, middle)) => (name.trim_end(), middle.trim_start()),
+            None => (left, ""),
         };
 
         // Parse `name#id`
-        let (name, id) = {
-            let mut it = name.split('#');
-            let n = it.next().unwrap(); // split() always return at least one
-            (n, it.next())
+        let (name, id) = match name.split_once('#') {
+            Some((name, id)) => (name.trim_end(), Some(id.trim_start())),
+            None => (name, None),
         };
 
         // Parse `ns1.ns2.name`
-        let mut namespace: Vec<String> = name.split('.').map(|part| part.to_string()).collect();
-        if namespace.iter().any(|part| part.is_empty()) {
+        let (namespace, name) = match name.rsplit_once('.') {
+            Some((namespace, name)) => (
+                namespace
+                    .split('.')
+                    .map(|part| part.to_owned())
+                    .collect::<Vec<_>>(),
+                name,
+            ),
+            None => (Vec::new(), name),
+        };
+        if namespace.iter().any(|part| part.is_empty()) || name.is_empty() {
             return Err(ParseError::MissingName);
         }
 
-        // Safe to unwrap because split() will always yield at least one.
-        let name = namespace.pop().unwrap();
-
         // Parse `id`
         let id = match id {
-            Some(v) => u32::from_str_radix(v.trim(), 16).map_err(ParseError::InvalidId)?,
+            Some(id) => u32::from_str_radix(id, 16).map_err(ParseError::InvalidId)?,
             None => infer_id(definition),
         };
 
@@ -146,55 +143,49 @@ impl FromStr for Definition {
                     None
                 }
 
-                // If the parameter is a flag definition save both
-                // the definition and the parameter.
-                Ok(Parameter {
-                    ref name,
-                    ty: ParameterType::Flags,
-                }) => {
-                    flag_defs.push(name.clone());
-                    Some(Ok(p.unwrap()))
-                }
-
-                // If the parameter type is a generic ref ensure it's valid.
-                Ok(Parameter {
-                    ty:
-                        ParameterType::Normal {
-                            ty:
-                                Type {
-                                    ref name,
-                                    generic_ref,
-                                    ..
-                                },
-                            ..
-                        },
-                    ..
-                }) if generic_ref => {
-                    if generic_ref && !type_defs.contains(name) {
-                        Some(Err(ParseError::InvalidParam(ParamParseError::MissingDef)))
-                    } else {
-                        Some(Ok(p.unwrap()))
+                Ok(p) => match p {
+                    // If the parameter is a flag definition save both
+                    // the definition and the parameter.
+                    Parameter {
+                        ref name,
+                        ty: ParameterType::Flags,
+                    } => {
+                        flag_defs.push(name.clone());
+                        Some(Ok(p))
                     }
-                }
 
-                // If the parameter type references a flag ensure it's valid
-                Ok(Parameter {
-                    ty:
-                        ParameterType::Normal {
-                            flag: Some(Flag { ref name, .. }),
-                            ..
-                        },
-                    ..
-                }) => {
-                    if !flag_defs.contains(name) {
+                    // If the parameter type is a generic ref ensure it's valid.
+                    Parameter {
+                        ty:
+                            ParameterType::Normal {
+                                ty:
+                                    Type {
+                                        ref name,
+                                        generic_ref: true,
+                                        ..
+                                    },
+                                ..
+                            },
+                        ..
+                    } if !type_defs.contains(name) => {
                         Some(Err(ParseError::InvalidParam(ParamParseError::MissingDef)))
-                    } else {
-                        Some(Ok(p.unwrap()))
                     }
-                }
 
-                // Any other parameter that's okay should just be passed as-is.
-                Ok(p) => Some(Ok(p)),
+                    // If the parameter type references a flag ensure it's valid
+                    Parameter {
+                        ty:
+                            ParameterType::Normal {
+                                flag: Some(Flag { ref name, .. }),
+                                ..
+                            },
+                        ..
+                    } if !flag_defs.contains(name) => {
+                        Some(Err(ParseError::InvalidParam(ParamParseError::MissingDef)))
+                    }
+
+                    // Any other parameter that's okay should just be passed as-is.
+                    p => Some(Ok(p)),
+                },
 
                 // Unimplenented parameters are unimplemented definitions.
                 Err(ParamParseError::NotImplemented) => Some(Err(ParseError::NotImplemented)),
@@ -212,7 +203,7 @@ impl FromStr for Definition {
 
         Ok(Definition {
             namespace,
-            name,
+            name: name.to_owned(),
             id,
             params,
             ty,
