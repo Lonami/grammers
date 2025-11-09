@@ -41,32 +41,20 @@ impl FromStr for Parameter {
     /// ```
     fn from_str(param: &str) -> Result<Self, Self::Err> {
         // Special case: parse `{X:Type}`
-        if param.starts_with('{') {
-            return Err(if param.ends_with(":Type}") {
-                ParamParseError::TypeDef {
-                    // Safe to unwrap because we know it contains ':'
-                    name: param[1..param.find(':').unwrap()].into(),
-                }
+        if let Some(def) = param.strip_prefix('{') {
+            return Err(if let Some(def) = def.strip_suffix(":Type}") {
+                ParamParseError::TypeDef { name: def.into() }
             } else {
                 ParamParseError::MissingDef
             });
         };
 
         // Parse `name:type`
-        let (name, ty) = {
-            let mut it = param.split(':');
-            if let Some(n) = it.next() {
-                if let Some(t) = it.next() {
-                    (n, t)
-                } else {
-                    return Err(ParamParseError::NotImplemented);
-                }
-            } else {
-                return Err(ParamParseError::Empty);
-            }
+        let (name, ty) = match param.split_once(':') {
+            Some((name, ty)) => (name, ty),
+            None => return Err(ParamParseError::NotImplemented),
         };
-
-        if name.is_empty() {
+        if name.is_empty() || ty.is_empty() {
             return Err(ParamParseError::Empty);
         }
 
@@ -84,45 +72,35 @@ mod tests {
 
     #[test]
     fn parse_empty_param() {
-        assert_eq!(Parameter::from_str(":noname"), Err(ParamParseError::Empty));
-        assert_eq!(Parameter::from_str("notype:"), Err(ParamParseError::Empty));
-        assert_eq!(Parameter::from_str(":"), Err(ParamParseError::Empty));
+        for param_str in [":noname", "notype:", ":"] {
+            assert_eq!(
+                Parameter::from_str(param_str),
+                Err(ParamParseError::Empty),
+                "Parameter::from_str({param_str:?})"
+            );
+        }
     }
 
     #[test]
     fn parse_unknown_param() {
-        assert_eq!(
-            Parameter::from_str(""),
-            Err(ParamParseError::NotImplemented)
-        );
-        assert_eq!(
-            Parameter::from_str("no colon"),
-            Err(ParamParseError::NotImplemented)
-        );
-        assert_eq!(
-            Parameter::from_str("colonless"),
-            Err(ParamParseError::NotImplemented)
-        );
+        for param_str in ["", "no colon", "colonless"] {
+            assert_eq!(
+                Parameter::from_str(param_str),
+                Err(ParamParseError::NotImplemented),
+                "Parameter::from_str({param_str:?})"
+            );
+        }
     }
 
     #[test]
     fn parse_bad_flags() {
-        assert_eq!(
-            Parameter::from_str("foo:bar?"),
-            Err(ParamParseError::InvalidFlag)
-        );
-        assert_eq!(
-            Parameter::from_str("foo:?bar"),
-            Err(ParamParseError::InvalidFlag)
-        );
-        assert_eq!(
-            Parameter::from_str("foo:bar?baz"),
-            Err(ParamParseError::InvalidFlag)
-        );
-        assert_eq!(
-            Parameter::from_str("foo:bar.baz?qux"),
-            Err(ParamParseError::InvalidFlag)
-        );
+        for param_str in ["foo:bar?", "foo:?bar?", "foo:bar?baz", "foo:bar.baz?qux"] {
+            assert_eq!(
+                Parameter::from_str(param_str),
+                Err(ParamParseError::InvalidFlag),
+                "Parameter::from_str({param_str:?})"
+            );
+        }
     }
 
     #[test]
