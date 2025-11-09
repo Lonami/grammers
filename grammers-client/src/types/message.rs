@@ -231,7 +231,7 @@ impl Message {
         self.raw.id()
     }
 
-    pub(crate) fn peer_ref(&self) -> PeerRef {
+    pub fn peer_ref(&self) -> PeerRef {
         utils::peer_from_message(&self.raw)
             .map(|peer| PeerRef {
                 id: PeerId::from(peer),
