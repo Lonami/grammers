@@ -9,7 +9,7 @@ mod channel;
 mod group;
 mod user;
 
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
@@ -178,6 +178,22 @@ impl From<&Peer> for PeerRef {
         PeerRef {
             id: peer.id(),
             auth: peer.auth(),
+        }
+    }
+}
+
+impl From<Peer> for PeerInfo {
+    #[inline]
+    fn from(peer: Peer) -> Self {
+        <Self as From<&Peer>>::from(&peer)
+    }
+}
+impl<'a> From<&'a Peer> for PeerInfo {
+    fn from(peer: &'a Peer) -> Self {
+        match peer {
+            Peer::User(user) => <PeerInfo as From<&'a User>>::from(user),
+            Peer::Group(group) => <PeerInfo as From<&'a Group>>::from(group),
+            Peer::Channel(channel) => <PeerInfo as From<&'a Channel>>::from(channel),
         }
     }
 }

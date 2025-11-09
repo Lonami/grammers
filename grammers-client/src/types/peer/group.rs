@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::{PeerAuth, PeerId};
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -173,5 +173,17 @@ impl Group {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => false,
             C::Channel(_) | C::ChannelForbidden(_) => true,
         }
+    }
+}
+
+impl From<Group> for PeerInfo {
+    #[inline]
+    fn from(group: Group) -> Self {
+        <Self as From<&Group>>::from(&group)
+    }
+}
+impl<'a> From<&'a Group> for PeerInfo {
+    fn from(group: &'a Group) -> Self {
+        <Self as From<&'a tl::enums::Chat>>::from(&group.raw)
     }
 }
