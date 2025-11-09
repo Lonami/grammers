@@ -958,7 +958,7 @@ impl Client {
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
             .next()
-            .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
+            .filter(|m| !filter_req || m.peer_ref().id == message.peer_ref().id))
     }
 
     /// Iterate over the message history of a peer, from most recent to oldest.
@@ -1078,7 +1078,7 @@ impl Client {
         let mut map = messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
-            .filter(|m| m.peer_id() == peer.id)
+            .filter(|m| m.peer_ref().id == peer.id)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
 
@@ -1131,7 +1131,7 @@ impl Client {
         Ok(messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
-            .find(|m| m.peer_id() == peer.id))
+            .find(|m| m.peer_ref().id == peer.id))
     }
 
     /// Pin a message in the peer. This will not notify any users.
