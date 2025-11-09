@@ -252,7 +252,7 @@ impl Message {
             .or({
                 // Incoming messages in private conversations don't include `from_id` since
                 // layer 119, but the sender can only be the peer we're in.
-                let peer_id = self.peer_id();
+                let peer_id = self.peer_ref().id;
                 if matches!(peer_id.kind(), PeerKind::User | PeerKind::UserSelf) {
                     if self.outgoing() {
                         let user_id = self
@@ -280,10 +280,6 @@ impl Message {
     pub fn peer(&self) -> Result<&types::Peer, PeerRef> {
         let peer = self.peer_ref();
         self.peers.get(peer.id).ok_or(peer)
-    }
-
-    pub fn peer_id(&self) -> PeerId {
-        self.peer_ref().id
     }
 
     /// If this message was forwarded from a previous message, return the header with information
