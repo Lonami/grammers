@@ -43,6 +43,9 @@ pub enum TryIntoDocumentAttributeError {
 }
 
 /// Fallibly converts to this type from the input type.
+///
+/// Can't delegate to an `impl<'a> TryFrom<Attribute> for tl::enums::DocumentAttribute`
+/// because of `String` members.
 impl TryFrom<Attribute> for tl::enums::DocumentAttribute {
     type Error = TryIntoDocumentAttributeError;
 
