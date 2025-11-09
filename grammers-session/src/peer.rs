@@ -540,3 +540,45 @@ impl From<PeerRef> for tl::enums::InputChannel {
         }
     }
 }
+
+impl TryFrom<tl::types::Channel> for ChannelKind {
+    type Error = <ChannelKind as TryFrom<&'static tl::types::Channel>>::Error;
+
+    #[inline]
+    fn try_from(channel: tl::types::Channel) -> Result<Self, Self::Error> {
+        <ChannelKind as TryFrom<&tl::types::Channel>>::try_from(&channel)
+    }
+}
+impl<'a> TryFrom<&'a tl::types::Channel> for ChannelKind {
+    type Error = ();
+
+    fn try_from(channel: &'a tl::types::Channel) -> Result<Self, Self::Error> {
+        match channel {
+            channel if channel.gigagroup => Ok(Self::Gigagroup),
+            channel if channel.broadcast => Ok(Self::Broadcast),
+            channel if channel.megagroup => Ok(Self::Megagroup),
+            _channel => Err(()),
+        }
+    }
+}
+
+impl TryFrom<tl::types::ChannelForbidden> for ChannelKind {
+    type Error = <ChannelKind as TryFrom<&'static tl::types::ChannelForbidden>>::Error;
+
+    #[inline]
+    fn try_from(channel: tl::types::ChannelForbidden) -> Result<Self, Self::Error> {
+        <ChannelKind as TryFrom<&tl::types::ChannelForbidden>>::try_from(&channel)
+    }
+}
+impl<'a> TryFrom<&'a tl::types::ChannelForbidden> for ChannelKind {
+    type Error = ();
+
+    fn try_from(channel: &'a tl::types::ChannelForbidden) -> Result<Self, Self::Error> {
+        match channel {
+            // channel if channel.gigagroup => Ok(Self::Gigagroup),
+            channel if channel.broadcast => Ok(Self::Broadcast),
+            channel if channel.megagroup => Ok(Self::Megagroup),
+            _channel => Err(()),
+        }
+    }
+}

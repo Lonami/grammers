@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::PeerAuth;
+use grammers_session::types::{ChannelKind, PeerAuth};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -117,6 +117,15 @@ impl Channel {
             .unwrap_or_default()
     }
 
+    /// Additional information about this channel.
+    #[inline]
+    pub fn kind(&self) -> Option<ChannelKind> {
+        match <ChannelKind as TryFrom<&Channel>>::try_from(self) {
+            Ok(channel_kind) => Some(channel_kind),
+            Err(()) => None,
+        }
+    }
+
     /// Return the title of this channel.
     pub fn title(&self) -> &str {
         self.raw.title.as_str()
@@ -184,5 +193,22 @@ impl Channel {
             }),
             None => None,
         }
+    }
+}
+
+impl TryFrom<Channel> for ChannelKind {
+    type Error = <Self as TryFrom<&'static Channel>>::Error;
+
+    #[inline]
+    fn try_from(channel: Channel) -> Result<Self, Self::Error> {
+        <Self as TryFrom<&Channel>>::try_from(&channel)
+    }
+}
+impl<'a> TryFrom<&'a Channel> for ChannelKind {
+    type Error = <Self as TryFrom<&'a tl::types::Channel>>::Error;
+
+    #[inline]
+    fn try_from(channel: &'a Channel) -> Result<Self, Self::Error> {
+        <Self as TryFrom<&'a tl::types::Channel>>::try_from(&channel.raw)
     }
 }
