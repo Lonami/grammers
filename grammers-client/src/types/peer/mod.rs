@@ -86,6 +86,11 @@ impl Peer {
         }
     }
 
+    #[inline]
+    pub fn r#ref(&self) -> PeerRef {
+        PeerRef::from(self)
+    }
+
     /// Return the name of this peer.
     ///
     /// For private conversations (users), this is their first name. For groups and channels,
