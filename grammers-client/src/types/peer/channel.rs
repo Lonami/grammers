@@ -126,6 +126,11 @@ impl Channel {
         }
     }
 
+    /// Useful information about this peer.
+    pub fn info(&self) -> PeerInfo {
+        <PeerInfo as From<&Self>>::from(self)
+    }
+
     /// Return the title of this channel.
     pub fn title(&self) -> &str {
         self.raw.title.as_str()

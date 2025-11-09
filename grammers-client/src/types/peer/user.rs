@@ -104,6 +104,11 @@ impl User {
             .unwrap_or_default()
     }
 
+    /// Useful information about this peer.
+    pub fn info(&self) -> PeerInfo {
+        <PeerInfo as From<&Self>>::from(self)
+    }
+
     /// Return the first name of this user.
     ///
     /// The name will be `None` if the account was deleted. It may also be `None` if you received
