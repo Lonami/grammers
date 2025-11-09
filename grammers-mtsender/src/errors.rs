@@ -7,8 +7,7 @@
 // except according to those terms.
 use grammers_mtproto::{authentication, mtp, transport};
 use grammers_tl_types as tl;
-use std::fmt;
-use std::io;
+use std::{fmt, io};
 
 /// This error occurs when reading from the network fails.
 #[derive(Debug)]
@@ -124,10 +123,15 @@ impl fmt::Display for RpcError {
 impl From<tl::types::RpcError> for RpcError {
     fn from(error: tl::types::RpcError) -> Self {
         // Extract the numeric value in the error, if any
-        if let Some(value) = error
+        if let Some((value, parsed_value)) = error
             .error_message
             .split(|c: char| !c.is_ascii_digit())
-            .find(|s| !s.is_empty())
+            .flat_map(|value| {
+                value
+                    .parse::<u32>()
+                    .map(|parsed_value| (value, parsed_value))
+            })
+            .next()
         {
             let mut to_remove = String::with_capacity(1 + value.len());
             to_remove.push('_');
@@ -135,8 +139,7 @@ impl From<tl::types::RpcError> for RpcError {
             Self {
                 code: error.error_code,
                 name: error.error_message.replace(&to_remove, ""),
-                // Safe to unwrap, matched on digits
-                value: Some(value.parse().unwrap()),
+                value: Some(parsed_value),
                 caused_by: None,
             }
         } else {

@@ -39,12 +39,10 @@ impl FromStr for Flag {
     /// assert!("flags.1".parse::<Flag>().is_ok());
     /// ```
     fn from_str(ty: &str) -> Result<Self, Self::Err> {
-        if let Some(dot_pos) = ty.find('.') {
+        if let Some((name, index)) = ty.split_once('.') {
             Ok(Flag {
-                name: ty[..dot_pos].into(),
-                index: ty[dot_pos + 1..]
-                    .parse()
-                    .map_err(|_| ParamParseError::InvalidFlag)?,
+                name: name.into(),
+                index: index.parse().map_err(|_| ParamParseError::InvalidFlag)?,
             })
         } else {
             Err(ParamParseError::InvalidFlag)

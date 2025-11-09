@@ -55,20 +55,16 @@ impl FromStr for ParameterType {
     /// assert!("vector<int>".parse::<ParameterType>().is_ok());
     /// ```
     fn from_str(ty: &str) -> Result<Self, Self::Err> {
-        if ty.is_empty() {
-            return Err(ParamParseError::Empty);
-        }
-
-        // Parse `#`
-        if ty == "#" {
-            return Ok(ParameterType::Flags);
-        }
+        let ty = match ty {
+            "" => return Err(ParamParseError::Empty),
+            "#" => return Ok(ParameterType::Flags),
+            ty => ty,
+        };
 
         // Parse `flag_name.flag_index?type`
-        let (ty, flag) = if let Some(pos) = ty.find('?') {
-            (&ty[pos + 1..], Some(ty[..pos].parse()?))
-        } else {
-            (ty, None)
+        let (flag, ty) = match ty.split_once('?') {
+            Some((flag, ty)) => (Some(flag.parse()?), ty),
+            None => (None, ty),
         };
 
         // Parse `type<generic_arg>`
