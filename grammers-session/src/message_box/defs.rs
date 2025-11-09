@@ -42,7 +42,7 @@ pub(super) const POSSIBLE_GAP_TIMEOUT: Duration = Duration::from_millis(500);
 /// and the timeout will reset.
 ///
 /// Documentation recommends 15 minutes without updates
-/// (https://core.telegram.org/api/updates).
+/// (<https://core.telegram.org/api/updates>).
 pub(super) const NO_UPDATES_TIMEOUT: Duration = Duration::from_secs(15 * 60);
 
 /// A sortable [`MessageBox`] entry key.

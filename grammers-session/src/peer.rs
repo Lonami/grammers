@@ -112,7 +112,7 @@ pub enum ChannelKind {
 /// Sentinel value used to represent the self-user
 /// when its true `PeerId` is unknown.
 ///
-/// Per https://core.telegram.org/api/bots/ids:
+/// Per <https://core.telegram.org/api/bots/ids>:
 /// > a bot API dialog ID ranges from -4000000000000 to 1099511627775
 ///
 /// This value is not intended to be visible or persisted,
@@ -121,7 +121,7 @@ const SELF_USER_ID: PeerId = PeerId(1 << 40);
 
 /// Sentinel value used to represent empty chats.
 ///
-/// Per https://core.telegram.org/api/bots/ids:
+/// Per <https://core.telegram.org/api/bots/ids>:
 /// > \[…] transformed range for bot API chat dialog IDs is -999999999999 to -1 inclusively
 /// >
 /// > \[…] transformed range for bot API channel dialog IDs is -1997852516352 to -1000000000001 inclusively
@@ -131,7 +131,7 @@ const SELF_USER_ID: PeerId = PeerId(1 << 40);
 /// but it can be mimicked by picking the value in the correct range hole.
 /// This value is closer to "channel with ID 0" than "chat with ID 0",
 /// but there's no distinct `-0` integer,
-/// and channels have a proper constructor for empty already
+/// and channels have a proper constructor for empty already.
 const EMPTY_CHAT_ID: i64 = -1000000000000;
 
 impl PeerId {
