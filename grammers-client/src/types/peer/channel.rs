@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::{ChannelKind, PeerAuth};
+use grammers_session::types::{ChannelKind, PeerAuth, PeerInfo};
 use grammers_tl_types as tl;
 use std::fmt;
 
@@ -210,5 +210,17 @@ impl<'a> TryFrom<&'a Channel> for ChannelKind {
     #[inline]
     fn try_from(channel: &'a Channel) -> Result<Self, Self::Error> {
         <Self as TryFrom<&'a tl::types::Channel>>::try_from(&channel.raw)
+    }
+}
+
+impl From<Channel> for PeerInfo {
+    #[inline]
+    fn from(channel: Channel) -> Self {
+        <Self as From<&Channel>>::from(&channel)
+    }
+}
+impl<'a> From<&'a Channel> for PeerInfo {
+    fn from(channel: &'a Channel) -> Self {
+        <Self as From<&'a tl::types::Channel>>::from(&channel.raw)
     }
 }
