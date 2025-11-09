@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::fmt;
+use std::{fmt, ops::Deref as _};
 
 use grammers_tl_types as tl;
 
@@ -261,8 +261,14 @@ impl fmt::Display for PeerId {
 }
 
 impl From<PeerInfo> for PeerRef {
+    #[inline]
     fn from(peer: PeerInfo) -> Self {
-        PeerRef {
+        <Self as From<&PeerInfo>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerInfo> for PeerRef {
+    fn from(peer: &'a PeerInfo) -> Self {
+        Self {
             id: peer.id(),
             auth: peer.auth(),
         }
@@ -270,55 +276,89 @@ impl From<PeerInfo> for PeerRef {
 }
 
 impl From<tl::enums::Peer> for PeerId {
+    #[inline]
     fn from(peer: tl::enums::Peer) -> Self {
+        <Self as From<&tl::enums::Peer>>::from(&peer)
+    }
+}
+impl<'a> From<&'a tl::enums::Peer> for PeerId {
+    fn from(peer: &'a tl::enums::Peer) -> Self {
+        use tl::enums::Peer;
         match peer {
-            tl::enums::Peer::User(user) => PeerId::from(user),
-            tl::enums::Peer::Chat(chat) => PeerId::from(chat),
-            tl::enums::Peer::Channel(channel) => PeerId::from(channel),
+            Peer::User(user) => Self::from(user),
+            Peer::Chat(chat) => Self::from(chat),
+            Peer::Channel(channel) => Self::from(channel),
         }
     }
 }
 
 impl From<tl::types::PeerUser> for PeerId {
+    #[inline]
     fn from(user: tl::types::PeerUser) -> Self {
-        PeerId::user(user.user_id)
+        <Self as From<&tl::types::PeerUser>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::PeerUser> for PeerId {
+    fn from(user: &'a tl::types::PeerUser) -> Self {
+        Self::user(user.user_id)
     }
 }
 
 impl From<tl::types::PeerChat> for PeerId {
-    fn from(chat: tl::types::PeerChat) -> Self {
-        PeerId::chat(chat.chat_id)
+    #[inline]
+    fn from(user: tl::types::PeerChat) -> Self {
+        <Self as From<&tl::types::PeerChat>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::PeerChat> for PeerId {
+    fn from(chat: &'a tl::types::PeerChat) -> Self {
+        Self::chat(chat.chat_id)
     }
 }
 
 impl From<tl::types::PeerChannel> for PeerId {
+    #[inline]
     fn from(channel: tl::types::PeerChannel) -> Self {
-        PeerId::channel(channel.channel_id)
+        <Self as From<&tl::types::PeerChannel>>::from(&channel)
+    }
+}
+impl<'a> From<&'a tl::types::PeerChannel> for PeerId {
+    fn from(channel: &'a tl::types::PeerChannel) -> Self {
+        Self::channel(channel.channel_id)
     }
 }
 
 impl From<tl::enums::InputPeer> for PeerRef {
+    #[inline]
     fn from(peer: tl::enums::InputPeer) -> Self {
+        <Self as From<&tl::enums::InputPeer>>::from(&peer)
+    }
+}
+impl<'a> From<&'a tl::enums::InputPeer> for PeerRef {
+    fn from(peer: &'a tl::enums::InputPeer) -> Self {
+        use tl::{enums::InputPeer, types::InputPeerSelf};
         match peer {
-            tl::enums::InputPeer::Empty => {
-                panic!("InputPeer::Empty cannot be converted to any Peer");
-            }
-            tl::enums::InputPeer::PeerSelf => PeerRef {
-                id: SELF_USER_ID,
-                auth: PeerAuth::default(),
-            },
-            tl::enums::InputPeer::User(user) => PeerRef::from(user),
-            tl::enums::InputPeer::Chat(chat) => PeerRef::from(chat),
-            tl::enums::InputPeer::Channel(channel) => PeerRef::from(channel),
-            tl::enums::InputPeer::UserFromMessage(user) => PeerRef::from(*user),
-            tl::enums::InputPeer::ChannelFromMessage(channel) => PeerRef::from(*channel),
+            InputPeer::Empty => panic!("InputPeer::Empty cannot be converted to any Peer"),
+            InputPeer::PeerSelf => <Self as From<&'a _>>::from(&InputPeerSelf {}),
+            InputPeer::User(user) => <Self as From<&'a _>>::from(user),
+            InputPeer::Chat(chat) => <Self as From<&'a _>>::from(chat),
+            InputPeer::Channel(channel) => <Self as From<&'a _>>::from(channel),
+            InputPeer::UserFromMessage(user) => <Self as From<&'a _>>::from(user.deref()),
+            InputPeer::ChannelFromMessage(channel) => <Self as From<&'a _>>::from(channel.deref()),
         }
     }
 }
 
 impl From<tl::types::InputPeerSelf> for PeerRef {
-    fn from(_: tl::types::InputPeerSelf) -> Self {
-        PeerRef {
+    #[inline]
+    fn from(self_user: tl::types::InputPeerSelf) -> Self {
+        <Self as From<&tl::types::InputPeerSelf>>::from(&self_user)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerSelf> for PeerRef {
+    fn from(self_user: &'a tl::types::InputPeerSelf) -> Self {
+        _ = self_user;
+        Self {
             id: SELF_USER_ID,
             auth: PeerAuth::default(),
         }
@@ -326,8 +366,14 @@ impl From<tl::types::InputPeerSelf> for PeerRef {
 }
 
 impl From<tl::types::InputPeerUser> for PeerRef {
+    #[inline]
     fn from(user: tl::types::InputPeerUser) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::InputPeerUser>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerUser> for PeerRef {
+    fn from(user: &'a tl::types::InputPeerUser) -> Self {
+        Self {
             id: PeerId::user(user.user_id),
             auth: PeerAuth::from_hash(user.access_hash),
         }
@@ -335,8 +381,14 @@ impl From<tl::types::InputPeerUser> for PeerRef {
 }
 
 impl From<tl::types::InputPeerChat> for PeerRef {
+    #[inline]
     fn from(chat: tl::types::InputPeerChat) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::InputPeerChat>>::from(&chat)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerChat> for PeerRef {
+    fn from(chat: &'a tl::types::InputPeerChat) -> Self {
+        Self {
             id: PeerId::chat(chat.chat_id),
             auth: PeerAuth::default(),
         }
@@ -344,8 +396,14 @@ impl From<tl::types::InputPeerChat> for PeerRef {
 }
 
 impl From<tl::types::InputPeerChannel> for PeerRef {
+    #[inline]
     fn from(channel: tl::types::InputPeerChannel) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::InputPeerChannel>>::from(&channel)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerChannel> for PeerRef {
+    fn from(channel: &'a tl::types::InputPeerChannel) -> Self {
+        Self {
             id: PeerId::channel(channel.channel_id),
             auth: PeerAuth::from_hash(channel.access_hash),
         }
@@ -353,9 +411,15 @@ impl From<tl::types::InputPeerChannel> for PeerRef {
 }
 
 impl From<tl::types::InputPeerUserFromMessage> for PeerRef {
+    #[inline]
     fn from(user: tl::types::InputPeerUserFromMessage) -> Self {
+        <Self as From<&tl::types::InputPeerUserFromMessage>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerUserFromMessage> for PeerRef {
+    fn from(user: &'a tl::types::InputPeerUserFromMessage) -> Self {
         // Not currently willing to make PeerRef significantly larger to accomodate for this uncommon type.
-        PeerRef {
+        Self {
             id: PeerId::user(user.user_id),
             auth: PeerAuth::default(),
         }
@@ -363,9 +427,15 @@ impl From<tl::types::InputPeerUserFromMessage> for PeerRef {
 }
 
 impl From<tl::types::InputPeerChannelFromMessage> for PeerRef {
+    #[inline]
     fn from(channel: tl::types::InputPeerChannelFromMessage) -> Self {
+        <Self as From<&tl::types::InputPeerChannelFromMessage>>::from(&channel)
+    }
+}
+impl<'a> From<&'a tl::types::InputPeerChannelFromMessage> for PeerRef {
+    fn from(channel: &'a tl::types::InputPeerChannelFromMessage) -> Self {
         // Not currently willing to make PeerRef significantly larger to accomodate for this uncommon type.
-        PeerRef {
+        Self {
             id: PeerId::channel(channel.channel_id),
             auth: PeerAuth::default(),
         }
@@ -373,17 +443,30 @@ impl From<tl::types::InputPeerChannelFromMessage> for PeerRef {
 }
 
 impl From<tl::enums::User> for PeerRef {
+    #[inline]
     fn from(user: tl::enums::User) -> Self {
+        <Self as From<&tl::enums::User>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::enums::User> for PeerRef {
+    fn from(user: &'a tl::enums::User) -> Self {
+        use tl::enums::User;
         match user {
-            grammers_tl_types::enums::User::Empty(user) => PeerRef::from(user),
-            grammers_tl_types::enums::User::User(user) => PeerRef::from(user),
+            User::Empty(user) => <Self as From<&_>>::from(user),
+            User::User(user) => <Self as From<&_>>::from(user),
         }
     }
 }
 
 impl From<tl::types::UserEmpty> for PeerRef {
+    #[inline]
     fn from(user: tl::types::UserEmpty) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::UserEmpty>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::UserEmpty> for PeerRef {
+    fn from(user: &'a tl::types::UserEmpty) -> Self {
+        Self {
             id: PeerId::user(user.id),
             auth: PeerAuth::default(),
         }
@@ -391,8 +474,14 @@ impl From<tl::types::UserEmpty> for PeerRef {
 }
 
 impl From<tl::types::User> for PeerRef {
+    #[inline]
     fn from(user: tl::types::User) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::User>>::from(&user)
+    }
+}
+impl<'a> From<&'a tl::types::User> for PeerRef {
+    fn from(user: &'a tl::types::User) -> Self {
+        Self {
             id: if user.is_self {
                 PeerId::self_user()
             } else {
@@ -407,20 +496,33 @@ impl From<tl::types::User> for PeerRef {
 }
 
 impl From<tl::enums::Chat> for PeerRef {
+    #[inline]
     fn from(chat: tl::enums::Chat) -> Self {
+        <Self as From<&tl::enums::Chat>>::from(&chat)
+    }
+}
+impl<'a> From<&'a tl::enums::Chat> for PeerRef {
+    fn from(chat: &'a tl::enums::Chat) -> Self {
+        use tl::enums::Chat;
         match chat {
-            grammers_tl_types::enums::Chat::Empty(chat) => PeerRef::from(chat),
-            grammers_tl_types::enums::Chat::Chat(chat) => PeerRef::from(chat),
-            grammers_tl_types::enums::Chat::Forbidden(chat) => PeerRef::from(chat),
-            grammers_tl_types::enums::Chat::Channel(channel) => PeerRef::from(channel),
-            grammers_tl_types::enums::Chat::ChannelForbidden(channel) => PeerRef::from(channel),
+            Chat::Empty(chat) => <Self as From<&_>>::from(chat),
+            Chat::Chat(chat) => <Self as From<&_>>::from(chat),
+            Chat::Forbidden(chat) => <Self as From<&_>>::from(chat),
+            Chat::Channel(channel) => <Self as From<&_>>::from(channel),
+            Chat::ChannelForbidden(channel) => <Self as From<&_>>::from(channel),
         }
     }
 }
 
 impl From<tl::types::ChatEmpty> for PeerRef {
+    #[inline]
     fn from(chat: tl::types::ChatEmpty) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::ChatEmpty>>::from(&chat)
+    }
+}
+impl<'a> From<&'a tl::types::ChatEmpty> for PeerRef {
+    fn from(chat: &'a tl::types::ChatEmpty) -> Self {
+        Self {
             id: PeerId::chat(chat.id),
             auth: PeerAuth::default(),
         }
@@ -428,8 +530,14 @@ impl From<tl::types::ChatEmpty> for PeerRef {
 }
 
 impl From<tl::types::Chat> for PeerRef {
+    #[inline]
     fn from(chat: tl::types::Chat) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::Chat>>::from(&chat)
+    }
+}
+impl<'a> From<&'a tl::types::Chat> for PeerRef {
+    fn from(chat: &'a tl::types::Chat) -> Self {
+        Self {
             id: PeerId::chat(chat.id),
             auth: PeerAuth::default(),
         }
@@ -437,8 +545,14 @@ impl From<tl::types::Chat> for PeerRef {
 }
 
 impl From<tl::types::ChatForbidden> for PeerRef {
+    #[inline]
     fn from(chat: tl::types::ChatForbidden) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::ChatForbidden>>::from(&chat)
+    }
+}
+impl<'a> From<&'a tl::types::ChatForbidden> for PeerRef {
+    fn from(chat: &'a tl::types::ChatForbidden) -> Self {
+        Self {
             id: PeerId::chat(chat.id),
             auth: PeerAuth::default(),
         }
@@ -446,8 +560,14 @@ impl From<tl::types::ChatForbidden> for PeerRef {
 }
 
 impl From<tl::types::Channel> for PeerRef {
+    #[inline]
     fn from(channel: tl::types::Channel) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::Channel>>::from(&channel)
+    }
+}
+impl<'a> From<&'a tl::types::Channel> for PeerRef {
+    fn from(channel: &'a tl::types::Channel) -> Self {
+        Self {
             id: PeerId::channel(channel.id),
             auth: channel
                 .access_hash
@@ -458,8 +578,14 @@ impl From<tl::types::Channel> for PeerRef {
 }
 
 impl From<tl::types::ChannelForbidden> for PeerRef {
+    #[inline]
     fn from(channel: tl::types::ChannelForbidden) -> Self {
-        PeerRef {
+        <Self as From<&tl::types::ChannelForbidden>>::from(&channel)
+    }
+}
+impl<'a> From<&'a tl::types::ChannelForbidden> for PeerRef {
+    fn from(channel: &'a tl::types::ChannelForbidden) -> Self {
+        Self {
             id: PeerId::channel(channel.id),
             auth: PeerAuth::from_hash(channel.access_hash),
         }
@@ -467,16 +593,22 @@ impl From<tl::types::ChannelForbidden> for PeerRef {
 }
 
 impl From<PeerId> for tl::enums::Peer {
+    #[inline]
     fn from(peer: PeerId) -> Self {
+        <Self as From<&PeerId>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerId> for tl::enums::Peer {
+    fn from(peer: &'a PeerId) -> Self {
         match peer.kind() {
-            PeerKind::User => tl::enums::Peer::User(tl::types::PeerUser {
+            PeerKind::User => Self::User(tl::types::PeerUser {
                 user_id: peer.bare_id(),
             }),
             PeerKind::UserSelf => panic!("self-user ID not known"),
-            PeerKind::Chat => tl::enums::Peer::Chat(tl::types::PeerChat {
+            PeerKind::Chat => Self::Chat(tl::types::PeerChat {
                 chat_id: peer.bare_id(),
             }),
-            PeerKind::Channel => tl::enums::Peer::Channel(tl::types::PeerChannel {
+            PeerKind::Channel => Self::Channel(tl::types::PeerChannel {
                 channel_id: peer.bare_id(),
             }),
         }
@@ -484,17 +616,23 @@ impl From<PeerId> for tl::enums::Peer {
 }
 
 impl From<PeerRef> for tl::enums::InputPeer {
+    #[inline]
     fn from(peer: PeerRef) -> Self {
+        <Self as From<&PeerRef>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerRef> for tl::enums::InputPeer {
+    fn from(peer: &'a PeerRef) -> Self {
         match peer.id.kind() {
-            PeerKind::User => tl::enums::InputPeer::User(tl::types::InputPeerUser {
+            PeerKind::User => Self::User(tl::types::InputPeerUser {
                 user_id: peer.id.bare_id(),
                 access_hash: peer.auth.hash(),
             }),
-            PeerKind::UserSelf => tl::enums::InputPeer::PeerSelf,
-            PeerKind::Chat => tl::enums::InputPeer::Chat(tl::types::InputPeerChat {
+            PeerKind::UserSelf => Self::PeerSelf,
+            PeerKind::Chat => Self::Chat(tl::types::InputPeerChat {
                 chat_id: peer.id.bare_id(),
             }),
-            PeerKind::Channel => tl::enums::InputPeer::Channel(tl::types::InputPeerChannel {
+            PeerKind::Channel => Self::Channel(tl::types::InputPeerChannel {
                 channel_id: peer.id.bare_id(),
                 access_hash: peer.auth.hash(),
             }),
@@ -503,21 +641,33 @@ impl From<PeerRef> for tl::enums::InputPeer {
 }
 
 impl From<PeerRef> for tl::enums::InputUser {
+    #[inline]
     fn from(peer: PeerRef) -> Self {
+        <Self as From<&PeerRef>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerRef> for tl::enums::InputUser {
+    fn from(peer: &'a PeerRef) -> Self {
         match peer.id.kind() {
-            PeerKind::User => tl::enums::InputUser::User(tl::types::InputUser {
+            PeerKind::User => Self::User(tl::types::InputUser {
                 user_id: peer.id.bare_id(),
                 access_hash: peer.auth.hash(),
             }),
-            PeerKind::UserSelf => tl::enums::InputUser::UserSelf,
-            PeerKind::Chat => tl::enums::InputUser::Empty,
-            PeerKind::Channel => tl::enums::InputUser::Empty,
+            PeerKind::UserSelf => Self::UserSelf,
+            PeerKind::Chat => Self::Empty,
+            PeerKind::Channel => Self::Empty,
         }
     }
 }
 
 impl From<PeerRef> for i64 {
+    #[inline]
     fn from(peer: PeerRef) -> Self {
+        <Self as From<&PeerRef>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerRef> for i64 {
+    fn from(peer: &'a PeerRef) -> Self {
         match peer.id.kind() {
             PeerKind::User => EMPTY_CHAT_ID,
             PeerKind::UserSelf => EMPTY_CHAT_ID,
@@ -528,12 +678,18 @@ impl From<PeerRef> for i64 {
 }
 
 impl From<PeerRef> for tl::enums::InputChannel {
+    #[inline]
     fn from(peer: PeerRef) -> Self {
+        <Self as From<&PeerRef>>::from(&peer)
+    }
+}
+impl<'a> From<&'a PeerRef> for tl::enums::InputChannel {
+    fn from(peer: &'a PeerRef) -> Self {
         match peer.id.kind() {
-            PeerKind::User => tl::enums::InputChannel::Empty,
-            PeerKind::UserSelf => tl::enums::InputChannel::Empty,
-            PeerKind::Chat => tl::enums::InputChannel::Empty,
-            PeerKind::Channel => tl::enums::InputChannel::Channel(tl::types::InputChannel {
+            PeerKind::User => Self::Empty,
+            PeerKind::UserSelf => Self::Empty,
+            PeerKind::Chat => Self::Empty,
+            PeerKind::Channel => Self::Channel(tl::types::InputChannel {
                 channel_id: peer.id.bare_id(),
                 access_hash: peer.auth.hash(),
             }),

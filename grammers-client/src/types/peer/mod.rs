@@ -165,17 +165,14 @@ impl Peer {
 }
 
 impl From<Peer> for PeerRef {
+    #[inline]
     fn from(peer: Peer) -> Self {
-        PeerRef {
-            id: peer.id(),
-            auth: peer.auth(),
-        }
+        <Self as From<&Peer>>::from(&peer)
     }
 }
-
-impl From<&Peer> for PeerRef {
-    fn from(peer: &Peer) -> Self {
-        PeerRef {
+impl<'a> From<&'a Peer> for PeerRef {
+    fn from(peer: &'a Peer) -> Self {
+        Self {
             id: peer.id(),
             auth: peer.auth(),
         }
