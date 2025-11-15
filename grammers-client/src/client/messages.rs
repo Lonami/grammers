@@ -519,6 +519,7 @@ impl Client {
                 reply_markup: message.reply_markup.clone(),
                 entities,
                 schedule_date: message.schedule_date,
+                schedule_repeat_period: None,
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
@@ -555,6 +556,7 @@ impl Client {
                 reply_markup: message.reply_markup.clone(),
                 entities,
                 schedule_date: message.schedule_date,
+                schedule_repeat_period: None,
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
@@ -759,6 +761,7 @@ impl Client {
             reply_markup: new_message.reply_markup,
             entities,
             schedule_date: new_message.schedule_date,
+            schedule_repeat_period: None,
             quick_reply_shortcut_id: None,
         })
         .await?;
@@ -865,6 +868,7 @@ impl Client {
             top_msg_id: None,
             reply_to: None,
             schedule_date: None,
+            schedule_repeat_period: None,
             send_as: None,
             noforwards: false,
             quick_reply_shortcut: None,
