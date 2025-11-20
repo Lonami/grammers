@@ -24,7 +24,7 @@ default = ["fs"]
 [dependencies]
 chrono = "0.4.42"
 futures-util = { version = "0.3.31", default-features = false, features = [
-    "alloc"
+    "alloc",
 ] }
 grammers-crypto = { path = "../grammers-crypto", version = "0.8.0" }
 grammers-mtsender = { path = "../grammers-mtsender", version = "0.8.1" }
@@ -38,8 +38,13 @@ md5 = "0.8.0"
 mime_guess = "2.0.5"
 pin-project-lite = "0.2"
 pulldown-cmark = { version = "0.13.0", default-features = false, optional = true }
+snafu = { version = "0.8.9", default-features = false, features = [
+    "rust_1_81",
+    "std",
+] }
 tokio = { version = "1.47.1", default-features = false, features = [
-    "rt", "macros"
+    "rt",
+    "macros",
 ] }
 url = { version = "2.5.7", optional = true }
 

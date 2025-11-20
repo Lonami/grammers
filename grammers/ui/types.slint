@@ -1,0 +1,17 @@
+import { ChatKindEnum } from "enums.slint";
+
+export struct ChatId {
+    kind: ChatKindEnum,
+    id-hi: int,
+    id-lo: int,
+}
+
+export struct ChatAuth {
+    access_hash_hi: int,
+    access_hash_lo: int,
+}
+
+export struct ChatRef {
+    id: ChatId,
+    auth: ChatAuth,
+}

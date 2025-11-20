@@ -1,0 +1,38 @@
+import { LineEdit, Button } from "std-widgets.slint";
+import { LoginStepEnum } from "../enums.slint";
+import { LoginScreenGlobal as G } from "../globals.slint";
+
+export component LoginScreen inherits VerticalLayout {
+    label := Text { }
+
+    input := LineEdit {
+        input-type: G.step == LoginStepEnum.password ? password : text;
+
+        key-pressed(event) => {
+            if event.text == Key.Return {
+                G.request-continue(input.text);
+                return EventResult.accept;
+            }
+            EventResult.reject
+        }
+    }
+
+    Button {
+        text: "Continue";
+        clicked => {
+            G.request-continue(input.text);
+        }
+    }
+
+    states [
+        phone when G.step == LoginStepEnum.phone: {
+            label.text: "Phone number (in international format):";
+        }
+        active-hover when G.step == LoginStepEnum.code: {
+            label.text: "Login code:";
+        }
+        inactive when G.step == LoginStepEnum.password: {
+            label.text: G.password-hint.is-empty ? "Password:" : "Password (hint: \{G.password-hint}):";
+        }
+    ]
+}

@@ -1,0 +1,87 @@
+import { LineEdit, Button, ScrollView, TextEdit } from "std-widgets.slint";
+import { DialogItem } from "../components/dialog-item.slint";
+import { MessageItem } from "../components/message-item.slint";
+import { ChatId } from "../types.slint";
+import { MainScreenGlobal as G } from "../globals.slint";
+
+export component MainScreen inherits HorizontalLayout {
+    callback request-settings();
+
+    VerticalLayout {
+        width: 300px;
+
+        HorizontalLayout {
+            Button {
+                text: "Settings";
+            }
+
+            LineEdit { }
+        }
+
+        ScrollView {
+            VerticalLayout {
+                for model in G.dialogs: DialogItem {
+                    clicked => {
+                        G.selected-dialog-id = model.id;
+                        G.request-messages();
+                    }
+                    model: model;
+                    selected: G.selected-dialog-id == model.id;
+                }
+            }
+        }
+    }
+
+    VerticalLayout {
+        HorizontalLayout {
+            VerticalLayout {
+                Text {
+                    text: "Chat";
+                }
+
+                Text {
+                    text: "Chat information";
+                }
+            }
+
+            Button {
+                text: "Search";
+            }
+        }
+
+        ScrollView {
+            VerticalLayout {
+                for model in G.messages: MessageItem {
+                    model: model;
+                }
+            }
+        }
+
+        HorizontalLayout {
+            Button {
+                text: "Attach";
+            }
+
+            message-input := TextEdit {
+                min-height: 4rem;
+                key-pressed(event) => {
+                    if event.text == Key.Return && !event.modifiers.shift {
+                        G.request-send-message(self.text);
+                        self.text = "";
+                        return EventResult.accept;
+                    }
+                    EventResult.reject
+                }
+            }
+
+            Button {
+                text: "Send";
+
+                clicked => {
+                    G.request-send-message(message-input.text);
+                    message-input.text = "";
+                }
+            }
+        }
+    }
+}
