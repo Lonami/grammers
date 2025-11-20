@@ -17,6 +17,8 @@ pub use crate::peer::{ChannelKind, PeerAuth, PeerId, PeerInfo, PeerKind, PeerRef
 /// This is very similar to Telegram's own `dcOption` type, except it also
 /// contains the permanent authentication key and serves as a stable interface.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", serde_with::serde_as)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct DcOption {
     /// Datacenter identifier.
     ///
@@ -34,11 +36,17 @@ pub struct DcOption {
     /// Permanent authentication key generated for encrypted communication with this datacenter.
     ///
     /// A logged-in user may or not be bound to this authentication key.
+    #[cfg(not(feature = "serde"))]
+    pub auth_key: Option<[u8; 256]>,
+
+    #[cfg(feature = "serde")]
+    #[serde_as(as = "Option<serde_with::hex::Hex>")]
     pub auth_key: Option<[u8; 256]>,
 }
 
 /// Full update state needed to process updates in order without gaps.
 #[derive(Clone, Debug, Default, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct UpdatesState {
     /// Primary persistent timestamp value.
     pub pts: i32,
@@ -54,6 +62,7 @@ pub struct UpdatesState {
 
 /// Update state for a single channel.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct ChannelState {
     /// The [`PeerId::bare_id`] of the channel.
     pub id: i64,
@@ -62,6 +71,7 @@ pub struct ChannelState {
 }
 
 /// Used in [`crate::Session::set_update_state`] to update parts of the overall [`UpdatesState`].
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum UpdateState {
     /// Updates the entirety of the state.
     All(UpdatesState),

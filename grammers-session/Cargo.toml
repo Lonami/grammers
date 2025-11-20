@@ -18,5 +18,12 @@ grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0" }
 log = "0.4.28"
 sqlite = "0.37.0"
 
+serde = { version = "1", features = ["derive"], optional = true }
+serde_with = { version = "3", features = ["hex"], optional = true }
+
 [dev-dependencies]
 toml = "0.9.8"
+
+[features]
+default = []
+serde = ["dep:serde", "dep:serde_with"]

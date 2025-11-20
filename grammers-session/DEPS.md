@@ -18,3 +18,11 @@ Used to test that this file lists all dependencies from `Cargo.toml`.
 ## sqlite
 
 SQLite-based session storage.
+
+## serde
+
+_Optional._ Enables serialization and deserialization of configuration and session-related types
+
+## serde_with
+
+_Optional._ Provides custom serialization helpers
