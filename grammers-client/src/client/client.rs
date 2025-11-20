@@ -27,6 +27,13 @@ pub struct ClientConfiguration {
     /// On flood, the library will retry *once*. If the flood error occurs a second time after
     /// sleeping, the error will be returned.
     pub flood_sleep_threshold: u32,
+
+    /// By default, the library call [`Session::cache_peer`] on all peer information that
+    /// the high-level methods receive as a response (e.g. [`Client::iter_dialogs`]).
+    ///
+    /// The cached peers are then usable by other methods such as [`Client::resolve_peer`]
+    /// for as long as the same persisted session is used.
+    pub auto_cache_peers: bool,
 }
 
 pub struct UpdatesConfiguration {
@@ -83,6 +90,7 @@ impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
             flood_sleep_threshold: 60,
+            auto_cache_peers: true,
         }
     }
 }

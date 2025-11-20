@@ -6,7 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use crate::types::{Peer, User};
-use grammers_session::Session;
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
 use std::collections::HashMap;
@@ -72,14 +71,5 @@ impl PeerMap {
     /// Iterate over the peers in the map.
     pub fn iter_peers(&self) -> impl Iterator<Item = &Peer> {
         self.map.values()
-    }
-
-    /// Cache all non-min peers inside the map to the session.
-    pub fn cache_to_session(&self, session: &dyn Session) {
-        for peer in self.iter_peers() {
-            if !peer.min() {
-                session.cache_peer(&peer.into());
-            }
-        }
     }
 }

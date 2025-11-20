@@ -127,7 +127,7 @@ impl UpdateStream {
                 let (updates, users, chats) = self.message_box.apply_difference(response);
                 let _ = self.peer_auths.extend(&users, &chats);
                 let peers = PeerMap::new(users, chats);
-                peers.cache_to_session(self.client.0.session.as_ref());
+                self.client.cache_peers_maybe(&peers);
                 self.extend_update_queue(updates, peers);
                 continue;
             }
@@ -184,7 +184,7 @@ impl UpdateStream {
                 let _ = self.peer_auths.extend(&users, &chats);
 
                 let peers = PeerMap::new(users, chats);
-                peers.cache_to_session(self.client.0.session.as_ref());
+                self.client.cache_peers_maybe(&peers);
                 self.extend_update_queue(updates, peers);
                 continue;
             }
@@ -214,7 +214,7 @@ impl UpdateStream {
 
         if let Some((updates, users, chats)) = result {
             let peers = PeerMap::new(users, chats);
-            peers.cache_to_session(self.client.0.session.as_ref());
+            self.client.cache_peers_maybe(&peers);
             self.extend_update_queue(updates, peers);
         }
     }
