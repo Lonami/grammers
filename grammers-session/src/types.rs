@@ -36,7 +36,7 @@ pub struct DcOption {
     /// Permanent authentication key generated for encrypted communication with this datacenter.
     ///
     /// A logged-in user may or not be bound to this authentication key.
-    #[serde_as(as = "Option<serde_with::Bytes>")]
+    #[cfg_attr(feature = "serde", serde_as(as = "Option<serde_with::Bytes>"))]
     pub auth_key: Option<[u8; 256]>,
 }
 
