@@ -24,6 +24,7 @@ use grammers_tl_types as tl;
 /// may be used to represent special peer identifiers.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerId(i64);
 
 /// Witness to the session's authority from Telegram to interact with a peer.
@@ -34,6 +35,7 @@ pub struct PeerId(i64);
 /// the peer being interacted with is one of its contacts.
 #[repr(transparent)]
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerAuth(i64);
 
 /// Ocap-style reference to a peer object, a peer object capability, bundling the identity
@@ -41,6 +43,7 @@ pub struct PeerAuth(i64);
 ///
 /// This type implements conversion to [`tl::enums::InputPeer`] and derivatives.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub struct PeerRef {
     /// The peer identity.
     pub id: PeerId,
@@ -52,6 +55,7 @@ pub struct PeerRef {
 ///
 /// The `PeerId` bitpacks this information for size reasons.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeerKind {
     /// The peer identity belongs to a [`tl::enums::User`]. May also represent [`PeerKind::UserSelf`].
     User,
@@ -65,6 +69,7 @@ pub enum PeerKind {
 
 /// An exploded peer reference along with any known useful information about the peer.
 #[derive(Clone, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum PeerInfo {
     User {
         /// Bare user identifier.
@@ -106,6 +111,7 @@ pub enum PeerInfo {
 /// slightly more performant.
 /// (See [`mod@core::option`]'s documentation about the "null pointer optimization".)
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[cfg_attr(feature = "serde", derive(serde::Serialize, serde::Deserialize))]
 pub enum ChannelKind {
     /// Value used for a channel with its [`tl::types::Channel::broadcast`] flag set to `true`.
     Broadcast = 1,
