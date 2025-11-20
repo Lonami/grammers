@@ -70,6 +70,18 @@ impl Group {
         }
     }
 
+    pub(crate) fn min(&self) -> bool {
+        use tl::enums::Chat;
+
+        match &self.raw {
+            Chat::Empty(_) => false,
+            Chat::Chat(_) => false,
+            Chat::Forbidden(_) => false,
+            Chat::Channel(channel) => channel.min,
+            Chat::ChannelForbidden(_) => false,
+        }
+    }
+
     pub(crate) fn auth(&self) -> PeerAuth {
         use tl::enums::Chat;
 

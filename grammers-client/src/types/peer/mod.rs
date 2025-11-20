@@ -78,6 +78,14 @@ impl Peer {
         }
     }
 
+    pub(crate) fn min(&self) -> bool {
+        match self {
+            Self::User(user) => user.min(),
+            Self::Group(group) => group.min(),
+            Self::Channel(channel) => channel.min(),
+        }
+    }
+
     pub(crate) fn auth(&self) -> PeerAuth {
         match self {
             Self::User(user) => user.auth(),

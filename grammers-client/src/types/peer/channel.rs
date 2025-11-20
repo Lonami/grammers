@@ -110,6 +110,10 @@ impl Channel {
         self.raw.id
     }
 
+    pub(crate) fn min(&self) -> bool {
+        self.raw.min
+    }
+
     pub(crate) fn auth(&self) -> PeerAuth {
         self.raw
             .access_hash

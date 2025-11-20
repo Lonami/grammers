@@ -97,6 +97,10 @@ impl User {
         self.raw.id()
     }
 
+    pub(crate) fn min(&self) -> bool {
+        self.user().map(|u| u.min).unwrap_or(true)
+    }
+
     pub(crate) fn auth(&self) -> PeerAuth {
         self.user()
             .and_then(|u| u.access_hash)

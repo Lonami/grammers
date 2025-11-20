@@ -82,6 +82,7 @@ impl DialogIter {
         };
 
         let peers = PeerMap::new(users, chats);
+        peers.cache_to_session(self.client.0.session.as_ref());
 
         self.buffer.extend(dialogs.into_iter().map(|dialog| {
             if let tl::enums::Dialog::Dialog(tl::types::Dialog {

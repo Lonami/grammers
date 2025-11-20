@@ -118,6 +118,7 @@ impl ParticipantIter {
 
                 // Don't actually care for the chats, just the users.
                 let mut peers = PeerMap::new(full.users, Vec::new());
+                peers.cache_to_session(client.0.session.as_ref());
                 let peers = Arc::get_mut(&mut peers).unwrap();
 
                 buffer.extend(
@@ -153,6 +154,7 @@ impl ParticipantIter {
 
                 // Don't actually care for the chats, just the users.
                 let mut peers = PeerMap::new(users, Vec::new());
+                peers.cache_to_session(iter.client.0.session.as_ref());
                 let peers = Arc::get_mut(&mut peers).unwrap();
 
                 iter.buffer.extend(
