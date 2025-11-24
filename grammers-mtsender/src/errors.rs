@@ -255,25 +255,25 @@ impl From<ReadError> for InvocationError {
 
 impl From<mtp::DeserializeError> for InvocationError {
     fn from(error: mtp::DeserializeError) -> Self {
-        Self::from(ReadError::from(error))
+        Self::Deserialize(error)
     }
 }
 
 impl From<transport::Error> for InvocationError {
     fn from(error: transport::Error) -> Self {
-        Self::from(ReadError::from(error))
+        Self::Transport(error)
     }
 }
 
 impl From<tl::deserialize::Error> for InvocationError {
     fn from(error: tl::deserialize::Error) -> Self {
-        Self::from(ReadError::from(error))
+        Self::Deserialize(error.into())
     }
 }
 
 impl From<io::Error> for InvocationError {
     fn from(error: io::Error) -> Self {
-        Self::from(ReadError::from(error))
+        Self::Io(error)
     }
 }
 
