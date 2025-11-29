@@ -27,7 +27,6 @@
 
 #![deny(unsafe_code)]
 
-mod chat;
 mod dc_options;
 mod message_box;
 mod peer;
@@ -37,8 +36,6 @@ pub mod storages;
 pub mod types;
 pub mod updates;
 
-#[allow(deprecated)]
-pub use chat::PeerAuthCache;
 pub(crate) use dc_options::{DEFAULT_DC, KNOWN_DC_OPTIONS};
 pub use session::Session;
 pub use session_data::SessionData;

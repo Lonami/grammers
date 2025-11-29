@@ -13,8 +13,8 @@
 use super::{Client, UpdatesConfiguration};
 use crate::types::{PeerMap, Update};
 use grammers_mtsender::InvocationError;
-use grammers_session::PeerAuthCache;
-use grammers_session::types::{PeerId, UpdateState, UpdatesState};
+use grammers_session::Session;
+use grammers_session::types::{PeerId, PeerInfo, UpdateState, UpdatesState};
 pub use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};
 use grammers_tl_types as tl;
 use log::{trace, warn};
@@ -33,7 +33,7 @@ const USER_CHANNEL_DIFF_LIMIT: i32 = 100;
 
 fn prepare_channel_difference(
     mut request: tl::functions::updates::GetChannelDifference,
-    peer_auths: &PeerAuthCache,
+    session: &dyn Session,
     message_box: &mut MessageBoxes,
 ) -> Option<tl::functions::updates::GetChannelDifference> {
     let id = match &request.channel {
@@ -41,9 +41,24 @@ fn prepare_channel_difference(
         _ => unreachable!(),
     };
 
-    if let Some(peer) = peer_auths.get(id) {
-        request.channel = peer.into();
-        request.limit = if peer_auths.is_self_bot() {
+    if let Some(PeerInfo::Channel {
+        id,
+        auth: Some(auth),
+        ..
+    }) = session.peer(id)
+    {
+        request.channel = tl::enums::InputChannel::Channel(tl::types::InputChannel {
+            channel_id: id,
+            access_hash: auth.hash(),
+        });
+        request.limit = if session
+            .peer(PeerId::self_user())
+            .map(|user| match user {
+                PeerInfo::User { bot, .. } => bot.unwrap_or(false),
+                _ => false,
+            })
+            .unwrap_or(false)
+        {
             BOT_CHANNEL_DIFF_LIMIT
         } else {
             USER_CHANNEL_DIFF_LIMIT
@@ -63,7 +78,6 @@ fn prepare_channel_difference(
 pub struct UpdateStream {
     client: Client,
     message_box: MessageBoxes,
-    peer_auths: PeerAuthCache,
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     last_update_limit_warn: Option<Instant>,
@@ -117,7 +131,11 @@ impl UpdateStream {
                     self.message_box.check_deadlines(), // first, as it might trigger differences
                     self.message_box.get_difference(),
                     self.message_box.get_channel_difference().and_then(|gd| {
-                        prepare_channel_difference(gd, &self.peer_auths, &mut self.message_box)
+                        prepare_channel_difference(
+                            gd,
+                            self.client.0.session.as_ref(),
+                            &mut self.message_box,
+                        )
                     }),
                 )
             };
@@ -125,7 +143,6 @@ impl UpdateStream {
             if let Some(request) = get_diff {
                 let response = self.client.invoke(&request).await?;
                 let (updates, users, chats) = self.message_box.apply_difference(response);
-                let _ = self.peer_auths.extend(&users, &chats);
                 let peers = PeerMap::new(users, chats);
                 self.client.cache_peers_maybe(&peers);
                 self.extend_update_queue(updates, peers);
@@ -181,7 +198,6 @@ impl UpdateStream {
                 };
 
                 let (updates, users, chats) = self.message_box.apply_channel_difference(response);
-                let _ = self.peer_auths.extend(&users, &chats);
 
                 let peers = PeerMap::new(users, chats);
                 self.client.cache_peers_maybe(&peers);
@@ -290,7 +306,6 @@ impl Client {
         UpdateStream {
             client: self.clone(),
             message_box,
-            peer_auths: PeerAuthCache::new(None),
             last_update_limit_warn: None,
             buffer: VecDeque::new(),
             updates,
