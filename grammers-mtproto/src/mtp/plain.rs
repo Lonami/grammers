@@ -72,7 +72,10 @@ impl Mtp for Plain {
     /// if it is, the method returns the inner contents of the message.
     ///
     /// [`serialize_plain_message`]: #method.serialize_plain_message
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError> {
+    fn deserialize(
+        &mut self,
+        payload: &mut [u8],
+    ) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
         let mut buf = Cursor::from_slice(payload);

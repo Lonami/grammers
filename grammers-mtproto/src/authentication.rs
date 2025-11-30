@@ -401,7 +401,7 @@ fn do_step3(
     let server_dh_params = response;
 
     // Step 3. Factorize PQ and construct the request for DH params.
-    let server_dh_params = match server_dh_params {
+    let mut server_dh_params = match server_dh_params {
         tl::enums::ServerDhParams::Fail(server_dh_params) => {
             // Even though this is a failing case, we should still perform
             // all the security checks.
@@ -438,8 +438,8 @@ fn do_step3(
     let (key, iv) = grammers_crypto::generate_key_data_from_nonce(&server_nonce, &new_nonce);
 
     // sha1 hash + plain text + padding
-    let plain_text_answer =
-        grammers_crypto::decrypt_ige(&server_dh_params.encrypted_answer, &key, &iv);
+    grammers_crypto::aes::ige_decrypt(&mut server_dh_params.encrypted_answer, &key, &iv);
+    let plain_text_answer = server_dh_params.encrypted_answer;
 
     let got_answer_hash = {
         let mut buffer = [0; 20];
@@ -520,7 +520,7 @@ fn do_step3(
         hasher.finalize()
     };
 
-    let client_dh_inner_hashed = {
+    let mut client_dh_inner_hashed = {
         let mut buffer = Vec::with_capacity(20 + client_dh_inner.len() + 16);
 
         buffer.extend(&sha);
@@ -534,7 +534,8 @@ fn do_step3(
         buffer
     };
 
-    let client_dh_encrypted = grammers_crypto::encrypt_ige(&client_dh_inner_hashed, &key, &iv);
+    grammers_crypto::aes::ige_encrypt(&mut client_dh_inner_hashed, &key, &iv);
+    let client_dh_encrypted = client_dh_inner_hashed;
 
     Ok((
         tl::functions::SetClientDhParams {
