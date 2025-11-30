@@ -1298,10 +1298,9 @@ impl Mtp for Encrypted {
     ) -> Result<Vec<Deserialization>, DeserializeError> {
         crate::utils::check_message_buffer(payload)?;
 
-        let plaintext_range = decrypt_data_v2(payload, &self.auth_key)?;
-        let plaintext = &payload[plaintext_range];
+        let plaintext = decrypt_data_v2(payload, &self.auth_key)?;
 
-        let mut buffer = Cursor::from_slice(&plaintext[..]);
+        let mut buffer = Cursor::from_slice(plaintext);
 
         let _salt = i64::deserialize(&mut buffer)?;
         let session_id = i64::deserialize(&mut buffer)?;

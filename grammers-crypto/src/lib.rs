@@ -156,11 +156,11 @@ pub fn encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey) {
 }
 
 /// This method is the inverse of `encrypt_data_v2`.
-/// Returns 24.., a RangeFrom where plaintext is in the decrypted buffer.
-pub fn decrypt_data_v2(
-    buffer: &mut [u8],
+/// Returns the slice of the input buffer that contains the decrypted plaintext.
+pub fn decrypt_data_v2<'b>(
+    buffer: &'b mut [u8],
     auth_key: &AuthKey,
-) -> Result<std::ops::RangeFrom<usize>, Error> {
+) -> Result<&'b mut [u8], Error> {
     // Decryption is done from the server
     let side = Side::Server;
     let x = side.x();
@@ -190,7 +190,7 @@ pub fn decrypt_data_v2(
         return Err(Error::MessageKeyMismatch);
     }
 
-    Ok(8 + 16..)
+    Ok(&mut buffer[8 + 16..])
 }
 
 /// Generate the AES key and initialization vector from the server nonce
@@ -348,8 +348,7 @@ mod tests {
             205, 142, 233, 208, 174, 111, 171, 103, 44, 96, 192, 74, 63, 31, 212, 73, 14, 81, 246,
         ];
 
-        let plaintext_range = decrypt_data_v2(&mut ciphertext, &auth_key).unwrap();
-        let plaintext = &ciphertext[plaintext_range];
+        let plaintext = decrypt_data_v2(&mut ciphertext, &auth_key).unwrap();
 
         assert_eq!(plaintext, expected);
     }
