@@ -218,5 +218,6 @@ pub trait Mtp {
     fn finalize(&mut self, buffer: &mut DequeBuffer<u8>) -> Option<MsgId>;
 
     /// Deserializes a single incoming message payload into zero or more responses.
-    fn deserialize(&mut self, payload: &[u8]) -> Result<Vec<Deserialization>, DeserializeError>;
+    fn deserialize(&mut self, payload: &mut [u8])
+    -> Result<Vec<Deserialization>, DeserializeError>;
 }

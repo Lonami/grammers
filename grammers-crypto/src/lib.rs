@@ -21,11 +21,12 @@ pub mod rsa;
 mod sha;
 pub mod two_factor_auth;
 
+use std::fmt;
+
 pub use auth_key::AuthKey;
 pub use deque_buffer::DequeBuffer;
 pub use factorize::factorize;
 pub use obfuscated::ObfuscatedCipher;
-use std::fmt;
 
 /// The error type for [`decrypt_data_v2`].
 #[derive(Clone, Debug, PartialEq)]
@@ -155,29 +156,32 @@ pub fn encrypt_data_v2(buffer: &mut DequeBuffer<u8>, auth_key: &AuthKey) {
 }
 
 /// This method is the inverse of `encrypt_data_v2`.
-pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>, Error> {
+/// Returns 24.., a RangeFrom where plaintext is in the decrypted buffer.
+pub fn decrypt_data_v2(
+    buffer: &mut [u8],
+    auth_key: &AuthKey,
+) -> Result<std::ops::RangeFrom<usize>, Error> {
     // Decryption is done from the server
     let side = Side::Server;
     let x = side.x();
 
-    if ciphertext.len() < 24 || (ciphertext.len() - 24) % 16 != 0 {
+    if buffer.len() < 24 || (buffer.len() - 24) % 16 != 0 {
         return Err(Error::InvalidBuffer);
     }
 
     // TODO Check salt, session_id and sequence_number
-    let key_id = &ciphertext[..8];
+    let key_id = &buffer[..8];
     if auth_key.key_id != *key_id {
         return Err(Error::AuthKeyMismatch);
     }
 
-    let msg_key = {
-        let mut buffer = [0; 16];
-        buffer.copy_from_slice(&ciphertext[8..8 + 16]);
-        buffer
-    };
+    let mut msg_key = [0; 16];
+    msg_key.copy_from_slice(&buffer[8..8 + 16]);
 
     let (key, iv) = calc_key(auth_key, &msg_key, Side::Server);
-    let plaintext = decrypt_ige(&ciphertext[24..], &key, &iv);
+
+    aes::ige_decrypt(&mut buffer[8 + 16..], &key, &iv);
+    let plaintext = &buffer[8 + 16..];
 
     // https://core.telegram.org/mtproto/security_guidelines#mtproto-encrypted-messages
     let our_key = sha256!(&auth_key.data[88 + x..88 + x + 32], &plaintext);
@@ -186,7 +190,7 @@ pub fn decrypt_data_v2(ciphertext: &[u8], auth_key: &AuthKey) -> Result<Vec<u8>,
         return Err(Error::MessageKeyMismatch);
     }
 
-    Ok(plaintext)
+    Ok(8 + 16..)
 }
 
 /// Generate the AES key and initialization vector from the server nonce
@@ -217,31 +221,6 @@ pub fn generate_key_data_from_nonce(
     };
 
     (key, iv)
-}
-
-/// Encrypt data using AES-IGE.
-pub fn encrypt_ige(plaintext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    let mut padded = if plaintext.len() % 16 == 0 {
-        plaintext.to_vec()
-    } else {
-        let pad_len = (16 - (plaintext.len() % 16)) % 16;
-        let mut padded = Vec::with_capacity(plaintext.len() + pad_len);
-        padded.extend(plaintext);
-
-        let mut buffer = vec![0; pad_len];
-        getrandom::fill(&mut buffer).expect("failed to generate random padding for encryption");
-        padded.extend(&buffer);
-        padded
-    };
-
-    aes::ige_encrypt(padded.as_mut(), key, iv);
-    padded
-}
-
-/// Decrypt data using AES-IGE. Panics if the plaintext is not padded
-/// to 16 bytes.
-pub fn decrypt_ige(padded_ciphertext: &[u8], key: &[u8; 32], iv: &[u8; 32]) -> Vec<u8> {
-    aes::ige_decrypt(padded_ciphertext, key, iv)
 }
 
 #[cfg(test)]
@@ -332,7 +311,7 @@ mod tests {
 
     #[test]
     fn decrypt_server_data_v2() {
-        let ciphertext = vec![
+        let mut ciphertext = vec![
             122, 113, 131, 194, 193, 14, 79, 77, 249, 69, 250, 154, 154, 189, 53, 231, 195, 132,
             11, 97, 240, 69, 48, 79, 57, 103, 76, 25, 192, 226, 9, 120, 79, 80, 246, 34, 106, 7,
             53, 41, 214, 117, 201, 44, 191, 11, 250, 140, 153, 167, 155, 63, 57, 199, 42, 93, 154,
@@ -369,7 +348,10 @@ mod tests {
             205, 142, 233, 208, 174, 111, 171, 103, 44, 96, 192, 74, 63, 31, 212, 73, 14, 81, 246,
         ];
 
-        assert_eq!(decrypt_data_v2(&ciphertext, &auth_key).unwrap(), expected);
+        let plaintext_range = decrypt_data_v2(&mut ciphertext, &auth_key).unwrap();
+        let plaintext = &ciphertext[plaintext_range];
+
+        assert_eq!(plaintext, expected);
     }
 
     #[test]
@@ -410,25 +392,33 @@ mod tests {
 
     #[test]
     fn verify_ige_encryption() {
-        let plaintext = get_test_aes_key_or_iv(); // Encrypting the key with itself
+        let mut plaintext = get_test_aes_key_or_iv(); // Encrypting the key with itself
         let key = get_test_aes_key_or_iv();
         let iv = get_test_aes_key_or_iv();
         let expected = vec![
             226, 129, 18, 165, 62, 92, 137, 199, 177, 234, 128, 113, 193, 51, 105, 159, 212, 232,
             107, 38, 196, 186, 201, 252, 90, 241, 171, 140, 226, 122, 68, 164,
         ];
-        assert_eq!(encrypt_ige(&plaintext, &key, &iv), expected);
+
+        aes::ige_encrypt(&mut plaintext, &key, &iv);
+        let ciphertext = plaintext;
+
+        assert_eq!(ciphertext.as_slice(), &expected);
     }
 
     #[test]
     fn verify_ige_decryption() {
-        let ciphertext = get_test_aes_key_or_iv(); // Decrypting the key with itself
+        let mut ciphertext = get_test_aes_key_or_iv(); // Decrypting the key with itself
         let key = get_test_aes_key_or_iv();
         let iv = get_test_aes_key_or_iv();
         let expected = vec![
             229, 119, 122, 250, 205, 123, 44, 22, 247, 172, 64, 202, 230, 30, 246, 3, 254, 230, 9,
             143, 184, 168, 134, 10, 185, 238, 103, 44, 215, 229, 186, 204,
         ];
-        assert_eq!(decrypt_ige(&ciphertext, &key, &iv), expected);
+
+        aes::ige_decrypt(&mut ciphertext, &key, &iv);
+        let plaintext = ciphertext;
+
+        assert_eq!(plaintext.as_slice(), &expected);
     }
 }
