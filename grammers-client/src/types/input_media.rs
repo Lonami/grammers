@@ -230,7 +230,7 @@ impl InputMedia {
     /// ```
     pub fn attribute(mut self, attr: Attribute) -> Self {
         if let Some(tl::enums::InputMedia::UploadedDocument(document)) = &mut self.media {
-            document.attributes.push(attr.into());
+            document.attributes.push(attr.try_into().unwrap());
         }
         self
     }
