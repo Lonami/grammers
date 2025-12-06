@@ -875,6 +875,7 @@ impl Client {
             noforwards: false,
             quick_reply_shortcut: None,
             allow_paid_floodskip: false,
+            effect: None,
             video_timestamp: None,
             allow_paid_stars: None,
             suggested_post: None,
