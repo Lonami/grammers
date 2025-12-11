@@ -61,8 +61,8 @@ fn update_short_message(short: tl::types::UpdateShortMessage) -> tl::types::Upda
                 id: short.id,
                 from_id: None,
                 from_boosts_applied: None,
-                peer_id: tl::types::PeerChat {
-                    chat_id: short.user_id,
+                peer_id: tl::types::PeerUser {
+                    user_id: short.user_id,
                 }
                 .into(),
                 saved_peer_id: None,
