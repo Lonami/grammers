@@ -26,6 +26,6 @@ serde_with = { version = "3", features = ["hex"], optional = true }
 toml = "0.9.8"
 
 [features]
-default = []
+default = ["sqlite-storage"]
 sqlite-storage = ["dep:sqlite"]
 serde = ["dep:serde", "dep:serde_with"]
