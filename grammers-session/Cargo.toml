@@ -16,7 +16,8 @@ edition = "2024"
 [dependencies]
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0" }
 log = "0.4.28"
-sqlite = "0.37.0"
+
+sqlite = { version = "0.37.0", optional = true }
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", features = ["hex"], optional = true }
@@ -26,4 +27,5 @@ toml = "0.9.8"
 
 [features]
 default = []
+sqlite-storage = ["dep:sqlite"]
 serde = ["dep:serde", "dep:serde_with"]
