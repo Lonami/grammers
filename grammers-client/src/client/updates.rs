@@ -283,7 +283,10 @@ impl Drop for UpdateStream {
 impl Client {
     /// Returns an asynchronous stream of processed updates.
     ///
-    /// The updates are guaranteed to be in order, and any gaps will be resolved.
+    /// The updates are guaranteed to be in order, and any gaps will be resolved.\
+    /// **Important** to note that for gaps to be resolved, the peers must have been
+    /// persisted in the session cache beforehand (i.e. be retrievable with [`Session::peer`]).
+    /// A good way to achieve this is to use [`Self::iter_dialogs`] at least once after login.
     ///
     /// The updates are wrapped in [`crate::Update`] to make them more convenient to use,
     /// but their raw type is still accessible to bridge any missing functionality.
