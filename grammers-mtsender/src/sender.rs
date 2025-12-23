@@ -17,9 +17,9 @@ use grammers_mtproto::{MsgId, authentication};
 use grammers_session::updates::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
-use std::io;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::time::{Duration, SystemTime};
+use std::{io, thread};
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
@@ -59,15 +59,18 @@ const NO_PING_DISCONNECT: i32 = 75;
 pub(crate) fn generate_random_id() -> i64 {
     static LAST_ID: AtomicI64 = AtomicI64::new(0);
 
-    if LAST_ID.load(Ordering::SeqCst) == 0 {
+    while LAST_ID.load(Ordering::SeqCst) == 0 {
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("system time is before epoch")
             .as_nanos() as i64;
 
-        LAST_ID
+        if LAST_ID
             .compare_exchange(0, now, Ordering::SeqCst, Ordering::SeqCst)
-            .unwrap();
+            .is_err()
+        {
+            thread::yield_now();
+        }
     }
 
     LAST_ID.fetch_add(1, Ordering::SeqCst)
