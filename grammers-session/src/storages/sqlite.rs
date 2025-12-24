@@ -94,6 +94,52 @@ impl Database {
         Ok(())
     }
 
+    fn last_error(&self) -> Option<sqlite::Error> {
+        let raw_connection = self.0.as_raw();
+        #[allow(unsafe_code)]
+        let code = unsafe { sqlite::ffi::sqlite3_errcode(raw_connection) };
+        if code == sqlite::ffi::SQLITE_OK {
+            return None;
+        }
+        #[allow(unsafe_code)]
+        let message = unsafe { sqlite::ffi::sqlite3_errmsg(raw_connection) };
+        if message.is_null() {
+            return None;
+        }
+        #[allow(unsafe_code)]
+        let message = unsafe { std::ffi::CStr::from_ptr(message as *const _) };
+        Some(sqlite::Error {
+            code: Some(code as isize),
+            message: Some(String::from_utf8_lossy(message.to_bytes()).into_owned()),
+        })
+    }
+
+    #[inline]
+    fn new_error(&self, error_code: i32) -> sqlite::Error {
+        match self.last_error() {
+            Some(error) => error,
+            _ => sqlite::Error {
+                code: Some(error_code as isize),
+                message: None,
+            },
+        }
+    }
+
+    #[inline]
+    fn new_result(&self, result_code: i32) -> sqlite::Result<()> {
+        match result_code {
+            sqlite::ffi::SQLITE_OK => Ok(()),
+            error_code => Err(self.new_error(error_code)),
+        }
+    }
+
+    fn flush(&self) -> sqlite::Result<()> {
+        let raw_connection = self.0.as_raw();
+        #[allow(unsafe_code)]
+        let result_code = unsafe { sqlite::ffi::sqlite3_db_cacheflush(raw_connection) };
+        self.new_result(result_code)
+    }
+
     fn begin_transaction(&self) -> sqlite::Result<TransactionGuard<'_>> {
         self.0.execute("BEGIN TRANSACTION")?;
         Ok(TransactionGuard(&self.0))
@@ -145,6 +191,11 @@ impl SqliteSession {
         Ok(SqliteSession {
             database: Mutex::new(database),
         })
+    }
+
+    pub fn flush(&self) -> sqlite::Result<()> {
+        let db = self.database.lock().unwrap();
+        db.flush()
     }
 }
 

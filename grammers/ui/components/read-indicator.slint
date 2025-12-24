@@ -1,0 +1,35 @@
+import { Check, DoubleCheck, Clock } from "../icons.slint";
+
+export component ReadIndicator {
+    in property <bool> sent;
+    in property <bool> read;
+
+    clock := Clock { }
+
+    check := Check { }
+
+    double-check := DoubleCheck { }
+
+    states [
+        incoming when !sent && read: {
+            clock.visible: false;
+            check.visible: false;
+            double-check.visible: false;
+        }
+        outgoing-unread when sent && !read: {
+            clock.visible: false;
+            check.visible: true;
+            double-check.visible: false;
+        }
+        outgoing-read when sent && read: {
+            clock.visible: false;
+            check.visible: false;
+            double-check.visible: true;
+        }
+        outgoing-pending when !sent && !read: {
+            clock.visible: true;
+            check.visible: false;
+            double-check.visible: false;
+        }
+    ]
+}
