@@ -229,6 +229,7 @@ impl SenderPoolRunner {
                             sender,
                             rpc_rx,
                             self.updates_tx.clone(),
+                            dc_option.id == self.session.home_dc_id(),
                         ));
                         self.connections.push(ConnectionInfo {
                             dc_id,
@@ -367,6 +368,7 @@ async fn run_sender(
     mut sender: Sender<Transport, grammers_mtproto::mtp::Encrypted>,
     mut rpc_rx: mpsc::UnboundedReceiver<Rpc>,
     updates: mpsc::UnboundedSender<UpdatesLike>,
+    home_sender: bool,
 ) -> Result<(), ReadError> {
     loop {
         tokio::select! {
@@ -374,7 +376,12 @@ async fn run_sender(
                 Ok(all_new_updates) => all_new_updates.into_iter().for_each(|new_updates| {
                     let _ = updates.send(new_updates);
                 }),
-                Err(err) => break Err(err),
+                Err(err) => {
+                    if home_sender {
+                        let _ = updates.send(UpdatesLike::ConnectionClosed);
+                    }
+                    break Err(err)
+                },
             },
             rpc = rpc_rx.recv() => match rpc {
                 Some(rpc) => sender.enqueue_body(rpc.body, rpc.tx),

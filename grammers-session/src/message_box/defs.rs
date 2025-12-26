@@ -145,6 +145,9 @@ pub enum UpdatesLike {
     AffectedMessages(tl::types::messages::AffectedMessages),
     /// Special-case for requests that lead to users being invited.
     InvitedUsers(tl::types::messages::InvitedUsers),
+    /// Indicates that the connection was closed and had to be recreated.
+    /// This may mean that an update gap now exists and should be resolved.
+    ConnectionClosed,
 }
 
 // Public interface around the more tightly-packed internal state.

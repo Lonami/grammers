@@ -347,6 +347,7 @@ pub(super) fn adapt(updates: UpdatesLike) -> Result<tl::types::UpdatesCombined, 
             date: 0,
         })),
         UpdatesLike::InvitedUsers(invited) => adapt_updates(invited.updates),
+        UpdatesLike::ConnectionClosed => return Err(Gap),
     }
 }
 
