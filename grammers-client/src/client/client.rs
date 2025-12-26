@@ -18,7 +18,8 @@ use crate::client::retry_policy::{AutoSleep, RetryPolicy};
 pub struct ClientConfiguration {
     /// The retry policy to use when encountering errors after invoking a request.
     ///
-    /// By default, the library will use [`AutoSleep`] with a threshold of 60 seconds.
+    /// By default, the library will use [`AutoSleep`] with a threshold of 60 seconds,
+    /// and will treat I/O errors as if they were a 1-second flood.
     pub retry_policy: Box<dyn RetryPolicy>,
 
     /// By default, the library call [`Session::cache_peer`] on all peer information that
@@ -84,6 +85,7 @@ impl Default for ClientConfiguration {
         Self {
             retry_policy: Box::new(AutoSleep {
                 threshold: Duration::from_secs(60),
+                io_errors_as_flood_of: Some(Duration::from_secs(1)),
             }),
             auto_cache_peers: true,
         }

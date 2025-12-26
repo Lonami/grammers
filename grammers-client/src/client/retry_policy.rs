@@ -45,6 +45,10 @@ pub struct AutoSleep {
     /// and `flood_sleep_threshold` is 20 (seconds), the library will `sleep` automatically for
     /// 17 seconds. If the error was for 21s, it would propagate the error instead.
     pub threshold: Duration,
+
+    /// `Some` if I/O errors should be treated as a flood error that would last the specified duration.
+    /// This duration will ignore the `threshold` and always be slept on on the first I/O error.
+    pub io_errors_as_flood_of: Option<Duration>,
 }
 
 impl RetryPolicy for AutoSleep {
@@ -56,6 +60,13 @@ impl RetryPolicy for AutoSleep {
                 ..
             }) if ctx.fail_count.get() == 1 && seconds as u64 <= self.threshold.as_secs() => {
                 ControlFlow::Continue(Duration::from_secs(seconds as _))
+            }
+            InvocationError::Io(_) if ctx.fail_count.get() == 1 => {
+                if let Some(duration) = self.io_errors_as_flood_of {
+                    ControlFlow::Continue(duration)
+                } else {
+                    ControlFlow::Break(())
+                }
             }
             _ => ControlFlow::Break(()),
         }
