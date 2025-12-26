@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::Client;
-use crate::types::{LoginToken, PasswordToken, TermsOfService, User};
+use crate::types::{LoginToken, PasswordToken, User};
 use crate::utils;
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 pub use grammers_mtsender::InvocationError;
@@ -18,9 +18,7 @@ use std::fmt;
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SignInError {
-    SignUpRequired {
-        terms_of_service: Option<TermsOfService>,
-    },
+    SignUpRequired,
     PasswordRequired(PasswordToken),
     InvalidCode,
     InvalidPassword,
@@ -31,12 +29,7 @@ impl fmt::Display for SignInError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         use SignInError::*;
         match self {
-            SignUpRequired {
-                terms_of_service: tos,
-            } => write!(
-                f,
-                "sign in error: sign up with official client required: {tos:?}"
-            ),
+            SignUpRequired => write!(f, "sign in error: sign up with official client required"),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
             InvalidPassword => write!(f, "invalid password"),
@@ -313,10 +306,8 @@ impl Client {
             Ok(tl::enums::auth::Authorization::Authorization(x)) => {
                 self.complete_login(x).await.map_err(SignInError::Other)
             }
-            Ok(tl::enums::auth::Authorization::SignUpRequired(x)) => {
-                Err(SignInError::SignUpRequired {
-                    terms_of_service: x.terms_of_service.map(TermsOfService::from_raw),
-                })
+            Ok(tl::enums::auth::Authorization::SignUpRequired(_)) => {
+                Err(SignInError::SignUpRequired)
             }
             Err(err) if err.is("SESSION_PASSWORD_NEEDED") => {
                 let password_token = self.get_password_information().await;

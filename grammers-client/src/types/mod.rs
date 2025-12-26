@@ -30,7 +30,6 @@ pub mod permissions;
 pub mod photo_sizes;
 pub mod reactions;
 pub mod reply_markup;
-pub mod terms_of_service;
 pub mod update;
 
 pub use action::ActionSender;
@@ -52,5 +51,4 @@ pub use peer_map::PeerMap;
 pub use permissions::{Permissions, Restrictions};
 pub use reactions::InputReactions;
 pub(crate) use reply_markup::ReplyMarkup;
-pub use terms_of_service::TermsOfService;
 pub use update::Update;
