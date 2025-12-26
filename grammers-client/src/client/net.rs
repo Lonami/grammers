@@ -6,11 +6,11 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 use super::{Client, ClientInner};
-use crate::client::client::ClientConfiguration;
-use grammers_mtsender::{InvocationError, RpcError, SenderPool};
+use crate::client::{client::ClientConfiguration, retry_policy::RetryContext};
+use grammers_mtsender::{InvocationError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::sync::Arc;
+use std::{num::NonZeroU32, ops::ControlFlow, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
 
 /// Method implementations directly related with network connectivity.
@@ -113,7 +113,11 @@ impl Client {
         dc_id: i32,
         request_body: Vec<u8>,
     ) -> Result<Vec<u8>, InvocationError> {
-        let mut slept_flood = false;
+        let mut retry_context = RetryContext {
+            fail_count: NonZeroU32::new(1).unwrap(),
+            slept_so_far: Duration::default(),
+            error: InvocationError::Dropped,
+        };
 
         loop {
             match self
@@ -123,19 +127,27 @@ impl Client {
                 .await
             {
                 Ok(response) => break Ok(response),
-                Err(InvocationError::Rpc(RpcError {
-                    name,
-                    code: 420,
-                    value: Some(seconds),
-                    ..
-                })) if !slept_flood && seconds <= self.0.configuration.flood_sleep_threshold => {
-                    let delay = std::time::Duration::from_secs(seconds as _);
-                    info!("sleeping on {} for {:?} before retrying", name, delay,);
-                    sleep(delay).await;
-                    slept_flood = true;
-                    continue;
+                Err(e) => {
+                    retry_context.error = e;
+                    match self
+                        .0
+                        .configuration
+                        .retry_policy
+                        .should_retry(&retry_context)
+                    {
+                        ControlFlow::Continue(delay) => {
+                            info!(
+                                "sleeping on {} for {:?} before retrying",
+                                retry_context.error, delay,
+                            );
+                            sleep(delay).await;
+                            retry_context.fail_count = retry_context.fail_count.saturating_add(1);
+                            retry_context.slept_so_far += delay;
+                            continue;
+                        }
+                        ControlFlow::Break(()) => break Err(retry_context.error),
+                    }
                 }
-                Err(e) => break Err(e),
             }
         }
     }

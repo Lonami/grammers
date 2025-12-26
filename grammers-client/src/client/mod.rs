@@ -14,6 +14,7 @@ pub mod dialogs;
 pub mod files;
 pub mod messages;
 pub mod net;
+pub mod retry_policy;
 pub mod updates;
 
 pub use auth::SignInError;

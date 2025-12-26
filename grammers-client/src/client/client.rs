@@ -5,28 +5,21 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::sync::Arc;
+use std::{sync::Arc, time::Duration};
 
 use grammers_mtsender::SenderPoolHandle;
 use grammers_session::Session;
+
+use crate::client::retry_policy::{AutoSleep, RetryPolicy};
 
 /// Configuration that controls the [`Client`] behaviour when making requests.
 ///
 /// [`Client`]: struct.Client.html
 pub struct ClientConfiguration {
-    /// The threshold below which the library should automatically sleep on flood-wait and slow
-    /// mode wait errors (inclusive). For instance, if an
-    /// `RpcError { name: "FLOOD_WAIT", value: Some(17) }` (flood, must wait 17 seconds) occurs
-    /// and `flood_sleep_threshold` is 20 (seconds), the library will `sleep` automatically for
-    /// 17 seconds. If the error was for 21s, it would propagate the error instead.
+    /// The retry policy to use when encountering errors after invoking a request.
     ///
-    /// By default, the library will sleep on flood-waits below or equal to one minute (60
-    /// seconds), but this can be disabled by passing `0` (since all flood errors would be
-    /// higher and exceed the threshold).
-    ///
-    /// On flood, the library will retry *once*. If the flood error occurs a second time after
-    /// sleeping, the error will be returned.
-    pub flood_sleep_threshold: u32,
+    /// By default, the library will use [`AutoSleep`] with a threshold of 60 seconds.
+    pub retry_policy: Box<dyn RetryPolicy>,
 
     /// By default, the library call [`Session::cache_peer`] on all peer information that
     /// the high-level methods receive as a response (e.g. [`Client::iter_dialogs`]).
@@ -89,7 +82,9 @@ pub struct Client(pub(crate) Arc<ClientInner>);
 impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
-            flood_sleep_threshold: 60,
+            retry_policy: Box::new(AutoSleep {
+                threshold: Duration::from_secs(60),
+            }),
             auto_cache_peers: true,
         }
     }

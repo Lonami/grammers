@@ -49,7 +49,7 @@ pub mod parsers;
 pub mod types;
 pub(crate) mod utils;
 
-pub use client::{Client, ClientConfiguration, SignInError, UpdatesConfiguration};
+pub use client::{Client, ClientConfiguration, SignInError, UpdatesConfiguration, retry_policy};
 pub use types::{InputMedia, InputMessage, PeerMap, Update, button, reply_markup};
 
 pub use grammers_mtsender::InvocationError;
