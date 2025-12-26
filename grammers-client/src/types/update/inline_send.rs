@@ -9,7 +9,7 @@
 use crate::types::{Peer, User};
 use crate::{Client, InputMessage, PeerMap};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerId;
+use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 use std::fmt;
@@ -39,9 +39,21 @@ impl InlineSend {
         self.update().query.as_str()
     }
 
+    /// The reference to the user that chose the result.
+    pub fn sender_ref(&self) -> PeerRef {
+        let id = PeerId::user(self.update().user_id);
+        match self.client.0.session.peer(id) {
+            Some(info) => info.into(),
+            None => PeerRef {
+                id,
+                auth: PeerAuth::default(),
+            },
+        }
+    }
+
     /// The user that chose the result.
     pub fn sender(&self) -> &User {
-        match self.peers.get(PeerId::user(self.update().user_id)).unwrap() {
+        match self.peers.get(self.sender_ref().id).unwrap() {
             Peer::User(user) => user,
             _ => unreachable!(),
         }

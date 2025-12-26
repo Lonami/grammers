@@ -246,28 +246,21 @@ impl Message {
             .expect("empty messages from updates should contain peer_id")
     }
 
-    /// The sender of this message, if any.
-    pub fn sender(&self) -> Option<&types::Peer> {
+    /// The reference to the sender of this message, if there is a sender.
+    pub fn sender_ref(&self) -> Option<PeerRef> {
         let from_id = match &self.raw {
             tl::enums::Message::Empty(_) => None,
             tl::enums::Message::Message(message) => message.from_id.clone().map(PeerId::from),
             tl::enums::Message::Service(message) => message.from_id.clone().map(PeerId::from),
         };
         from_id
-            .or({
+            .or_else(|| {
                 // Incoming messages in private conversations don't include `from_id` since
                 // layer 119, but the sender can only be the peer we're in.
                 let peer_id = self.peer_ref().id;
                 if matches!(peer_id.kind(), PeerKind::User | PeerKind::UserSelf) {
                     if self.outgoing() {
-                        let user_id = self
-                            .client
-                            .0
-                            .session
-                            .peer(PeerId::self_user())
-                            .unwrap()
-                            .id();
-                        Some(user_id)
+                        Some(PeerId::self_user())
                     } else {
                         Some(peer_id)
                     }
@@ -275,7 +268,22 @@ impl Message {
                     None
                 }
             })
-            .and_then(|from| self.peers.get(from))
+            .map(|id| match self.client.0.session.peer(id) {
+                Some(info) => info.into(),
+                None => PeerRef {
+                    id,
+                    auth: PeerAuth::default(),
+                },
+            })
+    }
+
+    /// The sender of this message, if there is a sender **and** the sender is in cache.
+    pub fn sender(&self) -> Result<&types::Peer, Option<PeerRef>> {
+        let sender = self.sender_ref();
+        match sender {
+            Some(from) => self.peers.get(from.id).ok_or(sender),
+            None => Err(None),
+        }
     }
 
     /// The peer where this message was sent to.

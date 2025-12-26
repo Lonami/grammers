@@ -8,7 +8,7 @@
 
 use crate::{Client, InputMessage, types};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerId;
+use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 use std::convert::TryInto;
@@ -39,24 +39,47 @@ pub struct Answer<'a> {
 }
 
 impl CallbackQuery {
-    /// The user who sent this callback query.
-    pub fn sender(&self) -> &types::Peer {
+    /// Reference to the user who sent this callback query.
+    pub fn sender_ref(&self) -> PeerRef {
         let user_id = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.user_id,
             tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
             _ => unreachable!(),
         };
-        self.peers.get(PeerId::user(user_id)).unwrap()
+        let id = PeerId::user(user_id);
+        match self.client.0.session.peer(id) {
+            Some(info) => info.into(),
+            None => PeerRef {
+                id,
+                auth: PeerAuth::default(),
+            },
+        }
     }
 
-    /// The peer where the callback query occured.
-    pub fn peer(&self) -> &types::Peer {
-        let peer = match &self.raw {
+    /// Reference to the peer where the callback query occured.
+    pub fn peer_ref(&self) -> PeerRef {
+        let id = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.peer.clone().into(),
             tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),
             _ => unreachable!(),
         };
-        self.peers.get(peer).unwrap()
+        match self.client.0.session.peer(id) {
+            Some(info) => info.into(),
+            None => PeerRef {
+                id,
+                auth: PeerAuth::default(),
+            },
+        }
+    }
+
+    /// The user who sent this callback query.
+    pub fn sender(&self) -> &types::Peer {
+        self.peers.get(self.sender_ref().id).unwrap()
+    }
+
+    /// The peer where the callback query occured.
+    pub fn peer(&self) -> &types::Peer {
+        self.peers.get(self.peer_ref().id).unwrap()
     }
 
     /// They binary payload data contained by the inline button which was pressed.
