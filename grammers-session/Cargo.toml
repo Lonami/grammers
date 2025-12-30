@@ -17,15 +17,16 @@ edition = "2024"
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0" }
 log = "0.4.28"
 
-sqlite = { version = "0.37.0", optional = true }
+rusqlite = { version = "0.38.0", optional = true }
 
 serde = { version = "1", features = ["derive"], optional = true }
 serde_with = { version = "3", features = ["hex"], optional = true }
 
 [dev-dependencies]
 toml = "0.9.8"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 
 [features]
 default = ["sqlite-storage"]
-sqlite-storage = ["dep:sqlite"]
+sqlite-storage = ["dep:rusqlite"]
 serde = ["dep:serde", "dep:serde_with"]

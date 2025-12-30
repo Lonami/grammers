@@ -11,14 +11,15 @@ use crate::types::{
     UpdatesState,
 };
 use crate::{DEFAULT_DC, KNOWN_DC_OPTIONS, Session};
+use rusqlite::named_params;
 use std::path::Path;
 use std::sync::Mutex;
 
 const VERSION: i64 = 1;
 
-struct Database(sqlite::Connection);
+struct Database(rusqlite::Connection);
 
-struct TransactionGuard<'c>(&'c sqlite::Connection);
+struct TransactionGuard<'c>(&'c rusqlite::Connection);
 
 /// SQLite-based storage. This is the recommended option.
 pub struct SqliteSession {
@@ -36,9 +37,9 @@ enum PeerSubtype {
 }
 
 impl Database {
-    fn init(&self) -> sqlite::Result<()> {
-        let mut user_version = self
-            .fetch_one("PRAGMA user_version", &[], |stmt| stmt.read::<i64, _>(0))?
+    fn init(&self) -> rusqlite::Result<()> {
+        let mut user_version: i64 = self
+            .fetch_one("PRAGMA user_version", named_params![], |row| row.get(0))?
             .unwrap_or(0);
         if user_version == VERSION {
             return Ok(());
@@ -50,17 +51,19 @@ impl Database {
         }
         if user_version == VERSION {
             // Can't bind PRAGMA parameters, but `VERSION` is not user-controlled input.
-            self.0.execute(format!("PRAGMA user_version = {VERSION}"))?;
+            self.0
+                .execute(&format!("PRAGMA user_version = {VERSION}"), [])?;
         }
         Ok(())
     }
 
-    fn migrate_v0_to_v1(&self) -> sqlite::Result<()> {
+    fn migrate_v0_to_v1(&self) -> rusqlite::Result<()> {
         let _transaction = self.begin_transaction()?;
         self.0.execute(
             "CREATE TABLE dc_home (
                 dc_id INTEGER NOT NULL,
                 PRIMARY KEY(dc_id))",
+            [],
         )?;
         self.0.execute(
             "CREATE TABLE dc_option (
@@ -69,6 +72,7 @@ impl Database {
                 ipv6 TEXT NOT NULL,
                 auth_key BLOB,
                 PRIMARY KEY (dc_id))",
+            [],
         )?;
         self.0.execute(
             "CREATE TABLE peer_info (
@@ -76,6 +80,7 @@ impl Database {
                 hash INTEGER,
                 subtype INTEGER,
                 PRIMARY KEY (peer_id))",
+            [],
         )?;
         self.0.execute(
             "CREATE TABLE update_state (
@@ -83,64 +88,62 @@ impl Database {
                 qts INTEGER NOT NULL,
                 date INTEGER NOT NULL,
                 seq INTEGER NOT NULL)",
+            [],
         )?;
         self.0.execute(
             "CREATE TABLE channel_state (
                 peer_id INTEGER NOT NULL,
                 pts INTEGER NOT NULL,
                 PRIMARY KEY (peer_id))",
+            [],
         )?;
 
         Ok(())
     }
 
-    fn begin_transaction(&self) -> sqlite::Result<TransactionGuard<'_>> {
-        self.0.execute("BEGIN TRANSACTION")?;
+    fn begin_transaction(&self) -> rusqlite::Result<TransactionGuard<'_>> {
+        self.0.execute("BEGIN TRANSACTION", [])?;
         Ok(TransactionGuard(&self.0))
     }
 
-    fn fetch_one<T, F: FnOnce(sqlite::Statement) -> sqlite::Result<T>>(
+    fn fetch_one<T, P: rusqlite::ToSql, F: FnOnce(&rusqlite::Row) -> rusqlite::Result<T>>(
         &self,
         statement: &str,
-        bindings: &[(&str, sqlite::Value)],
+        params: &[(&str, P)],
         select: F,
-    ) -> sqlite::Result<Option<T>> {
+    ) -> rusqlite::Result<Option<T>> {
         let mut statement = self.0.prepare(statement)?;
-        statement.bind(bindings)?;
-        let result = match statement.next()? {
-            sqlite::State::Row => Some(select(statement)?),
-            sqlite::State::Done => None,
-        };
-        Ok(result)
+        let result = statement.query_row(params, select);
+        match result {
+            Ok(value) => Ok(Some(value)),
+            Err(rusqlite::Error::QueryReturnedNoRows) => Ok(None),
+            Err(e) => Err(e),
+        }
     }
 
-    fn fetch_all<T, F: FnMut(&sqlite::Statement) -> sqlite::Result<T>>(
+    fn fetch_all<T, P: rusqlite::ToSql, F: FnMut(&rusqlite::Row) -> rusqlite::Result<T>>(
         &self,
         statement: &str,
-        bindings: &[(&str, sqlite::Value)],
-        mut select: F,
-    ) -> sqlite::Result<Vec<T>> {
-        let mut result = Vec::new();
+        params: &[(&str, P)],
+        select: F,
+    ) -> rusqlite::Result<Vec<T>> {
         let mut statement = self.0.prepare(statement)?;
-        statement.bind(bindings)?;
-        while statement.next()? == sqlite::State::Row {
-            result.push(select(&statement)?);
-        }
-        Ok(result)
+        let rows = statement.query_map(params, select)?;
+        rows.collect()
     }
 }
 
 impl Drop for TransactionGuard<'_> {
     fn drop(&mut self) {
-        self.0.execute("COMMIT").unwrap();
+        self.0.execute("COMMIT", []).unwrap();
     }
 }
 
 impl SqliteSession {
     /// Open a connection to the SQLite database at `path`,
     /// creating one if it doesn't exist.
-    pub fn open<P: AsRef<Path>>(path: P) -> sqlite::Result<Self> {
-        let database = Database(sqlite::Connection::open(path)?);
+    pub fn open<P: AsRef<Path>>(path: P) -> rusqlite::Result<Self> {
+        let database = Database(rusqlite::Connection::open(path)?);
         database.init()?;
         Ok(SqliteSession {
             database: Mutex::new(database),
@@ -151,8 +154,8 @@ impl SqliteSession {
 impl Session for SqliteSession {
     fn home_dc_id(&self) -> i32 {
         let db = self.database.lock().unwrap();
-        db.fetch_one("SELECT * FROM dc_home LIMIT 1", &[], |stmt| {
-            Ok(stmt.read::<i64, _>("dc_id")? as i32)
+        db.fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
+            Ok(row.get::<_, i32>("dc_id")?)
         })
         .unwrap()
         .unwrap_or(DEFAULT_DC)
@@ -161,24 +164,23 @@ impl Session for SqliteSession {
     fn set_home_dc_id(&self, dc_id: i32) {
         let db = self.database.lock().unwrap();
         let _transaction = db.begin_transaction().unwrap();
-        db.0.execute("DELETE FROM dc_home").unwrap();
+        db.0.execute("DELETE FROM dc_home", []).unwrap();
         let mut stmt = db.0.prepare("INSERT INTO dc_home VALUES (:dc_id)").unwrap();
-        stmt.bind((":dc_id", dc_id as i64)).unwrap();
-        stmt.next().unwrap();
+        stmt.execute(named_params! {":dc_id": dc_id}).unwrap();
     }
 
     fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
         let db = self.database.lock().unwrap();
         db.fetch_one(
             "SELECT * FROM dc_option WHERE dc_id = :dc_id LIMIT 1",
-            &[(":dc_id", sqlite::Value::Integer(dc_id as _))],
-            |stmt| {
+            &[(":dc_id", dc_id)],
+            |row| {
                 Ok(DcOption {
-                    id: stmt.read::<i64, _>("dc_id")? as _,
-                    ipv4: stmt.read::<String, _>("ipv4")?.parse().unwrap(),
-                    ipv6: stmt.read::<String, _>("ipv6")?.parse().unwrap(),
-                    auth_key: stmt
-                        .read::<Option<Vec<u8>>, _>("auth_key")?
+                    id: row.get::<_, i32>("dc_id")?,
+                    ipv4: row.get::<_, String>("ipv4")?.parse().unwrap(),
+                    ipv6: row.get::<_, String>("ipv6")?.parse().unwrap(),
+                    auth_key: row
+                        .get::<_, Option<Vec<u8>>>("auth_key")?
                         .map(|auth_key| auth_key.try_into().unwrap()),
                 })
             },
@@ -194,40 +196,33 @@ impl Session for SqliteSession {
 
     fn set_dc_option(&self, dc_option: &DcOption) {
         let db = self.database.lock().unwrap();
-        let mut stmt = db
-            .0
-            .prepare("INSERT OR REPLACE INTO dc_option VALUES (:dc_id, :ipv4, :ipv6, :auth_key)")
-            .unwrap();
-        stmt.bind((":dc_id", dc_option.id as i64)).unwrap();
-        stmt.bind((":ipv4", dc_option.ipv4.to_string().as_str()))
-            .unwrap();
-        stmt.bind((":ipv6", dc_option.ipv6.to_string().as_str()))
-            .unwrap();
-        if let Some(auth_key) = dc_option.auth_key {
-            stmt.bind((":auth_key", auth_key.as_slice())).unwrap();
-        }
-        stmt.next().unwrap();
+        db.0.execute(
+            "INSERT OR REPLACE INTO dc_option VALUES (:dc_id, :ipv4, :ipv6, :auth_key)",
+            named_params! {
+                ":dc_id": dc_option.id,
+                ":ipv4": dc_option.ipv4.to_string(),
+                ":ipv6": dc_option.ipv6.to_string(),
+                ":auth_key": dc_option.auth_key.map(|k| k.to_vec()),
+            },
+        )
+        .unwrap();
     }
 
     fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
         let db = self.database.lock().unwrap();
-        let map_stmt = |stmt: sqlite::Statement| {
-            let subtype = stmt.read::<Option<i64>, _>("subtype")?.map(|s| s as u8);
+        let map_row = |row: &rusqlite::Row| {
+            let subtype = row.get::<_, Option<i64>>("subtype")?.map(|s| s as u8);
             Ok(match peer.kind() {
                 PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
-                    id: PeerId::user(stmt.read::<i64, _>("peer_id")?).bare_id(),
-                    auth: stmt
-                        .read::<Option<i64>, _>("hash")?
-                        .map(PeerAuth::from_hash),
+                    id: PeerId::user(row.get::<_, i64>("peer_id")?).bare_id(),
+                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
                     bot: subtype.map(|s| s & PeerSubtype::UserBot as u8 != 0),
                     is_self: subtype.map(|s| s & PeerSubtype::UserSelf as u8 != 0),
                 },
                 PeerKind::Chat => PeerInfo::Chat { id: peer.bare_id() },
                 PeerKind::Channel => PeerInfo::Channel {
                     id: peer.bare_id(),
-                    auth: stmt
-                        .read::<Option<i64>, _>("hash")?
-                        .map(PeerAuth::from_hash),
+                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
                     kind: subtype.and_then(|s| {
                         if (s & PeerSubtype::Gigagroup as u8) == PeerSubtype::Gigagroup as _ {
                             Some(ChannelKind::Gigagroup)
@@ -246,15 +241,15 @@ impl Session for SqliteSession {
         if peer.kind() == PeerKind::UserSelf {
             db.fetch_one(
                 "SELECT * FROM peer_info WHERE subtype & :type LIMIT 1",
-                &[(":type", sqlite::Value::Integer(PeerSubtype::UserSelf as _))],
-                map_stmt,
+                &[(":type", PeerSubtype::UserSelf as i64)],
+                map_row,
             )
             .unwrap()
         } else {
             db.fetch_one(
                 "SELECT * FROM peer_info WHERE peer_id = :peer_id LIMIT 1",
-                &[(":peer_id", sqlite::Value::Integer(peer.bot_api_dialog_id()))],
-                map_stmt,
+                &[(":peer_id", peer.bot_api_dialog_id())],
+                map_row,
             )
             .unwrap()
         }
@@ -265,11 +260,6 @@ impl Session for SqliteSession {
         let mut stmt =
             db.0.prepare("INSERT OR REPLACE INTO peer_info VALUES (:peer_id, :hash, :subtype)")
                 .unwrap();
-        stmt.bind((":peer_id", peer.id().bot_api_dialog_id()))
-            .unwrap();
-        if peer.auth() != PeerAuth::default() {
-            stmt.bind((":hash", peer.auth().hash())).unwrap();
-        }
         let subtype = match peer {
             PeerInfo::User { bot, is_self, .. } => {
                 match (bot.unwrap_or_default(), is_self.unwrap_or_default()) {
@@ -286,31 +276,43 @@ impl Session for SqliteSession {
                 ChannelKind::Gigagroup => PeerSubtype::Gigagroup,
             }),
         };
-        if let Some(subtype) = subtype {
-            stmt.bind((":subtype", subtype as i64)).unwrap();
+        let mut params = vec![];
+        let peer_id = peer.id().bot_api_dialog_id();
+        params.extend_from_slice(named_params! {":peer_id": peer_id});
+        let hash = peer.auth().hash();
+        if peer.auth() != PeerAuth::default() {
+            params.extend_from_slice(named_params! {":hash": hash});
         }
-        stmt.next().unwrap();
+        let subtype = subtype.map(|s| s as i64);
+        if subtype.is_some() {
+            params.extend_from_slice(named_params! {":subtype": subtype});
+        }
+        stmt.execute(params.as_slice()).unwrap();
     }
 
     fn updates_state(&self) -> UpdatesState {
         let db = self.database.lock().unwrap();
         let mut state = db
-            .fetch_one("SELECT * FROM update_state LIMIT 1", &[], |stmt| {
-                Ok(UpdatesState {
-                    pts: stmt.read::<i64, _>("pts")? as _,
-                    qts: stmt.read::<i64, _>("qts")? as _,
-                    date: stmt.read::<i64, _>("date")? as _,
-                    seq: stmt.read::<i64, _>("seq")? as _,
-                    channels: Vec::new(),
-                })
-            })
+            .fetch_one(
+                "SELECT * FROM update_state LIMIT 1",
+                named_params![],
+                |row| {
+                    Ok(UpdatesState {
+                        pts: row.get("pts")?,
+                        qts: row.get("qts")?,
+                        date: row.get("date")?,
+                        seq: row.get("seq")?,
+                        channels: Vec::new(),
+                    })
+                },
+            )
             .unwrap()
             .unwrap_or_default();
         state.channels = db
-            .fetch_all("SELECT * FROM channel_state", &[], |stmt| {
+            .fetch_all("SELECT * FROM channel_state", named_params![], |row| {
                 Ok(ChannelState {
-                    id: stmt.read::<i64, _>("peer_id")?,
-                    pts: stmt.read::<i64, _>("pts")? as _,
+                    id: row.get("peer_id")?,
+                    pts: row.get("pts")?,
                 })
             })
             .unwrap();
@@ -323,64 +325,93 @@ impl Session for SqliteSession {
 
         match update {
             UpdateState::All(updates_state) => {
-                db.0.execute("DELETE FROM update_state").unwrap();
-                let mut stmt =
-                    db.0.prepare("INSERT INTO update_state VALUES (:pts, :qts, :date, :seq)")
-                        .unwrap();
-                stmt.bind((":pts", updates_state.pts as i64)).unwrap();
-                stmt.bind((":qts", updates_state.qts as i64)).unwrap();
-                stmt.bind((":date", updates_state.date as i64)).unwrap();
-                stmt.bind((":seq", updates_state.seq as i64)).unwrap();
-                stmt.next().unwrap();
+                db.0.execute("DELETE FROM update_state", []).unwrap();
+                db.0.execute(
+                    "INSERT INTO update_state VALUES (:pts, :qts, :date, :seq)",
+                    named_params! {
+                        ":pts": updates_state.pts,
+                        ":qts": updates_state.qts,
+                        ":date": updates_state.date,
+                        ":seq": updates_state.seq,
+                    },
+                )
+                .unwrap();
 
-                db.0.execute("DELETE FROM channel_state").unwrap();
+                db.0.execute("DELETE FROM channel_state", []).unwrap();
                 for channel in updates_state.channels {
-                    let mut stmt =
-                        db.0.prepare("INSERT INTO channel_state VALUES (:peer_id, :pts)")
-                            .unwrap();
-                    stmt.bind((":peer_id", channel.id as i64)).unwrap();
-                    stmt.bind((":pts", channel.pts as i64)).unwrap();
-                    stmt.next().unwrap();
+                    db.0.execute(
+                        "INSERT INTO channel_state VALUES (:peer_id, :pts)",
+                        named_params! {
+                            ":peer_id": channel.id,
+                            ":pts": channel.pts,
+                        },
+                    )
+                    .unwrap();
                 }
             }
             UpdateState::Primary { pts, date, seq } => {
                 let previous = db
-                    .fetch_one("SELECT * FROM update_state LIMIT 1", &[], |_| Ok(()))
+                    .fetch_one(
+                        "SELECT * FROM update_state LIMIT 1",
+                        named_params![],
+                        |_| Ok(()),
+                    )
                     .unwrap();
 
-                let mut stmt = if previous.is_some() {
-                    db.0.prepare("UPDATE update_state SET pts = :pts, date = :date, seq = :seq")
-                        .unwrap()
+                if previous.is_some() {
+                    db.0.execute(
+                        "UPDATE update_state SET pts = :pts, date = :date, seq = :seq",
+                        named_params! {
+                            ":pts": pts,
+                            ":date": date,
+                            ":seq": seq,
+                        },
+                    )
+                    .unwrap();
                 } else {
-                    db.0.prepare("INSERT INTO update_state VALUES (:pts, 0, :date, :seq)")
-                        .unwrap()
-                };
-                stmt.bind((":pts", pts as i64)).unwrap();
-                stmt.bind((":date", date as i64)).unwrap();
-                stmt.bind((":seq", seq as i64)).unwrap();
-                stmt.next().unwrap();
+                    db.0.execute(
+                        "INSERT INTO update_state VALUES (:pts, 0, :date, :seq)",
+                        named_params! {
+                            ":pts": pts,
+                            ":date": date,
+                            ":seq": seq,
+                        },
+                    )
+                    .unwrap();
+                }
             }
             UpdateState::Secondary { qts } => {
                 let previous = db
-                    .fetch_one("SELECT * FROM update_state LIMIT 1", &[], |_| Ok(()))
+                    .fetch_one(
+                        "SELECT * FROM update_state LIMIT 1",
+                        named_params![],
+                        |_| Ok(()),
+                    )
                     .unwrap();
 
-                let mut stmt = if previous.is_some() {
-                    db.0.prepare("UPDATE update_state SET qts = :qts").unwrap()
+                if previous.is_some() {
+                    db.0.execute(
+                        "UPDATE update_state SET qts = :qts",
+                        named_params! {":qts": qts},
+                    )
+                    .unwrap();
                 } else {
-                    db.0.prepare("INSERT INTO update_state VALUES (0, :qts, 0, 0)")
-                        .unwrap()
-                };
-                stmt.bind((":qts", qts as i64)).unwrap();
-                stmt.next().unwrap();
+                    db.0.execute(
+                        "INSERT INTO update_state VALUES (0, :qts, 0, 0)",
+                        named_params! {":qts": qts},
+                    )
+                    .unwrap();
+                }
             }
             UpdateState::Channel { id, pts } => {
-                let mut stmt =
-                    db.0.prepare("INSERT OR REPLACE INTO channel_state VALUES (:peer_id, :pts)")
-                        .unwrap();
-                stmt.bind((":peer_id", id)).unwrap();
-                stmt.bind((":pts", pts as i64)).unwrap();
-                stmt.next().unwrap();
+                db.0.execute(
+                    "INSERT OR REPLACE INTO channel_state VALUES (:peer_id, :pts)",
+                    named_params! {
+                        ":peer_id": id,
+                        ":pts": pts,
+                    },
+                )
+                .unwrap();
             }
         }
     }
