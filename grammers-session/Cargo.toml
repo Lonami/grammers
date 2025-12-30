@@ -24,6 +24,7 @@ serde_with = { version = "3", features = ["hex"], optional = true }
 
 [dev-dependencies]
 toml = "0.9.8"
+rusqlite = { version = "0.38.0", features = ["bundled"] }
 
 [features]
 default = ["sqlite-storage"]
