@@ -51,7 +51,8 @@ impl Database {
         }
         if user_version == VERSION {
             // Can't bind PRAGMA parameters, but `VERSION` is not user-controlled input.
-            self.0.execute(&format!("PRAGMA user_version = {VERSION}"), [])?;
+            self.0
+                .execute(&format!("PRAGMA user_version = {VERSION}"), [])?;
         }
         Ok(())
     }
@@ -214,18 +215,14 @@ impl Session for SqliteSession {
             Ok(match peer.kind() {
                 PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
                     id: PeerId::user(row.get::<_, i64>("peer_id")?).bare_id(),
-                    auth: row
-                        .get::<_, Option<i64>>("hash")?
-                        .map(PeerAuth::from_hash),
+                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
                     bot: subtype.map(|s| s & PeerSubtype::UserBot as u8 != 0),
                     is_self: subtype.map(|s| s & PeerSubtype::UserSelf as u8 != 0),
                 },
                 PeerKind::Chat => PeerInfo::Chat { id: peer.bare_id() },
                 PeerKind::Channel => PeerInfo::Channel {
                     id: peer.bare_id(),
-                    auth: row
-                        .get::<_, Option<i64>>("hash")?
-                        .map(PeerAuth::from_hash),
+                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
                     kind: subtype.and_then(|s| {
                         if (s & PeerSubtype::Gigagroup as u8) == PeerSubtype::Gigagroup as _ {
                             Some(ChannelKind::Gigagroup)
@@ -296,15 +293,19 @@ impl Session for SqliteSession {
     fn updates_state(&self) -> UpdatesState {
         let db = self.database.lock().unwrap();
         let mut state = db
-            .fetch_one("SELECT * FROM update_state LIMIT 1", named_params![], |row| {
-                Ok(UpdatesState {
-                    pts: row.get("pts")?,
-                    qts: row.get("qts")?,
-                    date: row.get("date")?,
-                    seq: row.get("seq")?,
-                    channels: Vec::new(),
-                })
-            })
+            .fetch_one(
+                "SELECT * FROM update_state LIMIT 1",
+                named_params![],
+                |row| {
+                    Ok(UpdatesState {
+                        pts: row.get("pts")?,
+                        qts: row.get("qts")?,
+                        date: row.get("date")?,
+                        seq: row.get("seq")?,
+                        channels: Vec::new(),
+                    })
+                },
+            )
             .unwrap()
             .unwrap_or_default();
         state.channels = db
@@ -350,7 +351,11 @@ impl Session for SqliteSession {
             }
             UpdateState::Primary { pts, date, seq } => {
                 let previous = db
-                    .fetch_one("SELECT * FROM update_state LIMIT 1",  named_params![], |_| Ok(()))
+                    .fetch_one(
+                        "SELECT * FROM update_state LIMIT 1",
+                        named_params![],
+                        |_| Ok(()),
+                    )
                     .unwrap();
 
                 if previous.is_some() {
@@ -377,7 +382,11 @@ impl Session for SqliteSession {
             }
             UpdateState::Secondary { qts } => {
                 let previous = db
-                    .fetch_one("SELECT * FROM update_state LIMIT 1", named_params![], |_| Ok(()))
+                    .fetch_one(
+                        "SELECT * FROM update_state LIMIT 1",
+                        named_params![],
+                        |_| Ok(()),
+                    )
                     .unwrap();
 
                 if previous.is_some() {
