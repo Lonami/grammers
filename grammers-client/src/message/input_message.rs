@@ -5,10 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::attributes::Attribute;
-use crate::types::{Media, ReplyMarkup, Uploaded};
-use grammers_tl_types as tl;
+
 use std::time::{SystemTime, UNIX_EPOCH};
+
+use grammers_tl_types as tl;
+
+use super::reply_markup::ReplyMarkup;
+use crate::media::{Attribute, Media, Uploaded};
 
 // https://github.com/telegramdesktop/tdesktop/blob/e7fbcce9d9f0a8944eb2c34e74bd01b8776cb891/Telegram/SourceFiles/data/data_scheduled_messages.h#L52
 const SCHEDULE_ONCE_ONLINE: i32 = 0x7ffffffe;
@@ -137,7 +140,7 @@ impl InputMessage {
     ///
     /// The user is free to ignore the markup and continue sending usual text messages.
     ///
-    /// See [`crate::types::reply_markup`] for the different available markups along with how
+    /// See [`crate::message::reply_markup`] for the different available markups along with how
     /// they behave.
     pub fn reply_markup<RM: ReplyMarkup>(mut self, markup: &RM) -> Self {
         self.reply_markup = Some(markup.to_reply_markup().raw);
@@ -272,7 +275,7 @@ impl InputMessage {
     ///
     /// ```
     /// async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    ///     use grammers_client::{InputMessage};
+    ///     use grammers_client::message::InputMessage;
     ///
     ///     let video = client.upload_file("video.mp4").await?;
     ///     let thumb = client.upload_file("thumb.png").await?;
@@ -319,7 +322,8 @@ impl InputMessage {
     /// # let audio = client.upload_file("audio.flac").await?;
     /// #
     /// use std::time::Duration;
-    /// use grammers_client::{types::Attribute, InputMessage};
+    /// use grammers_client::media::Attribute;
+    /// use grammers_client::message::InputMessage;
     ///
     /// let message = InputMessage::new().text("").document(audio).attribute(
     ///    Attribute::Audio {

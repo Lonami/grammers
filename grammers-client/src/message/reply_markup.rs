@@ -17,9 +17,11 @@
 //! The trait is used to group all types as "something that
 //! may be used as a reply markup".
 //!
-//! [`InputMessage::reply_markup`]: crate::types::InputMessage::reply_markup
-use super::button;
+//! [`InputMessage::reply_markup`]: crate::message::InputMessage::reply_markup
+
 use grammers_tl_types as tl;
+
+use super::button;
 
 #[doc(hidden)]
 pub struct Markup {
@@ -106,7 +108,7 @@ impl ReplyMarkup for ForceReply {
 ///
 /// ```
 /// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::types::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
-/// use grammers_client::{InputMessage, reply_markup, button};
+/// use grammers_client::message::{InputMessage, reply_markup, button};
 ///
 /// let artist = "Krewella";
 /// client.send_message(peer, InputMessage::new().text("Select song").reply_markup(&reply_markup::keyboard(vec![
@@ -151,7 +153,7 @@ pub fn inline<B: Into<Vec<Vec<button::Inline>>>>(buttons: B) -> Inline {
 ///
 /// ```
 /// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::types::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
-/// use grammers_client::{InputMessage, reply_markup, button};
+/// use grammers_client::message::{InputMessage, reply_markup, button};
 ///
 /// client.send_message(peer, InputMessage::new().text("What do you want to do?").reply_markup(&reply_markup::keyboard(vec![
 ///     vec![button::text("Accept")],
@@ -190,7 +192,7 @@ pub fn keyboard<B: Into<Vec<Vec<button::Keyboard>>>>(buttons: B) -> Keyboard {
 ///
 /// ```
 /// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::types::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
-/// use grammers_client::{InputMessage, reply_markup};
+/// use grammers_client::message::{InputMessage, reply_markup};
 ///
 /// client.send_message(peer, InputMessage::new().text("Bot keyboards removed.").reply_markup(&reply_markup::hide())).await?;
 /// # Ok(())
@@ -213,7 +215,7 @@ pub fn hide() -> Hide {
 ///
 /// ```
 /// # async fn f(client: &mut grammers_client::Client, peer: grammers_session::types::PeerRef) -> Result<(), Box<dyn std::error::Error>> {
-/// use grammers_client::{InputMessage, reply_markup};
+/// use grammers_client::message::{InputMessage, reply_markup};
 ///
 /// let markup = reply_markup::force_reply().single_use();
 /// client.send_message(peer, InputMessage::new().text("Reply me!").reply_markup(&markup)).await?;

@@ -7,16 +7,20 @@
 // except according to those terms.
 
 //! Methods related to sending messages.
-use crate::types::{InputReactions, IterBuffer, Message};
-use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{Client, types};
+
+use std::collections::HashMap;
+
 use chrono::{DateTime, FixedOffset};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerId, PeerKind, PeerRef};
-use grammers_tl_types as tl;
+use grammers_tl_types::{self as tl, enums::InputPeer};
 use log::{Level, log_enabled, warn};
-use std::collections::HashMap;
-use tl::enums::InputPeer;
+
+use super::{Client, IterBuffer};
+use crate::media::{InputMedia, Media};
+use crate::message::{InputMessage, InputReactions, Message};
+use crate::peer::PeerMap;
+use crate::utils::{generate_random_id, generate_random_ids};
 
 fn map_random_ids_to_messages(
     client: &Client,
@@ -32,7 +36,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let peers = types::PeerMap::new(users, chats);
+            let peers = PeerMap::new(users, chats);
             client.cache_peers_maybe(&peers);
 
             let rnd_to_id = updates
@@ -182,7 +186,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let peers = types::PeerMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         self.client.cache_peers_maybe(&peers);
 
         let client = self.client.clone();
@@ -479,15 +483,13 @@ impl Client {
     /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// client.send_message(peer, "Boring text message :-(").await?;
     ///
-    /// use grammers_client::InputMessage;
+    /// use grammers_client::message::InputMessage;
     ///
     /// client.send_message(peer, InputMessage::new().text("Sneaky message").silent(true)).await?;
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// [`InputMessage`]: crate::types::InputMessage
-    pub async fn send_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
+    pub async fn send_message<C: Into<PeerRef>, M: Into<InputMessage>>(
         &self,
         peer: C,
         message: M,
@@ -609,7 +611,7 @@ impl Client {
                                 peer_id: Some(peer.id.into()),
                             }),
                             Some(peer),
-                            &types::PeerMap::empty(),
+                            &PeerMap::empty(),
                         )
                     }
                 }
@@ -632,18 +634,16 @@ impl Client {
     ///
     /// ```
     /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::InputMedia;
+    /// use grammers_client::media::InputMedia;
     ///
     /// client.send_album(peer, vec![InputMedia::new().caption("A album").photo_url("https://example.com/cat.jpg")]).await?;
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// [`InputMedia`]: crate::types::InputMedia
     pub async fn send_album<C: Into<PeerRef>>(
         &self,
         peer: C,
-        mut medias: Vec<types::InputMedia>,
+        mut medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         let peer = peer.into();
         let random_ids = generate_random_ids(medias.len());
@@ -667,7 +667,7 @@ impl Client {
                     })
                     .await?;
                 media.media = Some(
-                    types::Media::from_raw(uploaded)
+                    Media::from_raw(uploaded)
                         .unwrap()
                         .to_raw_input_media()
                         .unwrap(),
@@ -742,10 +742,7 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    ///
-    /// [`InputMessage`]: crate::types::InputMessage
-    // TODO don't require nasty InputPeer
-    pub async fn edit_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
+    pub async fn edit_message<C: Into<PeerRef>, M: Into<InputMessage>>(
         &self,
         peer: C,
         message_id: i32,
@@ -896,7 +893,7 @@ impl Client {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(message: grammers_client::message::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// if let Some(reply) = client.get_reply_to_message(&message).await? {
     ///     println!("The reply said: {}", reply.text());
     /// }
@@ -960,7 +957,7 @@ impl Client {
             }
         };
 
-        let peers = types::PeerMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         Ok(messages
             .into_iter()
@@ -1082,7 +1079,7 @@ impl Client {
             }
         };
 
-        let peers = types::PeerMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         let mut map = messages
             .into_iter()
@@ -1136,7 +1133,7 @@ impl Client {
             }
         };
 
-        let peers = types::PeerMap::new(users, chats);
+        let peers = PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         Ok(messages
             .into_iter()
@@ -1242,7 +1239,7 @@ impl Client {
     ///
     /// ```
     /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::types::InputReactions;
+    /// use grammers_client::message::InputReactions;
     ///
     /// let message_id = 123;
     /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
@@ -1256,7 +1253,7 @@ impl Client {
     ///
     /// ```
     /// # async fn f(peer: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::types::InputReactions;
+    /// use grammers_client::message::InputReactions;
     ///
     /// let message_id = 123;
     ///

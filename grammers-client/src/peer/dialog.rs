@@ -8,12 +8,13 @@
 
 use std::sync::Arc;
 
-use crate::Client;
-use crate::utils::peer_from_message;
-
-use super::{Message, Peer, PeerMap};
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
+
+use super::{Peer, PeerMap};
+use crate::Client;
+use crate::message::Message;
+use crate::utils::peer_from_message;
 
 /// An entry in the list of "chats".
 ///

@@ -6,11 +6,12 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use chrono::{DateTime, Utc};
-use grammers_tl_types as tl;
 use std::sync::atomic::{AtomicI64, Ordering};
 use std::thread;
 use std::time::SystemTime;
+
+use chrono::{DateTime, Utc};
+use grammers_tl_types as tl;
 
 // This atomic isn't for anything critical, just to generate unique IDs without locks.
 // The worst that can happen if the load and store orderings are wrong is that the IDs

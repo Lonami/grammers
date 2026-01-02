@@ -8,20 +8,18 @@
 
 use std::ops::{Deref, DerefMut};
 
-use grammers_tl_types as tl;
-
-use crate::types::Message as Msg;
 use grammers_session::updates::State;
+use grammers_tl_types as tl;
 
 #[derive(Debug, Clone)]
 pub struct Message {
-    pub(crate) msg: Msg,
+    pub(crate) msg: crate::message::Message,
     pub raw: tl::enums::Update,
     pub state: State,
 }
 
 impl Deref for Message {
-    type Target = Msg;
+    type Target = crate::message::Message;
 
     fn deref(&self) -> &Self::Target {
         &self.msg

@@ -5,19 +5,45 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use std::{sync::Arc, time::Duration};
+
+use std::sync::Arc;
 
 use grammers_mtsender::SenderPoolHandle;
 use grammers_session::Session;
 
-use crate::client::retry_policy::{AutoSleep, RetryPolicy};
+pub(crate) struct ClientInner {
+    pub(crate) session: Arc<dyn Session>,
+    pub(crate) api_id: i32,
+    pub(crate) handle: SenderPoolHandle,
+    pub(crate) configuration: ClientConfiguration,
+    pub(crate) auth_copied_to_dcs: tokio::sync::Mutex<Vec<i32>>,
+}
+
+/// Wrapper around [`SenderPool`] to facilitate interaction with Telegram's API.
+///
+/// This structure is the "entry point" of the library, from which you can start using the rest.
+///
+/// This structure owns all the necessary connections to Telegram, and has implementations for the
+/// most basic methods, such as connecting, signing in, or processing network events.
+///
+/// On drop, all state is synchronized to the session. The [`Session`] must be explicitly saved
+/// to disk with its corresponding save method for persistence.
+///
+/// [`SenderPool`]: grammers_mtsender::SenderPool
+/// [`Session`]: grammers_session::Session
+#[derive(Clone)]
+pub struct Client(pub(crate) Arc<ClientInner>);
+
+use std::time::Duration;
 
 /// Configuration that controls the [`Client`] behaviour when making requests.
 pub struct ClientConfiguration {
     /// The retry policy to use when encountering errors after invoking a request.
     ///
     /// By default, the library will use an [`AutoSleep::default`] instance.
-    pub retry_policy: Box<dyn RetryPolicy>,
+    ///
+    /// [`AutoSleep::default`]: super::AutoSleep::default
+    pub retry_policy: Box<dyn super::RetryPolicy>,
 
     /// By default, the library call [`Session::cache_peer`] on all peer information that
     /// the high-level methods receive as a response (e.g. [`Client::iter_dialogs`]).
@@ -56,33 +82,10 @@ pub struct UpdatesConfiguration {
     pub update_queue_limit: Option<usize>,
 }
 
-pub(crate) struct ClientInner {
-    pub(crate) session: Arc<dyn Session>,
-    pub(crate) api_id: i32,
-    pub(crate) handle: SenderPoolHandle,
-    pub(crate) configuration: ClientConfiguration,
-    pub(crate) auth_copied_to_dcs: tokio::sync::Mutex<Vec<i32>>,
-}
-
-/// Wrapper around [`SenderPool`] to facilitate interaction with Telegram's API.
-///
-/// This structure is the "entry point" of the library, from which you can start using the rest.
-///
-/// This structure owns all the necessary connections to Telegram, and has implementations for the
-/// most basic methods, such as connecting, signing in, or processing network events.
-///
-/// On drop, all state is synchronized to the session. The [`Session`] must be explicitly saved
-/// to disk with its corresponding save method for persistence.
-///
-/// [`SenderPool`]: grammers_mtsender::SenderPool
-/// [`Session`]: grammers_session::Session
-#[derive(Clone)]
-pub struct Client(pub(crate) Arc<ClientInner>);
-
 impl Default for ClientConfiguration {
     fn default() -> Self {
         Self {
-            retry_policy: Box::new(AutoSleep {
+            retry_policy: Box::new(super::AutoSleep {
                 threshold: Duration::from_secs(60),
                 io_errors_as_flood_of: Some(Duration::from_secs(1)),
             }),

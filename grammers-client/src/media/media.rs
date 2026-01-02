@@ -5,12 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::types::photo_sizes::{PhotoSize, VecExt};
-use chrono::{DateTime, Utc};
-use grammers_tl_types as tl;
+
 use std::fmt::Debug;
 
-use super::Downloadable;
+use chrono::{DateTime, Utc};
+use grammers_tl_types as tl;
+
+use super::{Downloadable, PhotoSize};
 
 /// Photo media contained within a message.
 #[derive(Clone, Debug, PartialEq)]
@@ -143,7 +144,7 @@ impl Photo {
     /// The size of the photo.
     /// returns 0 if unable to get the size.
     pub fn size(&self) -> i64 {
-        match self.thumbs().largest() {
+        match self.thumbs().iter().max_by_key(|x| x.size()) {
             Some(thumb) => thumb.size() as i64,
             None => 0,
         }
@@ -201,7 +202,8 @@ impl Downloadable for Photo {
                     file_reference: photo.file_reference.clone(),
                     thumb_size: self
                         .thumbs()
-                        .largest()
+                        .iter()
+                        .max_by_key(|x| x.size())
                         .map(|ps| ps.photo_type())
                         .unwrap_or(String::from("w")),
                 }

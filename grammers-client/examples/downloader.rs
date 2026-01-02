@@ -20,6 +20,7 @@ use std::path::Path;
 use std::sync::Arc;
 use std::{env, io};
 
+use grammers_client::media::Media;
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
@@ -27,8 +28,6 @@ use mime::Mime;
 use mime_guess::mime;
 use simple_logger::SimpleLogger;
 use tokio::runtime;
-
-use grammers_client::types::Media::{self, Contact, Document, Photo, Sticker};
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;
 
@@ -120,10 +119,10 @@ fn main() -> Result<()> {
 
 fn get_file_extension(media: &Media) -> String {
     match media {
-        Photo(_) => ".jpg".to_string(),
-        Sticker(sticker) => get_mime_extension(sticker.document.mime_type()),
-        Document(document) => get_mime_extension(document.mime_type()),
-        Contact(_) => ".vcf".to_string(),
+        Media::Photo(_) => ".jpg".to_string(),
+        Media::Sticker(sticker) => get_mime_extension(sticker.document.mime_type()),
+        Media::Document(document) => get_mime_extension(document.mime_type()),
+        Media::Contact(_) => ".vcf".to_string(),
         _ => String::new(),
     }
 }

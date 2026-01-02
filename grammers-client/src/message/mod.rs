@@ -6,21 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! Update types about events received from Telegram.
+//! Types relating to chat messages.
+//!
+//! Properties containing raw types are public and will either be called "raw" or prefixed with "raw_".\
+//! Keep in mind that **these fields are not part of the semantic versioning guarantees**.
 
-mod callback_query;
-mod inline_query;
-mod inline_send;
+pub mod button;
+mod input_message;
 mod message;
-mod message_deletion;
-mod raw;
-mod update;
+mod reactions;
+pub mod reply_markup;
 
-pub use callback_query::CallbackQuery;
-pub use inline_query::Article;
-pub use inline_query::InlineQuery;
-pub use inline_send::InlineSend;
+pub use input_message::InputMessage;
 pub use message::Message;
-pub use message_deletion::MessageDeletion;
-pub use raw::Raw;
-pub use update::Update;
+pub use reactions::InputReactions;

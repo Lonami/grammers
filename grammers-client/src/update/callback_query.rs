@@ -6,15 +6,19 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{Client, types};
-use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
-use grammers_session::updates::State;
-use grammers_tl_types as tl;
 use std::convert::TryInto;
 use std::fmt;
 use std::sync::Arc;
 use std::time::Duration;
+
+use grammers_mtsender::InvocationError;
+use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::updates::State;
+use grammers_tl_types as tl;
+
+use crate::Client;
+use crate::message::{InputMessage, Message};
+use crate::peer::{Peer, PeerMap};
 
 /// Represents a callback query update, which occurs when a user presses one of the bot's inline
 /// callback buttons.
@@ -27,7 +31,7 @@ pub struct CallbackQuery {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) peers: Arc<types::PeerMap>,
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 /// A callback query answer builder.
@@ -73,12 +77,12 @@ impl CallbackQuery {
     }
 
     /// The user who sent this callback query.
-    pub fn sender(&self) -> &types::Peer {
+    pub fn sender(&self) -> &Peer {
         self.peers.get(self.sender_ref().id).unwrap()
     }
 
     /// The peer where the callback query occured.
-    pub fn peer(&self) -> &types::Peer {
+    pub fn peer(&self) -> &Peer {
         self.peers.get(self.peer_ref().id).unwrap()
     }
 
@@ -106,7 +110,7 @@ impl CallbackQuery {
     }
 
     /// Load the `Message` that contains the pressed inline button.
-    pub async fn load_message(&self) -> Result<types::Message, InvocationError> {
+    pub async fn load_message(&self) -> Result<Message, InvocationError> {
         let msg_id = match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.msg_id,
             _ => return Err(InvocationError::Dropped),
@@ -177,10 +181,7 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also edit the message that contained the button.
-    pub async fn edit<M: Into<types::InputMessage>>(
-        self,
-        new_message: M,
-    ) -> Result<(), InvocationError> {
+    pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let peer = self.query.peer();
         match &self.query.raw {
@@ -201,20 +202,20 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also respond in the peer where the button was clicked.
-    pub async fn respond<M: Into<types::InputMessage>>(
+    pub async fn respond<M: Into<InputMessage>>(
         self,
         message: M,
-    ) -> Result<types::Message, InvocationError> {
+    ) -> Result<Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let peer = self.query.peer();
         self.query.client.send_message(peer, message).await
     }
 
     /// [`Self::send`] the answer, and also reply to the message that contained the button.
-    pub async fn reply<M: Into<types::InputMessage>>(
+    pub async fn reply<M: Into<InputMessage>>(
         self,
         message: M,
-    ) -> Result<types::Message, InvocationError> {
+    ) -> Result<Message, InvocationError> {
         let msg_id = match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.msg_id,
             _ => return Err(InvocationError::Dropped),

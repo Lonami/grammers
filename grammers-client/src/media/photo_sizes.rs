@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
 use grammers_tl_types as tl;
 
 use super::Downloadable;
@@ -373,16 +374,5 @@ viewBox="0 0 512 512" xml:space="preserve">
         );
 
         res.as_bytes().to_vec()
-    }
-}
-
-pub trait VecExt {
-    /// Helper method to get the largest photo thumb
-    fn largest(&self) -> Option<&PhotoSize>;
-}
-
-impl VecExt for Vec<PhotoSize> {
-    fn largest(&self) -> Option<&PhotoSize> {
-        self.iter().max_by_key(|x| x.size())
     }
 }

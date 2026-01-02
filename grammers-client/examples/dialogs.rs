@@ -12,13 +12,14 @@
 
 #![allow(deprecated)]
 
+use std::env;
+use std::io::{self, BufRead as _, Write as _};
+use std::sync::Arc;
+
 use grammers_client::{Client, SignInError};
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;
-use std::env;
-use std::io::{self, BufRead as _, Write as _};
-use std::sync::Arc;
 use tokio::runtime;
 
 type Result<T> = std::result::Result<T, Box<dyn std::error::Error>>;

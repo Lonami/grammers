@@ -6,14 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use super::super::{Peer, PeerMap, User};
-use crate::{Client, types, utils};
+use std::fmt;
+use std::sync::Arc;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
+
+use crate::message::InputMessage;
+use crate::peer::{Peer, PeerMap, User};
+use crate::{Client, utils};
 
 /// Represents an inline query update, which occurs when you sign in as a bot and a user sends an
 /// inline query such as `@bot query`.
@@ -166,11 +169,11 @@ pub struct Article {
     description: Option<String>,
     url: Option<String>,
     thumb_url: Option<String>,
-    input_message: types::InputMessage,
+    input_message: InputMessage,
 }
 
 impl Article {
-    pub fn new<S: Into<String>, M: Into<types::InputMessage>>(title: S, input_message: M) -> Self {
+    pub fn new<S: Into<String>, M: Into<InputMessage>>(title: S, input_message: M) -> Self {
         Self {
             id: None,
             title: title.into(),

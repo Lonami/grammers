@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unsafe_code)]
-
 //! # Brief on Telegram's API
 //!
 //! This library is a high-level implementation to access [Telegram's API], which essentially
@@ -84,18 +82,23 @@
 //! [Telegram's API]: https://core.telegram.org/#telegram-api
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
-mod client;
-pub mod types;
-pub(crate) mod utils;
+//! [`ClientConfiguration`]: crate::client::ClientConfiguration
+#![deny(unsafe_code)]
 
+pub mod client;
+pub mod media;
+pub mod message;
 #[cfg(any(feature = "markdown", feature = "html"))]
 pub mod parsers;
-
-pub use client::{Client, ClientConfiguration, SignInError, UpdatesConfiguration, retry_policy};
+pub mod peer;
+pub mod update;
+pub(crate) mod utils;
 
 pub use grammers_mtsender::{self as sender, InvocationError, SenderPool};
 pub use grammers_session as session;
 pub use grammers_tl_types as tl;
+
+pub use client::{Client, SignInError};
 
 /// Alias for [`std::result::Result`] with the error set to [`InvocationError`].
 pub type Result<T> = std::result::Result<T, InvocationError>;

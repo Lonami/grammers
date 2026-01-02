@@ -9,15 +9,16 @@
 
 use std::cell::Cell;
 
-use super::common::{
-    MENTION_URL_PREFIX, Segment, after, before, inject_into_message, telegram_string_len,
-    update_entity_len,
-};
 use grammers_tl_types as tl;
 use html5ever::local_name as tag;
 use html5ever::tendril::StrTendril;
 use html5ever::tokenizer::{
     BufferQueue, Tag, TagKind, Token, TokenSink, TokenSinkResult, Tokenizer,
+};
+
+use super::common::{
+    MENTION_URL_PREFIX, Segment, after, before, inject_into_message, telegram_string_len,
+    update_entity_len,
 };
 
 const CODE_LANG_PREFIX: &str = "language-";

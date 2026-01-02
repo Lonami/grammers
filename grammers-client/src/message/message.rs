@@ -5,21 +5,24 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#[cfg(any(feature = "markdown", feature = "html"))]
-use crate::parsers;
-use crate::types::reactions::InputReactions;
-use crate::types::{InputMessage, Media, Photo};
-use crate::utils;
-use crate::{Client, types};
+
+use std::fmt;
+use std::sync::Arc;
+#[cfg(feature = "fs")]
+use std::{io, path::Path};
+
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
 
-#[cfg(feature = "fs")]
-use std::{io, path::Path};
+use super::{InputMessage, InputReactions};
+use crate::Client;
+use crate::media::{InputMedia, Media, Photo};
+#[cfg(any(feature = "markdown", feature = "html"))]
+use crate::parsers;
+use crate::peer::{Peer, PeerMap};
+use crate::utils;
 
 /// Represents a Telegram message, which includes text messages, messages with media, and service
 /// messages.
@@ -35,7 +38,7 @@ pub struct Message {
     // server response contains a lot of peers, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
     // and moves, and saves us from worrying about picking out all the peers we care about.
-    pub(crate) peers: Arc<types::PeerMap>,
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 impl Message {
@@ -43,7 +46,7 @@ impl Message {
         client: &Client,
         message: tl::enums::Message,
         fetched_in: Option<PeerRef>,
-        peers: &Arc<types::PeerMap>,
+        peers: &Arc<PeerMap>,
     ) -> Self {
         Self {
             raw: message,
@@ -125,7 +128,7 @@ impl Message {
             }),
             fetched_in: Some(peer),
             client: client.clone(),
-            peers: types::PeerMap::empty(),
+            peers: PeerMap::empty(),
         }
     }
 
@@ -277,7 +280,7 @@ impl Message {
     }
 
     /// The sender of this message, if there is a sender **and** the sender is in cache.
-    pub fn sender(&self) -> Result<&types::Peer, Option<PeerRef>> {
+    pub fn sender(&self) -> Result<&Peer, Option<PeerRef>> {
         let sender = self.sender_ref();
         match sender {
             Some(from) => self.peers.get(from.id).ok_or(sender),
@@ -289,7 +292,7 @@ impl Message {
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    pub fn peer(&self) -> Result<&types::Peer, PeerRef> {
+    pub fn peer(&self) -> Result<&Peer, PeerRef> {
         let peer = self.peer_ref();
         self.peers.get(peer.id).ok_or(peer)
     }
@@ -394,7 +397,7 @@ impl Message {
     ///
     /// This not only includes photos or videos, but also contacts, polls, documents, locations
     /// and many other types.
-    pub fn media(&self) -> Option<types::Media> {
+    pub fn media(&self) -> Option<Media> {
         let media = match &self.raw {
             tl::enums::Message::Empty(_) => None,
             tl::enums::Message::Message(message) => message.media.clone(),
@@ -457,7 +460,7 @@ impl Message {
     /// # Examples
     ///
     /// ```
-    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// # async fn f(message: grammers_client::message::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
     /// message.react("👍").await?;
     /// # Ok(())
     /// # }
@@ -466,8 +469,8 @@ impl Message {
     /// Make animation big & Add to recent
     ///
     /// ```
-    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::types::InputReactions;
+    /// # async fn f(message: grammers_client::message::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::message::InputReactions;
     ///
     /// let reactions = InputReactions::emoticon("🤯").big().add_to_recent();
     ///
@@ -479,8 +482,8 @@ impl Message {
     /// Remove reactions
     ///
     /// ```
-    /// # async fn f(message: grammers_client::types::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    /// use grammers_client::types::InputReactions;
+    /// # async fn f(message: grammers_client::message::Message, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// use grammers_client::message::InputReactions;
     ///
     /// message.react(InputReactions::remove()).await?;
     /// # Ok(())
@@ -608,7 +611,7 @@ impl Message {
     /// Shorthand for `Client::send_album`.
     pub async fn respond_album(
         &self,
-        medias: Vec<types::InputMedia>,
+        medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         self.client.send_album(self.peer_ref(), medias).await
     }
@@ -630,7 +633,7 @@ impl Message {
     /// Shorthand for `Client::send_album`.
     pub async fn reply_album(
         &self,
-        mut medias: Vec<types::InputMedia>,
+        mut medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.id());
         self.client.send_album(self.peer_ref(), medias).await

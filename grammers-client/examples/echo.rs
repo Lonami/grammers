@@ -12,13 +12,16 @@
 
 #![allow(deprecated)]
 
-use grammers_client::{Client, Update, UpdatesConfiguration};
+use std::sync::Arc;
+use std::{env, time::Duration};
+
+use grammers_client::Client;
+use grammers_client::client::UpdatesConfiguration;
+use grammers_client::update::Update;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use grammers_session::types::PeerRef;
 use simple_logger::SimpleLogger;
-use std::sync::Arc;
-use std::{env, time::Duration};
 use tokio::task::JoinSet;
 use tokio::{runtime, time::sleep};
 

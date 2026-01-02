@@ -5,12 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_mtsender::InvocationError;
-use grammers_session::types::PeerRef;
-use grammers_tl_types as tl;
+
 use std::future::Future;
 use std::time::Duration;
-use tl::enums::SendMessageAction;
+
+use grammers_mtsender::InvocationError;
+use grammers_session::types::PeerRef;
+use grammers_tl_types::{self as tl, enums::SendMessageAction};
 use tokio::time::sleep;
 
 use crate::Client;

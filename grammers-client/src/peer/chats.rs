@@ -5,20 +5,21 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::Client;
-use crate::types::Role;
+
+use std::future::Future;
+use std::marker::PhantomPinned;
+use std::mem::drop;
+use std::pin::Pin;
+use std::task::{Context, Poll};
+use std::time::{Duration, SystemTime, UNIX_EPOCH};
+
 use grammers_mtsender::{InvocationError, RpcError};
 use grammers_session::types::{PeerKind, PeerRef};
 use grammers_tl_types as tl;
 use pin_project_lite::pin_project;
-use std::{
-    future::Future,
-    marker::PhantomPinned,
-    mem::drop,
-    pin::Pin,
-    task::{Context, Poll},
-    time::{Duration, SystemTime, UNIX_EPOCH},
-};
+
+use super::Role;
+use crate::Client;
 
 type BuilderRes = Result<(), InvocationError>;
 type AdminFutGen<F> = fn(AdminRightsBuilderInner) -> F;

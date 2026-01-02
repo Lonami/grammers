@@ -8,16 +8,16 @@
 
 use std::sync::Arc;
 
-use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
-use crate::types::Message as Msg;
-use crate::{Client, types, utils};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
+
+use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
+use crate::{Client, peer::PeerMap, utils};
 
 /// An update that indicates some event, which may be of interest to the logged-in account, has occured.
 ///
 /// Only updates pertaining to messages are guaranteed to be delivered, and can be fetched on-demand if
-/// they occured while the client was offline by enabling [`catch_up`](crate::UpdatesConfiguration::catch_up).
+/// they occured while the client was offline by enabling [`catch_up`](crate::client::UpdatesConfiguration::catch_up).
 #[non_exhaustive]
 #[derive(Debug, Clone)]
 pub enum Update {
@@ -51,7 +51,7 @@ impl Update {
         client: &Client,
         update: tl::enums::Update,
         state: State,
-        peers: &Arc<types::PeerMap>,
+        peers: &Arc<PeerMap>,
     ) -> Self {
         match &update {
             // NewMessage
@@ -61,7 +61,12 @@ impl Update {
                 }
 
                 Self::NewMessage(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
+                    msg: crate::message::Message::from_raw(
+                        client,
+                        raw.message.clone(),
+                        None,
+                        peers,
+                    ),
                     raw: update,
                     state,
                 })
@@ -73,7 +78,12 @@ impl Update {
                 }
 
                 Self::NewMessage(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
+                    msg: crate::message::Message::from_raw(
+                        client,
+                        raw.message.clone(),
+                        None,
+                        peers,
+                    ),
                     raw: update,
                     state,
                 })
@@ -86,13 +96,18 @@ impl Update {
                 }
 
                 Self::MessageEdited(Message {
-                    msg: Msg::from_raw(client, raw.message.clone(), None, peers),
+                    msg: crate::message::Message::from_raw(
+                        client,
+                        raw.message.clone(),
+                        None,
+                        peers,
+                    ),
                     raw: update,
                     state,
                 })
             }
             tl::enums::Update::EditChannelMessage(raw) => Self::MessageEdited(Message {
-                msg: Msg::from_raw(client, raw.message.clone(), None, peers),
+                msg: crate::message::Message::from_raw(client, raw.message.clone(), None, peers),
                 raw: update,
                 state,
             }),

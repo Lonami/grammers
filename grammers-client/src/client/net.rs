@@ -5,13 +5,18 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Client, ClientInner};
-use crate::client::{client::ClientConfiguration, retry_policy::RetryContext};
+
+use std::num::NonZeroU32;
+use std::ops::ControlFlow;
+use std::sync::Arc;
+use std::time::Duration;
+
 use grammers_mtsender::{InvocationError, SenderPool};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
-use std::{num::NonZeroU32, ops::ControlFlow, sync::Arc, time::Duration};
 use tokio::{sync::Mutex, time::sleep};
+
+use super::{Client, ClientConfiguration, ClientInner, RetryContext};
 
 /// Method implementations directly related with network connectivity.
 impl Client {
@@ -31,7 +36,7 @@ impl Client {
     /// ```
     /// use std::sync::Arc;
     /// use grammers_client::Client;
-    /// use grammers_session::storages::SqliteSession;
+    /// use grammers_session::storages::MemorySession; // avoid this storage outside tests!
     /// use grammers_mtsender::SenderPool;
     ///
     /// // Note: these are example values and are not actually valid.
@@ -39,7 +44,7 @@ impl Client {
     /// const API_ID: i32 = 932939;
     ///
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
-    /// let session = Arc::new(SqliteSession::open("hello-world.session")?);
+    /// let session = Arc::new(MemorySession::default());
     /// let pool = SenderPool::new(Arc::clone(&session), API_ID);
     /// let client = Client::new(&pool);
     /// # Ok(())

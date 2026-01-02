@@ -9,6 +9,7 @@
 //! Retry policy trait and built-in policies for use in [`ClientConfiguration`].
 //!
 //! [`ClientConfiguration`]: crate::ClientConfiguration
+
 use std::num::NonZeroU32;
 use std::ops::ControlFlow;
 use std::time::Duration;

@@ -6,14 +6,17 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::types::{Peer, User};
-use crate::{Client, types};
+use std::fmt;
+use std::sync::Arc;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
-use std::fmt;
-use std::sync::Arc;
+
+use crate::Client;
+use crate::message::InputMessage;
+use crate::peer::{Peer, PeerMap, User};
 
 /// Represents an update of user choosing the result of inline query and sending it to a peer.
 ///
@@ -23,7 +26,7 @@ pub struct InlineSend {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) peers: Arc<types::PeerMap>,
+    pub(crate) peers: Arc<PeerMap>,
 }
 
 impl InlineSend {
@@ -76,7 +79,7 @@ impl InlineSend {
     /// **This method will return Ok(None) if message id is None (e.g. if an inline keyboard is not attached)**
     pub async fn edit_message(
         &self,
-        input_message: impl Into<types::InputMessage>,
+        input_message: impl Into<InputMessage>,
     ) -> Result<Option<bool>, InvocationError> {
         let msg_id = match self.update().msg_id.clone() {
             None => return Ok(None),

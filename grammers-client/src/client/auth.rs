@@ -5,14 +5,17 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::Client;
-use crate::types::{LoginToken, PasswordToken, User};
-use crate::utils;
+
+use std::fmt;
+
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
-pub use grammers_mtsender::InvocationError;
+use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
-use std::fmt;
+
+use super::{Client, LoginToken, PasswordToken};
+use crate::peer::User;
+use crate::utils;
 
 /// The error type which is returned when signing in fails.
 #[derive(Debug)]
@@ -289,7 +292,7 @@ impl Client {
     /// let user = match client.sign_in(&token, &code).await {
     ///     Ok(user) => user,
     ///     Err(SignInError::PasswordRequired(_token)) => panic!("Please provide a password"),
-    ///     Err(SignInError::SignUpRequired { terms_of_service: tos }) => panic!("Sign up required"),
+    ///     Err(SignInError::SignUpRequired) => panic!("Sign up required"),
     ///     Err(err) => {
     ///         println!("Failed to sign in as a user :(\n{}", err);
     ///         return Err(err.into());

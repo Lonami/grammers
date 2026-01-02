@@ -7,12 +7,13 @@
 // except according to those terms.
 #![cfg(feature = "markdown")]
 
+use grammers_tl_types as tl;
+use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
+
 use super::common::{
     MENTION_URL_PREFIX, Segment, after, before, inject_into_message, telegram_string_len,
     update_entity_len,
 };
-use grammers_tl_types as tl;
-use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
 /// Parse a message containing CommonMark-flavored markdown into plain text and the list of formatting entities understood by Telegram.
 ///

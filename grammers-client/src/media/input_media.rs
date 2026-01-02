@@ -5,9 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::attributes::Attribute;
-use crate::types::{Media, Uploaded};
+
 use grammers_tl_types as tl;
+
+use super::{Attribute, Media, Uploaded};
 
 /// Construct and send albums.
 #[derive(Default)]
@@ -169,7 +170,7 @@ impl InputMedia {
     ///
     /// ```
     /// async fn f(client: &mut grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
-    ///     use grammers_client::{InputMedia};
+    ///     use grammers_client::media::InputMedia;
     ///
     ///     let video = client.upload_file("video.mp4").await?;
     ///     let thumb = client.upload_file("thumb.png").await?;
@@ -216,7 +217,7 @@ impl InputMedia {
     /// # let audio = client.upload_file("audio.flac").await?;
     /// #
     /// use std::time::Duration;
-    /// use grammers_client::{types::Attribute, InputMedia};
+    /// use grammers_client::media::{Attribute, InputMedia};
     ///
     /// let media = InputMedia::new().caption("").document(audio).attribute(
     ///    Attribute::Audio {

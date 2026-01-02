@@ -5,16 +5,36 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+//! Types relating to users, groups and channels.
+//!
+//! Properties containing raw types are public and will either be called "raw" or prefixed with "raw_".\
+//! Keep in mind that **these fields are not part of the semantic versioning guarantees**.
+
+mod action;
+pub(crate) mod chats;
+mod dialog;
+mod participant;
+pub use action::ActionSender;
 mod channel;
 mod group;
+mod peer_map;
+mod permissions;
 mod user;
 
 use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
 
 pub use channel::Channel;
+pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
+pub use dialog::Dialog;
 pub use group::Group;
+pub use participant::{Participant, Role};
+pub use peer_map::PeerMap;
+pub use permissions::{Permissions, Restrictions};
 pub use user::{Platform, RestrictionReason, User};
+
+use crate::media::ChatPhoto;
 
 /// A peer.
 ///
@@ -138,10 +158,10 @@ impl Peer {
     }
 
     // Return the profile picture or chat photo of this peer, if any.
-    pub fn photo(&self, big: bool) -> Option<crate::types::ChatPhoto> {
+    pub fn photo(&self, big: bool) -> Option<ChatPhoto> {
         let peer = PeerRef::from(self).into();
         match self {
-            Self::User(user) => user.photo().map(|x| crate::types::ChatPhoto {
+            Self::User(user) => user.photo().map(|x| ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
                     tl::types::InputPeerPhotoFileLocation {
                         big,
@@ -150,7 +170,7 @@ impl Peer {
                     },
                 ),
             }),
-            Self::Group(group) => group.photo().map(|x| crate::types::ChatPhoto {
+            Self::Group(group) => group.photo().map(|x| ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
                     tl::types::InputPeerPhotoFileLocation {
                         big,
@@ -159,7 +179,7 @@ impl Peer {
                     },
                 ),
             }),
-            Self::Channel(channel) => channel.photo().map(|x| crate::types::ChatPhoto {
+            Self::Channel(channel) => channel.photo().map(|x| ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
                     tl::types::InputPeerPhotoFileLocation {
                         big,

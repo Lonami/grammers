@@ -6,8 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_tl_types as tl;
-use tl::enums::Reaction;
+use grammers_tl_types::{self as tl, enums::Reaction};
 
 /// Parameter for reacting to messages with emoji.
 #[derive(Clone, Debug, Default)]

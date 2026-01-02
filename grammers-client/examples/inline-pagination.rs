@@ -24,7 +24,9 @@
 
 #![allow(deprecated)]
 
-use grammers_client::{Client, InputMessage, Update, button, reply_markup};
+use grammers_client::Client;
+use grammers_client::message::{InputMessage, button, reply_markup};
+use grammers_client::update::Update;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;

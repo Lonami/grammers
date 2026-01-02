@@ -7,22 +7,24 @@
 // except according to those terms.
 
 //! Methods to deal with and offer access to updates.
-
 #![allow(deprecated)]
 
-use super::{Client, UpdatesConfiguration};
-use crate::types::{PeerMap, Update};
-use grammers_mtsender::InvocationError;
-use grammers_session::Session;
-use grammers_session::types::{PeerId, PeerInfo, UpdateState, UpdatesState};
-pub use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};
-use grammers_tl_types as tl;
-use log::{trace, warn};
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
+
+use grammers_mtsender::InvocationError;
+use grammers_session::Session;
+use grammers_session::types::{PeerId, PeerInfo, UpdateState, UpdatesState};
+use grammers_session::updates::{MessageBoxes, PrematureEndReason, State, UpdatesLike};
+use grammers_tl_types as tl;
+use log::{trace, warn};
 use tokio::sync::mpsc;
 use tokio::time::timeout_at;
+
+use super::{Client, UpdatesConfiguration};
+use crate::peer::PeerMap;
+use crate::update::Update;
 
 /// How long to wait after warning the user that the updates limit was exceeded.
 const UPDATE_LIMIT_EXCEEDED_LOG_COOLDOWN: Duration = Duration::from_secs(300);
@@ -81,7 +83,7 @@ pub struct UpdateStream {
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     last_update_limit_warn: Option<Instant>,
-    buffer: VecDeque<(tl::enums::Update, State, Arc<crate::types::PeerMap>)>,
+    buffer: VecDeque<(tl::enums::Update, State, Arc<PeerMap>)>,
     updates: mpsc::UnboundedReceiver<UpdatesLike>,
     configuration: UpdatesConfiguration,
     should_get_state: bool,
@@ -288,7 +290,7 @@ impl Client {
     /// persisted in the session cache beforehand (i.e. be retrievable with [`Session::peer`]).
     /// A good way to achieve this is to use [`Self::iter_dialogs`] at least once after login.
     ///
-    /// The updates are wrapped in [`crate::types::Update`] to make them more convenient to use,
+    /// The updates are wrapped in [`crate::update::Update`] to make them more convenient to use,
     /// but their raw type is still accessible to bridge any missing functionality.
     pub fn stream_updates(
         &self,

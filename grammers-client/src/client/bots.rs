@@ -5,13 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::Client;
-use crate::client::messages::parse_mention_entities;
-use crate::types;
-use crate::utils::generate_random_id;
+
 use grammers_mtsender::InvocationError;
 use grammers_session::types::PeerRef;
 use grammers_tl_types as tl;
+
+use super::messages::parse_mention_entities;
+use super::{Client, IterBuffer};
+use crate::message::InputMessage;
+use crate::utils::generate_random_id;
 
 const MAX_LIMIT: usize = 50;
 
@@ -21,8 +23,7 @@ pub struct InlineResult {
     pub raw: tl::enums::BotInlineResult,
 }
 
-pub type InlineResultIter =
-    types::IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
+pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
 
 impl InlineResult {
     /// Send this inline result to the specified peer.
@@ -159,14 +160,12 @@ impl Client {
     ///
     /// Similar to [`Client::send_message`], advanced formatting can be achieved with the
     /// options offered by [`InputMessage`].
-    ///
-    /// [`InputMessage`]: crate::types::InputMessage
-    pub async fn edit_inline_message<M: Into<types::InputMessage>>(
+    pub async fn edit_inline_message<M: Into<InputMessage>>(
         &self,
         message_id: tl::enums::InputBotInlineMessageId,
         input_message: M,
     ) -> Result<bool, InvocationError> {
-        let message: types::InputMessage = input_message.into();
+        let message: InputMessage = input_message.into();
         let entities = parse_mention_entities(self, message.entities);
         if message.media.as_ref().is_some_and(|media| {
             !matches!(

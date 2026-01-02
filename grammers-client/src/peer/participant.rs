@@ -5,11 +5,13 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Peer, PeerMap, Permissions, Restrictions};
-use crate::utils;
+
 use chrono::{DateTime, Utc};
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
+
+use super::{Peer, PeerMap, Permissions, Restrictions};
+use crate::{peer::User, utils};
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Normal {
@@ -59,7 +61,7 @@ pub enum Role {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Participant {
-    pub user: crate::types::User,
+    pub user: User,
     pub role: Role,
 }
 

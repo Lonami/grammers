@@ -10,14 +10,14 @@
 //!
 //! Keep in mind that these deal with raw types, which are not part of
 //! the semantic versioning of this crate.
-mod common;
 
+mod common;
 #[cfg(feature = "html")]
 mod html;
-#[cfg(feature = "html")]
-pub use html::{generate_html_message, parse_html_message};
-
 #[cfg(feature = "markdown")]
 mod markdown;
+
+#[cfg(feature = "html")]
+pub use html::{generate_html_message, parse_html_message};
 #[cfg(feature = "markdown")]
 pub use markdown::{generate_markdown_message, parse_markdown_message};

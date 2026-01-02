@@ -8,19 +8,28 @@
 
 //! Methods related to users, groups and channels.
 
-use super::Client;
-use crate::types::{
-    AdminRightsBuilder, BannedRightsBuilder, IterBuffer, Message, Participant, Peer, PeerMap,
-    Photo, User, chats::AdminRightsBuilderInner, chats::BannedRightsBuilderInner,
-};
-use grammers_mtsender::InvocationError;
-use grammers_mtsender::RpcError;
-use grammers_session::types::{PeerId, PeerKind, PeerRef};
-use grammers_tl_types as tl;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
 use std::time::Duration;
+
+use grammers_mtsender::InvocationError;
+use grammers_mtsender::RpcError;
+use grammers_session::types::{PeerId, PeerKind, PeerRef};
+use grammers_tl_types as tl;
+
+use super::{Client, IterBuffer};
+use crate::media::Photo;
+use crate::message::Message;
+use crate::peer::ActionSender;
+use crate::peer::AdminRightsBuilder;
+use crate::peer::BannedRightsBuilder;
+use crate::peer::Participant;
+use crate::peer::Peer;
+use crate::peer::PeerMap;
+use crate::peer::User;
+use crate::peer::chats::AdminRightsBuilderInner;
+use crate::peer::chats::BannedRightsBuilderInner;
 
 const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
@@ -878,8 +887,8 @@ impl Client {
     /// # Ok(())
     /// # }
     /// ```
-    pub fn action<C: Into<PeerRef>>(&self, peer: C) -> crate::types::ActionSender {
-        crate::types::ActionSender::new(self, peer)
+    pub fn action<C: Into<PeerRef>>(&self, peer: C) -> ActionSender {
+        ActionSender::new(self, peer)
     }
 
     pub(crate) fn cache_peers_maybe(&self, peers: &Arc<PeerMap>) {
