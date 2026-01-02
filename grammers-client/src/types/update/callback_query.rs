@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::{Client, InputMessage, types};
+use crate::{Client, types};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
@@ -177,7 +177,10 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also edit the message that contained the button.
-    pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
+    pub async fn edit<M: Into<types::InputMessage>>(
+        self,
+        new_message: M,
+    ) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
         let peer = self.query.peer();
         match &self.query.raw {
@@ -198,7 +201,7 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also respond in the peer where the button was clicked.
-    pub async fn respond<M: Into<InputMessage>>(
+    pub async fn respond<M: Into<types::InputMessage>>(
         self,
         message: M,
     ) -> Result<types::Message, InvocationError> {
@@ -208,7 +211,7 @@ impl<'a> Answer<'a> {
     }
 
     /// [`Self::send`] the answer, and also reply to the message that contained the button.
-    pub async fn reply<M: Into<InputMessage>>(
+    pub async fn reply<M: Into<types::InputMessage>>(
         self,
         message: M,
     ) -> Result<types::Message, InvocationError> {

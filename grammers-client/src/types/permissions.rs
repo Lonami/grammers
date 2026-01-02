@@ -9,11 +9,13 @@ use crate::utils;
 use chrono::{DateTime, Utc};
 use grammers_tl_types as tl;
 
+/// Permissions granted to participants with admin roles.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Permissions {
     pub raw: tl::types::ChatAdminRights,
 }
 
+/// Restrictions in effect for participants with banned role.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Restrictions {
     pub raw: tl::types::ChatBannedRights,

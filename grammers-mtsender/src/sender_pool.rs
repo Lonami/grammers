@@ -55,7 +55,7 @@ struct ConnectionInfo {
 #[derive(Clone)]
 pub struct SenderPoolHandle(mpsc::UnboundedSender<Request>);
 
-/// Named type holding the actual runner and initial handles. The entry point.
+/// Builder to configure the runner to drive I/O and linked handles.
 pub struct SenderPool {
     /// The single mutable instance responsible for driving I/O.
     ///

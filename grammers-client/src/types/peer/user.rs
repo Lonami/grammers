@@ -10,7 +10,7 @@ use grammers_session::types::{PeerAuth, PeerInfo};
 use grammers_tl_types as tl;
 use std::fmt;
 
-/// Platform Identifier.
+/// Platform Identifier referenced only by [`RestrictionReason`].
 #[non_exhaustive]
 pub enum Platform {
     All,
@@ -20,7 +20,7 @@ pub enum Platform {
     Other(String),
 }
 
-/// Contains the reason why a certain user is restricted.
+/// Reason why a user is globally restricted.
 pub struct RestrictionReason {
     pub platforms: Vec<Platform>,
     pub reason: String,

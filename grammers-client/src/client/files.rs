@@ -492,7 +492,7 @@ impl Client {
     /// # }
     /// ```
     ///
-    /// [`InputMessage`]: crate::InputMessage
+    /// [`InputMessage`]: crate::types::InputMessage
     #[cfg(feature = "fs")]
     pub async fn upload_file<P: AsRef<Path>>(&self, path: P) -> Result<Uploaded, io::Error> {
         let path = path.as_ref();

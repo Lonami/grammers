@@ -7,15 +7,19 @@
 // except according to those terms.
 use grammers_tl_types as tl;
 
+/// Trait implemented by all types that may be downloaded.
 pub trait Downloadable {
+    /// Converts this downloadable into the input type that may be used by raw requests to download it.
     fn to_raw_input_location(&self) -> Option<tl::enums::InputFileLocation>;
 
-    // Data for tiny thumbnails comes inline, so there is no need to download anything.
+    /// Returns `Some` if the media has a tiny thumbnail embedded within.
+    ///
+    /// No network request would occur when attempting to download this downloadable.
     fn to_data(&self) -> Option<Vec<u8>> {
         None
     }
 
-    // Size, if known, to parallelize large downloads.
+    /// File size, in bytes.
     fn size(&self) -> Option<usize> {
         None
     }

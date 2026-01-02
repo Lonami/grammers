@@ -18,10 +18,21 @@ use std::fmt;
 #[derive(Debug)]
 #[allow(clippy::large_enum_variant)]
 pub enum SignInError {
+    /// Sign-up with an official client is required.
+    ///
+    /// Third-party applications, such as those developed with *grammers*,
+    /// cannot be used to register new accounts. For more details, see this
+    /// [comment regarding third-party app sign-ups](https://bugs.telegram.org/c/25410/1):
+    /// > \[…] if a user doesn’t have a Telegram account yet,
+    /// > they will need to create one first using an official mobile Telegram app.
     SignUpRequired,
+    /// The account has 2FA enabled, and the password is required.
     PasswordRequired(PasswordToken),
+    /// The code used to complete login was not valid.
     InvalidCode,
+    /// The 2FA password used to complete login was not valid.
     InvalidPassword,
+    /// A generic invocation error occured.
     Other(InvocationError),
 }
 

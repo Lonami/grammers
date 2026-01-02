@@ -25,7 +25,6 @@ use grammers_tl_types::{Cursor, Deserializable, Serializable};
 /// so being able to keep a simpler implementation separate is a bonus.
 ///
 /// [Mobile Transport Protocol]: https://core.telegram.org/mtproto
-/// [`Mtp`]: struct.Mtp.html
 #[non_exhaustive]
 pub struct Plain;
 

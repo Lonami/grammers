@@ -13,13 +13,10 @@ use grammers_session::Session;
 use crate::client::retry_policy::{AutoSleep, RetryPolicy};
 
 /// Configuration that controls the [`Client`] behaviour when making requests.
-///
-/// [`Client`]: struct.Client.html
 pub struct ClientConfiguration {
     /// The retry policy to use when encountering errors after invoking a request.
     ///
-    /// By default, the library will use [`AutoSleep`] with a threshold of 60 seconds,
-    /// and will treat I/O errors as if they were a 1-second flood.
+    /// By default, the library will use an [`AutoSleep::default`] instance.
     pub retry_policy: Box<dyn RetryPolicy>,
 
     /// By default, the library call [`Session::cache_peer`] on all peer information that
@@ -30,6 +27,7 @@ pub struct ClientConfiguration {
     pub auto_cache_peers: bool,
 }
 
+/// Configuration that controls [`Client::stream_updates`].
 pub struct UpdatesConfiguration {
     /// Should the client catch-up on updates sent to it while it was offline?
     ///
@@ -45,8 +43,8 @@ pub struct UpdatesConfiguration {
     /// emitted (but not too often, to avoid spamming the log), in order to let the developer
     /// know that they should either change how they handle updates or increase the limit.
     ///
-    /// A limit of zero (`0`) indicates that updates should not be buffered. They will be
-    /// immediately dropped, and no warning will ever be emitted.
+    /// A limit of zero (`Some(0)`) indicates that updates should not be buffered.
+    /// They will be immediately dropped, and no warning will ever be emitted.
     ///
     /// A limit of `None` disables the upper bound for the buffer. This is not recommended, as it
     /// could eventually lead to memory exhaustion. This option will also not emit any warnings.
@@ -66,7 +64,7 @@ pub(crate) struct ClientInner {
     pub(crate) auth_copied_to_dcs: tokio::sync::Mutex<Vec<i32>>,
 }
 
-/// A client capable of connecting to Telegram and invoking requests.
+/// Wrapper around [`SenderPool`] to facilitate interaction with Telegram's API.
 ///
 /// This structure is the "entry point" of the library, from which you can start using the rest.
 ///
@@ -76,6 +74,7 @@ pub(crate) struct ClientInner {
 /// On drop, all state is synchronized to the session. The [`Session`] must be explicitly saved
 /// to disk with its corresponding save method for persistence.
 ///
+/// [`SenderPool`]: grammers_mtsender::SenderPool
 /// [`Session`]: grammers_session::Session
 #[derive(Clone)]
 pub struct Client(pub(crate) Arc<ClientInner>);

@@ -12,6 +12,7 @@ use std::fmt::Debug;
 
 use super::Downloadable;
 
+/// Photo media contained within a message.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Photo {
     pub raw: tl::types::MessageMediaPhoto,
@@ -72,12 +73,13 @@ pub struct WebPage {
     pub raw: tl::types::MessageMediaWebPage,
 }
 
-// Not `MessageMedia`, but media nonetheless.
+/// Profile picture of a group.
 #[derive(Clone, Debug, PartialEq)]
 pub struct ChatPhoto {
     pub raw: tl::enums::InputFileLocation,
 }
 
+/// Message media (e.g. photos, polls, videos).
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
@@ -154,7 +156,7 @@ impl Photo {
     /// the resolution and image transform that was applied server-side. Some low-resolution
     /// thumbnails already contain all necessary information that can be shown to the user, but
     /// for other types an additional request to the Telegram should be performed.
-    /// Check the description of [PhotoSize] to get an information about each particular thumbnail.
+    /// Check the description of [`PhotoSize``] to get an information about each particular thumbnail.
     ///
     /// <https://core.telegram.org/api/files#image-thumbnail-types>
     pub fn thumbs(&self) -> Vec<PhotoSize> {

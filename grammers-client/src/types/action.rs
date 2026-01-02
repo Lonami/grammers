@@ -17,6 +17,7 @@ use crate::Client;
 
 const DEFAULT_REPEAT_DELAY: Duration = Duration::from_secs(4);
 
+/// Type to send chat actions (e.g. "Typing…") on repeat.
 pub struct ActionSender {
     client: Client,
     peer: PeerRef,

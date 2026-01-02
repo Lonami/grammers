@@ -9,11 +9,14 @@
 
 use super::common::{
     MENTION_URL_PREFIX, Segment, after, before, inject_into_message, telegram_string_len,
+    update_entity_len,
 };
-use crate::update_entity_len;
 use grammers_tl_types as tl;
 use pulldown_cmark::{CodeBlockKind, Event, Parser, Tag, TagEnd};
 
+/// Parse a message containing CommonMark-flavored markdown into plain text and the list of formatting entities understood by Telegram.
+///
+/// This is not the same as the markdown understood by Telegram's HTTP Bot API.
 pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageEntity>) {
     let mut text = String::with_capacity(message.len());
     let mut entities = Vec::new();
@@ -129,6 +132,7 @@ pub fn parse_markdown_message(message: &str) -> (String, Vec<tl::enums::MessageE
     (text, entities)
 }
 
+/// Combine plain text and the list of formatting entities understood by Telegram into CommonMark-compliant markdown.
 pub fn generate_markdown_message(message: &str, entities: &[tl::enums::MessageEntity]) -> String {
     // Getting this wrong isn't the end of the world so the wildcard pattern is used
     // (but it would still be a shame for it to be wrong).

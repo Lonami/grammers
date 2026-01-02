@@ -15,6 +15,15 @@ use super::{Message, Peer, PeerMap};
 use grammers_session::types::PeerId;
 use grammers_tl_types as tl;
 
+/// An entry in the list of "chats".
+///
+/// All conversations with history, even if the history has been cleared,
+/// as long as the dialog itself has not been deleted, are present as dialogs.
+///
+/// Bot accounts do not have dialogs per-se and thus cannot fetch them.
+///
+/// Dialogs of users continue to exist even if the user has deleted their account.
+/// The same is true for small group chats, but not of large group chats and channels.
 #[derive(Debug, Clone)]
 pub struct Dialog {
     pub raw: tl::enums::Dialog,

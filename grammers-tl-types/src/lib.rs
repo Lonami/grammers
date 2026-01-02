@@ -68,13 +68,6 @@
 //!   Only useful for low-level libraries.
 //!
 //! * `impl-serde`: generates code for serde support
-//!
-//! [`types`]: types/index.html
-//! [`functions`]: functions/index.html
-//! [`RemoteCall`]: trait.RemoteCall.html
-//! [`Serializable`]: trait.Serializable.html
-//! [`Deserializable`]: trait.Deserializable.html
-//! [`LAYER`]: constant.LAYER.html
 
 #![deny(unsafe_code)]
 

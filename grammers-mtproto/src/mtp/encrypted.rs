@@ -41,9 +41,6 @@ static UPDATE_IDS: [u32; 8] = [
 /// A builder to configure [`Mtp`] instances.
 ///
 /// Use the [`Encrypted::build`] method to create builder instances.
-///
-/// [`Mtp`]: struct.mtp.html
-/// [`Encrypted::build`]: fn.mtp.build.html
 pub struct Builder {
     time_offset: i32,
     first_salt: i64,

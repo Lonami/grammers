@@ -8,27 +8,27 @@
 
 //! Custom types extending those provided by Telegram.
 //!
-//! A lot of fields in the types exported from this module are currently public even though
-//! they directly uses `grammers-tl-types`. This will probably change before the 1.0 release.
-pub mod action;
-pub mod attributes;
+//! Properties containing raw types are public and will either be called "raw" or prefixed with "raw_".\
+//! Keep in mind that **these fields are not part of the semantic versioning guarantees**.
+mod action;
+mod attributes;
 pub mod button;
-pub mod chats;
-pub mod dialog;
-pub mod downloadable;
-pub mod input_media;
-pub mod input_message;
-pub mod iter_buffer;
-pub mod login_token;
-pub mod media;
-pub mod message;
-pub mod participant;
-pub mod password_token;
-pub mod peer;
-pub mod peer_map;
-pub mod permissions;
-pub mod photo_sizes;
-pub mod reactions;
+pub(crate) mod chats;
+mod dialog;
+mod downloadable;
+mod input_media;
+mod input_message;
+mod iter_buffer;
+mod login_token;
+mod media;
+mod message;
+mod participant;
+mod password_token;
+mod peer;
+mod peer_map;
+mod permissions;
+mod photo_sizes;
+mod reactions;
 pub mod reply_markup;
 pub mod update;
 
@@ -49,6 +49,7 @@ pub use password_token::PasswordToken;
 pub use peer::{Channel, Group, Peer, Platform, RestrictionReason, User};
 pub use peer_map::PeerMap;
 pub use permissions::{Permissions, Restrictions};
+pub use photo_sizes::PhotoSize;
 pub use reactions::InputReactions;
 pub(crate) use reply_markup::ReplyMarkup;
 pub use update::Update;

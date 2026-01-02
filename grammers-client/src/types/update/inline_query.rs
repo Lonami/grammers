@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use super::super::{Peer, PeerMap, User};
-use crate::{InputMessage, client::Client, utils::generate_random_id};
+use crate::{Client, types, utils};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
@@ -166,11 +166,11 @@ pub struct Article {
     description: Option<String>,
     url: Option<String>,
     thumb_url: Option<String>,
-    input_message: InputMessage,
+    input_message: types::InputMessage,
 }
 
 impl Article {
-    pub fn new<S: Into<String>, M: Into<InputMessage>>(title: S, input_message: M) -> Self {
+    pub fn new<S: Into<String>, M: Into<types::InputMessage>>(title: S, input_message: M) -> Self {
         Self {
             id: None,
             title: title.into(),
@@ -219,7 +219,7 @@ impl From<Article> for tl::enums::InputBotInlineResult {
         tl::enums::InputBotInlineResult::Result(tl::types::InputBotInlineResult {
             id: article
                 .id
-                .unwrap_or_else(|| generate_random_id().to_string()),
+                .unwrap_or_else(|| utils::generate_random_id().to_string()),
             r#type: "article".into(),
             title: Some(article.title),
             description: article.description,

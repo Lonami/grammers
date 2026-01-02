@@ -9,7 +9,7 @@
 //! Methods related to sending messages.
 use crate::types::{InputReactions, IterBuffer, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
-use crate::{Client, InputMedia, PeerMap, types};
+use crate::{Client, types};
 use chrono::{DateTime, FixedOffset};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerId, PeerKind, PeerRef};
@@ -32,7 +32,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let peers = PeerMap::new(users, chats);
+            let peers = types::PeerMap::new(users, chats);
             client.cache_peers_maybe(&peers);
 
             let rnd_to_id = updates
@@ -182,7 +182,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let peers = PeerMap::new(users, chats);
+        let peers = types::PeerMap::new(users, chats);
         self.client.cache_peers_maybe(&peers);
 
         let client = self.client.clone();
@@ -486,7 +486,7 @@ impl Client {
     /// # }
     /// ```
     ///
-    /// [`InputMessage`]: crate::InputMessage
+    /// [`InputMessage`]: crate::types::InputMessage
     pub async fn send_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
         &self,
         peer: C,
@@ -609,7 +609,7 @@ impl Client {
                                 peer_id: Some(peer.id.into()),
                             }),
                             Some(peer),
-                            &PeerMap::empty(),
+                            &types::PeerMap::empty(),
                         )
                     }
                 }
@@ -639,11 +639,11 @@ impl Client {
     /// # }
     /// ```
     ///
-    /// [`InputMedia`]: crate::InputMedia
+    /// [`InputMedia`]: crate::types::InputMedia
     pub async fn send_album<C: Into<PeerRef>>(
         &self,
         peer: C,
-        mut medias: Vec<InputMedia>,
+        mut medias: Vec<types::InputMedia>,
     ) -> Result<Vec<Option<Message>>, InvocationError> {
         let peer = peer.into();
         let random_ids = generate_random_ids(medias.len());
@@ -743,7 +743,7 @@ impl Client {
     /// # }
     /// ```
     ///
-    /// [`InputMessage`]: crate::InputMessage
+    /// [`InputMessage`]: crate::types::InputMessage
     // TODO don't require nasty InputPeer
     pub async fn edit_message<C: Into<PeerRef>, M: Into<types::InputMessage>>(
         &self,
@@ -960,7 +960,7 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
+        let peers = types::PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         Ok(messages
             .into_iter()
@@ -1082,7 +1082,7 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
+        let peers = types::PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         let mut map = messages
             .into_iter()
@@ -1136,7 +1136,7 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
+        let peers = types::PeerMap::new(users, chats);
         self.cache_peers_maybe(&peers);
         Ok(messages
             .into_iter()

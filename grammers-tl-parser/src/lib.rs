@@ -15,8 +15,6 @@
 //! need to later use somewhere else (for example, to generate code).
 //!
 //! [Type Language]: https://core.telegram.org/mtproto/TL
-//! [`parse_tl_file`]: fn.parse_tl_file.html
-//! [`Definition`]: tl/struct.Definition.html
 
 #![deny(unsafe_code)]
 

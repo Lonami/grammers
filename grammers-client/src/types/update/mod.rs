@@ -6,6 +6,8 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+//! Update types about events received from Telegram.
+
 mod callback_query;
 mod inline_query;
 mod inline_send;

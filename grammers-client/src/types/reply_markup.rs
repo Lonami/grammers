@@ -6,13 +6,18 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-//! This module contains several functions to build a reply markup usable by bots when sending
-//! messages through [`crate::InputMessage::reply_markup`].
+//! Contains functions to build reply markups.
 //!
-//! Each function returns a concrete builder-like type that may be further configured via their
-//! inherent methods.
+//! These can only be used by bot accounts when sending
+//! messages through [`InputMessage::reply_markup`].
 //!
-//! The trait is used to group all types as "something that may be used as a  reply markup".
+//! Each function returns a concrete builder-like type that
+//! may be further configured via their inherent methods.
+//!
+//! The trait is used to group all types as "something that
+//! may be used as a reply markup".
+//!
+//! [`InputMessage::reply_markup`]: crate::types::InputMessage::reply_markup
 use super::button;
 use grammers_tl_types as tl;
 

@@ -7,7 +7,7 @@
 // except according to those terms.
 
 use crate::types::{Peer, User};
-use crate::{Client, InputMessage, PeerMap};
+use crate::{Client, types};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerRef};
 use grammers_session::updates::State;
@@ -23,7 +23,7 @@ pub struct InlineSend {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) peers: Arc<PeerMap>,
+    pub(crate) peers: Arc<types::PeerMap>,
 }
 
 impl InlineSend {
@@ -76,7 +76,7 @@ impl InlineSend {
     /// **This method will return Ok(None) if message id is None (e.g. if an inline keyboard is not attached)**
     pub async fn edit_message(
         &self,
-        input_message: impl Into<InputMessage>,
+        input_message: impl Into<types::InputMessage>,
     ) -> Result<Option<bool>, InvocationError> {
         let msg_id = match self.update().msg_id.clone() {
             None => return Ok(None),

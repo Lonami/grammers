@@ -9,6 +9,7 @@
 use grammers_tl_types as tl;
 use tl::enums::Reaction;
 
+/// Parameter for reacting to messages with emoji.
 #[derive(Clone, Debug, Default)]
 pub struct InputReactions {
     pub(crate) reactions: Vec<Reaction>,

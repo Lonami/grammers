@@ -288,7 +288,7 @@ impl Client {
     /// persisted in the session cache beforehand (i.e. be retrievable with [`Session::peer`]).
     /// A good way to achieve this is to use [`Self::iter_dialogs`] at least once after login.
     ///
-    /// The updates are wrapped in [`crate::Update`] to make them more convenient to use,
+    /// The updates are wrapped in [`crate::types::Update`] to make them more convenient to use,
     /// but their raw type is still accessible to bridge any missing functionality.
     pub fn stream_updates(
         &self,

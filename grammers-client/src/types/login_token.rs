@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+/// Login token needed to continue the login process after sending the code.
 pub struct LoginToken {
     pub(crate) phone: String,
     pub(crate) phone_code_hash: String,

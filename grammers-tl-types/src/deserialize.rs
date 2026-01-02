@@ -28,7 +28,7 @@ pub enum Error {
     /// It is important to note that unboxed or bare [`types`] lack the
     /// constructor information, and as such they cannot be validated.
     ///
-    /// [`types`]: types/index.html
+    /// [`types`]: crate::types
     UnexpectedConstructor {
         /// The unexpected constructor identifier.
         id: u32,

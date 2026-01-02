@@ -5,13 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::PeerMap;
 #[cfg(any(feature = "markdown", feature = "html"))]
 use crate::parsers;
 use crate::types::reactions::InputReactions;
 use crate::types::{InputMessage, Media, Photo};
+use crate::utils;
 use crate::{Client, types};
-use crate::{InputMedia, utils};
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
@@ -36,7 +35,7 @@ pub struct Message {
     // server response contains a lot of peers, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
     // and moves, and saves us from worrying about picking out all the peers we care about.
-    pub(crate) peers: Arc<PeerMap>,
+    pub(crate) peers: Arc<types::PeerMap>,
 }
 
 impl Message {
@@ -44,7 +43,7 @@ impl Message {
         client: &Client,
         message: tl::enums::Message,
         fetched_in: Option<PeerRef>,
-        peers: &Arc<PeerMap>,
+        peers: &Arc<types::PeerMap>,
     ) -> Self {
         Self {
             raw: message,
@@ -126,7 +125,7 @@ impl Message {
             }),
             fetched_in: Some(peer),
             client: client.clone(),
-            peers: PeerMap::empty(),
+            peers: types::PeerMap::empty(),
         }
     }
 
@@ -609,7 +608,7 @@ impl Message {
     /// Shorthand for `Client::send_album`.
     pub async fn respond_album(
         &self,
-        medias: Vec<InputMedia>,
+        medias: Vec<types::InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         self.client.send_album(self.peer_ref(), medias).await
     }
@@ -631,7 +630,7 @@ impl Message {
     /// Shorthand for `Client::send_album`.
     pub async fn reply_album(
         &self,
-        mut medias: Vec<InputMedia>,
+        mut medias: Vec<types::InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.id());
         self.client.send_album(self.peer_ref(), medias).await

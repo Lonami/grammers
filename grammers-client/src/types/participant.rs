@@ -44,6 +44,7 @@ pub struct Banned {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Left {}
 
+/// Participant role within a group or channel.
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Role {
@@ -54,6 +55,7 @@ pub enum Role {
     Left(Left),
 }
 
+/// User and their role within the group or channel.
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub struct Participant {

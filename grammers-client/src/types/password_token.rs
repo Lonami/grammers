@@ -8,6 +8,7 @@
 use grammers_tl_types as tl;
 
 // TODO this should not be Clone, but check_password Err doesn't include it back yet
+/// Password token needed to complete a 2FA login.
 #[derive(Clone, Debug)]
 pub struct PasswordToken {
     pub(crate) password: tl::types::account::Password,

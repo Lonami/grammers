@@ -10,7 +10,7 @@ use std::sync::Arc;
 
 use super::{CallbackQuery, InlineQuery, InlineSend, Message, MessageDeletion, Raw};
 use crate::types::Message as Msg;
-use crate::{Client, PeerMap, utils};
+use crate::{Client, types, utils};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
@@ -51,7 +51,7 @@ impl Update {
         client: &Client,
         update: tl::enums::Update,
         state: State,
-        peers: &Arc<PeerMap>,
+        peers: &Arc<types::PeerMap>,
     ) -> Self {
         match &update {
             // NewMessage
