@@ -35,9 +35,10 @@ pub use user::{Platform, RestrictionReason, User};
 
 use crate::media::ChatPhoto;
 
-/// A peer.
+/// A user, group, or broadcast channel.
 ///
-/// Peers represent places where you can share messages with others.
+/// Peers represent places where you can initiate a message exchange with others.
+/// After doing so, user accounts can retrieve them via their [`Dialog`] list.
 ///
 /// * Private conversations with other people are treated as the peer of the user itself.
 /// * Conversations in a group, whether it's private or public, are simply known as groups.
