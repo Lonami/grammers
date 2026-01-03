@@ -140,10 +140,10 @@ impl InputMessage {
     ///
     /// The user is free to ignore the markup and continue sending usual text messages.
     ///
-    /// See [`crate::message::reply_markup`] for the different available markups along with how
+    /// See [`crate::message::ReplyMarkup`] for the different available markups along with how
     /// they behave.
-    pub fn reply_markup<RM: ReplyMarkup>(mut self, markup: &RM) -> Self {
-        self.reply_markup = Some(markup.to_reply_markup().raw);
+    pub fn reply_markup(mut self, markup: ReplyMarkup) -> Self {
+        self.reply_markup = Some(markup.raw);
         self
     }
 

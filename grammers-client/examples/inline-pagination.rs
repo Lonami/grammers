@@ -26,7 +26,7 @@ use std::env;
 use std::sync::Arc;
 
 use grammers_client::Client;
-use grammers_client::message::{InputMessage, button, reply_markup};
+use grammers_client::message::{Button, InputMessage, ReplyMarkup};
 use grammers_client::update::Update;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
@@ -43,11 +43,11 @@ const NUMBERS_PER_PAGE: usize = 4;
 const MAX_PAYLOAD_DATA_LEN: usize = 64;
 
 /// Generate the inline keyboard reply markup with a few more numbers from the sequence.
-fn fib_markup(mut a: u128, mut b: u128) -> reply_markup::Inline {
+fn fib_markup(mut a: u128, mut b: u128) -> ReplyMarkup {
     let mut rows = Vec::with_capacity(NUMBERS_PER_PAGE + 1);
     for _ in 0..NUMBERS_PER_PAGE {
         let text = a.to_string();
-        rows.push(vec![button::inline(&text, text.as_bytes())]);
+        rows.push(vec![Button::data(&text, text.as_bytes())]);
 
         let bb = b;
         b += a;
@@ -56,14 +56,14 @@ fn fib_markup(mut a: u128, mut b: u128) -> reply_markup::Inline {
 
     let next = format!("{a},{b}");
     if next.len() > MAX_PAYLOAD_DATA_LEN {
-        rows.push(vec![button::inline("I'm satisfied!!", b"done".to_vec())]);
+        rows.push(vec![Button::data("I'm satisfied!!", b"done".to_vec())]);
     } else {
         rows.push(vec![
-            button::inline("Restart!", b"0,1".to_vec()),
-            button::inline("More!", format!("{a},{b}").into_bytes()),
+            Button::data("Restart!", b"0,1".to_vec()),
+            Button::data("More!", format!("{a},{b}").into_bytes()),
         ]);
     }
-    reply_markup::inline(rows)
+    ReplyMarkup::from_buttons(&rows)
 }
 
 async fn handle_update(_client: Client, update: Update) -> Result {
@@ -73,7 +73,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
                 .respond(
                     InputMessage::new()
                         .text("Here's a fibonacci")
-                        .reply_markup(&fib_markup(0, 1)),
+                        .reply_markup(fib_markup(0, 1)),
                 )
                 .await?;
         }
@@ -97,7 +97,7 @@ async fn handle_update(_client: Client, update: Update) -> Result {
                     .answer()
                     .edit(
                         InputMessage::from(format!("S{os} much fibonacci 🔢"))
-                            .reply_markup(&fib_markup(a, b)),
+                            .reply_markup(fib_markup(a, b)),
                     )
                     .await?;
             } else if a % 2 == 0 {

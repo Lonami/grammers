@@ -11,12 +11,14 @@
 //! Properties containing raw types are public and will either be called "raw" or prefixed with "raw_".\
 //! Keep in mind that **these fields are not part of the semantic versioning guarantees**.
 
-pub mod button;
+mod button;
 mod input_message;
 mod message;
 mod reactions;
-pub mod reply_markup;
+mod reply_markup;
 
+pub use button::{Button, Key};
 pub use input_message::InputMessage;
 pub use message::Message;
 pub use reactions::InputReactions;
+pub use reply_markup::ReplyMarkup;
