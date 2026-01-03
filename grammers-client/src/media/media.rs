@@ -19,11 +19,15 @@ pub struct Photo {
     pub raw: tl::types::MessageMediaPhoto,
 }
 
+/// File documents unlike the alternative of compressed photos.
+///
+/// This includes uncompressed photos, videos, stickers, and files of any type.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Document {
     pub raw: tl::types::MessageMediaDocument,
 }
 
+/// A sticker [`Document`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sticker {
     pub document: Document,
@@ -31,44 +35,55 @@ pub struct Sticker {
     animated: bool,
 }
 
+/// Data uploaded by the client to be used as either a [`Photo`] or [`Document`].
 #[derive(Clone, Debug, PartialEq)]
 pub struct Uploaded {
     pub raw: tl::enums::InputFile,
 }
 
+/// Contact media containing a phone number.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Contact {
     pub raw: tl::types::MessageMediaContact,
 }
 
+/// Poll or quiz which may be voted on while open.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Poll {
     pub raw: tl::types::Poll,
     pub raw_results: tl::types::PollResults,
 }
 
+/// Geo point with latitude and longitude coordinates on the globe.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Geo {
     pub raw: tl::types::GeoPoint,
 }
 
+/// Animated built-in sticker with a set of possible outcomes.
+///
+/// Originally used to roll dice (🎲), but other emoji such as darts (🎯),
+/// basket-balls (🏀) and slot-machines (🎰) can also be used.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Dice {
     pub raw: tl::types::MessageMediaDice,
 }
 
+/// A place with optional coordinates.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Venue {
     pub geo: Option<Geo>,
     pub raw_venue: tl::types::MessageMediaVenue,
 }
 
+/// Like [`Geo`], but periodcally edits itself with updated information.
 #[derive(Clone, Debug, PartialEq)]
 pub struct GeoLive {
     pub geo: Option<Geo>,
     pub raw_geolive: tl::types::MessageMediaGeoLive,
 }
 
+/// Instant View web-page previews.
 #[derive(Clone, Debug, PartialEq)]
 pub struct WebPage {
     pub raw: tl::types::MessageMediaWebPage,
@@ -84,15 +99,25 @@ pub struct ChatPhoto {
 #[derive(Clone, Debug, PartialEq)]
 #[non_exhaustive]
 pub enum Media {
+    /// Compressed JPEG photo.
     Photo(Photo),
+    /// File which may or not be rendered directly by clients.
     Document(Document),
+    /// Document that has the attributes of a sticker.
     Sticker(Sticker),
+    /// Contact information.
     Contact(Contact),
+    /// Poll which can be voted on while open.
     Poll(Poll),
+    /// Coordinates of a place.
     Geo(Geo),
+    /// Dice-like built-in sticker media.
     Dice(Dice),
+    /// Information about a place with optional coordinates.
     Venue(Venue),
+    /// Self-updating coordinates of a place or person.
     GeoLive(GeoLive),
+    /// Web-page instant view.
     WebPage(WebPage),
 }
 

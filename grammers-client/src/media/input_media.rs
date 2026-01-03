@@ -10,7 +10,7 @@ use grammers_tl_types as tl;
 
 use super::{Attribute, Media, Uploaded};
 
-/// Construct and send albums.
+/// Media item to be sent as part of an album.
 #[derive(Default)]
 pub struct InputMedia {
     pub(crate) entities: Vec<tl::enums::MessageEntity>,

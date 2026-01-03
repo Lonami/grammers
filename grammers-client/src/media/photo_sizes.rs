@@ -10,13 +10,23 @@ use grammers_tl_types as tl;
 
 use super::Downloadable;
 
+/// Thumbnail of a [`Photo`] or [`Document`].
+///
+/// [`Photo`]: super::Photo
+/// [`Document`]: super::Document
 #[derive(Clone, Debug, PartialEq)]
 pub enum PhotoSize {
+    /// Size that is no longer available.
     Empty(SizeEmpty),
+    /// Size that may be downloaded.
     Size(Size),
+    /// Size attached directly to the message object.
     Cached(CachedSize),
+    /// Stripped size attached directly to the message object.
     Stripped(StrippedSize),
+    /// Multiple sizes in one.
     Progressive(ProgressiveSize),
+    /// Vector thumbnail.
     Path(PathSize),
 }
 
