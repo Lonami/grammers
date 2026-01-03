@@ -11,6 +11,10 @@ use std::ops::{Deref, DerefMut};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
+/// Update that all receive whenever a message is received or edited.
+///
+/// For bots to receive this update, they must either be an administrator
+/// or have disabled the privacy mode via [@BotFather](https://t.me/BotFather).
 #[derive(Debug, Clone)]
 pub struct Message {
     pub(crate) msg: crate::message::Message,

@@ -9,10 +9,7 @@
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
-/// Occurs whenever a message is deleted.
-///
-/// When `MessageDeletion#channel_id` is Some, it means the message was deleted
-/// from a channel.
+/// Update that all receive whenever a message is deleted.
 #[derive(Debug, Clone)]
 pub struct MessageDeletion {
     pub raw: tl::enums::Update,

@@ -39,15 +39,15 @@ pub enum Update {
     /// Instead, they are the raw Update object that Telegram sends. You
     /// normally shouldn’t need these.
     ///
-    /// **NOTE**: the library can split raw updates into actual `Update`
-    /// variants so use this only as the workaround when such variant is not
-    /// available yet.
+    /// <div class="warning">The library can "move" raw update types into
+    /// a separate update wrapper variant during minor version bumps, so use
+    /// this only as a workaround when such variant is not available yet.</div>
     Raw(Raw),
 }
 
 impl Update {
-    /// Create new friendly to use Update from its raw version and peer map
-    pub fn new(
+    /// Create new friendly to use `Update`` from its raw version and peer map.
+    pub fn from_raw(
         client: &Client,
         update: tl::enums::Update,
         state: State,

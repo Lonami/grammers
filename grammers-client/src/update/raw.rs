@@ -11,6 +11,7 @@ use std::ops::{Deref, DerefMut};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
+/// Update that has not been wrapped in a nicer interface.
 #[derive(Debug, Clone)]
 pub struct Raw {
     pub raw: tl::enums::Update,

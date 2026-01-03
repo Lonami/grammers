@@ -20,8 +20,7 @@ use crate::Client;
 use crate::message::{InputMessage, Message};
 use crate::peer::{Peer, PeerMap};
 
-/// Represents a callback query update, which occurs when a user presses one of the bot's inline
-/// callback buttons.
+/// Update that bots receive when a user presses one of the bot's inline callback buttons.
 ///
 /// You should always [`CallbackQuery::answer`] these queries, even if you have no data to display
 /// to the user, because otherwise they will think the bot is non-responsive (the button spinner
@@ -92,8 +91,8 @@ impl CallbackQuery {
     /// on data that actually existed in the buttons of the message, so you do not need to perform
     /// any sanity checks.
     ///
-    /// > Trivia: it used to be possible to fake the callback data, but a server-side check was
-    /// > added circa 2018 to prevent malicious clients from doing so.
+    /// *Trivia*: it used to be possible to fake the callback data, but a server-side check was
+    /// added circa 2018 to prevent malicious clients from doing so.
     pub fn data(&self) -> &[u8] {
         match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.data.as_deref().unwrap_or(&[]),

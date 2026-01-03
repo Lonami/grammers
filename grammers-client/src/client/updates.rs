@@ -91,7 +91,7 @@ pub struct UpdateStream {
 impl UpdateStream {
     pub async fn next(&mut self) -> Result<Update, InvocationError> {
         let (update, state, peers) = self.next_raw().await?;
-        Ok(Update::new(&self.client, update, state, &peers))
+        Ok(Update::from_raw(&self.client, update, state, &peers))
     }
 
     pub async fn next_raw(

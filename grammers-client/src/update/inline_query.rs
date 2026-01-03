@@ -18,8 +18,7 @@ use crate::message::InputMessage;
 use crate::peer::{Peer, PeerMap, User};
 use crate::{Client, utils};
 
-/// Represents an inline query update, which occurs when you sign in as a bot and a user sends an
-/// inline query such as `@bot query`.
+/// Update that bots receive when a user performs an inline query such as `@bot query`.
 #[derive(Clone)]
 pub struct InlineQuery {
     pub raw: tl::enums::Update,
@@ -32,18 +31,6 @@ pub struct InlineQuery {
 pub struct Answer {
     request: tl::functions::messages::SetInlineBotResults,
     client: Client,
-}
-
-/// An inline query result.
-///
-/// The following types implement [`Into<InlineResult>`]:
-/// - [`Article`]
-pub struct InlineResult(tl::enums::InputBotInlineResult);
-
-impl From<InlineResult> for tl::enums::InputBotInlineResult {
-    fn from(result: InlineResult) -> Self {
-        result.0
-    }
 }
 
 impl InlineQuery {
@@ -163,24 +150,40 @@ impl Answer {
     }
 }
 
+/// One of the possible answers to an [`InlineQuery`].
+///
+/// Article answers let you show an option that when clicked will cause the user to send a text message.
+#[derive(Debug)]
 pub struct Article {
-    id: Option<String>,
-    title: String,
-    description: Option<String>,
-    url: Option<String>,
-    thumb_url: Option<String>,
-    input_message: InputMessage,
+    pub raw: tl::types::InputBotInlineResult,
 }
 
 impl Article {
+    /// Creates an inline result with the given title.
+    ///
+    /// If selected by the user that made the inline query, the input message will be sent by them.
     pub fn new<S: Into<String>, M: Into<InputMessage>>(title: S, input_message: M) -> Self {
+        let message = input_message.into();
         Self {
-            id: None,
-            title: title.into(),
-            description: None,
-            url: None,
-            thumb_url: None,
-            input_message: input_message.into(),
+            raw: tl::types::InputBotInlineResult {
+                id: utils::generate_random_id().to_string(),
+                r#type: "article".into(),
+                title: Some(title.into()),
+                description: None,
+                url: None,
+                thumb: None,
+                content: None,
+                // TODO: also allow other types of messages than text
+                send_message: tl::enums::InputBotInlineMessage::Text(
+                    tl::types::InputBotInlineMessageText {
+                        no_webpage: !message.link_preview,
+                        invert_media: message.invert_media,
+                        message: message.text,
+                        entities: Some(message.entities),
+                        reply_markup: message.reply_markup,
+                    },
+                ),
+            },
         }
     }
 
@@ -188,65 +191,41 @@ impl Article {
     ///
     /// By default, a random string will be used.
     pub fn id(mut self, result_id: impl Into<String>) -> Self {
-        self.id = Some(result_id.into());
+        self.raw.id = result_id.into();
         self
     }
 
     /// Short description of the result.
     pub fn description(mut self, description: impl Into<String>) -> Self {
-        self.description = Some(description.into());
+        self.raw.description = Some(description.into());
         self
     }
 
     /// URL of the result.
     pub fn url(mut self, url: impl Into<String>) -> Self {
-        self.url = Some(url.into());
+        self.raw.url = Some(url.into());
         self
     }
 
     /// URL of the thumbnail for the result.
+    ///
+    /// Must point to a suitable JPEG image.
     pub fn thumb_url(mut self, thumb_url: impl Into<String>) -> Self {
-        self.thumb_url = Some(thumb_url.into());
+        self.raw.thumb = Some(tl::enums::InputWebDocument::Document(
+            tl::types::InputWebDocument {
+                url: thumb_url.into(),
+                size: 0,
+                mime_type: "image/jpeg".into(),
+                attributes: vec![],
+            },
+        ));
         self
-    }
-}
-
-impl From<Article> for InlineResult {
-    fn from(article: Article) -> Self {
-        Self(article.into())
     }
 }
 
 impl From<Article> for tl::enums::InputBotInlineResult {
     fn from(article: Article) -> Self {
-        tl::enums::InputBotInlineResult::Result(tl::types::InputBotInlineResult {
-            id: article
-                .id
-                .unwrap_or_else(|| utils::generate_random_id().to_string()),
-            r#type: "article".into(),
-            title: Some(article.title),
-            description: article.description,
-            url: article.url,
-            thumb: article.thumb_url.map(|url| {
-                tl::enums::InputWebDocument::Document(tl::types::InputWebDocument {
-                    url,
-                    size: 0,
-                    mime_type: "image/jpeg".into(),
-                    attributes: vec![],
-                })
-            }),
-            content: None,
-            // TODO: also allow other types of messages than text
-            send_message: tl::enums::InputBotInlineMessage::Text(
-                tl::types::InputBotInlineMessageText {
-                    no_webpage: !article.input_message.link_preview,
-                    invert_media: article.input_message.invert_media,
-                    message: article.input_message.text,
-                    entities: Some(article.input_message.entities),
-                    reply_markup: article.input_message.reply_markup,
-                },
-            ),
-        })
+        tl::enums::InputBotInlineResult::Result(article.raw)
     }
 }
 
@@ -257,18 +236,6 @@ impl fmt::Debug for InlineQuery {
             .field("peer_type", &self.peer_type())
             .field("sender", &self.sender())
             .field("query_id", &self.query_id())
-            .finish()
-    }
-}
-
-impl fmt::Debug for Article {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        f.debug_struct("Article")
-            .field("id", &self.id)
-            .field("title", &self.title)
-            .field("description", &self.description)
-            .field("url", &self.url)
-            .field("thumb_url", &self.thumb_url)
             .finish()
     }
 }

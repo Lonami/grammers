@@ -18,7 +18,7 @@ use crate::Client;
 use crate::message::InputMessage;
 use crate::peer::{Peer, PeerMap, User};
 
-/// Represents an update of user choosing the result of inline query and sending it to a peer.
+/// Update that bots receive when a user chooses an inline query result.
 ///
 /// To receive this update, "Inline Feedback" under "Bot Settings" must be enabled via [@BotFather](https://t.me/BotFather).
 #[derive(Clone)]
