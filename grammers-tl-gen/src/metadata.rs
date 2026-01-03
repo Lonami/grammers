@@ -5,6 +5,7 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
 use std::collections::{HashMap, HashSet};
 
 use grammers_tl_parser::tl::{Category, Definition, Parameter, ParameterType, Type};

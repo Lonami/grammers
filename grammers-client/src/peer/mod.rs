@@ -22,12 +22,11 @@ mod peer_map;
 mod permissions;
 mod user;
 
-use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
-use grammers_tl_types as tl;
-
 pub use channel::Channel;
 pub use chats::{AdminRightsBuilder, BannedRightsBuilder};
 pub use dialog::Dialog;
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
+use grammers_tl_types as tl;
 pub use group::Group;
 pub use participant::{Participant, Role};
 pub use peer_map::PeerMap;

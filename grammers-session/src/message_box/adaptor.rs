@@ -5,9 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::defs::{Gap, Key, NO_PTS, NO_SEQ, PtsInfo, UpdatesLike};
+
 use grammers_tl_types as tl;
 use log::info;
+
+use super::defs::{Gap, Key, NO_PTS, NO_SEQ, PtsInfo, UpdatesLike};
 
 // > The `updateShortMessage`, `updateShortSentMessage` and `updateShortChatMessage` constructors
 // > [...] should be transformed to `updateShort` upon receiving.

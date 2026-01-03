@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Methods to deal with and offer access to updates.
+
 #![allow(deprecated)]
 
 use std::collections::VecDeque;
@@ -322,8 +323,9 @@ impl Client {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use core::future::Future;
+
+    use super::*;
 
     fn get_update_stream() -> UpdateStream {
         panic!()

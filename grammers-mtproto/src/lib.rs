@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![deny(unsafe_code)]
-
 //! This library is an implementation of the [Mobile Transport Protocol].
 //!
 //! It is capable of efficiently packing enqueued requests into message
@@ -15,6 +13,9 @@
 //! server responses to maintain a correct state.
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto
+
+#![deny(unsafe_code)]
+
 pub mod authentication;
 mod manual_tl;
 pub mod mtp;

@@ -5,9 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use super::{Error, Transport, UnpackedOffset};
+
 use crc32fast::Hasher;
 use grammers_crypto::DequeBuffer;
+
+use super::{Error, Transport, UnpackedOffset};
 
 /// The basic MTProto transport protocol.
 ///

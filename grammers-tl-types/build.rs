@@ -5,13 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use grammers_tl_gen::{Config, Outputs, generate_rust_code};
-use grammers_tl_parser::parse_tl_file;
-use grammers_tl_parser::tl::Definition;
+
 use std::env;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read};
 use std::path::Path;
+
+use grammers_tl_gen::{Config, Outputs, generate_rust_code};
+use grammers_tl_parser::parse_tl_file;
+use grammers_tl_parser::tl::Definition;
 
 /// Load the type language definitions from a certain file.
 /// Parse errors will be printed to `stderr`, and only the

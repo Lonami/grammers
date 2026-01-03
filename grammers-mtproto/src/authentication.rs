@@ -33,13 +33,15 @@
 //!     Ok(())
 //! }
 //! ```
+
+use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH};
+
 use grammers_crypto::hex;
 use grammers_crypto::{AuthKey, factorize, rsa};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Serializable};
 use num_bigint::{BigUint, ToBigUint};
 use sha1::{Digest, Sha1};
-use std::fmt;
-use std::time::{SystemTime, UNIX_EPOCH};
 
 // NOTE! Turning this on will leak the key generation process to stdout!
 // Should only be used for debugging purposes and generating test cases.

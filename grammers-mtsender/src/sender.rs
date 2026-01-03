@@ -6,8 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::errors::{InvocationError, ReadError, RpcError};
-use crate::net::{NetStream, ServerAddr};
+use std::sync::atomic::{AtomicI64, Ordering};
+use std::time::{Duration, SystemTime};
+use std::{io, thread};
+
 use grammers_crypto::DequeBuffer;
 use grammers_mtproto::mtp::{
     self, BadMessage, Deserialization, DeserializationFailure, Mtp, RpcResult, RpcResultError,
@@ -17,14 +19,14 @@ use grammers_mtproto::{MsgId, authentication};
 use grammers_session::updates::UpdatesLike;
 use grammers_tl_types::{self as tl, Deserializable, RemoteCall};
 use log::{debug, error, info, trace, warn};
-use std::sync::atomic::{AtomicI64, Ordering};
-use std::time::{Duration, SystemTime};
-use std::{io, thread};
 use tl::Serializable;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::oneshot;
 use tokio::sync::oneshot::error::TryRecvError;
 use tokio::time::{Instant, sleep_until};
+
+use crate::errors::{InvocationError, ReadError, RpcError};
+use crate::net::{NetStream, ServerAddr};
 
 /// The maximum data that we're willing to send or receive at once.
 ///

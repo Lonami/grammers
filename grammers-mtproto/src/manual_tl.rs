@@ -7,11 +7,14 @@
 // except according to those terms.
 
 //! This module contains additional, manual structures for some TL types.
-use crate::mtp;
+
+use std::io::Write;
+
 use flate2::Compression;
 use flate2::write::{GzDecoder, GzEncoder};
 use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
-use std::io::Write;
+
+use crate::mtp;
 
 /// This struct represents the following TL definition:
 ///

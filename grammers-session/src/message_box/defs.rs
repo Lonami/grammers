@@ -5,12 +5,15 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-#[cfg(test)]
-use super::tests::Instant;
-use grammers_tl_types as tl;
+
 use std::time::Duration;
 #[cfg(not(test))]
 use std::time::Instant;
+
+use grammers_tl_types as tl;
+
+#[cfg(test)]
+use super::tests::Instant;
 
 /// Telegram sends `seq` equal to `0` when "it doesn't matter", so we use that value too.
 pub(super) const NO_SEQ: i32 = 0;

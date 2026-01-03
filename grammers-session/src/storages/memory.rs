@@ -6,9 +6,10 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::sync::Mutex;
+
 use crate::types::{ChannelState, DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 use crate::{Session, SessionData};
-use std::sync::Mutex;
 
 /// In-memory session interface.
 ///

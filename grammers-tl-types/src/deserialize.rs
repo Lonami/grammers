@@ -7,6 +7,7 @@
 // except according to those terms.
 
 //! Types and traits involving the deserialization of the generated objects.
+
 use std::fmt;
 
 /// Errors that can be produced by [`Cursor`].

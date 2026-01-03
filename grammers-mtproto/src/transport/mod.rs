@@ -12,17 +12,19 @@
 //! packing them in a format that can be sent over a protocol, such as TCP, HTTP or UDP.
 //!
 //! [MTProto transports]: https://core.telegram.org/mtproto#mtproto-transport
+
 mod abridged;
 mod full;
 mod intermediate;
 mod obfuscated;
+
+use std::{fmt, ops::Range};
 
 pub use abridged::Abridged;
 pub use full::Full;
 use grammers_crypto::DequeBuffer;
 pub use intermediate::Intermediate;
 pub use obfuscated::Obfuscated;
-use std::{fmt, ops::Range};
 
 /// The error type reported by the different transports when something is wrong.
 ///

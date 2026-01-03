@@ -6,14 +6,16 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::path::Path;
+use std::sync::Mutex;
+
+use rusqlite::named_params;
+
 use crate::types::{
     ChannelKind, ChannelState, DcOption, PeerAuth, PeerId, PeerInfo, PeerKind, UpdateState,
     UpdatesState,
 };
 use crate::{DEFAULT_DC, KNOWN_DC_OPTIONS, Session};
-use rusqlite::named_params;
-use std::path::Path;
-use std::sync::Mutex;
 
 const VERSION: i64 = 1;
 

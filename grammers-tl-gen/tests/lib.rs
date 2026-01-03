@@ -5,10 +5,12 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+use std::io;
+
 use grammers_tl_gen::{Config, Outputs, generate_rust_code};
 use grammers_tl_parser::parse_tl_file;
 use grammers_tl_parser::tl::Definition;
-use std::io;
 
 const LAYER: i32 = 0;
 

@@ -5,16 +5,19 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+use std::mem;
+use std::time::{Instant, SystemTime, UNIX_EPOCH};
+
+use grammers_crypto::{AuthKey, DequeBuffer, decrypt_data_v2, encrypt_data_v2};
+use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
+use log::info;
+
 use super::{
     Deserialization, DeserializationFailure, DeserializeError, Mtp, RpcResult, RpcResultError,
 };
 use crate::utils::StackBuffer;
 use crate::{MsgId, manual_tl};
-use grammers_crypto::{AuthKey, DequeBuffer, decrypt_data_v2, encrypt_data_v2};
-use grammers_tl_types::{self as tl, Cursor, Deserializable, Identifiable, Serializable};
-use log::info;
-use std::mem;
-use std::time::{Instant, SystemTime, UNIX_EPOCH};
 
 /// How many future salts to fetch or have stored at a given time.
 ///

@@ -6,23 +6,25 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use crate::configuration::ConnectionParams;
-use crate::errors::ReadError;
-use crate::{InvocationError, Sender, ServerAddr, connect, connect_with_auth};
+use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
+use std::ops::ControlFlow;
+use std::sync::Arc;
+use std::{fmt, panic};
+
 use grammers_mtproto::{mtp, transport};
 use grammers_session::Session;
 use grammers_session::types::DcOption;
 use grammers_session::updates::UpdatesLike;
 use grammers_tl_types::{self as tl, enums};
-use std::net::{Ipv4Addr, Ipv6Addr, SocketAddrV4, SocketAddrV6};
-use std::ops::ControlFlow;
-use std::sync::Arc;
-use std::{fmt, panic};
 use tokio::task::AbortHandle;
 use tokio::{
     sync::{mpsc, oneshot},
     task::JoinSet,
 };
+
+use crate::configuration::ConnectionParams;
+use crate::errors::ReadError;
+use crate::{InvocationError, Sender, ServerAddr, connect, connect_with_auth};
 
 pub(crate) type Transport = transport::Full;
 

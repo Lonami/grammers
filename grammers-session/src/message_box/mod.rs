@@ -31,23 +31,26 @@
 //! While there are entries for which their difference must be fetched,
 //! [`MessageBoxes::check_deadlines`] will always return [`Instant::now`],
 //! since "now" is the time to get the difference.
+
 mod adaptor;
 mod defs;
 #[cfg(test)]
 mod tests;
 
-use crate::types::{ChannelState, UpdatesState};
+use std::cmp::Ordering;
+use std::time::Duration;
+#[cfg(not(test))]
+use std::time::Instant;
+
 use defs::Key;
 pub use defs::{Gap, MessageBox, MessageBoxes, State, UpdatesLike};
 use defs::{LiveEntry, NO_DATE, NO_PTS, NO_SEQ, POSSIBLE_GAP_TIMEOUT, PossibleGap, PtsInfo};
 use grammers_tl_types as tl;
 use log::{debug, info, trace};
-use std::cmp::Ordering;
-use std::time::Duration;
-#[cfg(not(test))]
-use std::time::Instant;
 #[cfg(test)]
 use tests::Instant;
+
+use crate::types::{ChannelState, UpdatesState};
 
 fn next_updates_deadline() -> Instant {
     Instant::now() + defs::NO_UPDATES_TIMEOUT

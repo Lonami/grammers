@@ -5,8 +5,10 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
-use crate::sha1;
+
 use std::fmt;
+
+use crate::sha1;
 
 /// Telegram's [Authorization Key](https://core.telegram.org/mtproto/auth_key).
 ///

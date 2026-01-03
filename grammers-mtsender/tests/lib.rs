@@ -13,11 +13,12 @@ pub const TELEGRAM_DEFAULT_TEST_DC: &str = TELEGRAM_TEST_DC_2;
 
 #[test]
 fn test_invoke_encrypted_method() {
+    use std::str::FromStr;
+
     use grammers_mtproto::transport;
     use grammers_mtsender::connect;
     use grammers_tl_types::{LAYER, enums, functions};
     use simple_logger::SimpleLogger;
-    use std::str::FromStr;
     use tokio::runtime;
 
     let _ = SimpleLogger::new()
@@ -63,6 +64,9 @@ fn test_invoke_encrypted_method() {
 #[test]
 #[cfg(feature = "proxy")]
 fn test_connection_through_proxy() {
+    use std::str::FromStr;
+    use std::sync::Arc;
+
     use grammers_mtproto::authentication;
     use grammers_mtproto::mtp;
     use grammers_mtproto::transport;
@@ -73,8 +77,6 @@ fn test_connection_through_proxy() {
         auth::Password,
         proto::{Address, Reply},
     };
-    use std::str::FromStr;
-    use std::sync::Arc;
     use tokio::io;
     use tokio::net::{TcpListener, TcpStream};
     use tokio::{runtime, task};

@@ -6,9 +6,9 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-#![allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
-
 //! [AES-Infinite Garble Extension](https://mgp25.com/blog/2015/06/21/AESIGE/) implementation.
+
+#![allow(deprecated)] // see https://github.com/RustCrypto/block-ciphers/issues/509
 
 use std::mem;
 

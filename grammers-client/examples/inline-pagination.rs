@@ -24,14 +24,15 @@
 
 #![allow(deprecated)]
 
+use std::env;
+use std::sync::Arc;
+
 use grammers_client::Client;
 use grammers_client::message::{InputMessage, button, reply_markup};
 use grammers_client::update::Update;
 use grammers_mtsender::SenderPool;
 use grammers_session::storages::SqliteSession;
 use simple_logger::SimpleLogger;
-use std::env;
-use std::sync::Arc;
 use tokio::{runtime, task};
 
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;

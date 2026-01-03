@@ -9,6 +9,7 @@
 //! Errors that can occur during the parsing of [Type Language] definitions.
 //!
 //! [Type Language]: https://core.telegram.org/mtproto/TL
+
 use std::num::ParseIntError;
 
 /// The error type for the parsing operation of [`Definition`]s.

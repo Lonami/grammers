@@ -83,6 +83,7 @@
 //! [Telegram Bot API]: https://core.telegram.org/bots/api
 //! [obtain a developer API ID]: https://my.telegram.org/auth
 //! [`ClientConfiguration`]: crate::client::ClientConfiguration
+
 #![deny(unsafe_code)]
 
 pub mod client;
@@ -94,11 +95,10 @@ pub mod peer;
 pub mod update;
 pub(crate) mod utils;
 
+pub use client::{Client, SignInError};
 pub use grammers_mtsender::{self as sender, InvocationError, SenderPool};
 pub use grammers_session as session;
 pub use grammers_tl_types as tl;
-
-pub use client::{Client, SignInError};
 
 /// Alias for [`std::result::Result`] with the error set to [`InvocationError`].
 pub type Result<T> = std::result::Result<T, InvocationError>;

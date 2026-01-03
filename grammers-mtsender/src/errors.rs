@@ -5,9 +5,11 @@
 // <LICENSE-MIT or https://opensource.org/licenses/MIT>, at your
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
+
+use std::{fmt, io};
+
 use grammers_mtproto::{authentication, mtp, transport};
 use grammers_tl_types as tl;
-use std::{fmt, io};
 
 /// This error occurs when reading from the network fails.
 #[derive(Debug)]
