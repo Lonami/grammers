@@ -8,8 +8,6 @@
 
 //! Methods to deal with and offer access to updates.
 
-#![allow(deprecated)]
-
 use std::collections::VecDeque;
 use std::sync::Arc;
 use std::time::{Duration, Instant};

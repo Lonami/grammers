@@ -10,8 +10,6 @@
 //! cargo run --example dialogs
 //! ```
 
-#![allow(deprecated)]
-
 use std::env;
 use std::io::{self, BufRead as _, Write as _};
 use std::sync::Arc;

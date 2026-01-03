@@ -10,8 +10,6 @@
 //! cargo run --example echo -- BOT_TOKEN
 //! ```
 
-#![allow(deprecated)]
-
 use std::sync::Arc;
 use std::{env, time::Duration};
 

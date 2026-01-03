@@ -13,8 +13,6 @@
 //! Messages will be printed to stdout, and media will be saved in the `target/` folder locally, named
 //! message-[MSG_ID].[EXT]
 
-#![allow(deprecated)]
-
 use std::io::{BufRead, Write};
 use std::path::Path;
 use std::sync::Arc;
