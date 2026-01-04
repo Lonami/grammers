@@ -281,8 +281,8 @@ impl Session for SqliteSession {
         let mut params = vec![];
         let peer_id = peer.id().bot_api_dialog_id();
         params.extend_from_slice(named_params! {":peer_id": peer_id});
-        let hash = peer.auth().hash();
-        if peer.auth() != PeerAuth::default() {
+        let hash = peer.auth().unwrap_or_default().hash();
+        if peer.auth().is_some() {
             params.extend_from_slice(named_params! {":hash": hash});
         }
         let subtype = subtype.map(|s| s as i64);

@@ -254,12 +254,12 @@ impl PeerInfo {
         }
     }
 
-    /// Returns the `PeerAuth` stored in this info, or [`PeerAuth::default()`] if that info is not known.
-    pub fn auth(&self) -> PeerAuth {
+    /// Returns the `PeerAuth` stored in this info.
+    pub fn auth(&self) -> Option<PeerAuth> {
         match self {
-            PeerInfo::User { auth, .. } => auth.unwrap_or_default(),
-            PeerInfo::Chat { .. } => PeerAuth::default(),
-            PeerInfo::Channel { auth, .. } => auth.unwrap_or_default(),
+            PeerInfo::User { auth, .. } => *auth,
+            PeerInfo::Chat { .. } => Some(PeerAuth::default()),
+            PeerInfo::Channel { auth, .. } => *auth,
         }
     }
 }
