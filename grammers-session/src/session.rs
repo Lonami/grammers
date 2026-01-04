@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use crate::peer::PeerRef;
 use crate::types::{DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 
 /// The main interface to interact with the different [`crate::storages`].
@@ -49,6 +50,15 @@ pub trait Session: Send + Sync {
     /// Querying for [`PeerId::self_user`] can be used as a way to determine
     /// whether the authentication key has a logged-in user bound (i.e. signed in).
     fn peer(&self, peer: PeerId) -> Option<PeerInfo>;
+
+    /// Query the full peer reference from its identity.
+    ///
+    /// By default, this uses [`Session::peer`] to retrieve the [`PeerAuth`](crate::types::PeerAuth).
+    fn peer_ref(&self, peer: PeerId) -> Option<PeerRef> {
+        self.peer(peer)
+            .and_then(|info| info.auth())
+            .map(|auth| PeerRef { id: peer, auth })
+    }
 
     /// Cache a peer's basic information for [`Session::peer`] to be able to query them later.
     ///
