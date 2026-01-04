@@ -12,7 +12,7 @@ use std::collections::HashMap;
 
 use chrono::{DateTime, FixedOffset};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerId, PeerKind, PeerRef};
+use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
 use grammers_tl_types::{self as tl, enums::InputPeer};
 use log::{Level, log_enabled, warn};
 
@@ -461,7 +461,10 @@ impl GlobalSearchIter {
         if !self.last_chunk && !self.buffer.is_empty() {
             let last = &self.buffer[self.buffer.len() - 1];
             self.request.offset_rate = offset_rate.unwrap_or(0);
-            self.request.offset_peer = last.peer_ref().into();
+            self.request.offset_peer = last
+                .peer_ref()
+                .map(|peer| peer.into())
+                .unwrap_or(tl::enums::InputPeer::Empty);
             self.request.offset_id = last.id();
         }
 
@@ -933,7 +936,14 @@ impl Client {
         }
 
         // TODO shouldn't this method take in a message id anyway?
-        let peer = message.peer_ref();
+        let peer_id = message.peer_id();
+        let peer = match peer_id.kind() {
+            PeerKind::User | PeerKind::UserSelf | PeerKind::Chat => PeerRef {
+                id: peer_id,
+                auth: PeerAuth::default(), // unused, so no need to bother fetching it
+            },
+            PeerKind::Channel => message.peer_ref().ok_or(InvocationError::Dropped)?,
+        };
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
             None => return Ok(None),
@@ -968,7 +978,7 @@ impl Client {
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
             .next()
-            .filter(|m| !filter_req || m.peer_ref().id == message.peer_ref().id))
+            .filter(|m| !filter_req || m.peer_id() == message.peer_id()))
     }
 
     /// Iterate over the message history of a peer, from most recent to oldest.
@@ -1088,7 +1098,7 @@ impl Client {
         let mut map = messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
-            .filter(|m| m.peer_ref().id == peer.id)
+            .filter(|m| m.peer_id() == peer.id)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
 
@@ -1141,7 +1151,7 @@ impl Client {
         Ok(messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
-            .find(|m| m.peer_ref().id == peer.id))
+            .find(|m| m.peer_id() == peer.id))
     }
 
     /// Pin a message in the peer. This will not notify any users.

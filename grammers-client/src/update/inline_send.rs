@@ -41,16 +41,21 @@ impl InlineSend {
         self.update().query.as_str()
     }
 
-    /// The reference to the user that chose the result.
-    pub fn sender_ref(&self) -> PeerRef {
-        let id = PeerId::user(self.update().user_id);
-        self.peers.get_ref(id).unwrap()
+    /// The [`Self::sender`]'s identifier.
+    pub fn sender_id(&self) -> PeerId {
+        PeerId::user(self.update().user_id)
     }
 
-    /// The user that chose the result.
-    pub fn sender(&self) -> &User {
-        match self.peers.get(self.sender_ref().id).unwrap() {
-            Peer::User(user) => user,
+    /// Cached reference to the [`Self::sender`], if it is in cache.
+    pub fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id())
+    }
+
+    /// The user that chose the result, if it is in cache.
+    pub fn sender(&self) -> Option<&User> {
+        match self.peers.get(self.sender_id()) {
+            Some(Peer::User(user)) => Some(user),
+            None => None,
             _ => unreachable!(),
         }
     }

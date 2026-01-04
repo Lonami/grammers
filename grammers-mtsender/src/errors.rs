@@ -219,6 +219,9 @@ pub enum InvocationError {
 
     /// The request was cancelled or dropped, and the results won't arrive.
     /// This may mean that the [`crate::SenderPoolRunner`] is no longer running.
+    ///
+    /// Higher level APIs may choose to use this variant when a request cannot
+    /// even be sent in the first place (for example, when a peer reference is missing).
     Dropped,
 
     /// The request was invoked in a datacenter that does not exist or is not known by the session.

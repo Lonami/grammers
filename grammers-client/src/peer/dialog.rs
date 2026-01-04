@@ -6,7 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use grammers_session::types::PeerId;
+use grammers_session::types::{PeerId, PeerRef};
 use grammers_tl_types as tl;
 
 use super::{Peer, PeerMap};
@@ -59,6 +59,16 @@ impl Dialog {
             peer,
             raw: dialog,
         }
+    }
+
+    /// The [`Self::peer`]'s identifier.
+    pub fn peer_id(&self) -> PeerId {
+        self.peer.id()
+    }
+
+    /// Cached reference to the [`Self::peer`].
+    pub fn peer_ref(&self) -> PeerRef {
+        self.peer.to_ref().unwrap()
     }
 
     /// The peer represented by this dialog.

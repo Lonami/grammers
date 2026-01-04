@@ -41,35 +41,42 @@ pub struct Answer<'a> {
 }
 
 impl CallbackQuery {
-    /// Reference to the user who sent this callback query.
-    pub fn sender_ref(&self) -> PeerRef {
-        let user_id = match &self.raw {
-            tl::enums::Update::BotCallbackQuery(update) => update.user_id,
-            tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
-            _ => unreachable!(),
-        };
-        let id = PeerId::user(user_id);
-        self.peers.get_ref(id).unwrap()
-    }
-
-    /// Reference to the peer where the callback query occured.
-    pub fn peer_ref(&self) -> PeerRef {
-        let id = match &self.raw {
+    /// The [`Self::peer`]'s identifier.
+    pub fn peer_id(&self) -> PeerId {
+        match &self.raw {
             tl::enums::Update::BotCallbackQuery(update) => update.peer.clone().into(),
             tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),
             _ => unreachable!(),
-        };
-        self.peers.get_ref(id).unwrap()
+        }
     }
 
-    /// The user who sent this callback query.
-    pub fn sender(&self) -> &Peer {
-        self.peers.get(self.sender_ref().id).unwrap()
+    /// Cached reference to the [`Self::peer`], if it is in cache.
+    pub fn peer_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.peer_id())
     }
 
-    /// The peer where the callback query occured.
-    pub fn peer(&self) -> &Peer {
-        self.peers.get(self.peer_ref().id).unwrap()
+    /// The peer where the callback query occured, if it is in cache.
+    pub fn peer(&self) -> Option<&Peer> {
+        self.peers.get(self.peer_id())
+    }
+
+    /// The [`Self::sender`]'s identifier.
+    pub fn sender_id(&self) -> PeerId {
+        PeerId::user(match &self.raw {
+            tl::enums::Update::BotCallbackQuery(update) => update.user_id,
+            tl::enums::Update::InlineBotCallbackQuery(update) => update.user_id,
+            _ => unreachable!(),
+        })
+    }
+
+    /// Cached reference to the [`Self::sender`], if it is in cache.
+    pub fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id())
+    }
+
+    /// The user who sent this callback query, if it is in cache.
+    pub fn sender(&self) -> Option<&Peer> {
+        self.peers.get(self.sender_id())
     }
 
     /// They binary payload data contained by the inline button which was pressed.
@@ -103,7 +110,7 @@ impl CallbackQuery {
         };
         Ok(self
             .client
-            .get_messages_by_id(self.peer_ref(), &[msg_id])
+            .get_messages_by_id(self.peer_ref().ok_or(InvocationError::Dropped)?, &[msg_id])
             .await?
             .pop()
             .unwrap()
@@ -169,7 +176,7 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref();
+        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
         match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => {
                 self.query
@@ -193,7 +200,7 @@ impl<'a> Answer<'a> {
         message: M,
     ) -> Result<Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref();
+        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
         self.query.client.send_message(peer, message).await
     }
 
@@ -207,7 +214,7 @@ impl<'a> Answer<'a> {
             _ => return Err(InvocationError::Dropped),
         };
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref();
+        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
         let message = message.into();
         self.query
             .client

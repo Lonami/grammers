@@ -233,55 +233,59 @@ impl Message {
         self.raw.id()
     }
 
-    pub fn peer_ref(&self) -> PeerRef {
+    /// The [`Self::peer`]'s identifier.
+    pub fn peer_id(&self) -> PeerId {
         utils::peer_from_message(&self.raw)
             .map(PeerId::from)
-            .and_then(|id| self.peers.get_ref(id))
-            .or(self.fetched_in)
+            .or_else(|| self.fetched_in.map(|peer| peer.id))
             .expect("empty messages from updates should contain peer_id")
     }
 
-    /// The reference to the sender of this message, if there is a sender.
-    pub fn sender_ref(&self) -> Option<PeerRef> {
-        let from_id = match &self.raw {
-            tl::enums::Message::Empty(_) => None,
-            tl::enums::Message::Message(message) => message.from_id.clone().map(PeerId::from),
-            tl::enums::Message::Service(message) => message.from_id.clone().map(PeerId::from),
-        };
-        from_id
-            .or_else(|| {
-                // Incoming messages in private conversations don't include `from_id` since
-                // layer 119, but the sender can only be the peer we're in.
-                let peer_id = self.peer_ref().id;
-                if matches!(peer_id.kind(), PeerKind::User | PeerKind::UserSelf) {
-                    if self.outgoing() {
-                        Some(PeerId::self_user())
-                    } else {
-                        Some(peer_id)
-                    }
-                } else {
-                    None
-                }
-            })
-            .and_then(|id| self.peers.get_ref(id))
-    }
-
-    /// The sender of this message, if there is a sender **and** the sender is in cache.
-    pub fn sender(&self) -> Result<&Peer, Option<PeerRef>> {
-        let sender = self.sender_ref();
-        match sender {
-            Some(from) => self.peers.get(from.id).ok_or(sender),
-            None => Err(None),
-        }
+    /// Cached reference to the [`Self::peer`], if it is in cache.
+    pub fn peer_ref(&self) -> Option<PeerRef> {
+        self.fetched_in
+            .or_else(|| self.peers.get_ref(self.peer_id()))
     }
 
     /// The peer where this message was sent to.
     ///
     /// This might be the user you're talking to for private conversations, or the group or
     /// channel where the message was sent.
-    pub fn peer(&self) -> Result<&Peer, PeerRef> {
-        let peer = self.peer_ref();
-        self.peers.get(peer.id).ok_or(peer)
+    pub fn peer(&self) -> Option<&Peer> {
+        self.peers.get(self.peer_id())
+    }
+
+    /// The [`Self::sender`]'s identifier, if there is a sender.
+    pub fn sender_id(&self) -> Option<PeerId> {
+        let from_id = match &self.raw {
+            tl::enums::Message::Empty(_) => None,
+            tl::enums::Message::Message(message) => message.from_id.clone().map(PeerId::from),
+            tl::enums::Message::Service(message) => message.from_id.clone().map(PeerId::from),
+        };
+        from_id.or_else(|| {
+            // Incoming messages in private conversations don't include `from_id` since
+            // layer 119, but the sender can only be the peer we're in.
+            let peer_id = self.peer_id();
+            if matches!(peer_id.kind(), PeerKind::User | PeerKind::UserSelf) {
+                if self.outgoing() {
+                    Some(PeerId::self_user())
+                } else {
+                    Some(peer_id)
+                }
+            } else {
+                None
+            }
+        })
+    }
+
+    /// Cached reference to the [`Self::sender`], if there is a sender and they are in cache.
+    pub fn sender_ref(&self) -> Option<PeerRef> {
+        self.sender_id().and_then(|id| self.peers.get_ref(id))
+    }
+
+    /// The sender of this message, if there is a sender **and** the sender is in cache.
+    pub fn sender(&self) -> Option<&Peer> {
+        self.sender_id().and_then(|id| self.peers.get(id))
     }
 
     /// If this message was forwarded from a previous message, return the header with information
@@ -481,7 +485,11 @@ impl Message {
         reactions: R,
     ) -> Result<(), InvocationError> {
         self.client
-            .send_reactions(self.peer_ref(), self.id(), reactions)
+            .send_reactions(
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.id(),
+                reactions,
+            )
             .await?;
         Ok(())
     }
@@ -589,7 +597,9 @@ impl Message {
         &self,
         message: M,
     ) -> Result<Self, InvocationError> {
-        self.client.send_message(self.peer_ref(), message).await
+        self.client
+            .send_message(self.peer_ref().ok_or(InvocationError::Dropped)?, message)
+            .await
     }
 
     /// Respond to this message by sending a album in the same peer, but without directly
@@ -600,7 +610,9 @@ impl Message {
         &self,
         medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
-        self.client.send_album(self.peer_ref(), medias).await
+        self.client
+            .send_album(self.peer_ref().ok_or(InvocationError::Dropped)?, medias)
+            .await
     }
 
     /// Directly reply to this message by sending a new message to the same peer that replies to
@@ -610,7 +622,10 @@ impl Message {
     pub async fn reply<M: Into<InputMessage>>(&self, message: M) -> Result<Self, InvocationError> {
         let message = message.into();
         self.client
-            .send_message(self.peer_ref(), message.reply_to(Some(self.id())))
+            .send_message(
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                message.reply_to(Some(self.id())),
+            )
             .await
     }
 
@@ -623,7 +638,9 @@ impl Message {
         mut medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.id());
-        self.client.send_album(self.peer_ref(), medias).await
+        self.client
+            .send_album(self.peer_ref().ok_or(InvocationError::Dropped)?, medias)
+            .await
     }
 
     /// Forward this message to another (or the same) peer.
@@ -635,7 +652,11 @@ impl Message {
         // When forwarding a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single forwarded message present which we can unwrap.
         self.client
-            .forward_messages(chat, &[self.id()], self.peer_ref())
+            .forward_messages(
+                chat,
+                &[self.id()],
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+            )
             .await
             .map(|mut msgs| msgs.pop().unwrap().unwrap())
     }
@@ -645,7 +666,11 @@ impl Message {
     /// Shorthand for `Client::edit_message`.
     pub async fn edit<M: Into<InputMessage>>(&self, new_message: M) -> Result<(), InvocationError> {
         self.client
-            .edit_message(self.peer_ref(), self.id(), new_message)
+            .edit_message(
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.id(),
+                new_message,
+            )
             .await
     }
 
@@ -655,7 +680,10 @@ impl Message {
     /// at once, consider using that method instead.
     pub async fn delete(&self) -> Result<(), InvocationError> {
         self.client
-            .delete_messages(self.peer_ref(), &[self.id()])
+            .delete_messages(
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                &[self.id()],
+            )
             .await
             .map(drop)
     }
@@ -665,7 +693,7 @@ impl Message {
     /// Unlike `Client::mark_as_read`, this method only will mark the conversation as read up to
     /// this message, not the entire conversation.
     pub async fn mark_as_read(&self) -> Result<(), InvocationError> {
-        let peer = self.peer_ref();
+        let peer = self.peer_ref().ok_or(InvocationError::Dropped)?;
         if peer.id.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
@@ -689,14 +717,18 @@ impl Message {
     ///
     /// Shorthand for `Client::pin_message`.
     pub async fn pin(&self) -> Result<(), InvocationError> {
-        self.client.pin_message(self.peer_ref(), self.id()).await
+        self.client
+            .pin_message(self.peer_ref().ok_or(InvocationError::Dropped)?, self.id())
+            .await
     }
 
     /// Unpin this message from the conversation.
     ///
     /// Shorthand for `Client::unpin_message`.
     pub async fn unpin(&self) -> Result<(), InvocationError> {
-        self.client.unpin_message(self.peer_ref(), self.id()).await
+        self.client
+            .unpin_message(self.peer_ref().ok_or(InvocationError::Dropped)?, self.id())
+            .await
     }
 
     /// Refetch this message, mutating all of its properties in-place.
@@ -708,7 +740,10 @@ impl Message {
         // When fetching a single message, if it fails, Telegram should respond with RPC error.
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
-            .get_messages_by_id(self.peer_ref(), &[self.id()])
+            .get_messages_by_id(
+                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                &[self.id()],
+            )
             .await?
             .pop()
             .unwrap()

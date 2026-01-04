@@ -40,16 +40,21 @@ impl InlineQuery {
         }
     }
 
-    /// Reference to the user that sent the query
-    pub fn sender_ref(&self) -> PeerRef {
-        let id = PeerId::user(self.update().user_id);
-        self.peers.get_ref(id).unwrap()
+    /// The [`Self::sender`]'s identifier.
+    pub fn sender_id(&self) -> PeerId {
+        PeerId::user(self.update().user_id)
     }
 
-    /// User that sent the query
-    pub fn sender(&self) -> &User {
-        match self.peers.get(self.sender_ref().id).unwrap() {
-            Peer::User(user) => user,
+    /// Cached reference to the [`Self::sender`], if it is in cache.
+    pub fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id())
+    }
+
+    /// User that sent the query, if it is in cache.
+    pub fn sender(&self) -> Option<&User> {
+        match self.peers.get(self.sender_id()) {
+            Some(Peer::User(user)) => Some(user),
+            None => None,
             _ => unreachable!(),
         }
     }
