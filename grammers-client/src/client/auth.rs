@@ -117,11 +117,12 @@ impl Client {
         // `message_box` will try to correct its state as updates arrive.
         let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();
 
-        let user = User::from_raw(auth.user);
+        let user = User::from_raw(self, auth.user);
+        let auth = user.to_ref().unwrap().auth;
 
         self.0.session.cache_peer(&PeerInfo::User {
-            id: user.bare_id(),
-            auth: Some(user.auth()),
+            id: user.id().bare_id(),
+            auth: Some(auth),
             bot: Some(user.is_bot()),
             is_self: Some(true),
         });

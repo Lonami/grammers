@@ -55,7 +55,7 @@ impl Dialog {
 
         Self {
             last_message: message
-                .map(|m| Message::from_raw(client, m, Some((&peer).into()), peers.handle())),
+                .map(|m| Message::from_raw(client, m, peer.to_ref(), peers.handle())),
             peer,
             raw: dialog,
         }

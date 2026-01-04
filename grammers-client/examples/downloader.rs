@@ -71,7 +71,10 @@ async fn async_main() -> Result<()> {
         println!("Signed in!");
     }
 
-    let maybe_peer = client.resolve_username(peer_name.as_str()).await?;
+    let maybe_peer = client
+        .resolve_username(peer_name.as_str())
+        .await?
+        .and_then(|peer| peer.to_ref());
 
     let peer = maybe_peer.unwrap_or_else(|| panic!("Peer {peer_name} could not be found"));
 

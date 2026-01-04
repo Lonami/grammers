@@ -116,8 +116,11 @@ impl DialogIter {
                 self.request.offset_date = last_message.date_timestamp();
                 self.request.offset_id = last_message.id();
             }
-            self.request.offset_peer =
-                PeerRef::from(self.buffer[self.buffer.len() - 1].peer()).into();
+            self.request.offset_peer = self.buffer[self.buffer.len() - 1]
+                .peer()
+                .to_ref()
+                .map(|peer| peer.into())
+                .unwrap_or(tl::enums::InputPeer::Empty);
         }
 
         Ok(self.pop_item())

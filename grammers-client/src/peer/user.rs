@@ -8,8 +8,10 @@
 
 use std::fmt;
 
-use grammers_session::types::{PeerAuth, PeerInfo};
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
+
+use crate::Client;
 
 /// Platform Identifier referenced only by [`RestrictionReason`].
 #[non_exhaustive]
@@ -65,6 +67,7 @@ impl RestrictionReason {
 #[derive(Clone)]
 pub struct User {
     pub raw: tl::enums::User,
+    pub(crate) client: Client,
 }
 
 impl fmt::Debug for User {
@@ -75,8 +78,11 @@ impl fmt::Debug for User {
 
 // TODO: photo
 impl User {
-    pub fn from_raw(user: tl::enums::User) -> Self {
-        Self { raw: user }
+    pub fn from_raw(client: &Client, user: tl::enums::User) -> Self {
+        Self {
+            raw: user,
+            client: client.clone(),
+        }
     }
 
     pub(crate) fn user(&self) -> Option<&tl::types::User> {
@@ -94,19 +100,26 @@ impl User {
     }
 
     /// Return the unique identifier for this user.
-    pub fn bare_id(&self) -> i64 {
-        self.raw.id()
+    pub fn id(&self) -> PeerId {
+        PeerId::user(self.raw.id())
     }
 
-    pub(crate) fn min(&self) -> bool {
-        self.user().map(|u| u.min).unwrap_or(true)
-    }
-
-    pub(crate) fn auth(&self) -> PeerAuth {
-        self.user()
-            .and_then(|u| u.access_hash)
+    /// Non-min auth stored in the user, if any.
+    pub(crate) fn auth(&self) -> Option<PeerAuth> {
+        let user = self.user()?;
+        user.access_hash
+            .filter(|_| !user.min)
             .map(PeerAuth::from_hash)
-            .unwrap_or_default()
+    }
+
+    /// Convert the user to its reference.
+    ///
+    /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
+    pub fn to_ref(&self) -> Option<PeerRef> {
+        let id = self.id();
+        self.auth()
+            .map(|auth| PeerRef { id, auth })
+            .or_else(|| self.client.0.session.peer_ref(id))
     }
 
     /// Return the first name of this user.

@@ -33,7 +33,7 @@ pub use peer_map::PeerMap;
 pub use permissions::{Permissions, Restrictions};
 pub use user::{Platform, RestrictionReason, User};
 
-use crate::media::ChatPhoto;
+use crate::{Client, media::ChatPhoto};
 
 /// A user, group, or broadcast channel.
 ///
@@ -56,27 +56,29 @@ pub enum Peer {
 }
 
 impl Peer {
-    pub(crate) fn from_user(user: tl::enums::User) -> Self {
-        Self::User(User::from_raw(user))
+    pub(crate) fn from_user(client: &Client, user: tl::enums::User) -> Self {
+        Self::User(User::from_raw(client, user))
     }
 
-    pub fn from_raw(chat: tl::enums::Chat) -> Self {
+    pub fn from_raw(client: &Client, chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
-            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => Self::Group(Group::from_raw(chat)),
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => {
+                Self::Group(Group::from_raw(client, chat))
+            }
             C::Channel(ref channel) => {
                 if channel.broadcast {
-                    Self::Channel(Channel::from_raw(chat))
+                    Self::Channel(Channel::from_raw(client, chat))
                 } else {
-                    Self::Group(Group::from_raw(chat))
+                    Self::Group(Group::from_raw(client, chat))
                 }
             }
             C::ChannelForbidden(ref channel) => {
                 if channel.broadcast {
-                    Self::Channel(Channel::from_raw(chat))
+                    Self::Channel(Channel::from_raw(client, chat))
                 } else {
-                    Self::Group(Group::from_raw(chat))
+                    Self::Group(Group::from_raw(client, chat))
                 }
             }
         }
@@ -92,25 +94,29 @@ impl Peer {
     /// property.
     pub fn id(&self) -> PeerId {
         match self {
-            Self::User(user) => PeerId::user(user.bare_id()),
+            Self::User(user) => user.id(),
             Self::Group(group) => group.id(),
-            Self::Channel(channel) => PeerId::channel(channel.bare_id()),
+            Self::Channel(channel) => channel.id(),
         }
     }
 
-    pub(crate) fn min(&self) -> bool {
-        match self {
-            Self::User(user) => user.min(),
-            Self::Group(group) => group.min(),
-            Self::Channel(channel) => channel.min(),
-        }
-    }
-
-    pub(crate) fn auth(&self) -> PeerAuth {
+    /// Non-min auth stored in the peer, if any.
+    pub(crate) fn auth(&self) -> Option<PeerAuth> {
         match self {
             Self::User(user) => user.auth(),
             Self::Group(group) => group.auth(),
             Self::Channel(channel) => channel.auth(),
+        }
+    }
+
+    /// Convert the peer to its reference.
+    ///
+    /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
+    pub fn to_ref(&self) -> Option<PeerRef> {
+        match self {
+            Self::User(user) => user.to_ref(),
+            Self::Group(group) => group.to_ref(),
+            Self::Channel(channel) => channel.to_ref(),
         }
     }
 
@@ -159,7 +165,7 @@ impl Peer {
 
     // Return the profile picture or chat photo of this peer, if any.
     pub fn photo(&self, big: bool) -> Option<ChatPhoto> {
-        let peer = PeerRef::from(self).into();
+        let peer = self.to_ref()?.into();
         match self {
             Self::User(user) => user.photo().map(|x| ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(
@@ -188,21 +194,6 @@ impl Peer {
                     },
                 ),
             }),
-        }
-    }
-}
-
-impl From<Peer> for PeerRef {
-    #[inline]
-    fn from(peer: Peer) -> Self {
-        <Self as From<&Peer>>::from(&peer)
-    }
-}
-impl<'a> From<&'a Peer> for PeerRef {
-    fn from(peer: &'a Peer) -> Self {
-        Self {
-            id: peer.id(),
-            auth: peer.auth(),
         }
     }
 }

@@ -341,7 +341,7 @@ impl ProfilePhotoIter {
     }
 }
 
-fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Peer> {
+fn updates_to_chat(client: &Client, id: Option<i64>, updates: tl::enums::Updates) -> Option<Peer> {
     use tl::enums::Updates;
 
     let chats = match updates {
@@ -357,7 +357,7 @@ fn updates_to_chat(id: Option<i64>, updates: tl::enums::Updates) -> Option<Peer>
         },
         None => None,
     }
-    .map(Peer::from_raw)
+    .map(|chat| Peer::from_raw(client, chat))
 }
 
 /// Method implementations related to dealing with peers.
@@ -392,15 +392,15 @@ impl Client {
         Ok(match peer {
             tl::enums::Peer::User(tl::types::PeerUser { user_id }) => users
                 .into_iter()
-                .map(Peer::from_user)
+                .map(|user| Peer::from_user(self, user))
                 .find(|peer| peer.id() == PeerId::user(user_id)),
             tl::enums::Peer::Chat(tl::types::PeerChat { chat_id }) => chats
                 .into_iter()
-                .map(Peer::from_raw)
+                .map(|chat| Peer::from_raw(self, chat))
                 .find(|peer| peer.id() == PeerId::chat(chat_id)),
             tl::enums::Peer::Channel(tl::types::PeerChannel { channel_id }) => chats
                 .into_iter()
-                .map(Peer::from_raw)
+                .map(|chat| Peer::from_raw(self, chat))
                 .find(|peer| peer.id() == PeerId::channel(channel_id)),
         })
     }
@@ -429,7 +429,7 @@ impl Client {
             panic!("fetching only one user should exactly return one user");
         }
 
-        Ok(User::from_raw(res.pop().unwrap()))
+        Ok(User::from_raw(self, res.pop().unwrap()))
     }
 
     /// Iterate over the participants of a chat.
@@ -447,7 +447,7 @@ impl Client {
     /// while let Some(participant) = participants.next().await? {
     ///     println!(
     ///         "{} has role {:?}",
-    ///         participant.user.first_name().unwrap_or(&participant.user.bare_id().to_string()),
+    ///         participant.user.first_name().unwrap_or(&participant.user.id().to_string()),
     ///         participant.role
     ///     );
     /// }
@@ -641,7 +641,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one user should exactly return one user");
                 }
-                Peer::from_user(res.pop().unwrap())
+                Peer::from_user(self, res.pop().unwrap())
             }
             PeerKind::Chat => {
                 let mut res = match self
@@ -656,7 +656,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one chat should exactly return one chat");
                 }
-                Peer::from_raw(res.pop().unwrap())
+                Peer::from_raw(self, res.pop().unwrap())
             }
             PeerKind::Channel => {
                 let mut res = match self
@@ -671,7 +671,7 @@ impl Client {
                 if res.len() != 1 {
                     panic!("fetching only one chat should exactly return one chat");
                 }
-                Peer::from_raw(res.pop().unwrap())
+                Peer::from_raw(self, res.pop().unwrap())
             }
         })
     }
@@ -704,7 +704,7 @@ impl Client {
                 tl::enums::InputUser::FromMessage(user) => user.user_id,
                 tl::enums::InputUser::UserSelf => {
                     let me = self.get_me().await?;
-                    me.bare_id()
+                    me.id().bare_id()
                 }
                 tl::enums::InputUser::Empty => return Err(InvocationError::Dropped),
             };
@@ -806,6 +806,7 @@ impl Client {
     ) -> Result<Option<Peer>, InvocationError> {
         match Self::parse_invite_link(invite_link) {
             Some(hash) => Ok(updates_to_chat(
+                self,
                 None,
                 self.invoke(&tl::functions::messages::ImportChatInvite { hash })
                     .await?,
@@ -834,6 +835,7 @@ impl Client {
         let chat: PeerRef = chat.into();
         let channel = chat.into();
         Ok(updates_to_chat(
+            self,
             Some(chat.id.bare_id()),
             self.invoke(&tl::functions::channels::JoinChannel { channel })
                 .await?,
@@ -906,14 +908,14 @@ impl Client {
     ) -> PeerMap {
         let map = users
             .into_iter()
-            .map(Peer::from_user)
-            .chain(chats.into_iter().map(Peer::from_raw))
+            .map(|user| Peer::from_user(self, user))
+            .chain(chats.into_iter().map(|chat| Peer::from_raw(self, chat)))
             .map(|peer| (peer.id(), peer))
             .collect::<HashMap<_, _>>();
 
         if self.0.configuration.auto_cache_peers {
             for peer in map.values() {
-                if !peer.min() {
+                if peer.auth().is_some() {
                     self.0.session.cache_peer(&peer.into());
                 }
             }

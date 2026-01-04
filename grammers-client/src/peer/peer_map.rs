@@ -38,8 +38,7 @@ impl PeerMap {
     pub fn get_ref(&self, peer: PeerId) -> Option<PeerRef> {
         self.map
             .get(&peer)
-            .filter(|peer| !peer.min())
-            .map(PeerRef::from)
+            .and_then(|peer| peer.to_ref())
             .or_else(|| self.session.peer_ref(peer))
     }
 

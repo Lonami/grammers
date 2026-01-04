@@ -8,8 +8,10 @@
 
 use std::fmt;
 
-use grammers_session::types::{ChannelKind, PeerAuth, PeerInfo};
+use grammers_session::types::{ChannelKind, PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
+
+use crate::Client;
 
 /// A broadcast channel.
 ///
@@ -22,6 +24,7 @@ use grammers_tl_types as tl;
 #[derive(Clone)]
 pub struct Channel {
     pub raw: tl::types::Channel,
+    pub(crate) client: Client,
 }
 
 impl fmt::Debug for Channel {
@@ -31,14 +34,17 @@ impl fmt::Debug for Channel {
 }
 
 impl Channel {
-    pub fn from_raw(chat: tl::enums::Chat) -> Self {
+    pub fn from_raw(client: &Client, chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
             C::Empty(_) | C::Chat(_) | C::Forbidden(_) => panic!("cannot create from group chat"),
             C::Channel(channel) => {
                 if channel.broadcast {
-                    Self { raw: channel }
+                    Self {
+                        raw: channel,
+                        client: client.clone(),
+                    }
                 } else {
                     panic!("tried to create broadcast channel from megagroup");
                 }
@@ -98,6 +104,7 @@ impl Channel {
                             forum_tabs: false,
                             linked_monoforum_id: None,
                         },
+                        client: client.clone(),
                     }
                 } else {
                     panic!("tried to create broadcast channel from megagroup");
@@ -107,19 +114,26 @@ impl Channel {
     }
 
     /// Return the unique identifier for this channel.
-    pub fn bare_id(&self) -> i64 {
-        self.raw.id
+    pub fn id(&self) -> PeerId {
+        PeerId::channel(self.raw.id)
     }
 
-    pub(crate) fn min(&self) -> bool {
-        self.raw.min
-    }
-
-    pub(crate) fn auth(&self) -> PeerAuth {
+    /// Non-min auth stored in the channel, if any.
+    pub(crate) fn auth(&self) -> Option<PeerAuth> {
         self.raw
             .access_hash
+            .filter(|_| !self.raw.min)
             .map(PeerAuth::from_hash)
-            .unwrap_or_default()
+    }
+
+    /// Convert the channel to its reference.
+    ///
+    /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
+    pub fn to_ref(&self) -> Option<PeerRef> {
+        let id = self.id();
+        self.auth()
+            .map(|auth| PeerRef { id, auth })
+            .or_else(|| self.client.0.session.peer_ref(id))
     }
 
     /// Additional information about this channel.

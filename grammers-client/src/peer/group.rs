@@ -8,8 +8,10 @@
 
 use std::fmt;
 
-use grammers_session::types::{PeerAuth, PeerId, PeerInfo};
+use grammers_session::types::{PeerAuth, PeerId, PeerInfo, PeerRef};
 use grammers_tl_types as tl;
+
+use crate::Client;
 
 /// A group chat.
 ///
@@ -22,6 +24,7 @@ use grammers_tl_types as tl;
 #[derive(Clone)]
 pub struct Group {
     pub raw: tl::enums::Chat,
+    pub(crate) client: Client,
 }
 
 impl fmt::Debug for Group {
@@ -33,23 +36,32 @@ impl fmt::Debug for Group {
 // TODO it might be desirable to manually merge all the properties of the chat to avoid endless matching
 
 impl Group {
-    pub fn from_raw(chat: tl::enums::Chat) -> Self {
+    pub fn from_raw(client: &Client, chat: tl::enums::Chat) -> Self {
         use tl::enums::Chat as C;
 
         match chat {
-            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => Self { raw: chat },
+            C::Empty(_) | C::Chat(_) | C::Forbidden(_) => Self {
+                raw: chat,
+                client: client.clone(),
+            },
             C::Channel(ref channel) => {
                 if channel.broadcast {
                     panic!("tried to create megagroup channel from broadcast");
                 } else {
-                    Self { raw: chat }
+                    Self {
+                        raw: chat,
+                        client: client.clone(),
+                    }
                 }
             }
             C::ChannelForbidden(ref channel) => {
                 if channel.broadcast {
                     panic!("tried to create megagroup channel from broadcast");
                 } else {
-                    Self { raw: chat }
+                    Self {
+                        raw: chat,
+                        client: client.clone(),
+                    }
                 }
             }
         }
@@ -71,31 +83,32 @@ impl Group {
         }
     }
 
-    pub(crate) fn min(&self) -> bool {
+    /// Non-min auth stored in the group, if any.
+    pub(crate) fn auth(&self) -> Option<PeerAuth> {
         use tl::enums::Chat;
 
-        match &self.raw {
-            Chat::Empty(_) => false,
-            Chat::Chat(_) => false,
-            Chat::Forbidden(_) => false,
-            Chat::Channel(channel) => channel.min,
-            Chat::ChannelForbidden(_) => false,
-        }
-    }
-
-    pub(crate) fn auth(&self) -> PeerAuth {
-        use tl::enums::Chat;
-
-        match &self.raw {
+        Some(match &self.raw {
             Chat::Empty(_) => PeerAuth::default(),
             Chat::Chat(_) => PeerAuth::default(),
             Chat::Forbidden(_) => PeerAuth::default(),
-            Chat::Channel(channel) => channel
-                .access_hash
-                .map(PeerAuth::from_hash)
-                .unwrap_or(PeerAuth::default()),
+            Chat::Channel(channel) => {
+                return channel
+                    .access_hash
+                    .filter(|_| !channel.min)
+                    .map(PeerAuth::from_hash);
+            }
             Chat::ChannelForbidden(channel) => PeerAuth::from_hash(channel.access_hash),
-        }
+        })
+    }
+
+    /// Convert the group to its reference.
+    ///
+    /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
+    pub fn to_ref(&self) -> Option<PeerRef> {
+        let id = self.id();
+        self.auth()
+            .map(|auth| PeerRef { id, auth })
+            .or_else(|| self.client.0.session.peer_ref(id))
     }
 
     /// Return the title of this group.
