@@ -270,21 +270,6 @@ impl fmt::Display for PeerId {
     }
 }
 
-impl From<PeerInfo> for PeerRef {
-    #[inline]
-    fn from(peer: PeerInfo) -> Self {
-        <Self as From<&PeerInfo>>::from(&peer)
-    }
-}
-impl<'a> From<&'a PeerInfo> for PeerRef {
-    fn from(peer: &'a PeerInfo) -> Self {
-        Self {
-            id: peer.id(),
-            auth: peer.auth(),
-        }
-    }
-}
-
 impl From<tl::enums::Peer> for PeerId {
     #[inline]
     fn from(peer: tl::enums::Peer) -> Self {
