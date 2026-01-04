@@ -8,11 +8,10 @@
 
 use std::convert::TryInto;
 use std::fmt;
-use std::sync::Arc;
 use std::time::Duration;
 
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::types::{PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
@@ -30,7 +29,7 @@ pub struct CallbackQuery {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) peers: Arc<PeerMap>,
+    pub(crate) peers: PeerMap,
 }
 
 /// A callback query answer builder.
@@ -50,13 +49,7 @@ impl CallbackQuery {
             _ => unreachable!(),
         };
         let id = PeerId::user(user_id);
-        match self.client.0.session.peer(id) {
-            Some(info) => info.into(),
-            None => PeerRef {
-                id,
-                auth: PeerAuth::default(),
-            },
-        }
+        self.peers.get_ref(id).unwrap()
     }
 
     /// Reference to the peer where the callback query occured.
@@ -66,13 +59,7 @@ impl CallbackQuery {
             tl::enums::Update::InlineBotCallbackQuery(update) => PeerId::user(update.user_id),
             _ => unreachable!(),
         };
-        match self.client.0.session.peer(id) {
-            Some(info) => info.into(),
-            None => PeerRef {
-                id,
-                auth: PeerAuth::default(),
-            },
-        }
+        self.peers.get_ref(id).unwrap()
     }
 
     /// The user who sent this callback query.
@@ -193,7 +180,7 @@ impl<'a> Answer<'a> {
             tl::enums::Update::InlineBotCallbackQuery(update) => self
                 .query
                 .client
-                .edit_inline_message(update.msg_id.clone(), new_message)
+                .edit_inline_message(update.msg_id.clone(), new_message.into())
                 .await
                 .map(drop),
             _ => unreachable!(),

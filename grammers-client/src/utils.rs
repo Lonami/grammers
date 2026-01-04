@@ -62,7 +62,7 @@ pub(crate) fn extract_password_parameters(
     (salt1, salt2, p, g)
 }
 
-pub fn peer_from_message(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
+pub(crate) fn peer_from_message(message: &tl::enums::Message) -> Option<tl::enums::Peer> {
     match &message {
         tl::enums::Message::Empty(message) => message.peer_id.clone(),
         tl::enums::Message::Message(message) => Some(message.peer_id.clone()),

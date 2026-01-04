@@ -19,7 +19,6 @@ use log::{Level, log_enabled, warn};
 use super::{Client, IterBuffer};
 use crate::media::{InputMedia, Media};
 use crate::message::{InputMessage, InputReactions, Message};
-use crate::peer::PeerMap;
 use crate::utils::{generate_random_id, generate_random_ids};
 
 fn map_random_ids_to_messages(
@@ -36,8 +35,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let peers = PeerMap::new(users, chats);
-            client.cache_peers_maybe(&peers);
+            let peers = client.build_peer_map(users, chats);
 
             let rnd_to_id = updates
                 .iter()
@@ -64,7 +62,9 @@ fn map_random_ids_to_messages(
                     ) => Some(message),
                     _ => None,
                 })
-                .map(|message| Message::from_raw(client, message, Some(fetched_in.clone()), &peers))
+                .map(|message| {
+                    Message::from_raw(client, message, Some(fetched_in.clone()), peers.handle())
+                })
                 .map(|message| (message.id(), message))
                 .collect::<HashMap<_, _>>();
 
@@ -113,7 +113,7 @@ pub(crate) fn parse_mention_entities(
                             .0
                             .session
                             .peer(PeerId::user(mention_name.user_id))
-                            .map(|peer| peer.auth())
+                            .and_then(|peer| peer.auth())
                             .unwrap_or_default()
                             .hash(),
                     }),
@@ -186,20 +186,20 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let peers = PeerMap::new(users, chats);
-        self.client.cache_peers_maybe(&peers);
+        let peers = self.client.build_peer_map(users, chats);
 
         let client = self.client.clone();
         self.buffer.extend(
             messages
                 .into_iter()
-                .map(|message| Message::from_raw(&client, message, peer, &peers)),
+                .map(|message| Message::from_raw(&client, message, peer, peers.handle())),
         );
 
         Ok(rate)
     }
 }
 
+/// Iterator returned by [`Client::iter_messages`].
 pub type MessageIter = IterBuffer<tl::functions::messages::GetHistory, Message>;
 
 impl MessageIter {
@@ -220,11 +220,13 @@ impl MessageIter {
         )
     }
 
+    /// Changes the message identifier upper bound.
     pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
     }
 
+    /// Changes the message send date upper bound.
     pub fn max_date(mut self, offset: i32) -> Self {
         self.request.offset_date = offset;
         self
@@ -238,7 +240,7 @@ impl MessageIter {
         self.get_total().await
     }
 
-    /// Return the next `Message` from the internal buffer, filling the buffer previously if it's
+    /// Returns the next `Message` from the internal buffer, filling the buffer previously if it's
     /// empty.
     ///
     /// Returns `None` if the `limit` is reached or there are no messages left.
@@ -262,6 +264,7 @@ impl MessageIter {
     }
 }
 
+/// Iterator returned by [`Client::search_messages`].
 pub type SearchIter = IterBuffer<tl::functions::messages::Search, Message>;
 
 impl SearchIter {
@@ -290,6 +293,7 @@ impl SearchIter {
         )
     }
 
+    /// Changes the message identifier upper bound.
     pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
@@ -387,6 +391,7 @@ impl SearchIter {
     }
 }
 
+/// Iterator returned by [`Client::search_all_messages`].
 pub type GlobalSearchIter = IterBuffer<tl::functions::messages::SearchGlobal, Message>;
 
 impl GlobalSearchIter {
@@ -412,6 +417,7 @@ impl GlobalSearchIter {
         )
     }
 
+    /// Changes the message identifier upper bound.
     pub fn offset_id(mut self, offset: i32) -> Self {
         self.request.offset_id = offset;
         self
@@ -578,7 +584,7 @@ impl Client {
             tl::enums::Updates::UpdateShortSentMessage(updates) => {
                 let peer = if peer.id.kind() == PeerKind::UserSelf {
                     // from_raw_short_updates needs the peer ID
-                    self.0.session.peer(peer.id).unwrap().into()
+                    self.0.session.peer_ref(peer.id).unwrap()
                 } else {
                     peer
                 };
@@ -611,7 +617,7 @@ impl Client {
                                 peer_id: Some(peer.id.into()),
                             }),
                             Some(peer),
-                            &PeerMap::empty(),
+                            self.build_peer_map(Vec::new(), Vec::new()),
                         )
                     }
                 }
@@ -770,9 +776,9 @@ impl Client {
 
     /// Deletes up to 100 messages in a peer.
     ///
-    /// <div class="stab unstable">
+    /// <div class="warning">
     ///
-    /// **Warning**: when deleting messages from small group peers or private conversations, this
+    /// When deleting messages from small group peers or private conversations, this
     /// method cannot validate that the provided message IDs actually belong to the input peer due
     /// to the way Telegram's API works. Make sure to pass correct [`Message::id`]'s.
     ///
@@ -957,11 +963,10 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
-        self.cache_peers_maybe(&peers);
+        let peers = self.build_peer_map(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
             .next()
             .filter(|m| !filter_req || m.peer_ref().id == message.peer_ref().id))
     }
@@ -1079,11 +1084,10 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
-        self.cache_peers_maybe(&peers);
+        let peers = self.build_peer_map(users, chats);
         let mut map = messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
             .filter(|m| m.peer_ref().id == peer.id)
             .map(|m| (m.id(), m))
             .collect::<HashMap<_, _>>();
@@ -1133,11 +1137,10 @@ impl Client {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
-        self.cache_peers_maybe(&peers);
+        let peers = self.build_peer_map(users, chats);
         Ok(messages
             .into_iter()
-            .map(|m| Message::from_raw(self, m, Some(peer.into()), &peers))
+            .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
             .find(|m| m.peer_ref().id == peer.id))
     }
 

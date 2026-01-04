@@ -118,7 +118,7 @@ impl PhotoSize {
         }
     }
 
-    /// Size of the photo thumb
+    /// Size of the photo thumb.
     pub fn size(&self) -> usize {
         match self {
             PhotoSize::Empty(_) => 0,
@@ -138,6 +138,9 @@ impl PhotoSize {
         }
     }
 
+    /// Resolution and image transform applied server-side.
+    ///
+    /// <https://core.telegram.org/api/files#image-thumbnail-types>
     pub fn photo_type(&self) -> String {
         match self {
             PhotoSize::Empty(size) => size.photo_type.clone(),

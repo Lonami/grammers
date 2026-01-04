@@ -13,7 +13,7 @@ use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
 
-use super::{Client, LoginToken, PasswordToken};
+use super::Client;
 use crate::peer::User;
 use crate::utils;
 
@@ -53,6 +53,29 @@ impl fmt::Display for SignInError {
 }
 
 impl std::error::Error for SignInError {}
+
+/// Login token needed to continue the login process after sending the code.
+pub struct LoginToken {
+    pub(crate) phone: String,
+    pub(crate) phone_code_hash: String,
+}
+
+// TODO this should not be Clone, but check_password Err doesn't include it back yet
+/// Password token needed to complete a 2FA login.
+#[derive(Clone, Debug)]
+pub struct PasswordToken {
+    pub(crate) password: tl::types::account::Password,
+}
+
+impl PasswordToken {
+    pub fn new(password: tl::types::account::Password) -> Self {
+        PasswordToken { password }
+    }
+
+    pub fn hint(&self) -> Option<&str> {
+        self.password.hint.as_deref()
+    }
+}
 
 /// Method implementations related with the authentication of the user into the API.
 ///
@@ -121,9 +144,10 @@ impl Client {
     ///
     /// This is the method you need to call to use the client under a bot account.
     ///
-    /// It is recommended to save the session on successful login, and if saving
-    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
-    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
+    /// It is recommended to save the session on successful login. Some session storages will do this
+    /// automatically. If saving fails, it is recommended to [`Client::sign_out`]. If the session is never
+    /// saved post-login, then the authorization will be "lost" in the list of logged-in clients, since it
+    /// is unaccessible.
     ///
     /// # Examples
     ///
@@ -270,9 +294,10 @@ impl Client {
     /// You must call [`Client::request_login_code`] before using this method in order to obtain
     /// necessary login token, and also have asked the user for the login code.
     ///
-    /// It is recommended to save the session on successful login, and if saving
-    /// fails, it is recommended to [`Client::sign_out`]. If the session cannot be saved, then the
-    /// authorization will be "lost" in the list of logged-in clients, since it is unaccessible.
+    /// It is recommended to save the session on successful login. Some session storages will do this
+    /// automatically. If saving fails, it is recommended to [`Client::sign_out`]. If the session is never
+    /// saved post-login, then the authorization will be "lost" in the list of logged-in clients, since it
+    /// is unaccessible.
     ///
     /// # Examples
     ///

@@ -33,6 +33,7 @@ const FILE_MIGRATE_ERROR: i32 = 303;
 const BIG_FILE_SIZE: usize = 10 * 1024 * 1024;
 const WORKER_COUNT: usize = 4;
 
+/// Iterator returned by [`Client::iter_download`].
 pub struct DownloadIter {
     client: Client,
     done: bool,

@@ -6,8 +6,6 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
-use std::sync::Arc;
-
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
@@ -51,7 +49,7 @@ impl Update {
         client: &Client,
         update: tl::enums::Update,
         state: State,
-        peers: &Arc<PeerMap>,
+        peers: PeerMap,
     ) -> Self {
         match &update {
             // NewMessage
@@ -125,7 +123,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                peers: Arc::clone(peers),
+                peers,
             }),
 
             // InlineCallbackQuery
@@ -133,7 +131,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                peers: Arc::clone(peers),
+                peers,
             }),
 
             // InlineQuery
@@ -141,7 +139,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                peers: Arc::clone(peers),
+                peers,
             }),
 
             // InlineSend
@@ -149,7 +147,7 @@ impl Update {
                 raw: update,
                 state,
                 client: client.clone(),
-                peers: Arc::clone(peers),
+                peers,
             }),
 
             // Raw

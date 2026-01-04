@@ -12,9 +12,9 @@ use grammers_mtsender::InvocationError;
 
 use super::Client;
 
-/// Common parts to all requests that are used for creating iterators.
+/// Common parts to most requests that are used for creating iterators.
 ///
-/// End-users should obtain particular instances of this type via client methods.
+/// Client methods will either return a type alias or a wrapper around this.
 pub struct IterBuffer<R, T> {
     pub(crate) client: Client,
     pub(crate) limit: Option<usize>,

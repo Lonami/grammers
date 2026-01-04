@@ -157,6 +157,7 @@ impl Photo {
         }
     }
 
+    /// The globally unique identifier for this media, as seen by any account.
     pub fn id(&self) -> i64 {
         use tl::enums::Photo as P;
 
@@ -166,13 +167,12 @@ impl Photo {
         }
     }
 
-    /// The size of the photo.
-    /// returns 0 if unable to get the size.
-    pub fn size(&self) -> i64 {
-        match self.thumbs().iter().max_by_key(|x| x.size()) {
-            Some(thumb) => thumb.size() as i64,
-            None => 0,
-        }
+    /// The size of the photo, if not empty.
+    pub fn size(&self) -> Option<usize> {
+        self.thumbs()
+            .iter()
+            .max_by_key(|x| x.size())
+            .map(|thumb| thumb.size())
     }
 
     /// Get photo thumbs.
@@ -267,6 +267,7 @@ impl Document {
         }
     }
 
+    /// The globally unique identifier for this media, as seen by any account.
     pub fn id(&self) -> i64 {
         use tl::enums::Document as D;
 
@@ -279,19 +280,19 @@ impl Document {
     /// Return the file's name.
     ///
     /// If the file was uploaded with no file name, the returned string will be empty.
-    pub fn name(&self) -> &str {
+    ///
+    /// Note that the file name is not necessarily valid as seen by the OS,
+    /// and using it directly as the download location is subject to causing
+    /// path trasversal attacks.
+    pub fn name(&self) -> Option<&str> {
         use tl::enums::Document as D;
 
         match self.raw.document.as_ref().unwrap() {
-            D::Empty(_) => "",
-            D::Document(document) => document
-                .attributes
-                .iter()
-                .find_map(|attr| match attr {
-                    tl::enums::DocumentAttribute::Filename(attr) => Some(attr.file_name.as_ref()),
-                    _ => None,
-                })
-                .unwrap_or(""),
+            D::Empty(_) => None,
+            D::Document(document) => document.attributes.iter().find_map(|attr| match attr {
+                tl::enums::DocumentAttribute::Filename(attr) => Some(attr.file_name.as_ref()),
+                _ => None,
+            }),
         }
     }
 
@@ -314,16 +315,15 @@ impl Document {
     }
 
     /// The size of the file.
-    /// returns 0 if the document is empty.
-    pub fn size(&self) -> i64 {
+    pub fn size(&self) -> Option<usize> {
         match self.raw.document.as_ref() {
-            Some(tl::enums::Document::Document(d)) => d.size,
-            _ => 0,
+            Some(tl::enums::Document::Document(d)) => Some(d.size as usize),
+            _ => None,
         }
     }
 
     /// Get document thumbs.
-    /// <https://core.telegram.org/api/files#image-thumbnail-types>
+    /// See <https://core.telegram.org/api/files#image-thumbnail-types>.
     pub fn thumbs(&self) -> Vec<PhotoSize> {
         use tl::enums::Document as D;
 
@@ -344,7 +344,7 @@ impl Document {
         }
     }
 
-    /// Duration of video/audio, in seconds
+    /// Duration of video/audio, in seconds.
     pub fn duration(&self) -> Option<f64> {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
@@ -361,7 +361,7 @@ impl Document {
         }
     }
 
-    /// Width & height of video/image
+    /// Width & height of video/image, in pixels.
     pub fn resolution(&self) -> Option<(i32, i32)> {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
@@ -378,14 +378,14 @@ impl Document {
         }
     }
 
-    /// Title of audio
-    pub fn audio_title(&self) -> Option<String> {
+    /// Title of audio.
+    pub fn audio_title(&self) -> Option<&str> {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     #[allow(clippy::single_match)]
                     match attr {
-                        tl::enums::DocumentAttribute::Audio(a) => return a.title.clone(),
+                        tl::enums::DocumentAttribute::Audio(a) => return a.title.as_deref(),
                         _ => {}
                     }
                 }
@@ -395,14 +395,14 @@ impl Document {
         }
     }
 
-    /// Performer (artist) of audio
-    pub fn performer(&self) -> Option<String> {
+    /// Performer (artist) of audio.
+    pub fn performer(&self) -> Option<&str> {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
                 for attr in &d.attributes {
                     #[allow(clippy::single_match)]
                     match attr {
-                        tl::enums::DocumentAttribute::Audio(a) => return a.performer.clone(),
+                        tl::enums::DocumentAttribute::Audio(a) => return a.performer.as_deref(),
                         _ => {}
                     }
                 }
@@ -412,7 +412,7 @@ impl Document {
         }
     }
 
-    /// Returns true if the document is an animated sticker
+    /// Returns `true` if the document is an animated sticker.
     pub fn is_animated(&self) -> bool {
         match self.raw.document.as_ref() {
             Some(tl::enums::Document::Document(d)) => {
@@ -429,7 +429,7 @@ impl Document {
         }
     }
 
-    /// Returns true if the document is a spoiler
+    /// Returns `true` if the document is a spoiler.
     pub fn is_spoiler(&self) -> bool {
         self.raw.spoiler
     }
@@ -454,7 +454,7 @@ impl Downloadable for Document {
     }
 
     fn size(&self) -> Option<usize> {
-        Some(self.size() as usize)
+        self.size()
     }
 }
 
@@ -523,11 +523,11 @@ impl Contact {
         self.raw.last_name.as_str()
     }
 
-    /// Contact information in [vCard format][1]. Applications such as Telegram Desktop leave this
+    /// Contact information in [vCard format]. Applications such as Telegram Desktop leave this
     /// field empty. The vCard version used in this field could be any. The field may also contain
     /// arbitrary text when sent by non-official clients.
     ///
-    /// [1]: https://en.wikipedia.org/wiki/VCard
+    /// [vCard format]: https://en.wikipedia.org/wiki/VCard
     pub fn vcard(&self) -> &str {
         self.raw.vcard.as_str()
     }
@@ -554,37 +554,38 @@ impl Poll {
         }
     }
 
-    /// Return question of the poll
+    /// Returns the question asked by the poll.
     pub fn question(&self) -> &grammers_tl_types::enums::TextWithEntities {
         &self.raw.question
     }
 
-    /// Return if current poll is quiz
+    /// Return `true` if the poll is a quiz with a set of correct answers.
     pub fn is_quiz(&self) -> bool {
         self.raw.quiz
     }
 
-    /// Indicator that poll is closed
+    /// Returns `true` if the poll is closed.
     pub fn closed(&self) -> bool {
         self.raw.closed
     }
 
-    /// Iterator over poll answer options
+    /// Returns an iterator over the poll answer options.
     pub fn iter_answers(&self) -> impl Iterator<Item = &tl::types::PollAnswer> {
         self.raw.answers.iter().map(|answer| match answer {
             tl::enums::PollAnswer::Answer(answer) => answer,
         })
     }
 
-    /// Total voters that took part in the vote
+    /// Total voters that took part in the vote.
     ///
-    /// May be None if poll isn't started
+    /// May be `None` if poll hasn't started.
     pub fn total_voters(&self) -> Option<i32> {
         self.raw_results.total_voters
     }
 
-    /// Return details of the voters choices:
-    /// how much voters chose each answer and wether current option
+    /// Returns details of the voters choices,
+    /// such as amount of voters per answer and whether the answer
+    /// is currently selected by the logged-in account.
     pub fn iter_voters_summary(
         &self,
     ) -> Option<impl Iterator<Item = &tl::types::PollAnswerVoters>> {
@@ -639,7 +640,7 @@ impl Geo {
         self.raw.long
     }
 
-    /// Get the accuracy of the geo location in meters.
+    /// Get the accuracy of the geo location, in meters.
     pub fn accuracy_radius(&self) -> Option<i32> {
         self.raw.accuracy_radius
     }
@@ -692,27 +693,27 @@ impl Venue {
         }
     }
 
-    /// Get the title of the venue.
+    /// Returns the title of the venue.
     pub fn title(&self) -> &str {
         &self.raw_venue.title
     }
 
-    /// Get the address of the venue.
+    /// Returns the address of the venue.
     pub fn address(&self) -> &str {
         &self.raw_venue.address
     }
 
-    /// Get the provider of the venue location.
+    /// Returns the provider of the venue location.
     pub fn provider(&self) -> &str {
         &self.raw_venue.provider
     }
 
-    /// Get the id of the venue.
+    /// Returns the id of the venue.
     pub fn venue_id(&self) -> &str {
         &self.raw_venue.venue_id
     }
 
-    /// Get the type of the venue.
+    /// Returns the type of the venue.
     pub fn venue_type(&self) -> &str {
         &self.raw_venue.venue_type
     }
@@ -742,17 +743,17 @@ impl GeoLive {
         }
     }
 
-    /// Get the heading of the live location in degress (1-360).
+    /// Returns the heading of the live location in degress (1-360).
     pub fn heading(&self) -> Option<i32> {
         self.raw_geolive.heading
     }
 
-    /// Get the validity period of the live location.
+    /// Returns the validity period of the live location.
     pub fn period(&self) -> i32 {
         self.raw_geolive.period
     }
 
-    /// Get the radius of the proximity alert.
+    /// Returns the radius of the proximity alert.
     pub fn proximity_notification_radius(&self) -> Option<i32> {
         self.raw_geolive.proximity_notification_radius
     }

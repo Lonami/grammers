@@ -11,10 +11,11 @@ use grammers_session::types::{PeerKind, PeerRef, UpdateState};
 use grammers_tl_types as tl;
 
 use super::{Client, IterBuffer};
-use crate::peer::{Dialog, PeerMap};
+use crate::peer::Dialog;
 
 const MAX_LIMIT: usize = 100;
 
+/// Iterator returned by [`Client::iter_dialogs`].
 pub type DialogIter = IterBuffer<tl::functions::messages::GetDialogs, Dialog>;
 
 impl DialogIter {
@@ -83,8 +84,7 @@ impl DialogIter {
             }
         };
 
-        let peers = PeerMap::new(users, chats);
-        self.client.cache_peers_maybe(&peers);
+        let peers = self.client.build_peer_map(users, chats);
 
         self.buffer.extend(dialogs.into_iter().map(|dialog| {
             if let tl::enums::Dialog::Dialog(tl::types::Dialog {
@@ -101,7 +101,7 @@ impl DialogIter {
                         pts: *pts,
                     });
             }
-            Dialog::new(&self.client, dialog, &mut messages, &peers)
+            Dialog::new(&self.client, dialog, &mut messages, peers.handle())
         }));
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.

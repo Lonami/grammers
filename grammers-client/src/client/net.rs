@@ -74,9 +74,9 @@ impl Client {
     /// Using function definitions corresponding to a different layer is likely to cause the
     /// responses to the request to not be understood.
     ///
-    /// <div class="stab unstable">
+    /// <div class="warning">
     ///
-    /// **Warning**: this method is **not** part of the stability guarantees of semantic
+    /// This method is **not** part of the stability guarantees of semantic
     /// versioning. It **may** break during *minor* version changes (but not on patch version
     /// changes). Use with care.
     ///
@@ -103,6 +103,14 @@ impl Client {
     }
 
     /// Like [`Self::invoke`], but in the specified DC.
+    ///
+    /// <div class="warning">
+    ///
+    /// This method is **not** part of the stability guarantees of semantic
+    /// versioning. It **may** break during *minor* version changes (but not on patch version
+    /// changes). Use with care.
+    ///
+    /// </div>
     pub async fn invoke_in_dc<R: tl::RemoteCall>(
         &self,
         dc_id: i32,

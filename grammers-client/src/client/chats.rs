@@ -8,6 +8,7 @@
 
 //! Methods related to users, groups and channels.
 
+use std::collections::HashMap;
 use std::collections::VecDeque;
 use std::future::Future;
 use std::sync::Arc;
@@ -35,7 +36,7 @@ const MAX_PARTICIPANT_LIMIT: usize = 200;
 const MAX_PHOTO_LIMIT: usize = 100;
 const KICK_BAN_DURATION: i32 = 60; // in seconds, in case the second request fails
 
-pub enum ParticipantIter {
+enum ParticipantIterInner {
     Empty,
     Chat {
         client: Client,
@@ -46,10 +47,13 @@ pub enum ParticipantIter {
     Channel(IterBuffer<tl::functions::channels::GetParticipants, Participant>),
 }
 
+/// Iterator returned by [`Client::iter_participants`].
+pub struct ParticipantIter(ParticipantIterInner);
+
 impl ParticipantIter {
     fn new(client: &Client, peer: PeerRef) -> Self {
-        if peer.id.kind() == PeerKind::Channel {
-            Self::Channel(IterBuffer::from_request(
+        Self(if peer.id.kind() == PeerKind::Channel {
+            ParticipantIterInner::Channel(IterBuffer::from_request(
                 client,
                 MAX_PARTICIPANT_LIMIT,
                 tl::functions::channels::GetParticipants {
@@ -61,31 +65,31 @@ impl ParticipantIter {
                 },
             ))
         } else if peer.id.kind() == PeerKind::Chat {
-            Self::Chat {
+            ParticipantIterInner::Chat {
                 client: client.clone(),
                 chat_id: peer.into(),
                 buffer: VecDeque::new(),
                 total: None,
             }
         } else {
-            Self::Empty
-        }
+            ParticipantIterInner::Empty
+        })
     }
 
     /// Determines how many participants there are in total.
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
-        match self {
-            Self::Empty => Ok(0),
-            Self::Chat { total, .. } => {
+        match &self.0 {
+            ParticipantIterInner::Empty => Ok(0),
+            ParticipantIterInner::Chat { total, .. } => {
                 if let Some(total) = total {
                     Ok(*total)
                 } else {
                     self.fill_buffer().await
                 }
             }
-            Self::Channel(iter) => {
+            ParticipantIterInner::Channel(iter) => {
                 if let Some(total) = iter.total {
                     Ok(total)
                 } else {
@@ -97,9 +101,9 @@ impl ParticipantIter {
 
     /// Fills the buffer, and returns the total count.
     async fn fill_buffer(&mut self) -> Result<usize, InvocationError> {
-        match self {
-            Self::Empty => Ok(0),
-            Self::Chat {
+        match &mut self.0 {
+            ParticipantIterInner::Empty => Ok(0),
+            ParticipantIterInner::Chat {
                 client,
                 chat_id,
                 buffer,
@@ -126,20 +130,18 @@ impl ParticipantIter {
                 };
 
                 // Don't actually care for the chats, just the users.
-                let mut peers = PeerMap::new(full.users, Vec::new());
-                client.cache_peers_maybe(&peers);
-                let peers = Arc::get_mut(&mut peers).unwrap();
+                let mut peers = client.build_peer_map(full.users, Vec::new());
 
                 buffer.extend(
                     participants
                         .into_iter()
-                        .map(|p| Participant::from_raw_chat(peers, p)),
+                        .map(|p| Participant::from_raw_chat(&mut peers, p)),
                 );
 
                 *total = Some(buffer.len());
                 Ok(buffer.len())
             }
-            Self::Channel(iter) => {
+            ParticipantIterInner::Channel(iter) => {
                 assert!(iter.buffer.is_empty());
                 use tl::enums::channels::ChannelParticipants::*;
 
@@ -162,14 +164,12 @@ impl ParticipantIter {
                 iter.request.offset += participants.len() as i32;
 
                 // Don't actually care for the chats, just the users.
-                let mut peers = PeerMap::new(users, Vec::new());
-                iter.client.cache_peers_maybe(&peers);
-                let peers = Arc::get_mut(&mut peers).unwrap();
+                let mut peers = iter.client.build_peer_map(users, Vec::new());
 
                 iter.buffer.extend(
                     participants
                         .into_iter()
-                        .map(|p| Participant::from_raw_channel(peers, p)),
+                        .map(|p| Participant::from_raw_channel(&mut peers, p)),
                 );
 
                 iter.total = Some(count as usize);
@@ -184,14 +184,14 @@ impl ParticipantIter {
     /// Returns `None` if the `limit` is reached or there are no participants left.
     pub async fn next(&mut self) -> Result<Option<Participant>, InvocationError> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
-        match self {
-            Self::Empty => {}
-            Self::Chat { buffer, .. } => {
+        match &mut self.0 {
+            ParticipantIterInner::Empty => {}
+            ParticipantIterInner::Chat { buffer, .. } => {
                 if buffer.is_empty() {
                     self.fill_buffer().await?;
                 }
             }
-            Self::Channel(iter) => {
+            ParticipantIterInner::Channel(iter) => {
                 if let Some(result) = iter.next_raw() {
                     return result;
                 }
@@ -199,23 +199,23 @@ impl ParticipantIter {
             }
         }
 
-        match self {
-            Self::Empty => Ok(None),
-            Self::Chat { buffer, .. } => {
+        match &mut self.0 {
+            ParticipantIterInner::Empty => Ok(None),
+            ParticipantIterInner::Chat { buffer, .. } => {
                 let result = buffer.pop_front();
                 if buffer.is_empty() {
-                    *self = Self::Empty;
+                    self.0 = ParticipantIterInner::Empty;
                 }
                 Ok(result)
             }
-            Self::Channel(iter) => Ok(iter.pop_item()),
+            ParticipantIterInner::Channel(iter) => Ok(iter.pop_item()),
         }
     }
 
     /// apply a filter on fetched participants, note that this filter will apply only on large `Channel` and not small groups
     pub fn filter(mut self, filter: tl::enums::ChannelParticipantsFilter) -> Self {
-        match self {
-            ParticipantIter::Channel(ref mut c) => {
+        match self.0 {
+            ParticipantIterInner::Channel(ref mut c) => {
                 c.request.filter = filter;
                 self
             }
@@ -224,53 +224,58 @@ impl ParticipantIter {
     }
 }
 
-pub enum ProfilePhotoIter {
+enum ProfilePhotoIterInner {
     User(IterBuffer<tl::functions::photos::GetUserPhotos, Photo>),
     Chat(IterBuffer<tl::functions::messages::Search, Message>),
 }
 
+/// Iterator returned by [`Client::iter_profile_photos`].
+pub struct ProfilePhotoIter(ProfilePhotoIterInner);
+
 impl ProfilePhotoIter {
     fn new(client: &Client, peer: PeerRef) -> Self {
-        if matches!(peer.id.kind(), PeerKind::User | PeerKind::UserSelf) {
-            Self::User(IterBuffer::from_request(
-                client,
-                MAX_PHOTO_LIMIT,
-                tl::functions::photos::GetUserPhotos {
-                    user_id: peer.into(),
-                    offset: 0,
-                    max_id: 0,
-                    limit: 0,
-                },
-            ))
-        } else {
-            Self::Chat(
-                client
-                    .search_messages(peer)
-                    .filter(tl::enums::MessagesFilter::InputMessagesFilterChatPhotos),
-            )
-        }
+        Self(
+            if matches!(peer.id.kind(), PeerKind::User | PeerKind::UserSelf) {
+                ProfilePhotoIterInner::User(IterBuffer::from_request(
+                    client,
+                    MAX_PHOTO_LIMIT,
+                    tl::functions::photos::GetUserPhotos {
+                        user_id: peer.into(),
+                        offset: 0,
+                        max_id: 0,
+                        limit: 0,
+                    },
+                ))
+            } else {
+                ProfilePhotoIterInner::Chat(
+                    client
+                        .search_messages(peer)
+                        .filter(tl::enums::MessagesFilter::InputMessagesFilterChatPhotos),
+                )
+            },
+        )
     }
 
     /// Determines how many profile photos there are in total.
     ///
     /// This only performs a network call if `next` has not been called before.
     pub async fn total(&mut self) -> Result<usize, InvocationError> {
-        match self {
-            Self::User(iter) => {
+        match &mut self.0 {
+            ProfilePhotoIterInner::User(iter) => {
                 if let Some(total) = iter.total {
                     Ok(total)
                 } else {
                     self.fill_buffer().await
                 }
             }
-            Self::Chat(iter) => iter.total().await,
+            ProfilePhotoIterInner::Chat(iter) => iter.total().await,
         }
     }
 
     /// Fills the buffer, and returns the total count.
     async fn fill_buffer(&mut self) -> Result<usize, InvocationError> {
-        match self {
-            Self::User(iter) => {
+        match &mut self.0 {
+            ProfilePhotoIterInner::User(iter) => {
                 use tl::enums::photos::Photos;
 
                 iter.request.limit = iter.determine_limit(MAX_PHOTO_LIMIT);
@@ -296,7 +301,9 @@ impl ProfilePhotoIter {
 
                 Ok(total)
             }
-            Self::Chat(_) => panic!("fill_buffer should not be called for Chat variant"),
+            ProfilePhotoIterInner::Chat(_) => {
+                panic!("fill_buffer should not be called for Chat variant")
+            }
         }
     }
 
@@ -306,14 +313,14 @@ impl ProfilePhotoIter {
     /// Returns `None` if the `limit` is reached or there are no photos left.
     pub async fn next(&mut self) -> Result<Option<Photo>, InvocationError> {
         // Need to split the `match` because `fill_buffer()` borrows mutably.
-        match self {
-            Self::User(iter) => {
+        match &mut self.0 {
+            ProfilePhotoIterInner::User(iter) => {
                 if let Some(result) = iter.next_raw() {
                     return result;
                 }
                 self.fill_buffer().await?;
             }
-            Self::Chat(iter) => {
+            ProfilePhotoIterInner::Chat(iter) => {
                 while let Some(message) = iter.next().await? {
                     if let Some(tl::enums::MessageAction::ChatEditPhoto(
                         tl::types::MessageActionChatEditPhoto { photo },
@@ -327,9 +334,9 @@ impl ProfilePhotoIter {
             }
         }
 
-        match self {
-            Self::User(iter) => Ok(iter.pop_item()),
-            Self::Chat(_) => Ok(None),
+        match &mut self.0 {
+            ProfilePhotoIterInner::User(iter) => Ok(iter.pop_item()),
+            ProfilePhotoIterInner::Chat(_) => Ok(None),
         }
     }
 }
@@ -501,10 +508,7 @@ impl Client {
         }
     }
 
-    /// Set the banned rights for a specific user.
-    ///
-    /// Returns a new [`BannedRightsBuilder`] instance. Check out the documentation for that type
-    /// to learn more about what restrictions can be applied.
+    /// Returns a builder to set the banned rights for a specific user.
     ///
     /// Nothing is done until it is awaited, at which point it might result in
     /// error if you do not have sufficient permissions to ban the user in the input chat.
@@ -547,10 +551,7 @@ impl Client {
         )
     }
 
-    /// Set the administrator rights for a specific user.
-    ///
-    /// Returns a new [`AdminRightsBuilder`] instance. Check out the documentation for that
-    /// type to learn more about what rights can be given to administrators.
+    /// Returns a builder to set the administrator rights for a specific user.
     ///
     /// Nothing is done until it is awaited, at which point
     /// it might result in error if you do not have sufficient permissions to grant those rights
@@ -677,8 +678,15 @@ impl Client {
 
     /// Get permissions of participant `user` from chat `chat`.
     ///
-    /// # Panics
-    /// Panics if chat isn't channel or chat, and if user isn't user
+    /// # Example
+    ///
+    /// ```
+    /// # async fn f(chat: grammers_session::types::PeerRef, user: grammers_session::types::PeerRef, client: grammers_client::Client) -> Result<(), Box<dyn std::error::Error>> {
+    /// let permissions = client.get_permissions(chat, user).await?;
+    /// println!("The user {} an admin", if permissions.is_admin() { "is" } else { "is not" });
+    /// # Ok(())
+    /// # }
+    /// ```
     pub async fn get_permissions<C: Into<PeerRef>, U: Into<PeerRef>>(
         &self,
         chat: C,
@@ -686,9 +694,6 @@ impl Client {
     ) -> Result<ParticipantPermissions, InvocationError> {
         let chat = chat.into();
         let user = user.into();
-        if !matches!(user.id.kind(), PeerKind::User | PeerKind::UserSelf) {
-            panic!("User parameter not user!");
-        }
 
         // Get by chat
         if chat.id.kind() == PeerKind::Chat {
@@ -701,7 +706,7 @@ impl Client {
                     let me = self.get_me().await?;
                     me.bare_id()
                 }
-                tl::enums::InputUser::Empty => unreachable!(),
+                tl::enums::InputUser::Empty => return Err(InvocationError::Dropped),
             };
 
             // Get chat and find user
@@ -715,7 +720,9 @@ impl Client {
                 if let tl::enums::ChatParticipants::Participants(participants) = chat.participants {
                     for participant in participants.participants {
                         if participant.user_id() == user_id {
-                            return Ok(ParticipantPermissions::Chat(participant));
+                            return Ok(ParticipantPermissions(ParticipantPermissionsInner::Chat(
+                                participant,
+                            )));
                         }
                     }
                 }
@@ -736,8 +743,9 @@ impl Client {
             })
             .await?;
         let tl::enums::channels::ChannelParticipant::Participant(participant) = participant;
-        let permissions = ParticipantPermissions::Channel(participant.participant);
-        Ok(permissions)
+        Ok(ParticipantPermissions(
+            ParticipantPermissionsInner::Channel(participant.participant),
+        ))
     }
 
     #[cfg(feature = "parse_invite_link")]
@@ -891,30 +899,50 @@ impl Client {
         ActionSender::new(self, peer)
     }
 
-    pub(crate) fn cache_peers_maybe(&self, peers: &Arc<PeerMap>) {
+    pub(crate) fn build_peer_map(
+        &self,
+        users: Vec<tl::enums::User>,
+        chats: Vec<tl::enums::Chat>,
+    ) -> PeerMap {
+        let map = users
+            .into_iter()
+            .map(Peer::from_user)
+            .chain(chats.into_iter().map(Peer::from_raw))
+            .map(|peer| (peer.id(), peer))
+            .collect::<HashMap<_, _>>();
+
         if self.0.configuration.auto_cache_peers {
-            for peer in peers.iter_peers() {
+            for peer in map.values() {
                 if !peer.min() {
                     self.0.session.cache_peer(&peer.into());
                 }
             }
         }
+
+        PeerMap {
+            map: Arc::new(map),
+            session: Arc::clone(&self.0.session),
+        }
     }
 }
 
 #[derive(Debug, Clone)]
-pub enum ParticipantPermissions {
+enum ParticipantPermissionsInner {
     Channel(tl::enums::ChannelParticipant),
     Chat(tl::enums::ChatParticipant),
 }
+
+/// Permissions returned by [`Client::get_permissions`].
+#[derive(Debug, Clone)]
+pub struct ParticipantPermissions(ParticipantPermissionsInner);
 
 impl ParticipantPermissions {
     /// Whether the user is the creator of the chat or not.
     pub fn is_creator(&self) -> bool {
         matches!(
-            self,
-            Self::Channel(tl::enums::ChannelParticipant::Creator(_))
-                | Self::Chat(tl::enums::ChatParticipant::Creator(_))
+            self.0,
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Creator(_))
+                | ParticipantPermissionsInner::Chat(tl::enums::ChatParticipant::Creator(_))
         )
     }
 
@@ -922,32 +950,37 @@ impl ParticipantPermissions {
     pub fn is_admin(&self) -> bool {
         self.is_creator()
             || matches!(
-                self,
-                Self::Channel(tl::enums::ChannelParticipant::Admin(_))
-                    | Self::Chat(tl::enums::ChatParticipant::Admin(_))
+                self.0,
+                ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Admin(_))
+                    | ParticipantPermissionsInner::Chat(tl::enums::ChatParticipant::Admin(_))
             )
     }
 
     /// Whether the user is banned in the chat.
     pub fn is_banned(&self) -> bool {
         matches!(
-            self,
-            Self::Channel(tl::enums::ChannelParticipant::Banned(_))
+            self.0,
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Banned(_))
         )
     }
 
     /// Whether the user left the chat.
     pub fn has_left(&self) -> bool {
-        matches!(self, Self::Channel(tl::enums::ChannelParticipant::Left(_)))
+        matches!(
+            self.0,
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Left(_))
+        )
     }
 
     /// Whether the user is a normal user of the chat (not administrator, but not banned either, and has no restrictions applied).
     pub fn has_default_permissions(&self) -> bool {
         matches!(
-            self,
-            Self::Channel(tl::enums::ChannelParticipant::Participant(_))
-                | Self::Channel(tl::enums::ChannelParticipant::ParticipantSelf(_))
-                | Self::Chat(tl::enums::ChatParticipant::Participant(_))
+            self.0,
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Participant(_))
+                | ParticipantPermissionsInner::Channel(
+                    tl::enums::ChannelParticipant::ParticipantSelf(_)
+                )
+                | ParticipantPermissionsInner::Chat(tl::enums::ChatParticipant::Participant(_))
         )
     }
 
@@ -956,13 +989,15 @@ impl ParticipantPermissions {
         if !self.is_admin() {
             return false;
         }
-        match self {
-            Self::Channel(tl::enums::ChannelParticipant::Admin(participant)) => {
+        match &self.0 {
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Admin(
+                participant,
+            )) => {
                 let tl::enums::ChatAdminRights::Rights(rights) = &participant.admin_rights;
                 rights.add_admins
             }
-            Self::Channel(tl::enums::ChannelParticipant::Creator(_)) => true,
-            Self::Chat(_) => self.is_creator(),
+            ParticipantPermissionsInner::Channel(tl::enums::ChannelParticipant::Creator(_)) => true,
+            ParticipantPermissionsInner::Chat(_) => self.is_creator(),
             _ => false,
         }
     }

@@ -13,18 +13,21 @@ use grammers_tl_types as tl;
 use super::{Peer, PeerMap, Permissions, Restrictions};
 use crate::{peer::User, utils};
 
+/// Chat participant with default permissions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Normal {
     date: i32,
     inviter_id: Option<i64>,
 }
 
+/// Chat participant that created the chat itself.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Creator {
     permissions: Permissions,
     rank: Option<String>,
 }
 
+/// Chat participant promoted to administrator.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Admin {
     can_edit: bool,
@@ -35,6 +38,7 @@ pub struct Admin {
     rank: Option<String>,
 }
 
+/// Chat participant demoted to have restrictions.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Banned {
     left: bool,
@@ -43,6 +47,7 @@ pub struct Banned {
     restrictions: Restrictions,
 }
 
+/// Chat participant no longer present in the chat.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Left {}
 
@@ -66,20 +71,24 @@ pub struct Participant {
 }
 
 impl Normal {
+    /// Date when the participant joined.
     pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
-    pub fn inviter_id(&self) -> Option<i64> {
-        self.inviter_id
+    /// Identifier of the person that invited the participant into the chat, if known.
+    pub fn inviter_id(&self) -> Option<PeerId> {
+        self.inviter_id.map(PeerId::user)
     }
 }
 
 impl Creator {
+    /// Permissions this administrator has in the chat.
     pub fn permissions(&self) -> &Permissions {
         &self.permissions
     }
 
+    /// Custom administrator title.
     pub fn rank(&self) -> Option<&str> {
         self.rank.as_deref()
     }
@@ -90,22 +99,26 @@ impl Admin {
         self.can_edit
     }
 
-    pub fn inviter_id(&self) -> Option<i64> {
-        self.inviter_id
+    /// Identifier of the person that invited the participant into the chat, if known.
+    pub fn inviter_id(&self) -> Option<PeerId> {
+        self.inviter_id.map(PeerId::user)
     }
 
-    pub fn promoted_by(&self) -> Option<i64> {
-        self.promoted_by
+    /// Identifier of the person that promoted the participant, if known.
+    pub fn promoted_by(&self) -> Option<PeerId> {
+        self.promoted_by.map(PeerId::user)
     }
 
     pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
+    /// Permissions this administrator has in the chat.
     pub fn permissions(&self) -> &Permissions {
         &self.permissions
     }
 
+    /// Custom administrator title.
     pub fn rank(&self) -> Option<&str> {
         self.rank.as_deref()
     }
@@ -116,14 +129,16 @@ impl Banned {
         self.left
     }
 
-    pub fn kicked_by(&self) -> i64 {
-        self.kicked_by
+    /// Identifier of the person that kicked the participant from the chat.
+    pub fn kicked_by(&self) -> PeerId {
+        PeerId::user(self.kicked_by)
     }
 
     pub fn date(&self) -> DateTime<Utc> {
         utils::date(self.date)
     }
 
+    /// Restrictions this administrator has in the chat.
     pub fn restrictions(&self) -> &Restrictions {
         &self.restrictions
     }
@@ -138,28 +153,28 @@ impl Participant {
 
         match participant {
             P::Participant(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: None,
                 }),
             },
             P::ParticipantSelf(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: Some(p.inviter_id),
                 }),
             },
             P::Creator(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::Creator(Creator {
                     permissions: Permissions::from_raw(p.admin_rights.into()),
                     rank: p.rank,
                 }),
             },
             P::Admin(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::Admin(Admin {
                     can_edit: p.can_edit,
                     inviter_id: p.inviter_id,
@@ -170,7 +185,7 @@ impl Participant {
                 }),
             },
             P::Banned(p) => Self {
-                user: match peers.remove(PeerId::from(p.peer.clone())).unwrap() {
+                user: match peers.take(PeerId::from(p.peer.clone())).unwrap() {
                     Peer::User(user) => user,
                     _ => todo!("figure out how to deal with non-user being banned"),
                 },
@@ -182,7 +197,7 @@ impl Participant {
                 }),
             },
             P::Left(p) => Self {
-                user: match peers.remove(PeerId::from(p.peer.clone())).unwrap() {
+                user: match peers.take(PeerId::from(p.peer.clone())).unwrap() {
                     Peer::User(user) => user,
                     _ => todo!("figure out how to deal with non-user leaving"),
                 },
@@ -199,21 +214,21 @@ impl Participant {
 
         match participant {
             P::Participant(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::User(Normal {
                     date: p.date,
                     inviter_id: Some(p.inviter_id),
                 }),
             },
             P::Creator(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::Creator(Creator {
                     permissions: Permissions::new_full(),
                     rank: None,
                 }),
             },
             P::Admin(p) => Self {
-                user: peers.remove_user(p.user_id).unwrap(),
+                user: peers.take_user(p.user_id).unwrap(),
                 role: Role::Admin(Admin {
                     can_edit: true,
                     inviter_id: Some(p.inviter_id),

@@ -39,13 +39,9 @@ use std::time::Duration;
 /// Configuration that controls the [`Client`] behaviour when making requests.
 pub struct ClientConfiguration {
     /// The retry policy to use when encountering errors after invoking a request.
-    ///
-    /// By default, the library will use an [`AutoSleep::default`] instance.
-    ///
-    /// [`AutoSleep::default`]: super::AutoSleep::default
     pub retry_policy: Box<dyn super::RetryPolicy>,
 
-    /// By default, the library call [`Session::cache_peer`] on all peer information that
+    /// Whether to call [`Session::cache_peer`] on all peer information that
     /// the high-level methods receive as a response (e.g. [`Client::iter_dialogs`]).
     ///
     /// The cached peers are then usable by other methods such as [`Client::resolve_peer`]
@@ -83,6 +79,10 @@ pub struct UpdatesConfiguration {
 }
 
 impl Default for ClientConfiguration {
+    /// Returns an instance that with an [`AutoSleep::default`] retry policy,
+    /// where encountered peers are automatically passed to [`Session::cache_peer`].
+    ///
+    /// [`AutoSleep::default`]: super::AutoSleep::default
     fn default() -> Self {
         Self {
             retry_policy: Box::new(super::AutoSleep {
@@ -95,6 +95,7 @@ impl Default for ClientConfiguration {
 }
 
 impl Default for UpdatesConfiguration {
+    /// Returns an instance that will not catch up, with a queue limit of 100 updates.
     fn default() -> Self {
         Self {
             catch_up: false,

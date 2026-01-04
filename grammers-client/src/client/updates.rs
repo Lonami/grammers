@@ -9,7 +9,6 @@
 //! Methods to deal with and offer access to updates.
 
 use std::collections::VecDeque;
-use std::sync::Arc;
 use std::time::{Duration, Instant};
 
 use grammers_mtsender::InvocationError;
@@ -76,27 +75,32 @@ fn prepare_channel_difference(
     }
 }
 
+/// Iterator returned by [`Client::stream_updates`].
 pub struct UpdateStream {
     client: Client,
     message_box: MessageBoxes,
     // When did we last warn the user that the update queue filled up?
     // This is used to avoid spamming the log.
     last_update_limit_warn: Option<Instant>,
-    buffer: VecDeque<(tl::enums::Update, State, Arc<PeerMap>)>,
+    buffer: VecDeque<(tl::enums::Update, State, PeerMap)>,
     updates: mpsc::UnboundedReceiver<UpdatesLike>,
     configuration: UpdatesConfiguration,
     should_get_state: bool,
 }
 
 impl UpdateStream {
+    /// Pops an update from the queue, waiting for an update to arrive first if the queue is empty.
     pub async fn next(&mut self) -> Result<Update, InvocationError> {
         let (update, state, peers) = self.next_raw().await?;
-        Ok(Update::from_raw(&self.client, update, state, &peers))
+        Ok(Update::from_raw(&self.client, update, state, peers))
     }
 
+    /// Pops an update from the queue, waiting for an update to arrive first if the queue is empty.
+    ///
+    /// Unlike [`Self::next`], the update is not wrapped at all, but it is still processed.
     pub async fn next_raw(
         &mut self,
-    ) -> Result<(tl::enums::Update, State, Arc<PeerMap>), InvocationError> {
+    ) -> Result<(tl::enums::Update, State, PeerMap), InvocationError> {
         if self.should_get_state {
             self.should_get_state = false;
             match self
@@ -144,8 +148,7 @@ impl UpdateStream {
             if let Some(request) = get_diff {
                 let response = self.client.invoke(&request).await?;
                 let (updates, users, chats) = self.message_box.apply_difference(response);
-                let peers = PeerMap::new(users, chats);
-                self.client.cache_peers_maybe(&peers);
+                let peers = self.client.build_peer_map(users, chats);
                 self.extend_update_queue(updates, peers);
                 continue;
             }
@@ -200,8 +203,7 @@ impl UpdateStream {
 
                 let (updates, users, chats) = self.message_box.apply_channel_difference(response);
 
-                let peers = PeerMap::new(users, chats);
-                self.client.cache_peers_maybe(&peers);
+                let peers = self.client.build_peer_map(users, chats);
                 self.extend_update_queue(updates, peers);
                 continue;
             }
@@ -230,8 +232,7 @@ impl UpdateStream {
         }
 
         if let Some((updates, users, chats)) = result {
-            let peers = PeerMap::new(users, chats);
-            self.client.cache_peers_maybe(&peers);
+            let peers = self.client.build_peer_map(users, chats);
             self.extend_update_queue(updates, peers);
         }
     }
@@ -239,7 +240,7 @@ impl UpdateStream {
     fn extend_update_queue(
         &mut self,
         mut updates: Vec<(tl::enums::Update, State)>,
-        peer_map: Arc<PeerMap>,
+        peer_map: PeerMap,
     ) {
         if let Some(limit) = self.configuration.update_queue_limit {
             if let Some(exceeds) = (self.buffer.len() + updates.len()).checked_sub(limit + 1) {
@@ -263,7 +264,7 @@ impl UpdateStream {
         }
 
         self.buffer
-            .extend(updates.into_iter().map(|(u, s)| (u, s, peer_map.clone())));
+            .extend(updates.into_iter().map(|(u, s)| (u, s, peer_map.handle())));
     }
 
     /// Synchronize the updates state to the session.

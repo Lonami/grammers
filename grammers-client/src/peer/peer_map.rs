@@ -9,8 +9,8 @@
 use std::collections::HashMap;
 use std::sync::Arc;
 
-use grammers_session::types::PeerId;
-use grammers_tl_types as tl;
+use grammers_session::Session;
+use grammers_session::types::{PeerId, PeerRef};
 
 use crate::peer::{Peer, User};
 
@@ -19,51 +19,45 @@ use crate::peer::{Peer, User};
 /// A lot of responses include the peers related to them in the form of a list of users
 /// and peers, making it annoying to extract a specific peer. This structure lets you
 /// save those separate vectors in a single place and query them by using a `Peer`.
+///
+/// While this type derives `Clone` for convenience, it is recommended to use
+/// [`PeerMap::handle`] instead to signal that it is a cheap clone.
+#[derive(Clone)]
 pub struct PeerMap {
-    map: HashMap<PeerId, Peer>,
+    pub(crate) map: Arc<HashMap<PeerId, Peer>>,
+    pub(crate) session: Arc<dyn Session>,
 }
 
 impl PeerMap {
-    /// Create a new peer set.
-    pub fn new<U, C>(users: U, peers: C) -> Arc<Self>
-    where
-        U: IntoIterator<Item = tl::enums::User>,
-        C: IntoIterator<Item = tl::enums::Chat>,
-    {
-        Arc::new(Self {
-            map: users
-                .into_iter()
-                .map(Peer::from_user)
-                .chain(peers.into_iter().map(Peer::from_raw))
-                .map(|peer| (peer.id(), peer))
-                .collect(),
-        })
-    }
-
-    /// Create a new empty peer set.
-    pub fn empty() -> Arc<Self> {
-        Arc::new(Self {
-            map: HashMap::new(),
-        })
-    }
-
     /// Retrieve the full `Peer` object given its `PeerId`.
     pub fn get(&self, peer: PeerId) -> Option<&Peer> {
         self.map.get(&peer)
     }
 
-    /// Take the full `Peer` object given its `PeerId` and remove it from the map.
-    pub fn remove(&mut self, peer: PeerId) -> Option<Peer> {
-        self.map.remove(&peer)
+    /// Retrieve a non-min `PeerRef` from either the in-memory cache or the session.
+    pub fn get_ref(&self, peer: PeerId) -> Option<PeerRef> {
+        self.map
+            .get(&peer)
+            .filter(|peer| !peer.min())
+            .map(PeerRef::from)
+            .or_else(|| self.session.peer_ref(peer))
     }
 
-    pub(crate) fn remove_user(&mut self, user_id: i64) -> Option<User> {
-        self.map
-            .remove(&PeerId::user(user_id))
-            .map(|peer| match peer {
-                Peer::User(user) => user,
-                _ => unreachable!(),
-            })
+    /// Take the full `Peer` object given its `PeerId`.
+    ///
+    /// The peer will be removed from the map if there are no other strong references to it.
+    pub fn take(&mut self, peer: PeerId) -> Option<Peer> {
+        match Arc::get_mut(&mut self.map) {
+            Some(map) => map.remove(&peer),
+            None => self.get(peer).cloned(),
+        }
+    }
+
+    pub(crate) fn take_user(&mut self, user_id: i64) -> Option<User> {
+        self.take(PeerId::user(user_id)).map(|peer| match peer {
+            Peer::User(user) => user,
+            _ => unreachable!(),
+        })
     }
 
     /// Iterate over the peers and peers in the map.
@@ -74,5 +68,13 @@ impl PeerMap {
     /// Iterate over the peers in the map.
     pub fn iter_peers(&self) -> impl Iterator<Item = &Peer> {
         self.map.values()
+    }
+
+    /// Return a new strong reference to the map and session contained within.
+    pub fn handle(&self) -> Self {
+        Self {
+            map: Arc::clone(&self.map),
+            session: Arc::clone(&self.session),
+        }
     }
 }

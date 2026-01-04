@@ -7,13 +7,12 @@
 // except according to those terms.
 
 use std::fmt;
-use std::sync::Arc;
 #[cfg(feature = "fs")]
 use std::{io, path::Path};
 
 use chrono::{DateTime, Utc};
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerAuth, PeerId, PeerKind, PeerRef};
+use grammers_session::types::{PeerId, PeerKind, PeerRef};
 use grammers_tl_types as tl;
 
 use super::{InputMessage, InputReactions};
@@ -38,7 +37,7 @@ pub struct Message {
     // server response contains a lot of peers, and some might be related to deep layers of
     // a message action for instance. Keeping the entire set like this allows for cheaper clones
     // and moves, and saves us from worrying about picking out all the peers we care about.
-    pub(crate) peers: Arc<PeerMap>,
+    pub(crate) peers: PeerMap,
 }
 
 impl Message {
@@ -46,13 +45,13 @@ impl Message {
         client: &Client,
         message: tl::enums::Message,
         fetched_in: Option<PeerRef>,
-        peers: &Arc<PeerMap>,
+        peers: PeerMap,
     ) -> Self {
         Self {
             raw: message,
             fetched_in,
             client: client.clone(),
-            peers: Arc::clone(peers),
+            peers,
         }
     }
 
@@ -128,7 +127,7 @@ impl Message {
             }),
             fetched_in: Some(peer),
             client: client.clone(),
-            peers: PeerMap::empty(),
+            peers: client.build_peer_map(Vec::new(), Vec::new()),
         }
     }
 
@@ -237,13 +236,7 @@ impl Message {
     pub fn peer_ref(&self) -> PeerRef {
         utils::peer_from_message(&self.raw)
             .map(PeerId::from)
-            .map(|id| match self.client.0.session.peer(id) {
-                Some(info) => info.into(),
-                None => PeerRef {
-                    id,
-                    auth: PeerAuth::default(),
-                },
-            })
+            .and_then(|id| self.peers.get_ref(id))
             .or(self.fetched_in)
             .expect("empty messages from updates should contain peer_id")
     }
@@ -270,13 +263,7 @@ impl Message {
                     None
                 }
             })
-            .map(|id| match self.client.0.session.peer(id) {
-                Some(info) => info.into(),
-                None => PeerRef {
-                    id,
-                    auth: PeerAuth::default(),
-                },
-            })
+            .and_then(|id| self.peers.get_ref(id))
     }
 
     /// The sender of this message, if there is a sender **and** the sender is in cache.

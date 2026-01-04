@@ -17,12 +17,14 @@ use crate::utils::generate_random_id;
 
 const MAX_LIMIT: usize = 50;
 
+/// Item returned by [`Client::inline_query`].
 pub struct InlineResult {
     client: Client,
     query_id: i64,
     pub raw: tl::enums::BotInlineResult,
 }
 
+/// Iterator returned by [`Client::inline_query`].
 pub type InlineResultIter = IterBuffer<tl::functions::messages::GetInlineBotResults, InlineResult>;
 
 impl InlineResult {
@@ -134,8 +136,6 @@ impl Client {
     ///
     /// The query text may be empty.
     ///
-    /// The return value is used like any other async iterator, by repeatedly calling `next`.
-    ///
     /// Executing the query will fail if the input peer does not actually represent a bot account
     /// supporting inline mode.
     ///
@@ -160,12 +160,11 @@ impl Client {
     ///
     /// Similar to [`Client::send_message`], advanced formatting can be achieved with the
     /// options offered by [`InputMessage`].
-    pub async fn edit_inline_message<M: Into<InputMessage>>(
+    pub(crate) async fn edit_inline_message(
         &self,
         message_id: tl::enums::InputBotInlineMessageId,
-        input_message: M,
+        message: InputMessage,
     ) -> Result<bool, InvocationError> {
-        let message: InputMessage = input_message.into();
         let entities = parse_mention_entities(self, message.entities);
         if message.media.as_ref().is_some_and(|media| {
             !matches!(

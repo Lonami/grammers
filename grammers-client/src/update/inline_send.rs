@@ -7,10 +7,9 @@
 // except according to those terms.
 
 use std::fmt;
-use std::sync::Arc;
 
 use grammers_mtsender::InvocationError;
-use grammers_session::types::{PeerAuth, PeerId, PeerRef};
+use grammers_session::types::{PeerId, PeerRef};
 use grammers_session::updates::State;
 use grammers_tl_types as tl;
 
@@ -26,7 +25,7 @@ pub struct InlineSend {
     pub raw: tl::enums::Update,
     pub state: State,
     pub(crate) client: Client,
-    pub(crate) peers: Arc<PeerMap>,
+    pub(crate) peers: PeerMap,
 }
 
 impl InlineSend {
@@ -45,13 +44,7 @@ impl InlineSend {
     /// The reference to the user that chose the result.
     pub fn sender_ref(&self) -> PeerRef {
         let id = PeerId::user(self.update().user_id);
-        match self.client.0.session.peer(id) {
-            Some(info) => info.into(),
-            None => PeerRef {
-                id,
-                auth: PeerAuth::default(),
-            },
-        }
+        self.peers.get_ref(id).unwrap()
     }
 
     /// The user that chose the result.
@@ -88,7 +81,7 @@ impl InlineSend {
 
         Ok(Some(
             self.client
-                .edit_inline_message(msg_id, input_message)
+                .edit_inline_message(msg_id, input_message.into())
                 .await?,
         ))
     }
