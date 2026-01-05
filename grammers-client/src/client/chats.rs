@@ -121,16 +121,18 @@ impl ParticipantIter {
                     ),
                 };
 
+                // Don't actually care for the chats, just the users.
+                let mut peers = client.build_peer_map(full.users, Vec::new());
+
                 let participants = match chat.participants {
                     tl::enums::ChatParticipants::Forbidden(c) => {
-                        // TODO consider filling the buffer, even if just with ourself
-                        return Ok(if c.self_participant.is_some() { 1 } else { 0 });
+                        if let Some(p) = c.self_participant {
+                            buffer.push_back(Participant::from_raw_chat(&mut peers, p));
+                        }
+                        return Ok(buffer.len());
                     }
                     tl::enums::ChatParticipants::Participants(c) => c.participants,
                 };
-
-                // Don't actually care for the chats, just the users.
-                let mut peers = client.build_peer_map(full.users, Vec::new());
 
                 buffer.extend(
                     participants
