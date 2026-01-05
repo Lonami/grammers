@@ -157,6 +157,9 @@ impl Client {
     /// For groups and channels, this is the same as leaving said chat. This method does **not**
     /// delete the chat itself (the chat still exists and the other members will remain inside).
     ///
+    /// Bot accounts can use this method to leave a channel or group, but attempting
+    /// to leave the dialog with a user will fail, as bots do not actually have dialogs.
+    ///
     /// # Examples
     ///
     /// ```
@@ -175,7 +178,6 @@ impl Client {
             .await
             .map(drop)
         } else if peer.id.kind() == PeerKind::Chat {
-            // TODO handle PEER_ID_INVALID and ignore it (happens when trying to delete deactivated chats)
             self.invoke(&tl::functions::messages::DeleteChatUser {
                 chat_id: peer.into(),
                 user_id: tl::enums::InputUser::UserSelf,
@@ -184,7 +186,6 @@ impl Client {
             .await
             .map(drop)
         } else {
-            // TODO only do this if we're not a bot
             self.invoke(&tl::functions::messages::DeleteHistory {
                 just_clear: false,
                 revoke: false,
