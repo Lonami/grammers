@@ -34,7 +34,7 @@ pub enum SignInError {
     /// The code used to complete login was not valid.
     InvalidCode,
     /// The 2FA password used to complete login was not valid.
-    InvalidPassword,
+    InvalidPassword(PasswordToken),
     /// A generic invocation error occured.
     Other(InvocationError),
 }
@@ -46,7 +46,7 @@ impl fmt::Display for SignInError {
             SignUpRequired => write!(f, "sign in error: sign up with official client required"),
             PasswordRequired(_password) => write!(f, "2fa password required"),
             InvalidCode => write!(f, "sign in error: invalid code"),
-            InvalidPassword => write!(f, "invalid password"),
+            InvalidPassword(_password) => write!(f, "invalid password"),
             Other(e) => write!(f, "sign in error: {e}"),
         }
     }
@@ -60,9 +60,8 @@ pub struct LoginToken {
     pub(crate) phone_code_hash: String,
 }
 
-// TODO this should not be Clone, but check_password Err doesn't include it back yet
 /// Password token needed to complete a 2FA login.
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct PasswordToken {
     pub(crate) password: tl::types::account::Password,
 }
@@ -416,7 +415,7 @@ impl Client {
         password: impl AsRef<[u8]>,
     ) -> Result<User, SignInError> {
         let mut password_info = password_token.password;
-        let current_algo = password_info.current_algo.unwrap();
+        let current_algo = password_info.current_algo.clone().unwrap();
         let mut params = utils::extract_password_parameters(&current_algo);
 
         // Telegram sent us incorrect parameters, trying to get them again
@@ -435,14 +434,14 @@ impl Client {
 
         let (salt1, salt2, p, g) = params;
 
-        let g_b = password_info.srp_b.unwrap();
-        let a: Vec<u8> = password_info.secure_random;
+        let g_b = password_info.srp_b.clone().unwrap();
+        let a = password_info.secure_random.clone();
 
         let (m1, g_a) = calculate_2fa(salt1, salt2, p, g, g_b, a, password);
 
         let check_password = tl::functions::auth::CheckPassword {
             password: tl::enums::InputCheckPasswordSrp::Srp(tl::types::InputCheckPasswordSrp {
-                srp_id: password_info.srp_id.unwrap(),
+                srp_id: password_info.srp_id.clone().unwrap(),
                 a: g_a.to_vec(),
                 m1: m1.to_vec(),
             }),
@@ -453,7 +452,11 @@ impl Client {
                 self.complete_login(x).await.map_err(SignInError::Other)
             }
             Ok(tl::enums::auth::Authorization::SignUpRequired(_x)) => panic!("Unexpected result"),
-            Err(err) if err.is("PASSWORD_HASH_INVALID") => Err(SignInError::InvalidPassword),
+            Err(err) if err.is("PASSWORD_HASH_INVALID") => {
+                Err(SignInError::InvalidPassword(PasswordToken {
+                    password: password_info,
+                }))
+            }
             Err(error) => Err(SignInError::Other(error)),
         }
     }
