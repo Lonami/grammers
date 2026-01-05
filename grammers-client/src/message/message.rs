@@ -124,6 +124,7 @@ impl Message {
                 paid_suggested_post_ton: false,
                 suggested_post: None,
                 schedule_repeat_period: None,
+                summary_from_language: None,
             }),
             fetched_in: Some(peer),
             client: client.clone(),

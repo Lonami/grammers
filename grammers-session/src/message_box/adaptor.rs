@@ -94,6 +94,7 @@ fn update_short_message(short: tl::types::UpdateShortMessage) -> tl::types::Upda
                 paid_suggested_post_ton: false,
                 suggested_post: None,
                 schedule_repeat_period: None,
+                summary_from_language: None,
             }
             .into(),
             pts: short.pts,
@@ -163,6 +164,7 @@ fn update_short_chat_message(
                 paid_suggested_post_ton: false,
                 suggested_post: None,
                 schedule_repeat_period: None,
+                summary_from_language: None,
             }
             .into(),
             pts: short.pts,
@@ -329,6 +331,7 @@ pub(super) fn adapt(updates: UpdatesLike) -> Result<tl::types::UpdatesCombined, 
                         paid_message_stars: None,
                         suggested_post: None,
                         schedule_repeat_period: None,
+                        summary_from_language: None,
                     }
                     .into(),
                     pts: update.pts,
