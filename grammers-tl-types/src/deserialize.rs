@@ -100,8 +100,7 @@ impl<'a> Cursor<'a> {
 }
 
 /// Alias over a mutable reference to a [`Cursor`].
-// TODO this is only public for session
-pub type Buffer<'a, 'b> = &'a mut Cursor<'b>;
+pub(crate) type Buffer<'a, 'b> = &'a mut Cursor<'b>;
 
 /// A specialized `Result` type for deserialization operations.
 pub type Result<T> = std::result::Result<T, Error>;
