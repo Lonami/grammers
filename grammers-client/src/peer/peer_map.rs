@@ -35,11 +35,11 @@ impl PeerMap {
     }
 
     /// Retrieve a non-min `PeerRef` from either the in-memory cache or the session.
-    pub fn get_ref(&self, peer: PeerId) -> Option<PeerRef> {
-        self.map
-            .get(&peer)
-            .and_then(|peer| peer.to_ref())
-            .or_else(|| self.session.peer_ref(peer))
+    pub async fn get_ref(&self, peer: PeerId) -> Option<PeerRef> {
+        match self.map.get(&peer) {
+            Some(peer) => peer.to_ref().await,
+            None => self.session.peer_ref(peer).await,
+        }
     }
 
     /// Take the full `Peer` object given its `PeerId`.

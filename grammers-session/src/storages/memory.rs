@@ -29,20 +29,21 @@ impl From<SessionData> for MemorySession {
     }
 }
 
+#[async_trait::async_trait]
 impl Session for MemorySession {
-    fn home_dc_id(&self) -> i32 {
+    async fn home_dc_id(&self) -> i32 {
         self.0.lock().unwrap().home_dc
     }
 
-    fn set_home_dc_id(&self, dc_id: i32) {
+    async fn set_home_dc_id(&self, dc_id: i32) {
         self.0.lock().unwrap().home_dc = dc_id;
     }
 
-    fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
+    async fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
         self.0.lock().unwrap().dc_options.get(&dc_id).cloned()
     }
 
-    fn set_dc_option(&self, dc_option: &DcOption) {
+    async fn set_dc_option(&self, dc_option: &DcOption) {
         self.0
             .lock()
             .unwrap()
@@ -50,11 +51,11 @@ impl Session for MemorySession {
             .insert(dc_option.id, dc_option.clone());
     }
 
-    fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
+    async fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
         self.0.lock().unwrap().peer_infos.get(&peer).cloned()
     }
 
-    fn cache_peer(&self, peer: &PeerInfo) {
+    async fn cache_peer(&self, peer: &PeerInfo) {
         self.0
             .lock()
             .unwrap()
@@ -62,11 +63,11 @@ impl Session for MemorySession {
             .insert(peer.id(), peer.clone());
     }
 
-    fn updates_state(&self) -> UpdatesState {
+    async fn updates_state(&self) -> UpdatesState {
         self.0.lock().unwrap().updates_state.clone()
     }
 
-    fn set_update_state(&self, update: UpdateState) {
+    async fn set_update_state(&self, update: UpdateState) {
         let mut data = self.0.lock().unwrap();
 
         match update {

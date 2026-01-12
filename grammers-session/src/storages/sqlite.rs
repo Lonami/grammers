@@ -153,8 +153,9 @@ impl SqliteSession {
     }
 }
 
+#[async_trait::async_trait]
 impl Session for SqliteSession {
-    fn home_dc_id(&self) -> i32 {
+    async fn home_dc_id(&self) -> i32 {
         let db = self.database.lock().unwrap();
         db.fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
             Ok(row.get::<_, i32>("dc_id")?)
@@ -163,7 +164,7 @@ impl Session for SqliteSession {
         .unwrap_or(DEFAULT_DC)
     }
 
-    fn set_home_dc_id(&self, dc_id: i32) {
+    async fn set_home_dc_id(&self, dc_id: i32) {
         let db = self.database.lock().unwrap();
         let _transaction = db.begin_transaction().unwrap();
         db.0.execute("DELETE FROM dc_home", []).unwrap();
@@ -171,7 +172,7 @@ impl Session for SqliteSession {
         stmt.execute(named_params! {":dc_id": dc_id}).unwrap();
     }
 
-    fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
+    async fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
         let db = self.database.lock().unwrap();
         db.fetch_one(
             "SELECT * FROM dc_option WHERE dc_id = :dc_id LIMIT 1",
@@ -196,7 +197,7 @@ impl Session for SqliteSession {
         })
     }
 
-    fn set_dc_option(&self, dc_option: &DcOption) {
+    async fn set_dc_option(&self, dc_option: &DcOption) {
         let db = self.database.lock().unwrap();
         db.0.execute(
             "INSERT OR REPLACE INTO dc_option VALUES (:dc_id, :ipv4, :ipv6, :auth_key)",
@@ -210,7 +211,7 @@ impl Session for SqliteSession {
         .unwrap();
     }
 
-    fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
+    async fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
         let db = self.database.lock().unwrap();
         let map_row = |row: &rusqlite::Row| {
             let subtype = row.get::<_, Option<i64>>("subtype")?.map(|s| s as u8);
@@ -257,7 +258,7 @@ impl Session for SqliteSession {
         }
     }
 
-    fn cache_peer(&self, peer: &PeerInfo) {
+    async fn cache_peer(&self, peer: &PeerInfo) {
         let db = self.database.lock().unwrap();
         let mut stmt =
             db.0.prepare("INSERT OR REPLACE INTO peer_info VALUES (:peer_id, :hash, :subtype)")
@@ -292,7 +293,7 @@ impl Session for SqliteSession {
         stmt.execute(params.as_slice()).unwrap();
     }
 
-    fn updates_state(&self) -> UpdatesState {
+    async fn updates_state(&self) -> UpdatesState {
         let db = self.database.lock().unwrap();
         let mut state = db
             .fetch_one(
@@ -321,7 +322,7 @@ impl Session for SqliteSession {
         state
     }
 
-    fn set_update_state(&self, update: UpdateState) {
+    async fn set_update_state(&self, update: UpdateState) {
         let db = self.database.lock().unwrap();
         let _transaction = db.begin_transaction().unwrap();
 
@@ -429,14 +430,22 @@ mod tests {
 
     #[test]
     fn exercise_sqlite_session() {
+        tokio::runtime::Builder::new_current_thread()
+            .enable_all()
+            .build()
+            .unwrap()
+            .block_on(do_exercise_sqlite_session());
+    }
+
+    async fn do_exercise_sqlite_session() {
         let session = SqliteSession::open(":memory:").unwrap();
 
-        assert_eq!(session.home_dc_id(), DEFAULT_DC);
-        session.set_home_dc_id(DEFAULT_DC + 1);
-        assert_eq!(session.home_dc_id(), DEFAULT_DC + 1);
+        assert_eq!(session.home_dc_id().await, DEFAULT_DC);
+        session.set_home_dc_id(DEFAULT_DC + 1).await;
+        assert_eq!(session.home_dc_id().await, DEFAULT_DC + 1);
 
         assert_eq!(
-            session.dc_option(KNOWN_DC_OPTIONS[0].id),
+            session.dc_option(KNOWN_DC_OPTIONS[0].id).await,
             Some(KNOWN_DC_OPTIONS[0].clone())
         );
         let new_dc_option = DcOption {
@@ -450,51 +459,62 @@ mod tests {
             ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 1, 0, 0),
             auth_key: Some([1; 256]),
         };
-        assert_eq!(session.dc_option(new_dc_option.id), None);
-        session.set_dc_option(&new_dc_option);
-        assert_eq!(session.dc_option(new_dc_option.id), Some(new_dc_option));
+        assert_eq!(session.dc_option(new_dc_option.id).await, None);
+        session.set_dc_option(&new_dc_option).await;
+        assert_eq!(
+            session.dc_option(new_dc_option.id).await,
+            Some(new_dc_option)
+        );
 
-        assert_eq!(session.peer(PeerId::self_user()), None);
-        assert_eq!(session.peer(PeerId::user(1)), None);
+        assert_eq!(session.peer(PeerId::self_user()).await, None);
+        assert_eq!(session.peer(PeerId::user(1)).await, None);
         let peer = PeerInfo::User {
             id: 1,
             auth: None,
             bot: Some(true),
             is_self: Some(true),
         };
-        session.cache_peer(&peer);
-        assert_eq!(session.peer(PeerId::self_user()), Some(peer.clone()));
-        assert_eq!(session.peer(PeerId::user(1)), Some(peer));
+        session.cache_peer(&peer).await;
+        assert_eq!(session.peer(PeerId::self_user()).await, Some(peer.clone()));
+        assert_eq!(session.peer(PeerId::user(1)).await, Some(peer));
 
-        assert_eq!(session.peer(PeerId::channel(1)), None);
+        assert_eq!(session.peer(PeerId::channel(1)).await, None);
         let peer = PeerInfo::Channel {
             id: 1,
             auth: Some(PeerAuth::from_hash(-1)),
             kind: Some(ChannelKind::Broadcast),
         };
-        session.cache_peer(&peer);
-        assert_eq!(session.peer(PeerId::channel(1)), Some(peer));
+        session.cache_peer(&peer).await;
+        assert_eq!(session.peer(PeerId::channel(1)).await, Some(peer));
 
-        assert_eq!(session.updates_state(), UpdatesState::default());
-        session.set_update_state(UpdateState::All(UpdatesState {
-            pts: 1,
-            qts: 2,
-            date: 3,
-            seq: 4,
-            channels: vec![
-                ChannelState { id: 5, pts: 6 },
-                ChannelState { id: 7, pts: 8 },
-            ],
-        }));
-        session.set_update_state(UpdateState::Primary {
-            pts: 2,
-            date: 4,
-            seq: 5,
-        });
-        session.set_update_state(UpdateState::Secondary { qts: 3 });
-        session.set_update_state(UpdateState::Channel { id: 7, pts: 9 });
+        assert_eq!(session.updates_state().await, UpdatesState::default());
+        session
+            .set_update_state(UpdateState::All(UpdatesState {
+                pts: 1,
+                qts: 2,
+                date: 3,
+                seq: 4,
+                channels: vec![
+                    ChannelState { id: 5, pts: 6 },
+                    ChannelState { id: 7, pts: 8 },
+                ],
+            }))
+            .await;
+        session
+            .set_update_state(UpdateState::Primary {
+                pts: 2,
+                date: 4,
+                seq: 5,
+            })
+            .await;
+        session
+            .set_update_state(UpdateState::Secondary { qts: 3 })
+            .await;
+        session
+            .set_update_state(UpdateState::Channel { id: 7, pts: 9 })
+            .await;
         assert_eq!(
-            session.updates_state(),
+            session.updates_state().await,
             UpdatesState {
                 pts: 2,
                 qts: 3,

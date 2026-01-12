@@ -84,9 +84,9 @@ impl DialogIter {
             }
         };
 
-        let peers = self.client.build_peer_map(users, chats);
+        let peers = self.client.build_peer_map(users, chats).await;
 
-        self.buffer.extend(dialogs.into_iter().map(|dialog| {
+        for dialog in dialogs.iter() {
             if let tl::enums::Dialog::Dialog(tl::types::Dialog {
                 peer: tl::enums::Peer::Channel(channel),
                 pts: Some(pts),
@@ -99,10 +99,16 @@ impl DialogIter {
                     .set_update_state(UpdateState::Channel {
                         id: channel.channel_id,
                         pts: *pts,
-                    });
+                    })
+                    .await;
             }
-            Dialog::new(&self.client, dialog, &mut messages, peers.handle())
-        }));
+        }
+
+        self.buffer.extend(
+            dialogs
+                .into_iter()
+                .map(|dialog| Dialog::new(&self.client, dialog, &mut messages, peers.handle())),
+        );
 
         // Don't bother updating offsets if this is the last time stuff has to be fetched.
         if !self.last_chunk && !self.buffer.is_empty() {

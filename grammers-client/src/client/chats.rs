@@ -122,7 +122,7 @@ impl ParticipantIter {
                 };
 
                 // Don't actually care for the chats, just the users.
-                let mut peers = client.build_peer_map(full.users, Vec::new());
+                let mut peers = client.build_peer_map(full.users, Vec::new()).await;
 
                 let participants = match chat.participants {
                     tl::enums::ChatParticipants::Forbidden(c) => {
@@ -166,7 +166,7 @@ impl ParticipantIter {
                 iter.request.offset += participants.len() as i32;
 
                 // Don't actually care for the chats, just the users.
-                let mut peers = iter.client.build_peer_map(users, Vec::new());
+                let mut peers = iter.client.build_peer_map(users, Vec::new()).await;
 
                 iter.buffer.extend(
                     participants
@@ -903,7 +903,7 @@ impl Client {
         ActionSender::new(self, peer)
     }
 
-    pub(crate) fn build_peer_map(
+    pub(crate) async fn build_peer_map(
         &self,
         users: Vec<tl::enums::User>,
         chats: Vec<tl::enums::Chat>,
@@ -918,13 +918,20 @@ impl Client {
         if self.0.configuration.auto_cache_peers {
             for peer in map.values() {
                 if peer.auth().is_some() {
-                    self.0.session.cache_peer(&peer.into());
+                    self.0.session.cache_peer(&peer.into()).await;
                 }
             }
         }
 
         PeerMap {
             map: Arc::new(map),
+            session: Arc::clone(&self.0.session),
+        }
+    }
+
+    pub(crate) fn empty_peer_map(&self) -> PeerMap {
+        PeerMap {
+            map: Arc::new(HashMap::new()),
             session: Arc::clone(&self.0.session),
         }
     }

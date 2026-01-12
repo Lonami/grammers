@@ -128,7 +128,7 @@ impl Message {
             }),
             fetched_in: Some(peer),
             client: client.clone(),
-            peers: client.build_peer_map(Vec::new(), Vec::new()),
+            peers: client.empty_peer_map(),
         }
     }
 
@@ -243,9 +243,11 @@ impl Message {
     }
 
     /// Cached reference to the [`Self::peer`], if it is in cache.
-    pub fn peer_ref(&self) -> Option<PeerRef> {
-        self.fetched_in
-            .or_else(|| self.peers.get_ref(self.peer_id()))
+    pub async fn peer_ref(&self) -> Option<PeerRef> {
+        match self.fetched_in {
+            Some(peer) => Some(peer),
+            None => self.peers.get_ref(self.peer_id()).await,
+        }
     }
 
     /// The peer where this message was sent to.
@@ -280,8 +282,8 @@ impl Message {
     }
 
     /// Cached reference to the [`Self::sender`], if there is a sender and they are in cache.
-    pub fn sender_ref(&self) -> Option<PeerRef> {
-        self.sender_id().and_then(|id| self.peers.get_ref(id))
+    pub async fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id()?).await
     }
 
     /// The sender of this message, if there is a sender **and** the sender is in cache.
@@ -487,7 +489,7 @@ impl Message {
     ) -> Result<(), InvocationError> {
         self.client
             .send_reactions(
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
                 self.id(),
                 reactions,
             )
@@ -599,7 +601,10 @@ impl Message {
         message: M,
     ) -> Result<Self, InvocationError> {
         self.client
-            .send_message(self.peer_ref().ok_or(InvocationError::Dropped)?, message)
+            .send_message(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                message,
+            )
             .await
     }
 
@@ -612,7 +617,10 @@ impl Message {
         medias: Vec<InputMedia>,
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         self.client
-            .send_album(self.peer_ref().ok_or(InvocationError::Dropped)?, medias)
+            .send_album(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                medias,
+            )
             .await
     }
 
@@ -624,7 +632,7 @@ impl Message {
         let message = message.into();
         self.client
             .send_message(
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
                 message.reply_to(Some(self.id())),
             )
             .await
@@ -640,7 +648,10 @@ impl Message {
     ) -> Result<Vec<Option<Self>>, InvocationError> {
         medias.first_mut().unwrap().reply_to = Some(self.id());
         self.client
-            .send_album(self.peer_ref().ok_or(InvocationError::Dropped)?, medias)
+            .send_album(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                medias,
+            )
             .await
     }
 
@@ -656,7 +667,7 @@ impl Message {
             .forward_messages(
                 chat,
                 &[self.id()],
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
             )
             .await
             .map(|mut msgs| msgs.pop().unwrap().unwrap())
@@ -668,7 +679,7 @@ impl Message {
     pub async fn edit<M: Into<InputMessage>>(&self, new_message: M) -> Result<(), InvocationError> {
         self.client
             .edit_message(
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
                 self.id(),
                 new_message,
             )
@@ -682,7 +693,7 @@ impl Message {
     pub async fn delete(&self) -> Result<(), InvocationError> {
         self.client
             .delete_messages(
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
                 &[self.id()],
             )
             .await
@@ -694,7 +705,7 @@ impl Message {
     /// Unlike `Client::mark_as_read`, this method only will mark the conversation as read up to
     /// this message, not the entire conversation.
     pub async fn mark_as_read(&self) -> Result<(), InvocationError> {
-        let peer = self.peer_ref().ok_or(InvocationError::Dropped)?;
+        let peer = self.peer_ref().await.ok_or(InvocationError::Dropped)?;
         if peer.id.kind() == PeerKind::Channel {
             self.client
                 .invoke(&tl::functions::channels::ReadHistory {
@@ -719,7 +730,10 @@ impl Message {
     /// Shorthand for `Client::pin_message`.
     pub async fn pin(&self) -> Result<(), InvocationError> {
         self.client
-            .pin_message(self.peer_ref().ok_or(InvocationError::Dropped)?, self.id())
+            .pin_message(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                self.id(),
+            )
             .await
     }
 
@@ -728,7 +742,10 @@ impl Message {
     /// Shorthand for `Client::unpin_message`.
     pub async fn unpin(&self) -> Result<(), InvocationError> {
         self.client
-            .unpin_message(self.peer_ref().ok_or(InvocationError::Dropped)?, self.id())
+            .unpin_message(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                self.id(),
+            )
             .await
     }
 
@@ -742,7 +759,7 @@ impl Message {
         // If it succeeds we will have the single message present which we can unwrap.
         self.client
             .get_messages_by_id(
-                self.peer_ref().ok_or(InvocationError::Dropped)?,
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
                 &[self.id()],
             )
             .await?

@@ -21,7 +21,7 @@ use crate::media::{InputMedia, Media};
 use crate::message::{InputMessage, InputReactions, Message};
 use crate::utils::{generate_random_id, generate_random_ids};
 
-fn map_random_ids_to_messages(
+async fn map_random_ids_to_messages(
     client: &Client,
     fetched_in: PeerRef,
     random_ids: &[i64],
@@ -35,7 +35,7 @@ fn map_random_ids_to_messages(
             date: _,
             seq: _,
         }) => {
-            let peers = client.build_peer_map(users, chats);
+            let peers = client.build_peer_map(users, chats).await;
 
             let rnd_to_id = updates
                 .iter()
@@ -90,7 +90,7 @@ fn map_random_ids_to_messages(
     }
 }
 
-pub(crate) fn parse_mention_entities(
+pub(crate) async fn parse_mention_entities(
     client: &Client,
     mut entities: Vec<tl::enums::MessageEntity>,
 ) -> Option<Vec<tl::enums::MessageEntity>> {
@@ -113,6 +113,7 @@ pub(crate) fn parse_mention_entities(
                             .0
                             .session
                             .peer(PeerId::user(mention_name.user_id))
+                            .await
                             .and_then(|peer| peer.auth())
                             .unwrap_or_default()
                             .hash(),
@@ -186,7 +187,7 @@ impl<R: tl::RemoteCall<Return = tl::enums::messages::Messages>> IterBuffer<R, Me
             }
         };
 
-        let peers = self.client.build_peer_map(users, chats);
+        let peers = self.client.build_peer_map(users, chats).await;
 
         let client = self.client.clone();
         self.buffer.extend(
@@ -463,6 +464,7 @@ impl GlobalSearchIter {
             self.request.offset_rate = offset_rate.unwrap_or(0);
             self.request.offset_peer = last
                 .peer_ref()
+                .await
                 .map(|peer| peer.into())
                 .unwrap_or(tl::enums::InputPeer::Empty);
             self.request.offset_id = last.id();
@@ -506,7 +508,7 @@ impl Client {
         let peer = peer.into();
         let message = message.into();
         let random_id = generate_random_id();
-        let entities = parse_mention_entities(self, message.entities.clone());
+        let entities = parse_mention_entities(self, message.entities.clone()).await;
         let updates = if let Some(media) = message.media.clone() {
             self.invoke(&tl::functions::messages::SendMedia {
                 silent: message.silent,
@@ -587,7 +589,7 @@ impl Client {
             tl::enums::Updates::UpdateShortSentMessage(updates) => {
                 let peer = if peer.id.kind() == PeerKind::UserSelf {
                     // from_raw_short_updates needs the peer ID
-                    self.0.session.peer_ref(peer.id).unwrap()
+                    self.0.session.peer_ref(peer.id).await.unwrap()
                 } else {
                     peer
                 };
@@ -602,6 +604,7 @@ impl Client {
                 };
 
                 match map_random_ids_to_messages(self, peer, &[random_id], updates)
+                    .await
                     .pop()
                     .flatten()
                 {
@@ -620,7 +623,7 @@ impl Client {
                                 peer_id: Some(peer.id.into()),
                             }),
                             Some(peer),
-                            self.build_peer_map(Vec::new(), Vec::new()),
+                            self.empty_peer_map(),
                         )
                     }
                 }
@@ -684,7 +687,21 @@ impl Client {
             }
         }
 
-        let first_media = medias.first().unwrap();
+        let first_media_reply = medias.first().unwrap().reply_to;
+
+        let mut multi_media = Vec::with_capacity(medias.len());
+        for (input_media, random_id) in medias.into_iter().zip(random_ids.iter()) {
+            let entities = parse_mention_entities(self, input_media.entities).await;
+            let raw_media = input_media.media.unwrap();
+            multi_media.push(tl::enums::InputSingleMedia::Media(
+                tl::types::InputSingleMedia {
+                    media: raw_media,
+                    random_id: *random_id,
+                    message: input_media.caption,
+                    entities,
+                },
+            ))
+        }
 
         let updates = self
             .invoke(&tl::functions::messages::SendMultiMedia {
@@ -692,7 +709,7 @@ impl Client {
                 background: false,
                 clear_draft: false,
                 peer: peer.into(),
-                reply_to: first_media.reply_to.map(|reply_to_msg_id| {
+                reply_to: first_media_reply.map(|reply_to_msg_id| {
                     tl::types::InputReplyToMessage {
                         reply_to_msg_id,
                         top_msg_id: None,
@@ -706,21 +723,7 @@ impl Client {
                     .into()
                 }),
                 schedule_date: None,
-                multi_media: medias
-                    .into_iter()
-                    .zip(random_ids.iter())
-                    .map(|(input_media, random_id)| {
-                        let entities = parse_mention_entities(self, input_media.entities);
-                        let raw_media = input_media.media.unwrap();
-
-                        tl::enums::InputSingleMedia::Media(tl::types::InputSingleMedia {
-                            media: raw_media,
-                            random_id: *random_id,
-                            message: input_media.caption,
-                            entities,
-                        })
-                    })
-                    .collect(),
+                multi_media,
                 send_as: None,
                 noforwards: false,
                 update_stickersets_order: false,
@@ -732,7 +735,7 @@ impl Client {
             })
             .await?;
 
-        Ok(map_random_ids_to_messages(self, peer, &random_ids, updates))
+        Ok(map_random_ids_to_messages(self, peer, &random_ids, updates).await)
     }
 
     /// Edits an existing message.
@@ -758,7 +761,7 @@ impl Client {
         new_message: M,
     ) -> Result<(), InvocationError> {
         let new_message = new_message.into();
-        let entities = parse_mention_entities(self, new_message.entities);
+        let entities = parse_mention_entities(self, new_message.entities).await;
         self.invoke(&tl::functions::messages::EditMessage {
             no_webpage: !new_message.link_preview,
             invert_media: new_message.invert_media,
@@ -887,12 +890,7 @@ impl Client {
             suggested_post: None,
         };
         let result = self.invoke(&request).await?;
-        Ok(map_random_ids_to_messages(
-            self,
-            peer.into(),
-            &request.random_id,
-            result,
-        ))
+        Ok(map_random_ids_to_messages(self, peer.into(), &request.random_id, result).await)
     }
 
     /// Gets the [`Message`] to which the input message is replying to.
@@ -942,7 +940,7 @@ impl Client {
                 id: peer_id,
                 auth: PeerAuth::default(), // unused, so no need to bother fetching it
             },
-            PeerKind::Channel => message.peer_ref().ok_or(InvocationError::Dropped)?,
+            PeerKind::Channel => message.peer_ref().await.ok_or(InvocationError::Dropped)?,
         };
         let reply_to_message_id = match message.reply_to_message_id() {
             Some(id) => id,
@@ -973,7 +971,7 @@ impl Client {
             }
         };
 
-        let peers = self.build_peer_map(users, chats);
+        let peers = self.build_peer_map(users, chats).await;
         Ok(messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
@@ -1094,7 +1092,7 @@ impl Client {
             }
         };
 
-        let peers = self.build_peer_map(users, chats);
+        let peers = self.build_peer_map(users, chats).await;
         let mut map = messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))
@@ -1147,7 +1145,7 @@ impl Client {
             }
         };
 
-        let peers = self.build_peer_map(users, chats);
+        let peers = self.build_peer_map(users, chats).await;
         Ok(messages
             .into_iter()
             .map(|m| Message::from_raw(self, m, Some(peer.into()), peers.handle()))

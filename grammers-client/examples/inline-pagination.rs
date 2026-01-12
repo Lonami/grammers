@@ -137,7 +137,7 @@ async fn async_main() -> Result {
     }
 
     println!("Waiting for messages...");
-    let mut updates = client.stream_updates(updates, Default::default());
+    let mut updates = client.stream_updates(updates, Default::default()).await;
     loop {
         tokio::select! {
             _ = tokio::signal::ctrl_c() => break,

@@ -104,11 +104,12 @@ impl Group {
     /// Convert the group to its reference.
     ///
     /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
-    pub fn to_ref(&self) -> Option<PeerRef> {
+    pub async fn to_ref(&self) -> Option<PeerRef> {
         let id = self.id();
-        self.auth()
-            .map(|auth| PeerRef { id, auth })
-            .or_else(|| self.client.0.session.peer_ref(id))
+        match self.auth() {
+            Some(auth) => Some(PeerRef { id, auth }),
+            None => self.client.0.session.peer_ref(id).await,
+        }
     }
 
     /// Return the title of this group.

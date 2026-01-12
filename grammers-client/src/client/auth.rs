@@ -117,14 +117,17 @@ impl Client {
         let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();
 
         let user = User::from_raw(self, auth.user);
-        let auth = user.to_ref().unwrap().auth;
+        let auth = user.to_ref().await.unwrap().auth;
 
-        self.0.session.cache_peer(&PeerInfo::User {
-            id: user.id().bare_id(),
-            auth: Some(auth),
-            bot: Some(user.is_bot()),
-            is_self: Some(true),
-        });
+        self.0
+            .session
+            .cache_peer(&PeerInfo::User {
+                id: user.id().bare_id(),
+                auth: Some(auth),
+                bot: Some(user.is_bot()),
+                is_self: Some(true),
+            })
+            .await;
         if let Some(tl::enums::updates::State::State(state)) = update_state {
             self.0
                 .session
@@ -134,7 +137,8 @@ impl Client {
                     date: state.date,
                     seq: state.seq,
                     channels: Vec::new(),
-                }));
+                }))
+                .await;
         }
 
         Ok(user)
@@ -187,13 +191,13 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let old_dc_id = self.0.session.home_dc_id();
+                let old_dc_id = self.0.session.home_dc_id().await;
                 let new_dc_id = err.value.unwrap() as i32;
                 // Disconnect from current DC to cull the now-unused connection.
                 // This also gives a chance for the new home DC to export its authorization
                 // if there's a need to connect back to the old DC after having logged in.
                 self.0.handle.disconnect_from_dc(old_dc_id);
-                self.0.session.set_home_dc_id(new_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id).await;
                 self.invoke(&request).await?
             }
             Err(e) => return Err(e.into()),
@@ -267,13 +271,13 @@ impl Client {
                 SC::PaymentRequired(_) => unimplemented!(),
             },
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let old_dc_id = self.0.session.home_dc_id();
+                let old_dc_id = self.0.session.home_dc_id().await;
                 let new_dc_id = err.value.unwrap() as i32;
                 // Disconnect from current DC to cull the now-unused connection.
                 // This also gives a chance for the new home DC to export its authorization
                 // if there's a need to connect back to the old DC after having logged in.
                 self.0.handle.disconnect_from_dc(old_dc_id);
-                self.0.session.set_home_dc_id(new_dc_id);
+                self.0.session.set_home_dc_id(new_dc_id).await;
                 match self.invoke(&request).await? {
                     SC::Code(code) => code,
                     SC::Success(_) => panic!("should not have logged in yet"),

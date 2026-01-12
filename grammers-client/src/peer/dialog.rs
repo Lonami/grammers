@@ -54,8 +54,17 @@ impl Dialog {
             .map(|i| messages.swap_remove(i));
 
         Self {
-            last_message: message
-                .map(|m| Message::from_raw(client, m, peer.to_ref(), peers.handle())),
+            last_message: message.map(|m| {
+                Message::from_raw(
+                    client,
+                    m,
+                    Some(PeerRef {
+                        id: peer.id(),
+                        auth: peer.auth().unwrap(),
+                    }),
+                    peers.handle(),
+                )
+            }),
             peer,
             raw: dialog,
         }
@@ -68,7 +77,10 @@ impl Dialog {
 
     /// Cached reference to the [`Self::peer`].
     pub fn peer_ref(&self) -> PeerRef {
-        self.peer.to_ref().unwrap()
+        PeerRef {
+            id: self.peer.id(),
+            auth: self.peer.auth().unwrap(),
+        }
     }
 
     /// The peer represented by this dialog.
