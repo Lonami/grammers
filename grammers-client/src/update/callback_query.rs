@@ -51,8 +51,8 @@ impl CallbackQuery {
     }
 
     /// Cached reference to the [`Self::peer`], if it is in cache.
-    pub fn peer_ref(&self) -> Option<PeerRef> {
-        self.peers.get_ref(self.peer_id())
+    pub async fn peer_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.peer_id()).await
     }
 
     /// The peer where the callback query occured, if it is in cache.
@@ -70,8 +70,8 @@ impl CallbackQuery {
     }
 
     /// Cached reference to the [`Self::sender`], if it is in cache.
-    pub fn sender_ref(&self) -> Option<PeerRef> {
-        self.peers.get_ref(self.sender_id())
+    pub async fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id()).await
     }
 
     /// The user who sent this callback query, if it is in cache.
@@ -110,7 +110,10 @@ impl CallbackQuery {
         };
         Ok(self
             .client
-            .get_messages_by_id(self.peer_ref().ok_or(InvocationError::Dropped)?, &[msg_id])
+            .get_messages_by_id(
+                self.peer_ref().await.ok_or(InvocationError::Dropped)?,
+                &[msg_id],
+            )
             .await?
             .pop()
             .unwrap()
@@ -176,7 +179,11 @@ impl<'a> Answer<'a> {
     /// [`Self::send`] the answer, and also edit the message that contained the button.
     pub async fn edit<M: Into<InputMessage>>(self, new_message: M) -> Result<(), InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
+        let peer = self
+            .query
+            .peer_ref()
+            .await
+            .ok_or(InvocationError::Dropped)?;
         match &self.query.raw {
             tl::enums::Update::BotCallbackQuery(update) => {
                 self.query
@@ -200,7 +207,11 @@ impl<'a> Answer<'a> {
         message: M,
     ) -> Result<Message, InvocationError> {
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
+        let peer = self
+            .query
+            .peer_ref()
+            .await
+            .ok_or(InvocationError::Dropped)?;
         self.query.client.send_message(peer, message).await
     }
 
@@ -214,7 +225,11 @@ impl<'a> Answer<'a> {
             _ => return Err(InvocationError::Dropped),
         };
         self.query.client.invoke(&self.request).await?;
-        let peer = self.query.peer_ref().ok_or(InvocationError::Dropped)?;
+        let peer = self
+            .query
+            .peer_ref()
+            .await
+            .ok_or(InvocationError::Dropped)?;
         let message = message.into();
         self.query
             .client

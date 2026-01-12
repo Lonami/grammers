@@ -50,41 +50,16 @@ impl Default for SessionData {
 
 impl SessionData {
     /// Imports all information from this session data to a type implementing `Session`.
-    pub fn import_to<S: Session>(&self, session: &S) {
-        session.set_home_dc_id(self.home_dc);
-        self.dc_options
-            .values()
-            .for_each(|dc_option| session.set_dc_option(dc_option));
-        self.peer_infos
-            .values()
-            .for_each(|peer| session.cache_peer(peer));
-        session.set_update_state(UpdateState::All(self.updates_state.clone()));
-    }
-}
-
-impl<S: Session> From<S> for SessionData {
-    /// Imports the basic information from any type implementing `Session` into `SessionData`.
-    ///
-    /// Notably, only the standard DC options and the cached self-peer will be included.
-    fn from(session: S) -> Self {
-        let home_dc = session.home_dc_id();
-        let dc_options = KNOWN_DC_OPTIONS
-            .iter()
-            .map(|dc_option| (dc_option.id, session.dc_option(dc_option.id).unwrap()))
-            .collect();
-        let peer_infos = [session
-            .peer(PeerId::self_user())
-            .map(|peer_info| (peer_info.id(), peer_info))]
-        .into_iter()
-        .collect::<Option<_>>()
-        .unwrap_or_default();
-        let updates_state = session.updates_state();
-
-        Self {
-            home_dc,
-            dc_options,
-            peer_infos,
-            updates_state,
+    pub async fn import_to<S: Session>(&self, session: &S) {
+        session.set_home_dc_id(self.home_dc).await;
+        for dc_option in self.dc_options.values() {
+            session.set_dc_option(dc_option).await;
         }
+        for peer in self.peer_infos.values() {
+            session.cache_peer(peer).await;
+        }
+        session
+            .set_update_state(UpdateState::All(self.updates_state.clone()))
+            .await;
     }
 }

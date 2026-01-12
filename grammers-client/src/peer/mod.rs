@@ -112,11 +112,11 @@ impl Peer {
     /// Convert the peer to its reference.
     ///
     /// This is only possible if the peer would be usable on all methods or if it is in the session cache.
-    pub fn to_ref(&self) -> Option<PeerRef> {
+    pub async fn to_ref(&self) -> Option<PeerRef> {
         match self {
-            Self::User(user) => user.to_ref(),
-            Self::Group(group) => group.to_ref(),
-            Self::Channel(channel) => channel.to_ref(),
+            Self::User(user) => user.to_ref().await,
+            Self::Group(group) => group.to_ref().await,
+            Self::Channel(channel) => channel.to_ref().await,
         }
     }
 
@@ -164,8 +164,10 @@ impl Peer {
     }
 
     // Return the profile picture or chat photo of this peer, if any.
-    pub fn photo(&self, big: bool) -> Option<ChatPhoto> {
-        let peer = self.to_ref()?.into();
+    //
+    // This does not fetch the photo, but it may query the session to fetch the peer information.
+    pub async fn photo(&self, big: bool) -> Option<ChatPhoto> {
+        let peer = self.to_ref().await?.into();
         match self {
             Self::User(user) => user.photo().map(|x| ChatPhoto {
                 raw: tl::enums::InputFileLocation::InputPeerPhotoFileLocation(

@@ -100,7 +100,7 @@ impl DownloadIter {
         use tl::enums::upload::File;
 
         // TODO handle maybe FILEREF_UPGRADE_NEEDED
-        let mut dc = self.client.0.session.home_dc_id();
+        let mut dc = self.client.0.session.home_dc_id().await;
         loop {
             break match self.client.invoke_in_dc(dc, &request).await {
                 Ok(File::File(f)) => {
@@ -254,7 +254,7 @@ impl Client {
         let (tx, mut rx) = unbounded_channel();
         let part_index = Arc::new(tokio::sync::Mutex::new(0));
         let mut tasks = vec![];
-        let home_dc_id = self.0.session.home_dc_id();
+        let home_dc_id = self.0.session.home_dc_id().await;
         for _ in 0..workers {
             let location = location.clone();
             let tx = tx.clone();

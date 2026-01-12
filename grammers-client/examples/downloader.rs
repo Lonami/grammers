@@ -74,7 +74,9 @@ async fn async_main() -> Result<()> {
     let maybe_peer = client
         .resolve_username(peer_name.as_str())
         .await?
-        .and_then(|peer| peer.to_ref());
+        .ok_or("no peer with username")?
+        .to_ref()
+        .await;
 
     let peer = maybe_peer.unwrap_or_else(|| panic!("Peer {peer_name} could not be found"));
 

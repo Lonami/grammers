@@ -203,7 +203,7 @@ impl SenderPoolRunner {
     async fn process_request(&mut self, request: Request) -> ControlFlow<()> {
         match request {
             Request::Invoke { dc_id, body, tx } => {
-                let Some(mut dc_option) = self.session.dc_option(dc_id) else {
+                let Some(mut dc_option) = self.session.dc_option(dc_id).await else {
                     let _ = tx.send(Err(InvocationError::InvalidDc));
                     return ControlFlow::Continue(());
                 };
@@ -224,14 +224,14 @@ impl SenderPoolRunner {
                         };
 
                         dc_option.auth_key = Some(sender.auth_key());
-                        self.session.set_dc_option(&dc_option);
+                        self.session.set_dc_option(&dc_option).await;
 
                         let (rpc_tx, rpc_rx) = mpsc::unbounded_channel();
                         let abort_handle = self.connection_pool.spawn(run_sender(
                             sender,
                             rpc_rx,
                             self.updates_tx.clone(),
-                            dc_option.id == self.session.home_dc_id(),
+                            dc_option.id == self.session.home_dc_id().await,
                         ));
                         self.connections.push(ConnectionInfo {
                             dc_id,
@@ -314,55 +314,56 @@ impl SenderPoolRunner {
             Err(e) => return Err(dbg!(e).into()),
         };
 
-        self.update_config(remote_config);
+        self.update_config(remote_config).await;
 
         Ok(sender)
     }
 
-    fn update_config(&mut self, config: tl::types::Config) {
-        config
+    async fn update_config(&mut self, config: tl::types::Config) {
+        for option in config
             .dc_options
             .iter()
             .map(|tl::enums::DcOption::Option(option)| option)
             .filter(|option| !option.media_only && !option.tcpo_only && option.r#static)
-            .for_each(|option| {
-                let mut dc_option = self
-                    .session
+        {
+            let mut dc_option =
+                self.session
                     .dc_option(option.id)
+                    .await
                     .unwrap_or_else(|| DcOption {
                         id: option.id,
                         ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
                         ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
                         auth_key: None,
                     });
-                if option.ipv6 {
+            if option.ipv6 {
+                dc_option.ipv6 = SocketAddrV6::new(
+                    option
+                        .ip_address
+                        .parse()
+                        .expect("Telegram to return a valid IPv6 address"),
+                    option.port as _,
+                    0,
+                    0,
+                );
+            } else {
+                dc_option.ipv4 = SocketAddrV4::new(
+                    option
+                        .ip_address
+                        .parse()
+                        .expect("Telegram to return a valid IPv4 address"),
+                    option.port as _,
+                );
+                if dc_option.ipv6.ip().to_bits() == 0 {
                     dc_option.ipv6 = SocketAddrV6::new(
-                        option
-                            .ip_address
-                            .parse()
-                            .expect("Telegram to return a valid IPv6 address"),
-                        option.port as _,
+                        dc_option.ipv4.ip().to_ipv6_mapped(),
+                        dc_option.ipv4.port(),
                         0,
                         0,
-                    );
-                } else {
-                    dc_option.ipv4 = SocketAddrV4::new(
-                        option
-                            .ip_address
-                            .parse()
-                            .expect("Telegram to return a valid IPv4 address"),
-                        option.port as _,
-                    );
-                    if dc_option.ipv6.ip().to_bits() == 0 {
-                        dc_option.ipv6 = SocketAddrV6::new(
-                            dc_option.ipv4.ip().to_ipv6_mapped(),
-                            dc_option.ipv4.port(),
-                            0,
-                            0,
-                        )
-                    }
+                    )
                 }
-            });
+            }
+        }
     }
 }
 

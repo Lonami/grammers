@@ -7,6 +7,10 @@ Used for dealing with correct update processing.
 The serialization and deserialization traits are also used for storing and loading the session
 into and from bytes.
 
+## async-trait
+
+Used to make the `Session` trait dyn-compatible.
+
 ## log
 
 Used to log messages during update processing.
@@ -26,3 +30,7 @@ _Optional._ Enables serialization and deserialization of configuration and sessi
 ## serde_with
 
 _Optional._ Provides custom serialization helpers
+
+## tokio
+
+Runtime for testing asynchronous `Session` implementations.

@@ -165,7 +165,7 @@ impl Client {
         message_id: tl::enums::InputBotInlineMessageId,
         message: InputMessage,
     ) -> Result<bool, InvocationError> {
-        let entities = parse_mention_entities(self, message.entities);
+        let entities = parse_mention_entities(self, message.entities).await;
         if message.media.as_ref().is_some_and(|media| {
             !matches!(
                 media,

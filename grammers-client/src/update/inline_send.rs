@@ -47,8 +47,8 @@ impl InlineSend {
     }
 
     /// Cached reference to the [`Self::sender`], if it is in cache.
-    pub fn sender_ref(&self) -> Option<PeerRef> {
-        self.peers.get_ref(self.sender_id())
+    pub async fn sender_ref(&self) -> Option<PeerRef> {
+        self.peers.get_ref(self.sender_id()).await
     }
 
     /// The user that chose the result, if it is in cache.
