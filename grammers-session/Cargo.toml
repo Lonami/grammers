@@ -14,7 +14,7 @@ categories = []
 edition = "2024"
 
 [dependencies]
-async-trait = "0.1.89"
+futures-core = "0.3.31"
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0" }
 log = "0.4.28"
 
