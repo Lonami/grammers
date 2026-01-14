@@ -8,6 +8,8 @@
 
 use std::sync::Mutex;
 
+use futures_core::future::BoxFuture;
+
 use crate::types::{ChannelState, DcOption, PeerId, PeerInfo, UpdateState, UpdatesState};
 use crate::{Session, SessionData};
 
@@ -29,63 +31,72 @@ impl From<SessionData> for MemorySession {
     }
 }
 
-#[async_trait::async_trait]
 impl Session for MemorySession {
-    async fn home_dc_id(&self) -> i32 {
-        self.0.lock().unwrap().home_dc
+    fn home_dc_id(&self) -> BoxFuture<'_, i32> {
+        Box::pin(async move { self.0.lock().unwrap().home_dc })
     }
 
-    async fn set_home_dc_id(&self, dc_id: i32) {
-        self.0.lock().unwrap().home_dc = dc_id;
+    fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            self.0.lock().unwrap().home_dc = dc_id;
+        })
     }
 
-    async fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
-        self.0.lock().unwrap().dc_options.get(&dc_id).cloned()
+    fn dc_option(&self, dc_id: i32) -> BoxFuture<'_, Option<DcOption>> {
+        Box::pin(async move { self.0.lock().unwrap().dc_options.get(&dc_id).cloned() })
     }
 
-    async fn set_dc_option(&self, dc_option: &DcOption) {
-        self.0
-            .lock()
-            .unwrap()
-            .dc_options
-            .insert(dc_option.id, dc_option.clone());
+    fn set_dc_option(&self, dc_option: &DcOption) -> BoxFuture<'_, ()> {
+        let dc_option = dc_option.clone();
+        Box::pin(async move {
+            self.0
+                .lock()
+                .unwrap()
+                .dc_options
+                .insert(dc_option.id, dc_option.clone());
+        })
     }
 
-    async fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
-        self.0.lock().unwrap().peer_infos.get(&peer).cloned()
+    fn peer(&self, peer: PeerId) -> BoxFuture<'_, Option<PeerInfo>> {
+        Box::pin(async move { self.0.lock().unwrap().peer_infos.get(&peer).cloned() })
     }
 
-    async fn cache_peer(&self, peer: &PeerInfo) {
-        self.0
-            .lock()
-            .unwrap()
-            .peer_infos
-            .insert(peer.id(), peer.clone());
+    fn cache_peer(&self, peer: &PeerInfo) -> BoxFuture<'_, ()> {
+        let peer = peer.clone();
+        Box::pin(async move {
+            self.0
+                .lock()
+                .unwrap()
+                .peer_infos
+                .insert(peer.id(), peer.clone());
+        })
     }
 
-    async fn updates_state(&self) -> UpdatesState {
-        self.0.lock().unwrap().updates_state.clone()
+    fn updates_state(&self) -> BoxFuture<'_, UpdatesState> {
+        Box::pin(async move { self.0.lock().unwrap().updates_state.clone() })
     }
 
-    async fn set_update_state(&self, update: UpdateState) {
-        let mut data = self.0.lock().unwrap();
+    fn set_update_state(&self, update: UpdateState) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            let mut data = self.0.lock().unwrap();
 
-        match update {
-            UpdateState::All(updates_state) => {
-                data.updates_state = updates_state;
+            match update {
+                UpdateState::All(updates_state) => {
+                    data.updates_state = updates_state;
+                }
+                UpdateState::Primary { pts, date, seq } => {
+                    data.updates_state.pts = pts;
+                    data.updates_state.date = date;
+                    data.updates_state.seq = seq;
+                }
+                UpdateState::Secondary { qts } => {
+                    data.updates_state.qts = qts;
+                }
+                UpdateState::Channel { id, pts } => {
+                    data.updates_state.channels.retain(|c| c.id != id);
+                    data.updates_state.channels.push(ChannelState { id, pts });
+                }
             }
-            UpdateState::Primary { pts, date, seq } => {
-                data.updates_state.pts = pts;
-                data.updates_state.date = date;
-                data.updates_state.seq = seq;
-            }
-            UpdateState::Secondary { qts } => {
-                data.updates_state.qts = qts;
-            }
-            UpdateState::Channel { id, pts } => {
-                data.updates_state.channels.retain(|c| c.id != id);
-                data.updates_state.channels.push(ChannelState { id, pts });
-            }
-        }
+        })
     }
 }

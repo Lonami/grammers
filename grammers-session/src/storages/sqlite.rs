@@ -9,6 +9,7 @@
 use std::path::Path;
 use std::sync::Mutex;
 
+use futures_core::future::BoxFuture;
 use rusqlite::named_params;
 
 use crate::types::{
@@ -153,270 +154,287 @@ impl SqliteSession {
     }
 }
 
-#[async_trait::async_trait]
 impl Session for SqliteSession {
-    async fn home_dc_id(&self) -> i32 {
-        let db = self.database.lock().unwrap();
-        db.fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
-            Ok(row.get::<_, i32>("dc_id")?)
-        })
-        .unwrap()
-        .unwrap_or(DEFAULT_DC)
-    }
-
-    async fn set_home_dc_id(&self, dc_id: i32) {
-        let db = self.database.lock().unwrap();
-        let _transaction = db.begin_transaction().unwrap();
-        db.0.execute("DELETE FROM dc_home", []).unwrap();
-        let mut stmt = db.0.prepare("INSERT INTO dc_home VALUES (:dc_id)").unwrap();
-        stmt.execute(named_params! {":dc_id": dc_id}).unwrap();
-    }
-
-    async fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
-        let db = self.database.lock().unwrap();
-        db.fetch_one(
-            "SELECT * FROM dc_option WHERE dc_id = :dc_id LIMIT 1",
-            &[(":dc_id", dc_id)],
-            |row| {
-                Ok(DcOption {
-                    id: row.get::<_, i32>("dc_id")?,
-                    ipv4: row.get::<_, String>("ipv4")?.parse().unwrap(),
-                    ipv6: row.get::<_, String>("ipv6")?.parse().unwrap(),
-                    auth_key: row
-                        .get::<_, Option<Vec<u8>>>("auth_key")?
-                        .map(|auth_key| auth_key.try_into().unwrap()),
-                })
-            },
-        )
-        .unwrap()
-        .or_else(|| {
-            KNOWN_DC_OPTIONS
-                .iter()
-                .find(|dc_option| dc_option.id == dc_id)
-                .cloned()
-        })
-    }
-
-    async fn set_dc_option(&self, dc_option: &DcOption) {
-        let db = self.database.lock().unwrap();
-        db.0.execute(
-            "INSERT OR REPLACE INTO dc_option VALUES (:dc_id, :ipv4, :ipv6, :auth_key)",
-            named_params! {
-                ":dc_id": dc_option.id,
-                ":ipv4": dc_option.ipv4.to_string(),
-                ":ipv6": dc_option.ipv6.to_string(),
-                ":auth_key": dc_option.auth_key.map(|k| k.to_vec()),
-            },
-        )
-        .unwrap();
-    }
-
-    async fn peer(&self, peer: PeerId) -> Option<PeerInfo> {
-        let db = self.database.lock().unwrap();
-        let map_row = |row: &rusqlite::Row| {
-            let subtype = row.get::<_, Option<i64>>("subtype")?.map(|s| s as u8);
-            Ok(match peer.kind() {
-                PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
-                    id: PeerId::user(row.get::<_, i64>("peer_id")?).bare_id(),
-                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
-                    bot: subtype.map(|s| s & PeerSubtype::UserBot as u8 != 0),
-                    is_self: subtype.map(|s| s & PeerSubtype::UserSelf as u8 != 0),
-                },
-                PeerKind::Chat => PeerInfo::Chat { id: peer.bare_id() },
-                PeerKind::Channel => PeerInfo::Channel {
-                    id: peer.bare_id(),
-                    auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
-                    kind: subtype.and_then(|s| {
-                        if (s & PeerSubtype::Gigagroup as u8) == PeerSubtype::Gigagroup as _ {
-                            Some(ChannelKind::Gigagroup)
-                        } else if s & PeerSubtype::Broadcast as u8 != 0 {
-                            Some(ChannelKind::Broadcast)
-                        } else if s & PeerSubtype::Megagroup as u8 != 0 {
-                            Some(ChannelKind::Megagroup)
-                        } else {
-                            None
-                        }
-                    }),
-                },
+    fn home_dc_id(&self) -> BoxFuture<'_, i32> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            db.fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
+                Ok(row.get::<_, i32>("dc_id")?)
             })
-        };
-
-        if peer.kind() == PeerKind::UserSelf {
-            db.fetch_one(
-                "SELECT * FROM peer_info WHERE subtype & :type LIMIT 1",
-                &[(":type", PeerSubtype::UserSelf as i64)],
-                map_row,
-            )
             .unwrap()
-        } else {
-            db.fetch_one(
-                "SELECT * FROM peer_info WHERE peer_id = :peer_id LIMIT 1",
-                &[(":peer_id", peer.bot_api_dialog_id())],
-                map_row,
-            )
-            .unwrap()
-        }
+            .unwrap_or(DEFAULT_DC)
+        })
     }
 
-    async fn cache_peer(&self, peer: &PeerInfo) {
-        let db = self.database.lock().unwrap();
-        let mut stmt =
-            db.0.prepare("INSERT OR REPLACE INTO peer_info VALUES (:peer_id, :hash, :subtype)")
-                .unwrap();
-        let subtype = match peer {
-            PeerInfo::User { bot, is_self, .. } => {
-                match (bot.unwrap_or_default(), is_self.unwrap_or_default()) {
-                    (true, true) => Some(PeerSubtype::UserSelfBot),
-                    (true, false) => Some(PeerSubtype::UserBot),
-                    (false, true) => Some(PeerSubtype::UserSelf),
-                    (false, false) => None,
-                }
-            }
-            PeerInfo::Chat { .. } => None,
-            PeerInfo::Channel { kind, .. } => kind.map(|kind| match kind {
-                ChannelKind::Megagroup => PeerSubtype::Megagroup,
-                ChannelKind::Broadcast => PeerSubtype::Broadcast,
-                ChannelKind::Gigagroup => PeerSubtype::Gigagroup,
-            }),
-        };
-        let mut params = vec![];
-        let peer_id = peer.id().bot_api_dialog_id();
-        params.extend_from_slice(named_params! {":peer_id": peer_id});
-        let hash = peer.auth().unwrap_or_default().hash();
-        if peer.auth().is_some() {
-            params.extend_from_slice(named_params! {":hash": hash});
-        }
-        let subtype = subtype.map(|s| s as i64);
-        if subtype.is_some() {
-            params.extend_from_slice(named_params! {":subtype": subtype});
-        }
-        stmt.execute(params.as_slice()).unwrap();
+    fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            let _transaction = db.begin_transaction().unwrap();
+            db.0.execute("DELETE FROM dc_home", []).unwrap();
+            let mut stmt = db.0.prepare("INSERT INTO dc_home VALUES (:dc_id)").unwrap();
+            stmt.execute(named_params! {":dc_id": dc_id}).unwrap();
+        })
     }
 
-    async fn updates_state(&self) -> UpdatesState {
-        let db = self.database.lock().unwrap();
-        let mut state = db
-            .fetch_one(
-                "SELECT * FROM update_state LIMIT 1",
-                named_params![],
+    fn dc_option(&self, dc_id: i32) -> BoxFuture<'_, Option<DcOption>> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            db.fetch_one(
+                "SELECT * FROM dc_option WHERE dc_id = :dc_id LIMIT 1",
+                &[(":dc_id", dc_id)],
                 |row| {
-                    Ok(UpdatesState {
-                        pts: row.get("pts")?,
-                        qts: row.get("qts")?,
-                        date: row.get("date")?,
-                        seq: row.get("seq")?,
-                        channels: Vec::new(),
+                    Ok(DcOption {
+                        id: row.get::<_, i32>("dc_id")?,
+                        ipv4: row.get::<_, String>("ipv4")?.parse().unwrap(),
+                        ipv6: row.get::<_, String>("ipv6")?.parse().unwrap(),
+                        auth_key: row
+                            .get::<_, Option<Vec<u8>>>("auth_key")?
+                            .map(|auth_key| auth_key.try_into().unwrap()),
                     })
                 },
             )
             .unwrap()
-            .unwrap_or_default();
-        state.channels = db
-            .fetch_all("SELECT * FROM channel_state", named_params![], |row| {
-                Ok(ChannelState {
-                    id: row.get("peer_id")?,
-                    pts: row.get("pts")?,
-                })
+            .or_else(|| {
+                KNOWN_DC_OPTIONS
+                    .iter()
+                    .find(|dc_option| dc_option.id == dc_id)
+                    .cloned()
             })
-            .unwrap();
-        state
+        })
     }
 
-    async fn set_update_state(&self, update: UpdateState) {
-        let db = self.database.lock().unwrap();
-        let _transaction = db.begin_transaction().unwrap();
+    fn set_dc_option(&self, dc_option: &DcOption) -> BoxFuture<'_, ()> {
+        let dc_option = dc_option.clone();
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            db.0.execute(
+                "INSERT OR REPLACE INTO dc_option VALUES (:dc_id, :ipv4, :ipv6, :auth_key)",
+                named_params! {
+                    ":dc_id": dc_option.id,
+                    ":ipv4": dc_option.ipv4.to_string(),
+                    ":ipv6": dc_option.ipv6.to_string(),
+                    ":auth_key": dc_option.auth_key.map(|k| k.to_vec()),
+                },
+            )
+            .unwrap();
+        })
+    }
 
-        match update {
-            UpdateState::All(updates_state) => {
-                db.0.execute("DELETE FROM update_state", []).unwrap();
-                db.0.execute(
-                    "INSERT INTO update_state VALUES (:pts, :qts, :date, :seq)",
-                    named_params! {
-                        ":pts": updates_state.pts,
-                        ":qts": updates_state.qts,
-                        ":date": updates_state.date,
-                        ":seq": updates_state.seq,
+    fn peer(&self, peer: PeerId) -> BoxFuture<'_, Option<PeerInfo>> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            let map_row = |row: &rusqlite::Row| {
+                let subtype = row.get::<_, Option<i64>>("subtype")?.map(|s| s as u8);
+                Ok(match peer.kind() {
+                    PeerKind::User | PeerKind::UserSelf => PeerInfo::User {
+                        id: PeerId::user(row.get::<_, i64>("peer_id")?).bare_id(),
+                        auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
+                        bot: subtype.map(|s| s & PeerSubtype::UserBot as u8 != 0),
+                        is_self: subtype.map(|s| s & PeerSubtype::UserSelf as u8 != 0),
+                    },
+                    PeerKind::Chat => PeerInfo::Chat { id: peer.bare_id() },
+                    PeerKind::Channel => PeerInfo::Channel {
+                        id: peer.bare_id(),
+                        auth: row.get::<_, Option<i64>>("hash")?.map(PeerAuth::from_hash),
+                        kind: subtype.and_then(|s| {
+                            if (s & PeerSubtype::Gigagroup as u8) == PeerSubtype::Gigagroup as _ {
+                                Some(ChannelKind::Gigagroup)
+                            } else if s & PeerSubtype::Broadcast as u8 != 0 {
+                                Some(ChannelKind::Broadcast)
+                            } else if s & PeerSubtype::Megagroup as u8 != 0 {
+                                Some(ChannelKind::Megagroup)
+                            } else {
+                                None
+                            }
+                        }),
+                    },
+                })
+            };
+
+            if peer.kind() == PeerKind::UserSelf {
+                db.fetch_one(
+                    "SELECT * FROM peer_info WHERE subtype & :type LIMIT 1",
+                    &[(":type", PeerSubtype::UserSelf as i64)],
+                    map_row,
+                )
+                .unwrap()
+            } else {
+                db.fetch_one(
+                    "SELECT * FROM peer_info WHERE peer_id = :peer_id LIMIT 1",
+                    &[(":peer_id", peer.bot_api_dialog_id())],
+                    map_row,
+                )
+                .unwrap()
+            }
+        })
+    }
+
+    fn cache_peer(&self, peer: &PeerInfo) -> BoxFuture<'_, ()> {
+        let peer = peer.clone();
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            let mut stmt =
+                db.0.prepare("INSERT OR REPLACE INTO peer_info VALUES (:peer_id, :hash, :subtype)")
+                    .unwrap();
+            let subtype = match peer {
+                PeerInfo::User { bot, is_self, .. } => {
+                    match (bot.unwrap_or_default(), is_self.unwrap_or_default()) {
+                        (true, true) => Some(PeerSubtype::UserSelfBot),
+                        (true, false) => Some(PeerSubtype::UserBot),
+                        (false, true) => Some(PeerSubtype::UserSelf),
+                        (false, false) => None,
+                    }
+                }
+                PeerInfo::Chat { .. } => None,
+                PeerInfo::Channel { kind, .. } => kind.map(|kind| match kind {
+                    ChannelKind::Megagroup => PeerSubtype::Megagroup,
+                    ChannelKind::Broadcast => PeerSubtype::Broadcast,
+                    ChannelKind::Gigagroup => PeerSubtype::Gigagroup,
+                }),
+            };
+            let mut params = vec![];
+            let peer_id = peer.id().bot_api_dialog_id();
+            params.extend_from_slice(named_params! {":peer_id": peer_id});
+            let hash = peer.auth().unwrap_or_default().hash();
+            if peer.auth().is_some() {
+                params.extend_from_slice(named_params! {":hash": hash});
+            }
+            let subtype = subtype.map(|s| s as i64);
+            if subtype.is_some() {
+                params.extend_from_slice(named_params! {":subtype": subtype});
+            }
+            stmt.execute(params.as_slice()).unwrap();
+        })
+    }
+
+    fn updates_state(&self) -> BoxFuture<'_, UpdatesState> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            let mut state = db
+                .fetch_one(
+                    "SELECT * FROM update_state LIMIT 1",
+                    named_params![],
+                    |row| {
+                        Ok(UpdatesState {
+                            pts: row.get("pts")?,
+                            qts: row.get("qts")?,
+                            date: row.get("date")?,
+                            seq: row.get("seq")?,
+                            channels: Vec::new(),
+                        })
                     },
                 )
+                .unwrap()
+                .unwrap_or_default();
+            state.channels = db
+                .fetch_all("SELECT * FROM channel_state", named_params![], |row| {
+                    Ok(ChannelState {
+                        id: row.get("peer_id")?,
+                        pts: row.get("pts")?,
+                    })
+                })
                 .unwrap();
+            state
+        })
+    }
 
-                db.0.execute("DELETE FROM channel_state", []).unwrap();
-                for channel in updates_state.channels {
+    fn set_update_state(&self, update: UpdateState) -> BoxFuture<'_, ()> {
+        Box::pin(async move {
+            let db = self.database.lock().unwrap();
+            let _transaction = db.begin_transaction().unwrap();
+
+            match update {
+                UpdateState::All(updates_state) => {
+                    db.0.execute("DELETE FROM update_state", []).unwrap();
                     db.0.execute(
-                        "INSERT INTO channel_state VALUES (:peer_id, :pts)",
+                        "INSERT INTO update_state VALUES (:pts, :qts, :date, :seq)",
                         named_params! {
-                            ":peer_id": channel.id,
-                            ":pts": channel.pts,
+                            ":pts": updates_state.pts,
+                            ":qts": updates_state.qts,
+                            ":date": updates_state.date,
+                            ":seq": updates_state.seq,
                         },
                     )
                     .unwrap();
-                }
-            }
-            UpdateState::Primary { pts, date, seq } => {
-                let previous = db
-                    .fetch_one(
-                        "SELECT * FROM update_state LIMIT 1",
-                        named_params![],
-                        |_| Ok(()),
-                    )
-                    .unwrap();
 
-                if previous.is_some() {
+                    db.0.execute("DELETE FROM channel_state", []).unwrap();
+                    for channel in updates_state.channels {
+                        db.0.execute(
+                            "INSERT INTO channel_state VALUES (:peer_id, :pts)",
+                            named_params! {
+                                ":peer_id": channel.id,
+                                ":pts": channel.pts,
+                            },
+                        )
+                        .unwrap();
+                    }
+                }
+                UpdateState::Primary { pts, date, seq } => {
+                    let previous = db
+                        .fetch_one(
+                            "SELECT * FROM update_state LIMIT 1",
+                            named_params![],
+                            |_| Ok(()),
+                        )
+                        .unwrap();
+
+                    if previous.is_some() {
+                        db.0.execute(
+                            "UPDATE update_state SET pts = :pts, date = :date, seq = :seq",
+                            named_params! {
+                                ":pts": pts,
+                                ":date": date,
+                                ":seq": seq,
+                            },
+                        )
+                        .unwrap();
+                    } else {
+                        db.0.execute(
+                            "INSERT INTO update_state VALUES (:pts, 0, :date, :seq)",
+                            named_params! {
+                                ":pts": pts,
+                                ":date": date,
+                                ":seq": seq,
+                            },
+                        )
+                        .unwrap();
+                    }
+                }
+                UpdateState::Secondary { qts } => {
+                    let previous = db
+                        .fetch_one(
+                            "SELECT * FROM update_state LIMIT 1",
+                            named_params![],
+                            |_| Ok(()),
+                        )
+                        .unwrap();
+
+                    if previous.is_some() {
+                        db.0.execute(
+                            "UPDATE update_state SET qts = :qts",
+                            named_params! {":qts": qts},
+                        )
+                        .unwrap();
+                    } else {
+                        db.0.execute(
+                            "INSERT INTO update_state VALUES (0, :qts, 0, 0)",
+                            named_params! {":qts": qts},
+                        )
+                        .unwrap();
+                    }
+                }
+                UpdateState::Channel { id, pts } => {
                     db.0.execute(
-                        "UPDATE update_state SET pts = :pts, date = :date, seq = :seq",
+                        "INSERT OR REPLACE INTO channel_state VALUES (:peer_id, :pts)",
                         named_params! {
+                            ":peer_id": id,
                             ":pts": pts,
-                            ":date": date,
-                            ":seq": seq,
-                        },
-                    )
-                    .unwrap();
-                } else {
-                    db.0.execute(
-                        "INSERT INTO update_state VALUES (:pts, 0, :date, :seq)",
-                        named_params! {
-                            ":pts": pts,
-                            ":date": date,
-                            ":seq": seq,
                         },
                     )
                     .unwrap();
                 }
             }
-            UpdateState::Secondary { qts } => {
-                let previous = db
-                    .fetch_one(
-                        "SELECT * FROM update_state LIMIT 1",
-                        named_params![],
-                        |_| Ok(()),
-                    )
-                    .unwrap();
-
-                if previous.is_some() {
-                    db.0.execute(
-                        "UPDATE update_state SET qts = :qts",
-                        named_params! {":qts": qts},
-                    )
-                    .unwrap();
-                } else {
-                    db.0.execute(
-                        "INSERT INTO update_state VALUES (0, :qts, 0, 0)",
-                        named_params! {":qts": qts},
-                    )
-                    .unwrap();
-                }
-            }
-            UpdateState::Channel { id, pts } => {
-                db.0.execute(
-                    "INSERT OR REPLACE INTO channel_state VALUES (:peer_id, :pts)",
-                    named_params! {
-                        ":peer_id": id,
-                        ":pts": pts,
-                    },
-                )
-                .unwrap();
-            }
-        }
+        })
     }
 }
 
