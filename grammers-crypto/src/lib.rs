@@ -9,7 +9,7 @@
 //! This library contains a collection of functions that relate to
 //! encrypting and decryption values when exchanging messages with Telegram.
 
-#![deny(unsafe_code)]
+#![deny(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 pub mod aes;
 mod auth_key;

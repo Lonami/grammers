@@ -109,6 +109,7 @@ fn factorize_with_param(pq: u64, c: u64) -> (u64, u64) {
         }
     }
 
+    #[expect(clippy::cast_possible_truncation)]
     let (p, q) = (g as u64, (pq / g) as u64);
     (p.min(q), p.max(q))
 }

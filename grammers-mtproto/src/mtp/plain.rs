@@ -59,7 +59,7 @@ impl Mtp for Plain {
         // no need to generate a valid `msg_id`, it seems. Just use `0`.
         0i64.serialize(buffer); // message_id
 
-        (request.len() as i32).serialize(buffer); // message_data_length
+        i32::try_from(request.len()).unwrap().serialize(buffer); // message_data_length
         buffer.extend(request); // message_data
 
         Some(MsgId(0))
@@ -100,20 +100,22 @@ impl Mtp for Plain {
             return Err(DeserializeError::BadMessageId { got: msg_id });
         }
 
-        let len = i32::deserialize(&mut buf)?;
-        if len <= 0 {
-            return Err(DeserializeError::NegativeMessageLength { got: len });
-        }
-        if (20 + len) as usize > payload.len() {
+        let got = i32::deserialize(&mut buf)?;
+
+        let Ok(len) = usize::try_from(got) else {
+            return Err(DeserializeError::NegativeMessageLength { got });
+        };
+
+        if 20 + len > payload.len() {
             return Err(DeserializeError::TooLongMessageLength {
-                got: len as usize,
+                got: len,
                 max_length: payload.len() - 20,
             });
         }
 
         Ok(vec![Deserialization::RpcResult(RpcResult {
             msg_id: MsgId(0),
-            body: payload[20..20 + len as usize].into(),
+            body: payload[20..20 + len].into(),
         })])
     }
 }

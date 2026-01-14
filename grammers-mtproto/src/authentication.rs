@@ -366,10 +366,12 @@ pub fn step3(
         println!("r {}", hex::to_hex(&random_bytes));
     }
 
-    let now = SystemTime::now()
+    let now: i32 = SystemTime::now()
         .duration_since(UNIX_EPOCH)
         .expect("system time is before epoch")
-        .as_secs() as i32;
+        .as_secs()
+        .try_into()
+        .unwrap();
 
     let res = do_step3(data, response, &random_bytes, now);
     if TRACE_AUTH_GEN {

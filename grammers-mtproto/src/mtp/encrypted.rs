@@ -166,10 +166,12 @@ impl Encrypted {
 
     /// Correct our time offset based on a known valid message ID.
     fn correct_time_offset(&mut self, msg_id: i64) {
-        let now = SystemTime::now()
+        let now: i32 = SystemTime::now()
             .duration_since(UNIX_EPOCH)
             .expect("system time is before epoch")
-            .as_secs() as i32;
+            .as_secs()
+            .try_into()
+            .unwrap();
 
         let correct = (msg_id >> 32) as i32;
         self.time_offset = correct - now;
@@ -182,7 +184,7 @@ impl Encrypted {
             .duration_since(UNIX_EPOCH)
             .expect("system time is before epoch");
 
-        let seconds = (now.as_secs() as i32 + self.time_offset) as u64;
+        let seconds = (now.as_secs().cast_signed() + self.time_offset as i64).cast_unsigned();
         let nanoseconds = now.subsec_nanos() as u64;
         let mut new_msg_id = ((seconds << 32) | (nanoseconds << 2)) as i64;
 
@@ -215,7 +217,7 @@ impl Encrypted {
 
         msg_id.serialize(buffer);
         self.get_seq_no(content_related).serialize(buffer);
-        (body.len() as i32).serialize(buffer);
+        i32::try_from(body.len()).unwrap().serialize(buffer);
         buffer.extend(body);
 
         self.msg_count += 1;
@@ -258,7 +260,7 @@ impl Encrypted {
         if self.msg_count != 1 {
             // Prepend a container, setting its message ID and sequence number.
             // + 8 because it has to include the constructor ID and length (4 bytes each).
-            let len = (buffer.len() + 8) as i32;
+            let len = i32::try_from(buffer.len() + 8).unwrap();
             let mut header = StackBuffer::<MESSAGE_CONTAINER_HEADER_LEN>::new();
 
             // Manually `serialize_msg` because the container body was already written.
@@ -268,6 +270,10 @@ impl Encrypted {
             len.serialize(&mut header);
 
             manual_tl::MessageContainer::CONSTRUCTOR_ID.serialize(&mut header);
+            #[expect(
+                clippy::cast_possible_truncation,
+                reason = "`msg_count` does not overflow `manual_tl::MessageContainer::MAXIMUM_LENGTH`"
+            )]
             (self.msg_count as i32).serialize(&mut header);
             buffer.extend_front(&header.into_inner());
         }
@@ -1218,7 +1224,7 @@ impl Mtp for Encrypted {
         if let Some((start_secs, start_instant)) = self.start_salt_time {
             if self.salts.len() > 1 {
                 let salt = &self.salts[self.salts.len() - 2];
-                let now = start_secs + start_instant.elapsed().as_secs() as i32;
+                let now = start_secs + i32::try_from(start_instant.elapsed().as_secs()).unwrap();
                 if now >= salt.valid_since + SALT_USE_DELAY {
                     self.salts.pop();
                 }

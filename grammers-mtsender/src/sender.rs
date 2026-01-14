@@ -62,6 +62,10 @@ pub(crate) fn generate_random_id() -> i64 {
     static LAST_ID: AtomicI64 = AtomicI64::new(0);
 
     while LAST_ID.load(Ordering::SeqCst) == 0 {
+        #[expect(
+            clippy::cast_possible_truncation,
+            reason = "truncation is absolutely allowed for generating ping IDs"
+        )]
         let now = SystemTime::now()
             .duration_since(SystemTime::UNIX_EPOCH)
             .expect("system time is before epoch")

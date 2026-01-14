@@ -37,12 +37,13 @@ pub fn calculate_2fa(
     let g_b = pad_to_256(&g_b);
     let a = pad_to_256(&a);
 
-    let g_for_hash = vec![*g as u8];
+    #[expect(clippy::cast_possible_truncation)]
+    let g_for_hash = vec![g.cast_unsigned() as u8];
     let g_for_hash = pad_to_256(&g_for_hash);
 
     let big_g_b = BigInt::from_bytes_be(Sign::Plus, &g_b);
 
-    let big_g = BigInt::from(*g as u32);
+    let big_g = BigInt::from(g.cast_unsigned());
     let big_a = BigInt::from_bytes_be(Sign::Plus, &a);
 
     // k := H(p | g)

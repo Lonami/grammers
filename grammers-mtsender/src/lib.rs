@@ -21,7 +21,7 @@
 //! although many tasks can share access to the same `SenderPool` via
 //! multiple [`SenderPoolHandle`]s.
 
-#![deny(unsafe_code)]
+#![deny(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 mod configuration;
 mod errors;

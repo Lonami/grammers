@@ -54,9 +54,14 @@ impl Transport for Abridged {
         assert_eq!(len % 4, 0);
 
         let len = len / 4;
+
+        assert!(len <= u32::MAX as usize >> 8);
+
         if len < 127 {
+            #[expect(clippy::cast_possible_truncation)]
             buffer.extend_front(&[len as u8]);
         } else {
+            #[expect(clippy::cast_possible_truncation)]
             buffer.extend_front(&(0x7f | ((len as u32) << 8)).to_le_bytes());
         }
 
@@ -71,36 +76,34 @@ impl Transport for Abridged {
             return Err(Error::MissingBytes);
         }
 
-        let header_len;
-        let len = buffer[0];
-        let len = if len < 127 {
-            header_len = 1;
-            len as i32
-        } else {
-            if buffer.len() < 4 {
-                return Err(Error::MissingBytes);
+        let (header_len, len) = match buffer[0] {
+            len @ ..0x7F => (1, len as usize * 4),
+
+            0x7F => {
+                if buffer.len() < 4 {
+                    return Err(Error::MissingBytes);
+                }
+
+                let len = u32::from_le_bytes(buffer[0..4].try_into().unwrap()) >> 8;
+
+                (4, len as usize * 4)
             }
 
-            header_len = 4;
-            i32::from_le_bytes(buffer[0..4].try_into().unwrap()) >> 8
+            // TODO: quick ACK.
+            len @ 0x80.. => return Err(Error::BadLen { got: len as i32 }),
         };
 
-        let len = len * 4;
-        if (buffer.len() as i32) < header_len + len {
+        if buffer.len() < header_len + len {
             return Err(Error::MissingBytes);
         }
 
-        if header_len == 1 && len >= 4 {
-            let data = i32::from_le_bytes(buffer[1..5].try_into().unwrap());
-            if data < 0 {
-                return Err(Error::BadStatus {
-                    status: (-data) as u32,
-                });
+        if len == 4 {
+            let data = i32::from_le_bytes(buffer[header_len..header_len + 4].try_into().unwrap());
+
+            if let Ok(status) = u32::try_from(-data) {
+                return Err(Error::BadStatus { status });
             }
         }
-
-        let header_len = header_len as usize;
-        let len = len as usize;
 
         Ok(UnpackedOffset {
             data_range: header_len..header_len + len,

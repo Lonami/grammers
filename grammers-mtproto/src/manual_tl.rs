@@ -59,7 +59,7 @@ impl Serializable for Message {
     fn serialize(&self, buf: &mut impl Extend<u8>) {
         self.msg_id.serialize(buf);
         self.seq_no.serialize(buf);
-        (self.body.len() as i32).serialize(buf);
+        i32::try_from(self.body.len()).unwrap().serialize(buf);
         buf.extend(self.body.iter().copied());
     }
 }
@@ -69,9 +69,7 @@ impl Deserializable for Message {
         let msg_id = i64::deserialize(buf)?;
         let seq_no = i32::deserialize(buf)?;
 
-        let len = i32::deserialize(buf)?;
-        assert!(len >= 0);
-        let len = len as usize;
+        let len: usize = i32::deserialize(buf)?.try_into().unwrap();
         assert!(len < MessageContainer::MAXIMUM_SIZE);
         let mut body = vec![0; len];
         buf.read_exact(&mut body)?;
@@ -162,9 +160,7 @@ impl Deserializable for MessageContainer {
             return Err(tl::deserialize::Error::UnexpectedConstructor { id: constructor_id });
         }
 
-        let len = i32::deserialize(buf)?;
-        assert!(len >= 0);
-        let len = len as usize;
+        let len: usize = i32::deserialize(buf)?.try_into().unwrap();
         let mut messages = Vec::with_capacity(len.min(Self::MAXIMUM_LENGTH));
         for _ in 0..len {
             messages.push(Message::deserialize(buf)?);

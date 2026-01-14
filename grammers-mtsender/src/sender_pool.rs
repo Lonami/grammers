@@ -342,7 +342,7 @@ impl SenderPoolRunner {
                         .ip_address
                         .parse()
                         .expect("Telegram to return a valid IPv6 address"),
-                    option.port as _,
+                    u16::try_from(option.port).expect("Telegram to return a valid port"),
                     0,
                     0,
                 );
@@ -352,7 +352,7 @@ impl SenderPoolRunner {
                         .ip_address
                         .parse()
                         .expect("Telegram to return a valid IPv4 address"),
-                    option.port as _,
+                    u16::try_from(option.port).expect("Telegram to return a valid port"),
                 );
                 if dc_option.ipv6.ip().to_bits() == 0 {
                     dc_option.ipv6 = SocketAddrV6::new(

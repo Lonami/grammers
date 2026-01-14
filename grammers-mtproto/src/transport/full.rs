@@ -49,8 +49,8 @@ impl Transport for Full {
         let len = buffer.len();
         assert_eq!(len % 4, 0);
 
-        // payload len + length itself (4 bytes) + send counter (4 bytes) + crc32 (4 bytes)
-        let len = (len as i32) + 4 + 4 + 4;
+        // length (4 bytes) + send counter (4 bytes) + payload len + crc32 (4 bytes)
+        let len = i32::try_from(4 + 4 + len + 4).unwrap();
 
         buffer.extend_front(&self.send_seq.to_le_bytes());
         buffer.extend_front(&len.to_le_bytes());
@@ -71,20 +71,19 @@ impl Transport for Full {
             return Err(Error::MissingBytes);
         }
 
-        let total_len = buffer.len() as i32;
+        let got = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
 
-        // payload len
-        let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
+        let Ok(len) = usize::try_from(got) else {
+            return Err(Error::BadStatus {
+                status: (-got).cast_unsigned(),
+            });
+        };
+
         if len < 12 {
-            if len < 0 {
-                return Err(Error::BadStatus {
-                    status: (-len) as u32,
-                });
-            }
-            return Err(Error::BadLen { got: len });
+            return Err(Error::BadLen { got });
         }
 
-        if total_len < len {
+        if buffer.len() < len {
             return Err(Error::MissingBytes);
         }
 
@@ -96,8 +95,6 @@ impl Transport for Full {
                 got: seq,
             });
         }
-
-        let len = len as usize;
 
         // crc32
         let crc = u32::from_le_bytes(buffer[len - 4..len].try_into().unwrap());

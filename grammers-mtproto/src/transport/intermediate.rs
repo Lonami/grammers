@@ -46,7 +46,7 @@ impl Transport for Intermediate {
         let len = buffer.len();
         assert_eq!(len % 4, 0);
 
-        buffer.extend_front(&(len as i32).to_le_bytes());
+        buffer.extend_front(&i32::try_from(len).unwrap().to_le_bytes());
 
         if !self.init {
             buffer.extend_front(&Self::TAG);
@@ -59,22 +59,28 @@ impl Transport for Intermediate {
             return Err(Error::MissingBytes);
         }
 
-        let len = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
-        if (buffer.len() as i32) < len {
+        let got = i32::from_le_bytes(buffer[0..4].try_into().unwrap());
+
+        let Ok(len) = usize::try_from(got) else {
+            // TODO: quick ACK.
+            return Err(Error::BadLen { got });
+        };
+
+        if len < 4 {
+            return Err(Error::BadLen { got });
+        }
+
+        if buffer.len() < len {
             return Err(Error::MissingBytes);
         }
 
-        if len <= 4 {
-            if len >= 4 {
-                let data = i32::from_le_bytes(buffer[4..8].try_into().unwrap());
-                return Err(Error::BadStatus {
-                    status: (-data) as u32,
-                });
-            }
-            return Err(Error::BadLen { got: len });
-        }
+        if len == 4 {
+            let data = i32::from_le_bytes(buffer[4..8].try_into().unwrap());
 
-        let len = len as usize;
+            if let Ok(status) = u32::try_from(-data) {
+                return Err(Error::BadStatus { status });
+            }
+        }
 
         Ok(UnpackedOffset {
             data_range: 4..4 + len,

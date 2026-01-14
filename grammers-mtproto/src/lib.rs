@@ -14,7 +14,7 @@
 //!
 //! [Mobile Transport Protocol]: https://core.telegram.org/mtproto
 
-#![deny(unsafe_code)]
+#![deny(unsafe_code, clippy::cast_possible_truncation, clippy::cast_sign_loss)]
 
 pub mod authentication;
 mod manual_tl;
