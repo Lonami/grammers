@@ -15,7 +15,7 @@ use tokio::runtime;
 type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 async fn async_main() -> Result {
-    let session = Arc::new(SqliteSession::open("ping.session")?);
+    let session = Arc::new(SqliteSession::open("ping.session").await?);
     let pool = SenderPool::new(Arc::clone(&session), 1);
     let client = Client::new(&pool);
     let SenderPool { runner, handle, .. } = pool;

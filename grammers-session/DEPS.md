@@ -19,7 +19,7 @@ Used to log messages during update processing.
 
 Used to test that this file lists all dependencies from `Cargo.toml`.
 
-## rusqlite
+## libsql
 
 SQLite-based session storage.
 
@@ -33,4 +33,4 @@ _Optional._ Provides custom serialization helpers
 
 ## tokio
 
-Runtime for testing asynchronous `Session` implementations.
+Asynchronous locks and runtime for testing asynchronous `Session` implementations.
