@@ -25,11 +25,14 @@ pub trait Session: Send + Sync {
     /// If not known, the ID of the closest datacenter should be returned instead.
     /// Note that incorrect guesses are allowed, and the user may need to migrate.
     ///
-    /// This method should be cheap to call, because it is used on every request.
-    fn home_dc_id(&self) -> BoxFuture<'_, i32>;
+    /// This method should be implemented as an infallible memory read,
+    /// because it is used on every request and thus should be cheap to call.
+    fn home_dc_id(&self) -> i32;
 
     /// Changes the [`Session::home_dc_id`] after finding out the actual datacenter
     /// to which main queries should be executed against.
+    ///
+    /// This must update the value in the cache layer used by `home_dc_id`.
     fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()>;
 
     /// Query a single datacenter option.
@@ -39,12 +42,15 @@ pub trait Session: Send + Sync {
     ///
     /// `None` may only be returned on invalid DC IDs or DCs that are not yet known.
     ///
-    /// This method should be cheap to call, because it is used on every request.
-    fn dc_option(&self, dc_id: i32) -> BoxFuture<'_, Option<DcOption>>;
+    /// This method should be implemented as an infallible memory read,
+    /// because it is used on every request and thus should be cheap to call.
+    fn dc_option(&self, dc_id: i32) -> Option<DcOption>;
 
     /// Update the previously-known [`Session::dc_option`] with new values.
     ///
     /// Should also be used after generating permanent authentication keys to a datacenter.
+    ///
+    /// This must update the value in the cache layer used by `dc_option`.
     fn set_dc_option(&self, dc_option: &DcOption) -> BoxFuture<'_, ()>;
 
     /// Query a peer by its identity.

@@ -203,7 +203,7 @@ impl SenderPoolRunner {
     async fn process_request(&mut self, request: Request) -> ControlFlow<()> {
         match request {
             Request::Invoke { dc_id, body, tx } => {
-                let Some(mut dc_option) = self.session.dc_option(dc_id).await else {
+                let Some(mut dc_option) = self.session.dc_option(dc_id) else {
                     let _ = tx.send(Err(InvocationError::InvalidDc));
                     return ControlFlow::Continue(());
                 };
@@ -231,7 +231,7 @@ impl SenderPoolRunner {
                             sender,
                             rpc_rx,
                             self.updates_tx.clone(),
-                            dc_option.id == self.session.home_dc_id().await,
+                            dc_option.id == self.session.home_dc_id(),
                         ));
                         self.connections.push(ConnectionInfo {
                             dc_id,
@@ -326,16 +326,15 @@ impl SenderPoolRunner {
             .map(|tl::enums::DcOption::Option(option)| option)
             .filter(|option| !option.media_only && !option.tcpo_only && option.r#static)
         {
-            let mut dc_option =
-                self.session
-                    .dc_option(option.id)
-                    .await
-                    .unwrap_or_else(|| DcOption {
-                        id: option.id,
-                        ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
-                        ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
-                        auth_key: None,
-                    });
+            let mut dc_option = self
+                .session
+                .dc_option(option.id)
+                .unwrap_or_else(|| DcOption {
+                    id: option.id,
+                    ipv4: SocketAddrV4::new(Ipv4Addr::from_bits(0), 0),
+                    ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 0, 0, 0),
+                    auth_key: None,
+                });
             if option.ipv6 {
                 dc_option.ipv6 = SocketAddrV6::new(
                     option

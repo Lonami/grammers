@@ -6,6 +6,7 @@
 // option. This file may not be copied, modified, or distributed
 // except according to those terms.
 
+use std::collections::HashMap;
 use std::path::Path;
 use std::sync::Mutex;
 
@@ -24,9 +25,15 @@ struct Database(rusqlite::Connection);
 
 struct TransactionGuard<'c>(&'c rusqlite::Connection);
 
+struct Cache {
+    pub home_dc: i32,
+    pub dc_options: HashMap<i32, DcOption>,
+}
+
 /// SQLite-based storage. This is the recommended option.
 pub struct SqliteSession {
     database: Mutex<Database>,
+    cache: Mutex<Cache>,
 }
 
 #[repr(u8)]
@@ -146,27 +153,47 @@ impl SqliteSession {
     /// Open a connection to the SQLite database at `path`,
     /// creating one if it doesn't exist.
     pub fn open<P: AsRef<Path>>(path: P) -> rusqlite::Result<Self> {
-        let database = Database(rusqlite::Connection::open(path)?);
-        database.init()?;
+        let db = Database(rusqlite::Connection::open(path)?);
+        db.init()?;
+
+        let home_dc = db
+            .fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
+                Ok(row.get::<_, i32>("dc_id")?)
+            })?
+            .unwrap_or(DEFAULT_DC);
+
+        let dc_options = db
+            .fetch_all("SELECT * FROM dc_option", named_params![], |row| {
+                Ok(DcOption {
+                    id: row.get::<_, i32>("dc_id")?,
+                    ipv4: row.get::<_, String>("ipv4")?.parse().unwrap(),
+                    ipv6: row.get::<_, String>("ipv6")?.parse().unwrap(),
+                    auth_key: row
+                        .get::<_, Option<Vec<u8>>>("auth_key")?
+                        .map(|auth_key| auth_key.try_into().unwrap()),
+                })
+            })?
+            .into_iter()
+            .map(|dc_option| (dc_option.id, dc_option))
+            .collect();
+
         Ok(SqliteSession {
-            database: Mutex::new(database),
+            database: Mutex::new(db),
+            cache: Mutex::new(Cache {
+                home_dc,
+                dc_options,
+            }),
         })
     }
 }
 
 impl Session for SqliteSession {
-    fn home_dc_id(&self) -> BoxFuture<'_, i32> {
-        Box::pin(async move {
-            let db = self.database.lock().unwrap();
-            db.fetch_one("SELECT * FROM dc_home LIMIT 1", named_params![], |row| {
-                Ok(row.get::<_, i32>("dc_id")?)
-            })
-            .unwrap()
-            .unwrap_or(DEFAULT_DC)
-        })
+    fn home_dc_id(&self) -> i32 {
+        self.cache.lock().unwrap().home_dc
     }
 
     fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()> {
+        self.cache.lock().unwrap().home_dc = dc_id;
         Box::pin(async move {
             let db = self.database.lock().unwrap();
             let _transaction = db.begin_transaction().unwrap();
@@ -176,34 +203,28 @@ impl Session for SqliteSession {
         })
     }
 
-    fn dc_option(&self, dc_id: i32) -> BoxFuture<'_, Option<DcOption>> {
-        Box::pin(async move {
-            let db = self.database.lock().unwrap();
-            db.fetch_one(
-                "SELECT * FROM dc_option WHERE dc_id = :dc_id LIMIT 1",
-                &[(":dc_id", dc_id)],
-                |row| {
-                    Ok(DcOption {
-                        id: row.get::<_, i32>("dc_id")?,
-                        ipv4: row.get::<_, String>("ipv4")?.parse().unwrap(),
-                        ipv6: row.get::<_, String>("ipv6")?.parse().unwrap(),
-                        auth_key: row
-                            .get::<_, Option<Vec<u8>>>("auth_key")?
-                            .map(|auth_key| auth_key.try_into().unwrap()),
-                    })
-                },
-            )
+    fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
+        self.cache
+            .lock()
             .unwrap()
+            .dc_options
+            .get(&dc_id)
+            .cloned()
             .or_else(|| {
                 KNOWN_DC_OPTIONS
                     .iter()
                     .find(|dc_option| dc_option.id == dc_id)
                     .cloned()
             })
-        })
     }
 
     fn set_dc_option(&self, dc_option: &DcOption) -> BoxFuture<'_, ()> {
+        self.cache
+            .lock()
+            .unwrap()
+            .dc_options
+            .insert(dc_option.id, dc_option.clone());
+
         let dc_option = dc_option.clone();
         Box::pin(async move {
             let db = self.database.lock().unwrap();
@@ -458,12 +479,12 @@ mod tests {
     async fn do_exercise_sqlite_session() {
         let session = SqliteSession::open(":memory:").unwrap();
 
-        assert_eq!(session.home_dc_id().await, DEFAULT_DC);
+        assert_eq!(session.home_dc_id(), DEFAULT_DC);
         session.set_home_dc_id(DEFAULT_DC + 1).await;
-        assert_eq!(session.home_dc_id().await, DEFAULT_DC + 1);
+        assert_eq!(session.home_dc_id(), DEFAULT_DC + 1);
 
         assert_eq!(
-            session.dc_option(KNOWN_DC_OPTIONS[0].id).await,
+            session.dc_option(KNOWN_DC_OPTIONS[0].id),
             Some(KNOWN_DC_OPTIONS[0].clone())
         );
         let new_dc_option = DcOption {
@@ -477,12 +498,9 @@ mod tests {
             ipv6: SocketAddrV6::new(Ipv6Addr::from_bits(0), 1, 0, 0),
             auth_key: Some([1; 256]),
         };
-        assert_eq!(session.dc_option(new_dc_option.id).await, None);
+        assert_eq!(session.dc_option(new_dc_option.id), None);
         session.set_dc_option(&new_dc_option).await;
-        assert_eq!(
-            session.dc_option(new_dc_option.id).await,
-            Some(new_dc_option)
-        );
+        assert_eq!(session.dc_option(new_dc_option.id), Some(new_dc_option));
 
         assert_eq!(session.peer(PeerId::self_user()).await, None);
         assert_eq!(session.peer(PeerId::user(1)).await, None);

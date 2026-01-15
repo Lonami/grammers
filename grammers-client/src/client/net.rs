@@ -96,7 +96,7 @@ impl Client {
         &self,
         request: &R,
     ) -> Result<R::Return, InvocationError> {
-        let dc_id = self.0.session.home_dc_id().await;
+        let dc_id = self.0.session.home_dc_id();
         self.do_invoke_in_dc(dc_id, request.to_bytes())
             .await
             .and_then(|body| R::Return::from_bytes(&body).map_err(|e| e.into()))
@@ -171,7 +171,7 @@ impl Client {
             return Ok(());
         }
 
-        let home_dc_id = self.0.session.home_dc_id().await;
+        let home_dc_id = self.0.session.home_dc_id();
         if target_dc_id == home_dc_id {
             return Ok(());
         }

@@ -191,7 +191,7 @@ impl Client {
         let result = match self.invoke(&request).await {
             Ok(x) => x,
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let old_dc_id = self.0.session.home_dc_id().await;
+                let old_dc_id = self.0.session.home_dc_id();
                 let new_dc_id = err.value.unwrap() as i32;
                 // Disconnect from current DC to cull the now-unused connection.
                 // This also gives a chance for the new home DC to export its authorization
@@ -271,7 +271,7 @@ impl Client {
                 SC::PaymentRequired(_) => unimplemented!(),
             },
             Err(InvocationError::Rpc(err)) if err.code == 303 => {
-                let old_dc_id = self.0.session.home_dc_id().await;
+                let old_dc_id = self.0.session.home_dc_id();
                 let new_dc_id = err.value.unwrap() as i32;
                 // Disconnect from current DC to cull the now-unused connection.
                 // This also gives a chance for the new home DC to export its authorization

@@ -32,8 +32,8 @@ impl From<SessionData> for MemorySession {
 }
 
 impl Session for MemorySession {
-    fn home_dc_id(&self) -> BoxFuture<'_, i32> {
-        Box::pin(async move { self.0.lock().unwrap().home_dc })
+    fn home_dc_id(&self) -> i32 {
+        self.0.lock().unwrap().home_dc
     }
 
     fn set_home_dc_id(&self, dc_id: i32) -> BoxFuture<'_, ()> {
@@ -42,8 +42,8 @@ impl Session for MemorySession {
         })
     }
 
-    fn dc_option(&self, dc_id: i32) -> BoxFuture<'_, Option<DcOption>> {
-        Box::pin(async move { self.0.lock().unwrap().dc_options.get(&dc_id).cloned() })
+    fn dc_option(&self, dc_id: i32) -> Option<DcOption> {
+        self.0.lock().unwrap().dc_options.get(&dc_id).cloned()
     }
 
     fn set_dc_option(&self, dc_option: &DcOption) -> BoxFuture<'_, ()> {
