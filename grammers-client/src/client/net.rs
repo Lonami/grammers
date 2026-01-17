@@ -11,7 +11,7 @@ use std::ops::ControlFlow;
 use std::sync::Arc;
 use std::time::Duration;
 
-use grammers_mtsender::{InvocationError, SenderPool};
+use grammers_mtsender::{InvocationError, SenderPoolFatHandle};
 use grammers_tl_types::{self as tl, Deserializable};
 use log::info;
 use tokio::{sync::Mutex, time::sleep};
@@ -46,24 +46,24 @@ impl Client {
     /// # async fn f() -> Result<(), Box<dyn std::error::Error>> {
     /// let session = Arc::new(MemorySession::default());
     /// let pool = SenderPool::new(Arc::clone(&session), API_ID);
-    /// let client = Client::new(&pool);
+    /// let client = Client::new(pool.handle);
     /// # Ok(())
     /// # }
     /// ```
-    pub fn new(sender_pool: &SenderPool) -> Self {
+    pub fn new(sender_pool: SenderPoolFatHandle) -> Self {
         Self::with_configuration(sender_pool, Default::default())
     }
 
     /// Like [`Self::new`] but with a custom [`ClientConfiguration`].
     pub fn with_configuration(
-        sender_pool: &SenderPool,
+        sender_pool: SenderPoolFatHandle,
         configuration: ClientConfiguration,
     ) -> Self {
         // TODO Sender doesn't have a way to handle backpressure yet
         Self(Arc::new(ClientInner {
-            session: Arc::clone(&sender_pool.runner.session),
-            api_id: sender_pool.runner.api_id,
-            handle: sender_pool.handle.clone(),
+            session: sender_pool.session,
+            api_id: sender_pool.api_id,
+            handle: sender_pool.thin,
             configuration,
             auth_copied_to_dcs: Mutex::new(Vec::new()),
         }))

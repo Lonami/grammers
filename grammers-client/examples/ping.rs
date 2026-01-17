@@ -16,9 +16,8 @@ type Result = std::result::Result<(), Box<dyn std::error::Error>>;
 
 async fn async_main() -> Result {
     let session = Arc::new(SqliteSession::open("ping.session").await?);
-    let pool = SenderPool::new(Arc::clone(&session), 1);
-    let client = Client::new(&pool);
-    let SenderPool { runner, handle, .. } = pool;
+    let SenderPool { runner, handle, .. } = SenderPool::new(Arc::clone(&session), 1);
+    let client = Client::new(handle);
     let pool_task = tokio::spawn(runner.run());
 
     println!("Sending ping...");
@@ -26,10 +25,8 @@ async fn async_main() -> Result {
     println!("Ping sent successfully!");
 
     // Pool's `run()` won't finish until all handles are dropped or quit is called.
-    // Note that the pool's `handle` isn't dropped if it were omitted when destructuring.
     //
     // You don't need to explicitly close the connection, but this is a way to do it gracefully.
-    drop(handle);
     drop(client);
     let _ = pool_task.await;
 

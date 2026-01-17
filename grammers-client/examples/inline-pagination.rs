@@ -123,11 +123,12 @@ async fn async_main() -> Result {
 
     let session = Arc::new(SqliteSession::open(SESSION_FILE).await?);
 
-    let pool = SenderPool::new(Arc::clone(&session), api_id);
-    let client = Client::new(&pool);
     let SenderPool {
-        runner, updates, ..
-    } = pool;
+        runner,
+        handle,
+        updates,
+    } = SenderPool::new(Arc::clone(&session), api_id);
+    let client = Client::new(handle);
     let _ = tokio::spawn(runner.run());
 
     if !client.is_authorized().await? {
