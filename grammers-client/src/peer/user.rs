@@ -278,6 +278,16 @@ impl User {
         self.user().map(|u| u.scam).unwrap_or(false)
     }
 
+    /// Does this user have a Telegram Premium subscription?
+    pub fn is_premium(&self) -> bool {
+        self.user().map(|u| u.premium).unwrap_or(false)
+    }
+
+    /// Has this user been flagged as a fake account?
+    pub fn fake(&self) -> bool {
+        self.user().map(|u| u.fake).unwrap_or(false)
+    }
+
     /// The reason(s) why this user is restricted, could be empty.
     pub fn restriction_reason(&self) -> Vec<RestrictionReason> {
         if let Some(reasons) = self.user().and_then(|u| u.restriction_reason.as_ref()) {
