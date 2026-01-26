@@ -7,11 +7,14 @@
 // except according to those terms.
 
 use std::fmt;
+use std::time::{SystemTime, UNIX_EPOCH, Duration};
 
 use grammers_crypto::two_factor_auth::{calculate_2fa, check_p_and_g};
 use grammers_mtsender::InvocationError;
 use grammers_session::types::{PeerInfo, UpdateState, UpdatesState};
 use grammers_tl_types as tl;
+
+use base64::Engine;
 
 use super::Client;
 use crate::peer::User;
@@ -115,7 +118,7 @@ impl Client {
         // In the extremely rare case where `Err` happens, there's not much we can do.
         // `message_box` will try to correct its state as updates arrive.
         let update_state = self.invoke(&tl::functions::updates::GetState {}).await.ok();
-
+        
         let user = User::from_raw(self, auth.user);
         let auth = user.to_ref().await.unwrap().auth;
 
@@ -493,5 +496,467 @@ impl Client {
     /// Signals all clients sharing the same sender pool to disconnect.
     pub fn disconnect(&self) {
         self.0.handle.quit();
+    }
+}
+
+// QR Login functionality
+
+/// Status of the QR login process
+#[derive(Debug, Clone, PartialEq)]
+pub enum QrLoginStatus {
+    Idle,
+    Waiting,
+    Expired,
+    Success,
+    PasswordRequired(Option<String>), // 2FA required, with optional hint
+    Error(String),
+}
+
+/// Information about the current QR login state
+pub struct QrLoginInfo {
+    pub qr_url: String,
+    pub expires_unix: u64,
+    pub expires_in_seconds: i64,
+    pub status: QrLoginStatus,
+}
+
+impl Client {
+    /// Export login token for QR code login
+    pub async fn export_login_token(
+        &self,
+        api_id: i32,
+        api_hash: &str,
+    ) -> Result<tl::enums::auth::LoginToken, InvocationError> {
+        let request = tl::functions::auth::ExportLoginToken {
+            api_id,
+            api_hash: api_hash.to_string(),
+            except_ids: vec![],
+        };
+        
+        self.invoke(&request).await
+    }
+    
+    /// Import login token for DC migration
+    /// Import login token for DC migration - switches home DC before importing
+    pub async fn import_login_token(
+        &self,
+        token: Vec<u8>,
+        dc_id: i32,
+    ) -> Result<tl::enums::auth::LoginToken, InvocationError> {
+        // Handle DC migration by switching home DC
+        self.handle_qr_login_migration(dc_id).await?;
+        
+        let request = tl::functions::auth::ImportLoginToken {
+            token,
+        };
+        
+        // Import on the new home DC (after migration)
+        match self.invoke(&request).await {
+            Ok(result) => Ok(result),
+            Err(InvocationError::Rpc(ref err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                // If password is needed, we return an error that can be handled by the caller
+                Err(InvocationError::Rpc(err.clone()))
+            }
+            Err(e) => Err(e),
+        }
+    }
+    
+    /// Handle DC migration during QR login by switching home DC
+    pub(crate) async fn handle_qr_login_migration(&self, new_dc_id: i32) -> Result<(), InvocationError> {
+        let old_dc = self.0.session.home_dc_id();
+        self.0.handle.disconnect_from_dc(old_dc);
+        self.0.session.set_home_dc_id(new_dc_id).await;
+        Ok(())
+    }
+    
+    /// Finalize QR login by completing the authorization process
+    pub async fn finalize_qr_login(
+        &self,
+        auth: tl::types::auth::Authorization,
+    ) -> Result<User, InvocationError> {
+        self.complete_login(auth).await
+    }
+    
+    /// Get password information for 2FA authentication
+    pub async fn qr_get_password_token(&self) -> Result<PasswordToken, InvocationError> {
+        self.get_password_information().await
+    }
+    
+    /// Fetches 2FA password token (hint, SRP params) so the app can prompt for password.
+    pub async fn get_password_token(&self) -> Result<PasswordToken, InvocationError> {
+        self.get_password_information().await
+    }
+    
+    /// Convert raw token bytes to base64url encoded string
+    fn encode_token_to_base64url(&self, token_bytes: &[u8]) -> String {
+        // Use URL-safe base64 encoding without padding
+        base64::engine::general_purpose::URL_SAFE_NO_PAD.encode(token_bytes)
+    }
+    
+    /// Generate QR code URL from token bytes
+    fn generate_qr_url(&self, token_bytes: &[u8]) -> String {
+        let encoded_token = self.encode_token_to_base64url(token_bytes);
+        format!("tg://login?token={}", encoded_token)
+    }
+    
+    /// Start QR login process and return initial QR information
+    pub async fn start_qr_login(
+        &self,
+        api_id: i32,
+        api_hash: &str,
+    ) -> Result<QrLoginInfo, InvocationError> {
+        let login_token = match self.export_login_token(api_id, api_hash).await {
+            Ok(token) => token,
+            Err(InvocationError::Rpc(err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                // Return PasswordRequired status instead of failing
+                return Ok(QrLoginInfo {
+                    qr_url: "".to_string(),
+                    expires_unix: 0,
+                    expires_in_seconds: 0,
+                    status: QrLoginStatus::PasswordRequired(None), // We'll get the hint separately
+                });
+            },
+            Err(e) => return Err(e),
+        };
+        
+        match login_token {
+            tl::enums::auth::LoginToken::Token(token) => {
+                let qr_url = self.generate_qr_url(&token.token);
+                let expires_unix = token.expires as u64;
+                let current_time = SystemTime::now()
+                    .duration_since(UNIX_EPOCH)
+                    .unwrap()
+                    .as_secs();
+                let expires_in_seconds = token.expires as i64 - current_time as i64;
+                
+                Ok(QrLoginInfo {
+                    qr_url,
+                    expires_unix,
+                    expires_in_seconds,
+                    status: QrLoginStatus::Waiting,
+                })
+            },
+            tl::enums::auth::LoginToken::MigrateTo(migrate_to) => {
+                // Handle migration by switching home DC and importing the token on the new DC
+                self.handle_qr_login_migration(migrate_to.dc_id).await?;
+                
+                let import_request = tl::functions::auth::ImportLoginToken {
+                    token: migrate_to.token,
+                };
+                
+                let import_result = match self.invoke(&import_request).await {
+                    Ok(result) => result,
+                    Err(InvocationError::Rpc(err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                        // Return PasswordRequired status instead of failing
+                        return Ok(QrLoginInfo {
+                            qr_url: "".to_string(),
+                            expires_unix: 0,
+                            expires_in_seconds: 0,
+                            status: QrLoginStatus::PasswordRequired(None), // We'll get the hint separately
+                        });
+                    },
+                    Err(e) => return Err(e),
+                };
+                match import_result {
+                    tl::enums::auth::LoginToken::Success(success) => {
+                        // Successfully logged in after migration
+                        match success.authorization {
+                            tl::enums::auth::Authorization::Authorization(auth) => {
+                                // Complete the login and establish session on the new DC
+                                let _user = self.complete_login(auth).await?;
+                                
+                                // Ensure session is properly established on the new DC
+                                // This ensures is_authorized() will work correctly
+                                Ok(QrLoginInfo {
+                                    qr_url: "".to_string(),
+                                    expires_unix: 0,
+                                    expires_in_seconds: 0,
+                                    status: QrLoginStatus::Success,
+                                })
+                            },
+                            tl::enums::auth::Authorization::SignUpRequired(_) => {
+                                Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                                    code: 400,
+                                    name: "SIGN_UP_REQUIRED".to_string(),
+                                    value: None,
+                                    caused_by: None,
+                                }))
+                            }
+                        }
+                    },
+                    tl::enums::auth::LoginToken::Token(token) => {
+                        // Got a new token after migration
+                        let qr_url = self.generate_qr_url(&token.token);
+                        let expires_unix = token.expires as u64;
+                        let current_time = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        let expires_in_seconds = token.expires as i64 - current_time as i64;
+                        
+                        Ok(QrLoginInfo {
+                            qr_url,
+                            expires_unix,
+                            expires_in_seconds,
+                            status: QrLoginStatus::Waiting,
+                        })
+                    },
+                    tl::enums::auth::LoginToken::MigrateTo(_) => {
+                        // Unexpected double migration
+                        Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                            code: 400,
+                            name: "UNEXPECTED_MIGRATION".to_string(),
+                            value: None,
+                            caused_by: None,
+                        }))
+                    }
+                }
+            },
+            tl::enums::auth::LoginToken::Success(success) => {
+                // Already logged in
+                match success.authorization {
+                    tl::enums::auth::Authorization::Authorization(auth) => {
+                        self.complete_login(auth).await.map(|_| QrLoginInfo {
+                            qr_url: "".to_string(),
+                            expires_unix: 0,
+                            expires_in_seconds: 0,
+                            status: QrLoginStatus::Success,
+                        }).map_err(|e| e)
+                    },
+                    tl::enums::auth::Authorization::SignUpRequired(_) => {
+                        Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                            code: 400,
+                            name: "SIGN_UP_REQUIRED".to_string(),
+                            value: None,
+                            caused_by: None,
+                        }))
+                    }
+                }
+            }
+        }
+    }
+    
+    /// Perform continuous QR login with automatic token refresh
+    pub async fn start_continuous_qr_login(
+        &self,
+        api_id: i32,
+        api_hash: String,
+    ) -> Result<(
+        tokio::sync::watch::Sender<QrLoginInfo>,
+        tokio::sync::broadcast::Sender<()>,
+        tokio::task::JoinHandle<Result<User, InvocationError>>
+    ), InvocationError> {
+        // Create a QR info channel and a cancellation channel
+        let (qr_info_tx, _) = tokio::sync::watch::channel(QrLoginInfo {
+            qr_url: "".to_string(),
+            expires_unix: 0,
+            expires_in_seconds: 0,
+            status: QrLoginStatus::Idle,
+        });
+        let (cancellation_tx, _) = tokio::sync::broadcast::channel(1);
+        
+        // Create a clone of the client to move into the task
+        let client_clone = self.clone();
+        let qr_info_tx_clone = qr_info_tx.clone();
+        let cancellation_tx_clone = cancellation_tx.clone();
+        
+        let join_handle = tokio::spawn(async move {
+            let mut _current_expiration = 0;
+            let mut _current_token = Vec::<u8>::new();
+            // Used to track current token and expiration during QR refresh
+            
+            loop {
+                // Check for cancellation
+                let mut cancel_subscriber = cancellation_tx_clone.subscribe();
+                let cancellation_result = tokio::select! {
+                    _ = cancel_subscriber.recv() => {
+                        return Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                            code: 406,
+                            name: "LOGIN_CANCELLED".to_string(),
+                            value: None,
+                            caused_by: None,
+                        }));
+                    },
+                    result = client_clone.export_login_token(api_id, &api_hash) => {
+                        match result {
+                            Ok(token) => Ok(token),
+                            Err(InvocationError::Rpc(err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                                // Return error indicating password is required
+                                Err(InvocationError::Rpc(err))
+                            },
+                            Err(e) => Err(e),
+                        }
+                    },
+                };
+                
+                let login_token = match cancellation_result {
+                    Ok(token) => token,
+                    Err(InvocationError::Rpc(err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                        // Propagate the password needed error
+                        return Err(InvocationError::Rpc(err));
+                    },
+                    Err(e) => return Err(e),
+                };
+                
+                match login_token {
+                    tl::enums::auth::LoginToken::Token(token) => {
+                        _current_token = token.token.clone();
+                        _current_expiration = token.expires as u64;
+                        
+                        // Send QR info update
+                        let qr_url = client_clone.generate_qr_url(&token.token);
+                        let expires_unix = token.expires as u64;
+                        let current_time = SystemTime::now()
+                            .duration_since(UNIX_EPOCH)
+                            .unwrap()
+                            .as_secs();
+                        let expires_in_seconds = token.expires as i64 - current_time as i64;
+                        
+                        let qr_info = QrLoginInfo {
+                            qr_url,
+                            expires_unix,
+                            expires_in_seconds,
+                            status: QrLoginStatus::Waiting,
+                        };
+                        
+                        // Send the QR info update (ignore if no receivers)
+                        let _ = qr_info_tx_clone.send(qr_info);
+                        
+                        // Sleep until 5 seconds before expiration to refresh
+                        let time_until_expiry = if _current_expiration > current_time {
+                            _current_expiration - current_time
+                        } else {
+                            0
+                        };
+                        
+                        // Sleep for 1 second or until close to expiry
+                        let sleep_duration = std::cmp::min(time_until_expiry, 5) as u64;
+                        if sleep_duration > 0 {
+                            let sleep_future = tokio::time::sleep(Duration::from_secs(sleep_duration));
+                            let mut cancel_subscriber = cancellation_tx_clone.subscribe();
+                            tokio::select! {
+                                _ = sleep_future => {},
+                                _ = cancel_subscriber.recv() => {
+                                    return Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                                        code: 406,
+                                        name: "LOGIN_CANCELLED".to_string(),
+                                        value: None,
+                                        caused_by: None,
+                                    }));
+                                }
+                            }
+                        }
+                    },
+                    tl::enums::auth::LoginToken::MigrateTo(migrate_to) => {
+                        // Handle migration by switching home DC and importing the token on the new DC
+                        client_clone.handle_qr_login_migration(migrate_to.dc_id).await?;
+                        
+                        let import_request = tl::functions::auth::ImportLoginToken {
+                            token: migrate_to.token,
+                        };
+                        
+                        match client_clone.invoke(&import_request).await {
+                            Ok(import_result) => {
+                                match import_result {
+                                    tl::enums::auth::LoginToken::Success(success) => {
+                                        match success.authorization {
+                                            tl::enums::auth::Authorization::Authorization(auth) => {
+                                                return client_clone.finalize_qr_login(auth).await;
+                                            },
+                                            tl::enums::auth::Authorization::SignUpRequired(_) => {
+                                                return Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                                                    code: 400,
+                                                    name: "SIGN_UP_REQUIRED".to_string(),
+                                                    value: None,
+                                                    caused_by: None,
+                                                }));
+                                            }
+                                        }
+                                    },
+                                    tl::enums::auth::LoginToken::Token(token) => {
+                                        // Got a new token, continue the loop
+                                        _current_token = token.token.clone();
+                                        _current_expiration = token.expires as u64;
+                                        
+                                        // Send QR info update
+                                        let qr_url = client_clone.generate_qr_url(&token.token);
+                                        let expires_unix = token.expires as u64;
+                                        let current_time = SystemTime::now()
+                                            .duration_since(UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_secs();
+                                        let expires_in_seconds = token.expires as i64 - current_time as i64;
+                                        
+                                        let qr_info = QrLoginInfo {
+                                            qr_url,
+                                            expires_unix,
+                                            expires_in_seconds,
+                                            status: QrLoginStatus::Waiting,
+                                        };
+                                        
+                                        // Send the QR info update (ignore if no receivers)
+                                        let _ = qr_info_tx_clone.send(qr_info);
+                                        
+                                        let current_time = SystemTime::now()
+                                            .duration_since(UNIX_EPOCH)
+                                            .unwrap()
+                                            .as_secs();
+                                        let time_until_expiry = if _current_expiration > current_time {
+                                            _current_expiration - current_time
+                                        } else {
+                                            0
+                                        };
+                                        
+                                        let sleep_duration = std::cmp::min(time_until_expiry, 5) as u64;
+                                        if sleep_duration > 0 {
+                                            let sleep_future = tokio::time::sleep(Duration::from_secs(sleep_duration));
+                                            let mut cancel_subscriber = cancellation_tx_clone.subscribe();
+                                            tokio::select! {
+                                                _ = sleep_future => {},
+                                                _ = cancel_subscriber.recv() => {
+                                                    return Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                                                        code: 406,
+                                                        name: "LOGIN_CANCELLED".to_string(),
+                                                        value: None,
+                                                        caused_by: None,
+                                                    }));
+                                                }
+                                            }
+                                        }
+                                    },
+                                    tl::enums::auth::LoginToken::MigrateTo(_) => {
+                                        // This shouldn't happen, but continue anyway
+                                        continue;
+                                    }
+                                }
+                            },
+                            Err(InvocationError::Rpc(err)) if err.name == "SESSION_PASSWORD_NEEDED" => {
+                                // Return error indicating password is required
+                                return Err(InvocationError::Rpc(err));
+                            },
+                            Err(e) => return Err(e),
+                        }
+                    },
+                    tl::enums::auth::LoginToken::Success(success) => {
+                        // Login successful
+                        match success.authorization {
+                            tl::enums::auth::Authorization::Authorization(auth) => {
+                                return client_clone.complete_login(auth).await;
+                            },
+                            tl::enums::auth::Authorization::SignUpRequired(_) => {
+                                return Err(InvocationError::Rpc(grammers_mtsender::RpcError {
+                                    code: 400,
+                                    name: "SIGN_UP_REQUIRED".to_string(),
+                                    value: None,
+                                    caused_by: None,
+                                }));
+                            }
+                        }
+                    }
+                }
+            }
+        });
+        
+        Ok((qr_info_tx, cancellation_tx, join_handle))
     }
 }

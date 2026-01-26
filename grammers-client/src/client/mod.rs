@@ -21,7 +21,7 @@ mod net;
 mod retry_policy;
 mod updates;
 
-pub use auth::{LoginToken, PasswordToken, SignInError};
+pub use auth::{LoginToken, PasswordToken, SignInError, QrLoginStatus, QrLoginInfo};
 pub use bots::{InlineResult, InlineResultIter};
 pub use chats::{ParticipantIter, ParticipantPermissions, ProfilePhotoIter};
 pub(crate) use client::ClientInner;
