@@ -18,7 +18,7 @@ futures-core = "0.3.31"
 grammers-tl-types = { path = "../grammers-tl-types", version = "0.8.0" }
 log = "0.4.28"
 
-libsql = { version = "0.9.29", optional = true }
+libsql = { version = "0.9.29", default-features = false, features = ["core"], optional = true }
 tokio = { version = "1.47.1", default-features = false }
 
 serde = { version = "1", features = ["derive"], optional = true }
