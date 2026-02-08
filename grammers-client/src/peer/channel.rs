@@ -214,6 +214,11 @@ impl Channel {
             None => None,
         }
     }
+
+    /// Return whether this channel requires join requests.
+    pub fn requires_join_request(&self) -> bool {
+        self.raw.join_request
+    }
 }
 
 impl TryFrom<Channel> for ChannelKind {
