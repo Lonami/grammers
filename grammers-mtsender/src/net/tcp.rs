@@ -169,7 +169,9 @@ impl NetStream {
                 }
 
                 let response = String::from_utf8_lossy(&buf);
-                let status_line = response.lines().next().unwrap_or("");
+                let status_line = response.lines().next().ok_or_else(|| {
+                    io::Error::new(ErrorKind::InvalidData, "HTTP CONNECT response has no status line")
+                })?;
                 let parts: Vec<&str> = status_line.splitn(3, ' ').collect();
                 if parts.len() < 2 || parts[1] != "200" {
                     return Err(io::Error::new(
