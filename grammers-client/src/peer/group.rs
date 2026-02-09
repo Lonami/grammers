@@ -201,6 +201,18 @@ impl Group {
             C::Channel(_) | C::ChannelForbidden(_) => true,
         }
     }
+
+    /// Return whether this group requires join requests.
+    pub fn requires_join_request(&self) -> bool {
+        use tl::enums::Chat;
+
+        match &self.raw {
+            Chat::Empty(_) | Chat::Chat(_) | Chat::Forbidden(_) | Chat::ChannelForbidden(_) => {
+                false
+            }
+            Chat::Channel(channel) => channel.join_request,
+        }
+    }
 }
 
 impl From<Group> for PeerInfo {
