@@ -64,15 +64,15 @@ impl NetStream {
         ))?;
         let username = proxy.username();
         let password = proxy.password().unwrap_or("");
-        let socks_addr = match host {
+        let proxy_addr = match host {
             Host::Domain(domain) => {
                 let resolver = Resolver::builder_tokio().unwrap().build();
                 let response = resolver.lookup_ip(domain).await?;
-                let socks_ip_addr = response.into_iter().next().ok_or(io::Error::new(
+                let ip_addr = response.into_iter().next().ok_or(io::Error::new(
                     ErrorKind::NotFound,
                     format!("proxy host did not return any ip address: {}", domain),
                 ))?;
-                SocketAddr::new(socks_ip_addr, port)
+                SocketAddr::new(ip_addr, port)
             }
             Host::Ipv4(v4) => SocketAddr::new(IpAddr::from(v4), port),
             Host::Ipv6(v6) => SocketAddr::new(IpAddr::from(v6), port),
@@ -82,19 +82,61 @@ impl NetStream {
             "socks5" => {
                 if username.is_empty() {
                     Ok(NetStream::ProxySocks5(
-                        tokio_socks::tcp::Socks5Stream::connect(socks_addr, addr)
+                        tokio_socks::tcp::Socks5Stream::connect(proxy_addr, addr)
                             .await
                             .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     ))
                 } else {
                     Ok(NetStream::ProxySocks5(
                         tokio_socks::tcp::Socks5Stream::connect_with_password(
-                            socks_addr, addr, username, password,
+                            proxy_addr, addr, username, password,
                         )
                         .await
                         .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?,
                     ))
                 }
+            }
+            "socks4" => {
+                if username.is_empty() {
+                    Ok(NetStream::Tcp(
+                        tokio_socks::tcp::Socks4Stream::connect(proxy_addr, addr)
+                            .await
+                            .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?
+                            .into_inner(),
+                    ))
+                } else {
+                    Ok(NetStream::Tcp(
+                        tokio_socks::tcp::Socks4Stream::connect_with_userid(
+                            proxy_addr, addr, username,
+                        )
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?
+                        .into_inner(),
+                    ))
+                }
+            }
+            "http" => {
+                let mut stream = TcpStream::connect(proxy_addr).await?;
+                let target_host = addr.ip().to_string();
+                let target_port = addr.port();
+
+                if username.is_empty() {
+                    async_http_proxy::http_connect_tokio(&mut stream, &target_host, target_port)
+                        .await
+                        .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?;
+                } else {
+                    async_http_proxy::http_connect_tokio_with_basic_auth(
+                        &mut stream,
+                        &target_host,
+                        target_port,
+                        username,
+                        password,
+                    )
+                    .await
+                    .map_err(|err| io::Error::new(ErrorKind::ConnectionAborted, err))?;
+                }
+
+                Ok(NetStream::Tcp(stream))
             }
             scheme => Err(io::Error::new(
                 ErrorKind::ConnectionAborted,
