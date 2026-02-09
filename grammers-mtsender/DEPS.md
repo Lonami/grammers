@@ -65,6 +65,10 @@ Used to look up the IP address of the proxy host if a domain is provided.
 
 SOCKS5 proxy support.
 
+## base64
+
+Used to encode credentials for HTTP CONNECT proxy authentication.
+
 ## socks5-server
 
 Used to test for SOCKS5 proxy support.
