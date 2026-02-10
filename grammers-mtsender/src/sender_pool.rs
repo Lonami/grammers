@@ -291,23 +291,22 @@ impl SenderPoolRunner {
     ) -> Result<Sender<transport::Full, mtp::Encrypted>, InvocationError> {
         let transport = transport::Full::new;
 
+        let address = if self.connection_params.use_ipv6 {
+            dc_option.ipv6.into()
+        } else {
+            dc_option.ipv4.into()
+        };
+
         #[cfg(feature = "proxy")]
         let addr = || {
             if let Some(proxy) = self.connection_params.proxy_url.clone() {
-                ServerAddr::Proxied {
-                    address: dc_option.ipv4.into(),
-                    proxy,
-                }
+                ServerAddr::Proxied { address, proxy }
             } else {
-                ServerAddr::Tcp {
-                    address: dc_option.ipv4.into(),
-                }
+                ServerAddr::Tcp { address }
             }
         };
         #[cfg(not(feature = "proxy"))]
-        let addr = || ServerAddr::Tcp {
-            address: dc_option.ipv4.into(),
-        };
+        let addr = || ServerAddr::Tcp { address };
 
         let init_connection = tl::functions::InvokeWithLayer {
             layer: tl::LAYER,
