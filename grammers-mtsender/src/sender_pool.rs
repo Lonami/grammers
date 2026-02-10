@@ -161,6 +161,12 @@ impl SenderPool {
         Self::with_configuration(session, api_id, Default::default())
     }
 
+    // Enable IPv6 for connections created by this sender pool.
+    pub fn use_ipv6(mut self) -> Self {
+        self.runner.connection_params.use_ipv6 = true;
+        self
+    }
+
     /// Creates a new sender pool with non-[`ConnectionParams::default`] configuration.
     pub fn with_configuration<S: Session + 'static>(
         session: Arc<S>,
@@ -291,31 +297,23 @@ impl SenderPoolRunner {
     ) -> Result<Sender<transport::Full, mtp::Encrypted>, InvocationError> {
         let transport = transport::Full::new;
 
-        let address = match std::env::var("PREFER_V6") {
-            Ok(val) if val == "1" || val.eq_ignore_ascii_case("true") => {
-                log::info!("Using IPv6 connection");
-                dc_option.ipv6.into()
-            }
-            _ => dc_option.ipv4.into()
+        let address = if self.connection_params.use_ipv6 {
+            log::info!("Using IPv6 connection");
+            dc_option.ipv6.into()
+        } else {
+            dc_option.ipv4.into()
         };
 
         #[cfg(feature = "proxy")]
         let addr = || {
             if let Some(proxy) = self.connection_params.proxy_url.clone() {
-                ServerAddr::Proxied {
-                    address,
-                    proxy,
-                }
+                ServerAddr::Proxied { address, proxy }
             } else {
-                ServerAddr::Tcp {
-                    address,
-                }
+                ServerAddr::Tcp { address }
             }
         };
         #[cfg(not(feature = "proxy"))]
-        let addr = || ServerAddr::Tcp {
-            address,
-        };
+        let addr = || ServerAddr::Tcp { address };
 
         let init_connection = tl::functions::InvokeWithLayer {
             layer: tl::LAYER,

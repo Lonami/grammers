@@ -38,6 +38,7 @@ pub struct ConnectionParams {
     /// the host manually and selecting an IP address of your choice.
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
+    pub use_ipv6: bool,
     #[doc(hidden)]
     pub __non_exhaustive: (),
 }
@@ -67,6 +68,7 @@ impl Default for ConnectionParams {
             app_version: env!("CARGO_PKG_VERSION").to_string(),
             system_lang_code,
             lang_code,
+            use_ipv6: false,
             #[cfg(feature = "proxy")]
             proxy_url: None,
             __non_exhaustive: (),
