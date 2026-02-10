@@ -38,6 +38,7 @@ pub struct ConnectionParams {
     /// the host manually and selecting an IP address of your choice.
     #[cfg(feature = "proxy")]
     pub proxy_url: Option<String>,
+    /// Whether to connect via IPv6 instead of defaulting to IPv4.
     pub use_ipv6: bool,
     #[doc(hidden)]
     pub __non_exhaustive: (),
