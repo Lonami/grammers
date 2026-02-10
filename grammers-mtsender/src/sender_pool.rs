@@ -161,12 +161,6 @@ impl SenderPool {
         Self::with_configuration(session, api_id, Default::default())
     }
 
-    // Enable IPv6 for connections created by this sender pool.
-    pub fn use_ipv6(mut self) -> Self {
-        self.runner.connection_params.use_ipv6 = true;
-        self
-    }
-
     /// Creates a new sender pool with non-[`ConnectionParams::default`] configuration.
     pub fn with_configuration<S: Session + 'static>(
         session: Arc<S>,
