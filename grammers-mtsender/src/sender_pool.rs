@@ -292,7 +292,6 @@ impl SenderPoolRunner {
         let transport = transport::Full::new;
 
         let address = if self.connection_params.use_ipv6 {
-            log::info!("Using IPv6 connection");
             dc_option.ipv6.into()
         } else {
             dc_option.ipv4.into()
