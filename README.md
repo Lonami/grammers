@@ -1,3 +1,7 @@
+Moved to https://codeberg.org/Lonami/grammers. The GitHub repository may be deleted in the future.
+
+---
+
 # gramme.rs
 
 A set of Rust crates to interact with Telegram's API, hence the name *(tele)gramme.rs*.
